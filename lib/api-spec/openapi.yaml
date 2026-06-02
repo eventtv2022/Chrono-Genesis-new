@@ -3,13 +3,23 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: TimeNation API — digital state where time is currency
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: citizens
+    description: Citizen management
+  - name: sessions
+    description: TiMETR timer sessions
+  - name: transactions
+    description: Time transfer transactions
+  - name: timeline
+    description: Timeline anchor operations
+  - name: payments
+    description: Fiat gateway — buy minutes
 paths:
   /healthz:
     get:
@@ -24,6 +34,474 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /citizens:
+    get:
+      operationId: listCitizens
+      tags: [citizens]
+      summary: List all citizens
+      responses:
+        "200":
+          description: List of citizens
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Citizen"
+    post:
+      operationId: createCitizen
+      tags: [citizens]
+      summary: Register a new citizen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CitizenInput"
+      responses:
+        "201":
+          description: Created citizen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Citizen"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Citizen already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /citizens/{id}:
+    get:
+      operationId: getCitizen
+      tags: [citizens]
+      summary: Get citizen by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Citizen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Citizen"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateCitizen
+      tags: [citizens]
+      summary: Update citizen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CitizenUpdate"
+      responses:
+        "200":
+          description: Updated citizen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Citizen"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /citizens/by-phone/{phone}:
+    get:
+      operationId: getCitizenByPhone
+      tags: [citizens]
+      summary: Find citizen by phone number
+      parameters:
+        - name: phone
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Citizen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Citizen"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sessions:
+    post:
+      operationId: startSession
+      tags: [sessions]
+      summary: Start a TiMETR session (time transfer)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionInput"
+      responses:
+        "201":
+          description: Session started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          description: Invalid input or insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Citizen not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sessions/{id}/stop:
+    post:
+      operationId: stopSession
+      tags: [sessions]
+      summary: Stop a TiMETR session and finalize transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Session stopped, transaction logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResult"
+        "400":
+          description: Session already stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sessions/{id}:
+    get:
+      operationId: getSession
+      tags: [sessions]
+      summary: Get session by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      summary: List all transactions
+      parameters:
+        - name: citizenId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+
+  /citizens/{id}/heritage-transfer:
+    post:
+      operationId: heritageTransfer
+      tags: [citizens]
+      summary: Transfer citizenship heritage to heir
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HeritageTransferInput"
+      responses:
+        "200":
+          description: Heritage transferred
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HeritageTransferResult"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Citizen not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /citizens/{id}/wallet-link:
+    post:
+      operationId: linkWallet
+      tags: [citizens]
+      summary: Link a Web3 EVM wallet address to citizen passport
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CitizenWalletLinkInput"
+      responses:
+        "200":
+          description: Wallet linked, updated citizen returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Citizen"
+        "400":
+          description: Invalid wallet address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Citizen not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Wallet already linked to another citizen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /timeline/anchor:
+    post:
+      operationId: anchorTimeline
+      tags: [timeline]
+      summary: Anchor a timeline minute coordinate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineAnchorInput"
+      responses:
+        "201":
+          description: Anchor created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimelineAnchorResult"
+        "400":
+          description: Invalid input or insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Citizen not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Coordinate already occupied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /timeline/occupied:
+    get:
+      operationId: getTimelineOccupied
+      tags: [timeline]
+      summary: Get occupied timeline coordinates
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: month
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: day
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of occupied coordinates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimelineOccupiedEntry"
+        "400":
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [citizens]
+      summary: Get global economy stats
+      responses:
+        "200":
+          description: Economy stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EconomyStats"
+
+  /payments/packages:
+    get:
+      operationId: getMinutePackages
+      tags: [payments]
+      summary: List available minute packages for purchase
+      responses:
+        "200":
+          description: Available packages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MinutePackage"
+
+  /payments/checkout:
+    post:
+      operationId: createCheckoutSession
+      tags: [payments]
+      summary: Create a Stripe checkout session to buy minutes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentCheckoutInput"
+      responses:
+        "200":
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentCheckoutResult"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Payment gateway not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /payments/webhook:
+    post:
+      operationId: stripeWebhook
+      tags: [payments]
+      summary: Stripe webhook — credits minutes on payment completion
+      responses:
+        "200":
+          description: Webhook received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                required:
+                  - received
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +512,347 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Citizen:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        telegramId:
+          type: ["string", "null"]
+        walletAddress:
+          type: ["string", "null"]
+        balanceMinutes:
+          type: integer
+        transferableBalance:
+          type: integer
+        totalGiven:
+          type: integer
+        totalReceived:
+          type: integer
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+        meritScore:
+          type: number
+        rank:
+          type: string
+        lastActivity:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - phone
+        - telegramId
+        - walletAddress
+        - balanceMinutes
+        - transferableBalance
+        - totalGiven
+        - totalReceived
+        - status
+        - meritScore
+        - rank
+        - lastActivity
+        - createdAt
+
+    CitizenInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        phone:
+          type: string
+          minLength: 1
+        telegramId:
+          type: string
+      required:
+        - name
+        - phone
+
+    CitizenUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        telegramId:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+
+    CitizenWalletLinkInput:
+      type: object
+      properties:
+        walletAddress:
+          type: string
+          description: "EVM wallet address: 0x followed by 40 hex characters"
+          pattern: "^0x[a-fA-F0-9]{40}$"
+      required:
+        - walletAddress
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: integer
+        fromCitizenId:
+          type: integer
+        toCitizenId:
+          type: integer
+        startedAt:
+          type: string
+        stoppedAt:
+          type: ["string", "null"]
+        durationSeconds:
+          type: ["integer", "null"]
+        minutesTransferred:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [active, completed, failed]
+      required:
+        - id
+        - fromCitizenId
+        - toCitizenId
+        - startedAt
+        - stoppedAt
+        - durationSeconds
+        - minutesTransferred
+        - status
+
+    SessionInput:
+      type: object
+      properties:
+        fromCitizenId:
+          type: integer
+        toCitizenId:
+          type: integer
+      required:
+        - fromCitizenId
+        - toCitizenId
+
+    SessionResult:
+      type: object
+      properties:
+        session:
+          $ref: "#/components/schemas/Session"
+        transaction:
+          $ref: "#/components/schemas/Transaction"
+        sheetsLogged:
+          type: boolean
+      required:
+        - session
+        - transaction
+        - sheetsLogged
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        fromCitizenId:
+          type: integer
+        toCitizenId:
+          type: integer
+        fromCitizenName:
+          type: string
+        toCitizenName:
+          type: string
+        minutesTransferred:
+          type: integer
+        durationSeconds:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - sessionId
+        - fromCitizenId
+        - toCitizenId
+        - fromCitizenName
+        - toCitizenName
+        - minutesTransferred
+        - durationSeconds
+        - createdAt
+
+    HeritageTransferInput:
+      type: object
+      properties:
+        heirCitizenId:
+          type: integer
+      required:
+        - heirCitizenId
+
+    HeritageTransferResult:
+      type: object
+      properties:
+        message:
+          type: string
+        fromCitizenId:
+          type: integer
+        heirCitizenId:
+          type: integer
+        balanceTransferred:
+          type: integer
+      required:
+        - message
+        - fromCitizenId
+        - heirCitizenId
+        - balanceTransferred
+
+    TimelineAnchorInput:
+      type: object
+      properties:
+        citizenId:
+          type: integer
+        timelineCoord:
+          type: string
+          description: "12-digit string YYYYMMDDHHmm, year 0001–9999"
+          pattern: "^\\d{12}$"
+      required:
+        - citizenId
+        - timelineCoord
+
+    TimelineAnchor:
+      type: object
+      properties:
+        id:
+          type: integer
+        timelineCoord:
+          type: string
+        citizenId:
+          type: integer
+        status:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - timelineCoord
+        - citizenId
+        - status
+        - createdAt
+
+    TimelineAnchorResult:
+      type: object
+      properties:
+        anchor:
+          $ref: "#/components/schemas/TimelineAnchor"
+        newBalance:
+          type: integer
+        sheetsLogged:
+          type: boolean
+      required:
+        - anchor
+        - newBalance
+        - sheetsLogged
+
+    TimelineOccupiedEntry:
+      type: object
+      properties:
+        timelineCoord:
+          type: string
+        citizenId:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - timelineCoord
+        - citizenId
+        - createdAt
+
+    EconomyStats:
+      type: object
+      properties:
+        totalCitizens:
+          type: integer
+        activeCitizens:
+          type: integer
+        totalTransactions:
+          type: integer
+        totalMinutesCirculated:
+          type: integer
+        topGivers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Citizen"
+        topReceivers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Citizen"
+        recentTransactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+      required:
+        - totalCitizens
+        - activeCitizens
+        - totalTransactions
+        - totalMinutesCirculated
+        - topGivers
+        - topReceivers
+        - recentTransactions
+
+    MinutePackage:
+      type: object
+      properties:
+        id:
+          type: string
+        minutes:
+          type: integer
+        price:
+          type: integer
+        currency:
+          type: string
+        label:
+          type: string
+      required:
+        - id
+        - minutes
+        - price
+        - currency
+        - label
+
+    PaymentCheckoutInput:
+      type: object
+      properties:
+        citizenId:
+          type: integer
+        packageId:
+          type: string
+        successUrl:
+          type: string
+        cancelUrl:
+          type: string
+      required:
+        - citizenId
+        - packageId
+        - successUrl
+        - cancelUrl
+
+    PaymentCheckoutResult:
+      type: object
+      properties:
+        url:
+          type: ["string", "null"]
+        sessionId:
+          type: string
+      required:
+        - url
+        - sessionId
