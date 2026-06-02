@@ -41,7 +41,7 @@
 - Merit Score накапливается за передачу времени; энтропия (-0.5/нед) снижает ранг неактивных граждан.
 - Stripe работает через checkout sessions + webhook (кредитует минуты после оплаты).
 - Telegram бот уведомляет граждан о транзакциях и позволяет привязать аккаунт по номеру телефона.
-- Google Sheets логирование — заглушка, готова к интеграции (нужен GOOGLE_SHEETS_ID + credentials).
+- Google Sheets логирование — подключено через Service Account (googleapis). Листы «Транзакции» и «Таймлайн» создаются автоматически при первой записи.
 
 ## Product
 
@@ -70,4 +70,4 @@
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
 - Все секреты: DATABASE_URL, SESSION_SECRET, TELEGRAM_BOT_TOKEN, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
-- Опциональные секреты для полной функциональности: GOOGLE_SHEETS_ID, GOOGLE_SERVICE_ACCOUNT_JSON
+- Опциональные секреты (уже добавлены): GOOGLE_SHEETS_ID, GOOGLE_SERVICE_ACCOUNT_JSON
