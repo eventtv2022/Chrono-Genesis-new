@@ -1,0 +1,1 @@
+- [TimeNation stack & secrets](timenation-stack.md) — проект Chrono-Genesis: API + Expo mobile + Stripe + Telegram bot
