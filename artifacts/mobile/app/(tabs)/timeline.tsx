@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
+import { LogoBrand } from "@/components/LogoBrand";
 
 const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
@@ -126,7 +127,8 @@ export default function TimelineScreen() {
               <Feather name="arrow-left" size={18} color={colors.primary} />
             </TouchableOpacity>
           )}
-          <Text style={styles.headerTitle}>🕰 Таймлайн</Text>
+          <LogoBrand size={24} />
+          <Text style={styles.headerTitle}>Таймлайн</Text>
           <Text style={styles.breadcrumb}>{getBreadcrumb()}</Text>
         </View>
         <View style={styles.jumpRow}>

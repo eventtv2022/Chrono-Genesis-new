@@ -16,6 +16,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
+import { LogoBrand } from "@/components/LogoBrand";
+import { AnimatedHourglass } from "@/components/AnimatedHourglass";
 
 const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
@@ -157,7 +159,10 @@ export default function TimerScreen() {
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>TiMETR</Text>
+        <View style={styles.headerBrand}>
+          <LogoBrand size={30} />
+          <Text style={styles.headerTitle}>TiMETR</Text>
+        </View>
         {citizen && (
           <View style={styles.headerRight}>
             <View style={styles.rankPill}>
@@ -210,6 +215,7 @@ export default function TimerScreen() {
       <View style={styles.timerSection}>
         {activeSession ? (
           <>
+            <AnimatedHourglass active={true} size={36} />
             <Text style={styles.timerLabel}>→ {recipientCitizen?.name ?? "..."}</Text>
             <Text style={styles.timerDisplay}>{formatTime(elapsed)}</Text>
             <Text style={styles.timerSub}>~{Math.max(1, Math.ceil(elapsed / 60))} мин будет передано</Text>
@@ -316,6 +322,7 @@ function getStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingVertical: 12 },
+    headerBrand: { flexDirection: "row", alignItems: "center", gap: 8 },
     headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold", color: colors.primary, letterSpacing: 2 },
     headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
     rankPill: { backgroundColor: "rgba(201,168,76,0.15)", borderWidth: 1, borderColor: "rgba(201,168,76,0.4)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },

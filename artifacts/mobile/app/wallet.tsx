@@ -17,6 +17,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
+import { LogoBrand } from "@/components/LogoBrand";
 
 const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
@@ -144,9 +145,7 @@ export default function WalletScreen() {
       </TouchableOpacity>
 
       <View style={styles.headerSection}>
-        <View style={styles.iconRing}>
-          <Feather name="link" size={28} color={colors.primary} />
-        </View>
+        <LogoBrand size={72} />
         <Text style={styles.title}>Web3 Паспорт</Text>
         <Text style={styles.subtitle}>Привяжи Ethereum-кошелёк к своему гражданству в TimeNation</Text>
       </View>

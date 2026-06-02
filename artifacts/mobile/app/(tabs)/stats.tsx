@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
+import { LogoBrand } from "@/components/LogoBrand";
 
 const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
@@ -101,7 +102,10 @@ export default function StatsScreen() {
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
     >
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>КАЗНАЧЕЙСТВО</Text>
+        <View style={styles.headerBrand}>
+          <LogoBrand size={28} />
+          <Text style={styles.headerTitle}>КАЗНАЧЕЙСТВО</Text>
+        </View>
         {citizen && (
           <TouchableOpacity
             style={styles.topupBtn}
@@ -177,6 +181,7 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     container: { flex: 1, backgroundColor: colors.background },
     center: { alignItems: "center", justifyContent: "center" },
     header: { paddingHorizontal: 20, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    headerBrand: { flexDirection: "row", alignItems: "center", gap: 8 },
     headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold", color: colors.foreground, letterSpacing: 2 },
     topupBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 },
     topupBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.primaryForeground },

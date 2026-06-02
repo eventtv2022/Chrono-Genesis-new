@@ -16,6 +16,7 @@ import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCitizen, CitizenProfile } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
+import { LogoBrand } from "@/components/LogoBrand";
 
 const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
@@ -72,7 +73,7 @@ export default function RegisterScreen() {
       </TouchableOpacity>
 
       <View style={styles.logoSection}>
-        <View style={styles.logoMark}><Text style={styles.logoText}>TN</Text></View>
+        <LogoBrand size={80} />
         <Text style={styles.title}>TimeNation</Text>
         <Text style={styles.subtitle}>Цифровое государство</Text>
       </View>
@@ -128,9 +129,7 @@ function getStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 24 },
     backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center", marginBottom: 8 },
-    logoSection: { alignItems: "center", paddingVertical: 40 },
-    logoMark: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.goldGlow, borderWidth: 2, borderColor: colors.primary, alignItems: "center", justifyContent: "center", marginBottom: 16 },
-    logoText: { fontSize: 24, fontFamily: "Inter_700Bold", color: colors.primary, letterSpacing: 2 },
+    logoSection: { alignItems: "center", paddingVertical: 40, gap: 12 },
     title: { fontSize: 28, fontFamily: "Inter_700Bold", color: colors.foreground, letterSpacing: 1 },
     subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 4 },
     chooseSection: { gap: 12 },

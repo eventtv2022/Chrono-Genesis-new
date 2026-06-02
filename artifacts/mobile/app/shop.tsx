@@ -16,6 +16,7 @@ import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
+import { LogoBrand } from "@/components/LogoBrand";
 
 const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
@@ -109,9 +110,7 @@ export default function ShopScreen() {
       </TouchableOpacity>
 
       <View style={styles.headerSection}>
-        <View style={styles.iconRing}>
-          <Feather name="shopping-bag" size={28} color={colors.primary} />
-        </View>
+        <LogoBrand size={72} />
         <Text style={styles.title}>Казначейство</Text>
         <Text style={styles.subtitle}>Пополни баланс Минут Валюты через безопасный платёжный шлюз</Text>
         {citizen && (
