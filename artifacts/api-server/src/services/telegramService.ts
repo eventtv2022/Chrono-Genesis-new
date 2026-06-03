@@ -1,7 +1,7 @@
 import { Telegraf } from "telegraf";
 import { db } from "@workspace/db";
 import { citizensTable, transactionsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ilike } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 let bot: Telegraf | null = null;
@@ -11,59 +11,22 @@ export function getBot(): Telegraf | null {
 }
 
 // ─── Legacy import data ────────────────────────────────────────────────────
-// TiMETR-транзакции из старой базы данных.
-// Поля прямо соответствуют таблице transactions.
-// sessionId = 0 — маркер «импортированная запись» (sentinel-значение).
+// amount кодирует: minutes * 100 + seconds (например, 261 = 2 мин 61 сек).
+// fromName / toName сопоставляются с citizens.name в БД при импорте.
+// sessionId = 0 — sentinel-маркер «импортированная запись».
 // ──────────────────────────────────────────────────────────────────────────
 interface LegacyTransaction {
-  fromCitizenId: number;
-  toCitizenId: number;
-  fromCitizenName: string;
-  toCitizenName: string;
-  minutesTransferred: number;
-  durationSeconds: number;
+  fromName: string;
+  toName: string;
+  amount: number; // minutes * 100 + seconds
   createdAt: string; // ISO 8601
 }
 
-// Данные из CSV TimeNationCitizens – Transactions (строки с реальными гражданами).
-// Тестовые записи (test_sender / usr_… / amount < 1) исключены.
 const LEGACY_TRANSACTIONS: LegacyTransaction[] = [
-  {
-    fromCitizenId: 1,
-    toCitizenId: 2,
-    fromCitizenName: "Gennadii Lerner",
-    toCitizenName: "Olga Fedorova",
-    minutesTransferred: 2,
-    durationSeconds: 61,
-    createdAt: "2026-05-27T07:31:56.574Z",
-  },
-  {
-    fromCitizenId: 1,
-    toCitizenId: 2,
-    fromCitizenName: "Gennadii Lerner",
-    toCitizenName: "Olga Fedorova",
-    minutesTransferred: 2,
-    durationSeconds: 99,
-    createdAt: "2026-05-27T09:05:28.819Z",
-  },
-  {
-    fromCitizenId: 1,
-    toCitizenId: 2,
-    fromCitizenName: "Gennadii Lerner",
-    toCitizenName: "Olga Fedorova",
-    minutesTransferred: 2,
-    durationSeconds: 62,
-    createdAt: "2026-05-27T09:42:46.313Z",
-  },
-  {
-    fromCitizenId: 1,
-    toCitizenId: 4,
-    fromCitizenName: "Gennadii Lerner",
-    toCitizenName: "Gleb Lerner",
-    minutesTransferred: 11,
-    durationSeconds: 601,
-    createdAt: "2026-05-29T21:51:27.538Z",
-  },
+  { fromName: "Gennadii Lerner", toName: "Olga Fedorova", amount: 261,  createdAt: "2026-05-27T07:31:00Z" },
+  { fromName: "Gennadii Lerner", toName: "Olga Fedorova", amount: 299,  createdAt: "2026-05-27T09:05:00Z" },
+  { fromName: "Gennadii Lerner", toName: "Olga Fedorova", amount: 262,  createdAt: "2026-05-27T09:42:00Z" },
+  { fromName: "Gennadii Lerner", toName: "Gleb Lerner",   amount: 1160, createdAt: "2026-05-29T21:51:00Z" },
 ];
 
 // ─── Admin guard ──────────────────────────────────────────────────────────
@@ -195,22 +158,47 @@ export function initBot(token: string): Telegraf {
 
     let imported = 0;
     let skipped = 0;
+    let notFound = 0;
     let errors = 0;
 
     for (const tx of LEGACY_TRANSACTIONS) {
       try {
-        // Дедупликация: sessionId=0 — маркер импортированных записей.
-        // Уникальность определяем по комбинации участников + минут + длительности.
+        // Декодируем amount: minutes * 100 + seconds
+        const minutesTransferred = Math.floor(tx.amount / 100);
+        const durationSeconds    = tx.amount % 100;
+
+        // Ищем граждан по имени (без учёта регистра)
+        const [fromCitizen] = await db
+          .select({ id: citizensTable.id, name: citizensTable.name })
+          .from(citizensTable)
+          .where(ilike(citizensTable.name, tx.fromName))
+          .limit(1);
+
+        const [toCitizen] = await db
+          .select({ id: citizensTable.id, name: citizensTable.name })
+          .from(citizensTable)
+          .where(ilike(citizensTable.name, tx.toName))
+          .limit(1);
+
+        if (!fromCitizen || !toCitizen) {
+          notFound++;
+          logger.warn(
+            { fromName: tx.fromName, toName: tx.toName, fromFound: !!fromCitizen, toFound: !!toCitizen },
+            "migratedata: citizen not found by name, skipping"
+          );
+          continue;
+        }
+
+        // Дедупликация по (sessionId=0, fromCitizenId, toCitizenId, minutesTransferred)
         const [existing] = await db
           .select({ id: transactionsTable.id })
           .from(transactionsTable)
           .where(
             and(
               eq(transactionsTable.sessionId, 0),
-              eq(transactionsTable.fromCitizenId, tx.fromCitizenId),
-              eq(transactionsTable.toCitizenId, tx.toCitizenId),
-              eq(transactionsTable.minutesTransferred, tx.minutesTransferred),
-              eq(transactionsTable.durationSeconds, tx.durationSeconds),
+              eq(transactionsTable.fromCitizenId, fromCitizen.id),
+              eq(transactionsTable.toCitizenId, toCitizen.id),
+              eq(transactionsTable.minutesTransferred, minutesTransferred),
             )
           )
           .limit(1);
@@ -222,12 +210,12 @@ export function initBot(token: string): Telegraf {
 
         await db.insert(transactionsTable).values({
           sessionId: 0,
-          fromCitizenId: tx.fromCitizenId,
-          toCitizenId: tx.toCitizenId,
-          fromCitizenName: tx.fromCitizenName,
-          toCitizenName: tx.toCitizenName,
-          minutesTransferred: tx.minutesTransferred,
-          durationSeconds: tx.durationSeconds,
+          fromCitizenId: fromCitizen.id,
+          toCitizenId: toCitizen.id,
+          fromCitizenName: fromCitizen.name,
+          toCitizenName: toCitizen.name,
+          minutesTransferred,
+          durationSeconds,
           createdAt: new Date(tx.createdAt),
         });
 
@@ -242,9 +230,10 @@ export function initBot(token: string): Telegraf {
       `✅ *Импорт завершён*\n\n` +
       `📥 Успешно импортировано: *${imported}* транзакций\n` +
       `⏭ Пропущено (дубли): *${skipped}*\n` +
+      `👤 Гражданин не найден: *${notFound}*\n` +
       `❌ Ошибок при записи: *${errors}*`;
 
-    logger.info({ imported, skipped, errors }, "migratedata: import completed");
+    logger.info({ imported, skipped, notFound, errors }, "migratedata: import completed");
     await ctx.reply(report, { parse_mode: "Markdown" });
   });
   // ─────────────────────────────────────────────────────────────────────────
