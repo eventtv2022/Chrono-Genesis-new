@@ -1,0 +1,8 @@
+Timestamp,SenderID,SenderPhone,ReceiverID,ReceiverPhone,Amount,SessionID,SessionDurationSec,
+2026-05-23T20:02:19.455Z,test_sender,Test User,test_receiver,Active,1,test_session_1779566539455,60,
+2026-05-23T20:02:21.292Z,test_sender,Test User,test_receiver,Active,1,test_session_1779566541292,60,
+2026-05-24T21:45:52.089Z,usr_0285d385dec47633,4915123721119,usr_eddca6b10b886af0,usr_eddca6b10b886af0,0.6531,sess_39d2212ca667,39,
+1,1,2,Gennadii Lerner,Olga Fedorova,2,61,1,2026-05-27T07:31:56.574Z
+2,1,2,Gennadii Lerner,Olga Fedorova,2,99,2,2026-05-27T09:05:28.819Z
+3,1,2,Gennadii Lerner,Olga Fedorova,2,62,1,2026-05-27T09:42:46.313Z
+3,1,4,Gennadii Lerner,Gleb Lerner,11,601,10,2026-05-29T21:51:27.538Z
