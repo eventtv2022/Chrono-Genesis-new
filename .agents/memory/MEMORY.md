@@ -1,1 +1,2 @@
 - [TimeNation stack & secrets](timenation-stack.md) — проект Chrono-Genesis: API + Expo mobile + Stripe + Telegram bot
+- [TimeNation roadmap phases](timenation-roadmap.md) — Дармин=Минута, EmissionGatekeeper, Посольства, Аукционы, Compliance — реализованы

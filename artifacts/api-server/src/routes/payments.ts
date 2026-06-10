@@ -11,9 +11,9 @@ const STRIPE_SECRET_KEY = process.env["STRIPE_SECRET_KEY"];
 const STRIPE_WEBHOOK_SECRET = process.env["STRIPE_WEBHOOK_SECRET"];
 
 export const MINUTE_PACKAGES = [
-  { id: "pack_100", minutes: 100, price: 99, currency: "rub", label: "100 Минут" },
-  { id: "pack_500", minutes: 500, price: 449, currency: "rub", label: "500 Минут" },
-  { id: "pack_1000", minutes: 1000, price: 799, currency: "rub", label: "1000 Минут" },
+  { id: "pack_100", minutes: 100, price: 99, currency: "rub", label: "100 Дарминов" },
+  { id: "pack_500", minutes: 500, price: 449, currency: "rub", label: "500 Дарминов" },
+  { id: "pack_1000", minutes: 1000, price: 799, currency: "rub", label: "1000 Дарминов" },
 ] as const;
 
 router.get("/payments/packages", (_req, res) => {
@@ -71,7 +71,7 @@ router.post("/payments/checkout", async (req, res): Promise<void> => {
           currency: pack.currency,
           product_data: {
             name: `${pack.label} — TimeNation`,
-            description: `Неисключительная лицензия на использование ${pack.minutes} Минут Валюты в IT-платформе TimeNation`,
+            description: `Внутриигровые баллы (Дармины): ${pack.minutes} единиц для использования в IT-платформе TimeNation. Не являются деньгами или ценными бумагами.`,
           },
           unit_amount: pack.price * 100,
         },

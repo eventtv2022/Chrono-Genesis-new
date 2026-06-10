@@ -6,6 +6,9 @@ import transactionsRouter from "./transactions";
 import timelineRouter from "./timeline";
 import paymentsRouter from "./payments";
 import walletRouter from "./wallet";
+import embassiesRouter from "./embassies";
+import auctionsRouter from "./auctions";
+import emissionRouter from "./emission";
 
 const router: IRouter = Router();
 
@@ -16,5 +19,8 @@ router.use(transactionsRouter);
 router.use(timelineRouter);
 router.use(paymentsRouter);
 router.use(walletRouter);
+router.use(embassiesRouter);
+router.use(auctionsRouter);
+router.use(emissionRouter);
 
 export default router;

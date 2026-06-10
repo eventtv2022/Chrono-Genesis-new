@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { applyEntropy } from "./services/meritocracyService";
+import { drainEmissionQueue } from "./services/emissionService";
 import { initBot } from "./services/telegramService";
 
 const rawPort = process.env["PORT"];
@@ -54,6 +55,25 @@ function scheduleDailyEntropy() {
 }
 
 scheduleDailyEntropy();
+
+function scheduleMidnightUTCEmissionDrain() {
+  const now = new Date();
+  const nextMidnight = new Date(now);
+  nextMidnight.setUTCHours(24, 0, 0, 0);
+  const msUntilFirst = nextMidnight.getTime() - now.getTime();
+
+  setTimeout(() => {
+    drainEmissionQueue().catch((err) => logger.error({ err }, "Emission drain cron failed"));
+    setInterval(
+      () => drainEmissionQueue().catch((err) => logger.error({ err }, "Emission drain cron failed")),
+      24 * 60 * 60 * 1000
+    );
+  }, msUntilFirst);
+
+  logger.info({ nextRunMs: msUntilFirst }, "Emission drain cron scheduled (00:00 UTC)");
+}
+
+scheduleMidnightUTCEmissionDrain();
 
 app.listen(port, (err) => {
   if (err) {

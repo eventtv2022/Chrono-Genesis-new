@@ -22,6 +22,14 @@ function NativeTabLayout() {
         <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
         <Label>Экономика</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="embassies">
+        <Icon sf={{ default: "mappin.circle", selected: "mappin.circle.fill" }} />
+        <Label>Посольства</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="auctions">
+        <Icon sf={{ default: "tag", selected: "tag.fill" }} />
+        <Label>Аукцион</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -74,6 +82,20 @@ function ClassicTabLayout() {
         options={{
           title: "Экономика",
           tabBarIcon: ({ color }) => <Feather name="bar-chart-2" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="embassies"
+        options={{
+          title: "Посольства",
+          tabBarIcon: ({ color }) => <Feather name="map-pin" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="auctions"
+        options={{
+          title: "Аукцион",
+          tabBarIcon: ({ color }) => <Feather name="tag" size={22} color={color} />,
         }}
       />
     </Tabs>

@@ -73,7 +73,7 @@ export default function TimelineScreen() {
   const anchorMinute = useCallback(async (coord: string) => {
     if (!citizen) { Alert.alert("Нужна авторизация", "Зарегистрируйтесь как гражданин"); return; }
     const humanCoord = `${coord.slice(6, 8)}.${coord.slice(4, 6)}.${parseInt(coord.slice(0, 4), 10)} ${coord.slice(8, 10)}:${coord.slice(10, 12)}`;
-    Alert.alert("⏳ Закрепить минуту", `Зафиксировать координату ${humanCoord} навсегда за вашим родом?\n\nСтоимость: 1 минута баланса`, [
+    Alert.alert("⏳ Закрепить координату", `Зафиксировать координату ${humanCoord} навсегда за вашим родом?\n\nСтоимость: 1 Дармин`, [
       { text: "Отмена", style: "cancel" },
       { text: "Закрепить", onPress: async () => {
         setAnchoring(coord);
@@ -86,7 +86,7 @@ export default function TimelineScreen() {
           const data = await res.json() as { error?: string; newBalance?: number };
           if (!res.ok) Alert.alert("Ошибка", data.error ?? "Не удалось закрепить координату");
           else {
-            Alert.alert("✅ Зафиксировано!", `Координата ${humanCoord} закреплена навсегда!\nОстаток: ${data.newBalance} мин`);
+            Alert.alert("✅ Зафиксировано!", `Координата ${humanCoord} закреплена навсегда!\nОстаток: ${data.newBalance} Д`);
             await fetchOccupied(selectedYear, selectedMonth, selectedDay);
           }
         } catch { Alert.alert("Ошибка", "Не удалось подключиться к серверу"); }

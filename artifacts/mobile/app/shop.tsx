@@ -112,11 +112,11 @@ export default function ShopScreen() {
       <View style={styles.headerSection}>
         <LogoBrand size={72} />
         <Text style={styles.title}>Казначейство</Text>
-        <Text style={styles.subtitle}>Пополни баланс Минут Валюты через безопасный платёжный шлюз</Text>
+        <Text style={styles.subtitle}>Пополни баланс Дарминов через безопасный платёжный шлюз</Text>
         {citizen && (
           <View style={styles.balanceBadge}>
             <Feather name="clock" size={14} color={colors.primary} />
-            <Text style={styles.balanceBadgeText}>Текущий баланс: {citizen.balanceMinutes} мин</Text>
+            <Text style={styles.balanceBadgeText}>Текущий баланс: {citizen.balanceMinutes} Д</Text>
           </View>
         )}
       </View>
@@ -124,7 +124,7 @@ export default function ShopScreen() {
       {!citizen && (
         <View style={styles.authWarn}>
           <Feather name="alert-circle" size={18} color={colors.primary} />
-          <Text style={styles.authWarnText}>Зарегистрируйся, чтобы купить минуты</Text>
+          <Text style={styles.authWarnText}>Зарегистрируйся, чтобы купить Дармины</Text>
         </View>
       )}
 
@@ -146,13 +146,13 @@ export default function ShopScreen() {
                 <Text style={styles.packageIcon}>{PACKAGE_ICONS[i]}</Text>
                 <View style={styles.packageMeta}>
                   <Text style={styles.packageLabel}>{pkg.label}</Text>
-                  <Text style={styles.packageMinutes}>{pkg.minutes.toLocaleString()} Минут</Text>
+                  <Text style={styles.packageMinutes}>{pkg.minutes.toLocaleString()} Дарминов</Text>
                 </View>
                 <View style={styles.packagePricing}>
                   <Text style={[styles.packagePrice, isPopular && { color: colors.primary }]}>
                     {pkg.price} ₽
                   </Text>
-                  <Text style={styles.packagePpm}>{perMinute} ₽/мин</Text>
+                  <Text style={styles.packagePpm}>{perMinute} ₽/Д</Text>
                 </View>
               </View>
 
@@ -194,14 +194,14 @@ export default function ShopScreen() {
       <View style={styles.legalSection}>
         <Feather name="shield" size={14} color={colors.mutedForeground} />
         <Text style={styles.legalText}>
-          Оплата через Stripe. Минуты Валюты — неисключительная лицензия на использование в платформе TimeNation. Не являются электронными деньгами.
+          Оплата через Stripe. Дармины — внутриигровые баллы, неисключительная лицензия на использование в платформе TimeNation. Не являются электронными деньгами или ценными бумагами.
         </Text>
       </View>
 
       <View style={styles.webhookNote}>
         <Feather name="info" size={13} color={colors.mutedForeground} />
         <Text style={styles.webhookNoteText}>
-          После оплаты баланс обновится автоматически через Stripe Webhook. Если минуты не зачислились — закрой и снова открой приложение.
+          После оплаты баланс обновится автоматически через Stripe Webhook. Если Дармины не зачислились — закрой и снова открой приложение.
         </Text>
       </View>
     </ScrollView>

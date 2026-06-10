@@ -17,6 +17,7 @@ export const citizensTable = pgTable("citizens", {
   meritScore: real("merit_score").notNull().default(0),
   rank: text("rank").notNull().default("Странник"),
   lastActivity: timestamp("last_activity", { withTimezone: true }),
+  tosAcceptedAt: timestamp("tos_accepted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

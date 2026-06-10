@@ -169,7 +169,7 @@ export default function WalletScreen() {
             </View>
             <View style={styles.doneStat}>
               <Feather name="clock" size={14} color={colors.primary} />
-              <Text style={styles.doneStatText}>Баланс: {citizen?.balanceMinutes} мин</Text>
+              <Text style={styles.doneStatText}>Баланс: {citizen?.balanceMinutes} Д</Text>
             </View>
           </View>
           <TouchableOpacity style={styles.unlinkBtn} onPress={handleUnlink} disabled={loading} activeOpacity={0.8}>

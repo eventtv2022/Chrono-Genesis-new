@@ -1,11 +1,12 @@
 # TimeNation — Chrono-Genesis
 
-Цифровое государство, где время является валютой. Граждане передают минуты друг другу через TiMETR-сессии, накапливают Merit Score, занимают позиции в таймлайне и покупают минуты через Stripe.
+Цифровое государство, где время является валютой (Дармин = 1 минута). Граждане передают Дармины через TiMETR-сессии, накапливают Merit Score, занимают позиции в таймлайне, регистрируют Посольства и торгуют на P2P-аукционах.
 
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — запустить API сервер (порт 8080)
 - `pnpm run typecheck` — полная проверка типов по всем пакетам
+- `pnpm run typecheck:libs` — пересобрать lib-декларации (после изменений в `lib/db`)
 - `pnpm run build` — typecheck + сборка всех пакетов
 - `pnpm --filter @workspace/api-spec run codegen` — регенерировать API хуки и Zod схемы из OpenAPI спека
 - `pnpm --filter @workspace/db run push` — применить изменения схемы БД (только dev)
@@ -25,32 +26,43 @@
 
 ## Where things live
 
-- `lib/db/src/schema/` — источник истины для схемы БД (citizens, sessions, transactions, timelineAnchors)
+- `lib/db/src/schema/` — источник истины для схемы БД:
+  - `citizens` — граждане (+ tosAcceptedAt, rank=«Посол» для Земельного Фонда)
+  - `sessions`, `transactions`, `timelineAnchors` — ядро TiMETR
+  - `emissionLogs` — лог эмиссии Дарминов (Emission Gatekeeper)
+  - `auctionLogs`, `auctions` — P2P-аукционы
+  - `nationalEmbassies` — Земельный Фонд (ноды/посольства + NFT-метаданные)
 - `lib/api-spec/openapi.yaml` — источник истины для API контракта
-- `lib/api-zod/src/generated/` — Zod схемы (генерируются из OpenAPI)
-- `lib/api-client-react/src/generated/` — React Query хуки (генерируются из OpenAPI)
-- `artifacts/api-server/src/routes/` — Express роуты
-- `artifacts/api-server/src/services/` — бизнес-логика (meritocracy, telegram)
-- `artifacts/api-server/src/lib/googleSheets.ts` — заглушка Google Sheets (готова к подключению)
-- `artifacts/mobile/` — Expo мобильное приложение
+- `artifacts/api-server/src/routes/` — Express роуты (citizens, sessions, transactions, timeline, payments, wallet, embassies, auctions, emission)
+- `artifacts/api-server/src/services/` — бизнес-логика (meritocracy, telegram, **emission**)
+- `artifacts/api-server/src/lib/googleSheets.ts` — Google Sheets (Service Account, автосоздание листов)
+- `artifacts/mobile/` — Expo мобильное приложение (5 вкладок: TiMETR, Таймлайн, Экономика, Посольства, Аукцион)
+- Вспомогательные экраны: `shop.tsx`, `wallet.tsx`, `tos.tsx`, `register.tsx`
 
 ## Architecture decisions
 
-- Время — основная валюта. 1 минута реального времени = 1 минута в балансе гражданина.
-- Каждый гражданин получает 60 минут при регистрации. Родовая Минута (1 мин) не может быть передана.
-- Merit Score накапливается за передачу времени; энтропия (-0.5/нед) снижает ранг неактивных граждан.
-- Stripe работает через checkout sessions + webhook (кредитует минуты после оплаты).
+- Дармин = валюта. 1 минута реального времени = 1 Дармин. Аббревиатура в UI: «Д».
+- Каждый гражданин получает 60 Д при регистрации. Родовая минута (1 Д) не может быть передана.
+- Merit Score накапливается за передачу Дарминов; энтропия (-0.5/нед) снижает ранг неактивных граждан.
+- **Emission Gatekeeper**: лимит 350 Д/сутки по сети. При превышении — FIFO-очередь (scheduledFor = 00:00 UTC). Cron дрейнит очередь каждые сутки в 00:00 UTC.
+- **Земельный Фонд**: гражданин предоставляет 1 м² под ноду. Получает ранг «Посол» + NFT-сертификат (JSON в БД). Пассивный доход в Дарминах за аптайм.
+- **P2P-аукционы**: платформа — доска объявлений. 2% комиссии (Math.ceil). Дармины продавца блокируются при создании лота. Фиат в систему не входит.
+- Stripe работает через checkout sessions + webhook (кредитует Дармины после оплаты).
 - Telegram бот уведомляет граждан о транзакциях и позволяет привязать аккаунт по номеру телефона.
-- Google Sheets логирование — подключено через Service Account (googleapis). Листы «Транзакции» и «Таймлайн» создаются автоматически при первой записи.
+- Google Sheets логирование — подключено через Service Account (googleapis).
+- **SQL View** `excel_export_view` — объединяет transactions + emission_logs + auction_logs для выгрузки в Excel.
+- Terms of Service экран (`/tos`) — юридическая изоляция: Дармины = внутриигровые баллы, не деньги.
 
 ## Product
 
-- TiMETR сессии: передача минут в реальном времени (старт/стоп таймер)
+- TiMETR сессии: передача Дарминов в реальном времени (старт/стоп таймер)
 - Таймлайн: захват координат исторического времени (12-значный код YYYYMMDDHHmm)
-- Экономика: рейтинги граждан, статистика циркуляции минут
-- Магазин минут: пакеты 100/500/1000 мин через Stripe (в рублях)
+- Экономика: рейтинги граждан, статистика циркуляции Дарминов
+- Казначейство: пакеты 100/500/1000 Д через Stripe (в рублях)
 - Web3 кошелёк: привязка EVM-адреса с верификацией подписи (ethers.js)
-- Ранги: Странник → Созидатель → Хранитель Времени → Вершитель Эпох → Архитектор Таймлайна
+- Посольства: Земельный Фонд, ноды, NFT-сертификаты послов
+- Аукцион: P2P-рынок Дарминов, 2% комиссия
+- Ранги: Странник → Созидатель → Посол → Хранитель Времени → Вершитель Эпох → Архитектор Таймлайна
 
 ## User preferences
 
@@ -62,6 +74,7 @@
 
 - `GITHUB_TOKEN` нужен только для клонирования приватного репо, не для работы приложения
 - `pnpm --filter @workspace/db run push` применяет схему без миграций — только для dev
+- После добавления новых таблиц в `lib/db/src/schema/` — запустить `pnpm run typecheck:libs` перед typecheck артефакта
 - Stripe apiVersion в payments.ts не нужно указывать явно — библиотека использует дефолт
 - SF Symbols: `timer.fill` не существует в SFSymbols7_0, используй `timer`
 - `logTransactionToSheets` принимает полные поля транзакции (не fromName/toName)
@@ -71,3 +84,4 @@
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
 - Все секреты: DATABASE_URL, SESSION_SECRET, TELEGRAM_BOT_TOKEN, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
 - Опциональные секреты (уже добавлены): GOOGLE_SHEETS_ID, GOOGLE_SERVICE_ACCOUNT_JSON
+- Опциональный секрет: ADMIN_TELEGRAM_ID (числовой ID для /migratedata команды)

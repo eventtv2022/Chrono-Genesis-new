@@ -123,7 +123,7 @@ export default function StatsScreen() {
           { icon: "users", num: data?.totalCitizens ?? 0, label: "граждан", color: colors.primary },
           { icon: "activity", num: data?.activeCitizens ?? 0, label: "активных", color: colors.success },
           { icon: "repeat", num: data?.totalTransactions ?? 0, label: "транзакций", color: colors.primary },
-          { icon: "clock", num: data?.totalMinutesCirculated ?? 0, label: "мин в обороте", color: colors.primary },
+          { icon: "clock", num: data?.totalMinutesCirculated ?? 0, label: "Д в обороте", color: colors.primary },
         ].map((m) => (
           <View key={m.label} style={styles.metricCard}>
             <Feather name={m.icon as keyof typeof Feather.glyphMap} size={18} color={m.color} />
@@ -141,7 +141,7 @@ export default function StatsScreen() {
               <Text style={styles.rankNum}>#{i + 1}</Text>
               <View style={styles.rankAvatar}><Text style={styles.rankAvatarText}>{c.name.charAt(0)}</Text></View>
               <Text style={styles.rankName}>{c.name}</Text>
-              <View style={styles.rankBadge}><Text style={styles.rankBadgeText}>+{c.totalGiven} мин</Text></View>
+              <View style={styles.rankBadge}><Text style={styles.rankBadgeText}>+{c.totalGiven} Д</Text></View>
             </View>
           ))}
         </View>
@@ -158,7 +158,7 @@ export default function StatsScreen() {
               </View>
               <View style={styles.txAmount}>
                 <Text style={styles.txAmountText}>+{t.minutesTransferred}</Text>
-                <Text style={styles.txAmountUnit}>мин</Text>
+                <Text style={styles.txAmountUnit}>Д</Text>
               </View>
             </View>
           ))}

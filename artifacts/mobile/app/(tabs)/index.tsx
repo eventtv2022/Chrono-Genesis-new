@@ -122,7 +122,7 @@ export default function TimerScreen() {
       const mins = result.transaction.minutesTransferred;
       const secs = result.transaction.durationSeconds;
       const sheetsStatus = result.sheetsLogged ? "Записано в Казначейство" : "Ошибка записи в таблицу";
-      Alert.alert("Сессия завершена", `Передано: ${mins} мин\nДлительность: ${formatTime(secs)}\n${sheetsStatus}`);
+      Alert.alert("Сессия завершена", `Передано: ${mins} Д\nДлительность: ${formatTime(secs)}\n${sheetsStatus}`);
     },
     onError: (err) => Alert.alert("Ошибка", err.message),
   });
@@ -170,7 +170,7 @@ export default function TimerScreen() {
             </View>
             <View style={styles.balancePill}>
               <Feather name="clock" size={12} color={colors.primary} />
-              <Text style={styles.balanceText}>{citizen.balanceMinutes} мин</Text>
+              <Text style={styles.balanceText}>{citizen.balanceMinutes} Д</Text>
             </View>
             <TouchableOpacity
               style={styles.shopBtn}
@@ -208,7 +208,7 @@ export default function TimerScreen() {
           <Feather name="star" size={11} color={colors.primary} />
           <Text style={styles.meritText}>Merit: {(citizen.meritScore ?? 0).toFixed(2)}</Text>
           <Text style={styles.meritSep}>·</Text>
-          <Text style={styles.meritText}>Отдано: {citizen.totalGiven} мин</Text>
+          <Text style={styles.meritText}>Отдано: {citizen.totalGiven} Д</Text>
         </View>
       )}
 
@@ -218,7 +218,7 @@ export default function TimerScreen() {
             <AnimatedHourglass active={true} size={36} />
             <Text style={styles.timerLabel}>→ {recipientCitizen?.name ?? "..."}</Text>
             <Text style={styles.timerDisplay}>{formatTime(elapsed)}</Text>
-            <Text style={styles.timerSub}>~{Math.max(1, Math.ceil(elapsed / 60))} мин будет передано</Text>
+            <Text style={styles.timerSub}>~{Math.max(1, Math.ceil(elapsed / 60))} Д будет передано</Text>
             <TouchableOpacity style={styles.stopBtn} onPress={handleStop} disabled={stopMutation.isPending} activeOpacity={0.75}>
               {stopMutation.isPending ? (
                 <ActivityIndicator color={colors.destructiveForeground} />
@@ -299,7 +299,7 @@ export default function TimerScreen() {
                 </View>
                 <View style={styles.citizenInfo}>
                   <Text style={styles.citizenName}>{item.name}</Text>
-                  <Text style={styles.citizenBalance}>{item.balanceMinutes} мин</Text>
+                  <Text style={styles.citizenBalance}>{item.balanceMinutes} Д</Text>
                 </View>
                 {isActive && (
                   <View style={styles.activeIndicator}>
