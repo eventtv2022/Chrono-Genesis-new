@@ -190,6 +190,71 @@ export interface PaymentCheckoutResult {
   sessionId: string;
 }
 
+export type TvSlotSlotType = typeof TvSlotSlotType[keyof typeof TvSlotSlotType];
+
+
+export const TvSlotSlotType = {
+  citizen: 'citizen',
+  quarter: 'quarter',
+  half: 'half',
+  apex: 'apex',
+} as const;
+
+export type TvSlotStatus = typeof TvSlotStatus[keyof typeof TvSlotStatus];
+
+
+export const TvSlotStatus = {
+  free: 'free',
+  booked: 'booked',
+  aired: 'aired',
+} as const;
+
+export interface TvSlot {
+  id: number;
+  date: string;
+  minuteIndex: number;
+  slotType: TvSlotSlotType;
+  status: TvSlotStatus;
+  /** @nullable */
+  ownerId: number | null;
+  /** @nullable */
+  ownerName: string | null;
+  timeltrBurnCost: number;
+  isRetro: boolean;
+  hourLabel: string;
+  minLabel: string;
+}
+
+export interface TvSlotsResponse {
+  date: string;
+  count: number;
+  slots: TvSlot[];
+}
+
+export interface TvScheduleEntry {
+  slotId: number;
+  minuteIndex: number;
+  slotType: string;
+  hourLabel: string;
+  minLabel: string;
+  /** @nullable */
+  ownerName: string | null;
+  hasRenderedVideo: boolean;
+  /** @nullable */
+  catcastUrl: string | null;
+  /** @nullable */
+  mediaUrl: string | null;
+  isRetro: boolean;
+}
+
+export interface TvScheduleResponse {
+  date: string;
+  totalSlots: number;
+  bookedSlots: number;
+  freeSlots: number;
+  schedule: TvScheduleEntry[];
+}
+
 export type ListTransactionsParams = {
 citizenId?: number;
 limit?: number;
@@ -203,5 +268,19 @@ day?: string;
 
 export type StripeWebhook200 = {
   received: boolean;
+};
+
+export type GetTvSlotsParams = {
+/**
+ * YYYY-MM-DD
+ */
+date: string;
+};
+
+export type GetTvScheduleParams = {
+/**
+ * YYYY-MM-DD
+ */
+date: string;
 };
 

@@ -636,6 +636,72 @@ router.post("/tv/capsule/:id/report", async (req, res): Promise<void> => {
   });
 });
 
+// ─── GET /api/tv/schedule?date=YYYY-MM-DD ────────────────────────────────────
+// Public schedule summary: booked slots + capsule render status for a date.
+router.get("/tv/schedule", async (req, res): Promise<void> => {
+  const date = (req.query["date"] as string | undefined) ?? "";
+  if (!isValidDate(date)) {
+    res.status(400).json({ error: "Параметр date обязателен в формате YYYY-MM-DD" });
+    return;
+  }
+
+  await ensureSlotsForDate(date);
+
+  const slots = await db
+    .select()
+    .from(tvSlotsTable)
+    .where(eq(tvSlotsTable.date, date))
+    .orderBy(tvSlotsTable.minuteIndex);
+
+  const bookedSlots = slots.filter((s) => s.status === "booked" || s.status === "aired");
+
+  // Load capsules for booked slots
+  const bookedIds = bookedSlots.map((s) => s.id);
+  const capsules =
+    bookedIds.length > 0
+      ? await db
+          .select()
+          .from(tvCapsulesTable)
+          .where(inArray(tvCapsulesTable.slotId, bookedIds))
+      : [];
+  const capsuleBySlot = new Map(capsules.map((c) => [c.slotId, c]));
+
+  // Load owner names
+  const ownerIds = [...new Set(bookedSlots.map((s) => s.ownerId).filter(Boolean))] as number[];
+  const owners =
+    ownerIds.length > 0
+      ? await db
+          .select({ id: citizensTable.id, name: citizensTable.name })
+          .from(citizensTable)
+          .where(inArray(citizensTable.id, ownerIds))
+      : [];
+  const ownerMap = new Map(owners.map((o) => [o.id, o.name]));
+
+  const schedule = bookedSlots.map((s) => {
+    const capsule = capsuleBySlot.get(s.id);
+    return {
+      slotId: s.id,
+      minuteIndex: s.minuteIndex,
+      slotType: s.slotType,
+      hourLabel: String(Math.floor(s.minuteIndex / 60)).padStart(2, "0"),
+      minLabel: String(s.minuteIndex % 60).padStart(2, "0"),
+      ownerName: s.ownerId ? (ownerMap.get(s.ownerId) ?? null) : null,
+      hasRenderedVideo: !!(capsule?.mediaUrl),
+      catcastUrl: capsule?.catcastUrl ?? null,
+      mediaUrl: capsule?.mediaUrl ?? null,
+      isRetro: isRetroSlot(s.date, s.minuteIndex),
+    };
+  });
+
+  res.json({
+    date,
+    totalSlots: slots.length,
+    bookedSlots: bookedSlots.length,
+    freeSlots: slots.length - bookedSlots.length,
+    schedule,
+  });
+});
+
 // ─── GET /api/tv/media/:filename ───────────────────────────────────────────────
 // Serve generated MP4 files from the media directory
 router.get("/tv/media/:filename", (req, res): void => {

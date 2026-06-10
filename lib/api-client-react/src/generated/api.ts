@@ -27,6 +27,8 @@ import type {
   EconomyStats,
   ErrorResponse,
   GetTimelineOccupiedParams,
+  GetTvScheduleParams,
+  GetTvSlotsParams,
   HealthStatus,
   HeritageTransferInput,
   HeritageTransferResult,
@@ -41,7 +43,9 @@ import type {
   TimelineAnchorInput,
   TimelineAnchorResult,
   TimelineOccupiedEntry,
-  Transaction
+  Transaction,
+  TvScheduleResponse,
+  TvSlotsResponse
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1403,4 +1407,172 @@ export const useStripeWebhook = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getStripeWebhookMutationOptions(options));
     }
+
+export const getGetTvSlotsUrl = (params: GetTvSlotsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/tv/slots?${stringifiedParams}` : `/api/tv/slots`
+}
+
+/**
+ * @summary Get all 1440 TV slots for a given date
+ */
+export const getTvSlots = async (params: GetTvSlotsParams, options?: RequestInit): Promise<TvSlotsResponse> => {
+
+  return customFetch<TvSlotsResponse>(getGetTvSlotsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTvSlotsQueryKey = (params?: GetTvSlotsParams,) => {
+    return [
+    `/api/tv/slots`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTvSlotsQueryOptions = <TData = Awaited<ReturnType<typeof getTvSlots>>, TError = ErrorType<ErrorResponse>>(params: GetTvSlotsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTvSlots>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTvSlotsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTvSlots>>> = ({ signal }) => getTvSlots(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTvSlots>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTvSlotsQueryResult = NonNullable<Awaited<ReturnType<typeof getTvSlots>>>
+export type GetTvSlotsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get all 1440 TV slots for a given date
+ */
+
+export function useGetTvSlots<TData = Awaited<ReturnType<typeof getTvSlots>>, TError = ErrorType<ErrorResponse>>(
+ params: GetTvSlotsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTvSlots>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTvSlotsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTvScheduleUrl = (params: GetTvScheduleParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/tv/schedule?${stringifiedParams}` : `/api/tv/schedule`
+}
+
+/**
+ * @summary Daily TV schedule summary — booked slots with capsule info
+ */
+export const getTvSchedule = async (params: GetTvScheduleParams, options?: RequestInit): Promise<TvScheduleResponse> => {
+
+  return customFetch<TvScheduleResponse>(getGetTvScheduleUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTvScheduleQueryKey = (params?: GetTvScheduleParams,) => {
+    return [
+    `/api/tv/schedule`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTvScheduleQueryOptions = <TData = Awaited<ReturnType<typeof getTvSchedule>>, TError = ErrorType<ErrorResponse>>(params: GetTvScheduleParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTvSchedule>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTvScheduleQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTvSchedule>>> = ({ signal }) => getTvSchedule(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTvSchedule>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTvScheduleQueryResult = NonNullable<Awaited<ReturnType<typeof getTvSchedule>>>
+export type GetTvScheduleQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Daily TV schedule summary — booked slots with capsule info
+ */
+
+export function useGetTvSchedule<TData = Awaited<ReturnType<typeof getTvSchedule>>, TError = ErrorType<ErrorResponse>>(
+ params: GetTvScheduleParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTvSchedule>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTvScheduleQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 

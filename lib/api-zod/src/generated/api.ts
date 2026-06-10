@@ -388,3 +388,56 @@ export const StripeWebhookResponse = zod.object({
 })
 
 
+/**
+ * @summary Get all 1440 TV slots for a given date
+ */
+export const GetTvSlotsQueryParams = zod.object({
+  "date": zod.coerce.string()
+})
+
+export const GetTvSlotsResponse = zod.object({
+  "date": zod.string(),
+  "count": zod.number(),
+  "slots": zod.array(zod.object({
+  "id": zod.number(),
+  "date": zod.string(),
+  "minuteIndex": zod.number(),
+  "slotType": zod.enum(['citizen', 'quarter', 'half', 'apex']),
+  "status": zod.enum(['free', 'booked', 'aired']),
+  "ownerId": zod.number().nullable(),
+  "ownerName": zod.string().nullable(),
+  "timeltrBurnCost": zod.number(),
+  "isRetro": zod.boolean(),
+  "hourLabel": zod.string(),
+  "minLabel": zod.string()
+}))
+})
+
+
+/**
+ * @summary Daily TV schedule summary — booked slots with capsule info
+ */
+export const GetTvScheduleQueryParams = zod.object({
+  "date": zod.coerce.string()
+})
+
+export const GetTvScheduleResponse = zod.object({
+  "date": zod.string(),
+  "totalSlots": zod.number(),
+  "bookedSlots": zod.number(),
+  "freeSlots": zod.number(),
+  "schedule": zod.array(zod.object({
+  "slotId": zod.number(),
+  "minuteIndex": zod.number(),
+  "slotType": zod.string(),
+  "hourLabel": zod.string(),
+  "minLabel": zod.string(),
+  "ownerName": zod.string().nullable(),
+  "hasRenderedVideo": zod.boolean(),
+  "catcastUrl": zod.string().nullable(),
+  "mediaUrl": zod.string().nullable(),
+  "isRetro": zod.boolean()
+}))
+})
+
+

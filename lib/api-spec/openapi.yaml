@@ -502,6 +502,58 @@ paths:
                 required:
                   - received
 
+  /tv/slots:
+    get:
+      operationId: getTvSlots
+      tags: [tv]
+      summary: Get all 1440 TV slots for a given date
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            description: "YYYY-MM-DD"
+      responses:
+        "200":
+          description: Slot list for the date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TvSlotsResponse"
+        "400":
+          description: Invalid date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tv/schedule:
+    get:
+      operationId: getTvSchedule
+      tags: [tv]
+      summary: Daily TV schedule summary — booked slots with capsule info
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            description: "YYYY-MM-DD"
+      responses:
+        "200":
+          description: Schedule summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TvScheduleResponse"
+        "400":
+          description: Invalid date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -856,3 +908,116 @@ components:
       required:
         - url
         - sessionId
+
+    TvSlot:
+      type: object
+      properties:
+        id:
+          type: integer
+        date:
+          type: string
+        minuteIndex:
+          type: integer
+        slotType:
+          type: string
+          enum: [citizen, quarter, half, apex]
+        status:
+          type: string
+          enum: [free, booked, aired]
+        ownerId:
+          type: ["integer", "null"]
+        ownerName:
+          type: ["string", "null"]
+        timeltrBurnCost:
+          type: integer
+        isRetro:
+          type: boolean
+        hourLabel:
+          type: string
+        minLabel:
+          type: string
+      required:
+        - id
+        - date
+        - minuteIndex
+        - slotType
+        - status
+        - ownerId
+        - ownerName
+        - timeltrBurnCost
+        - isRetro
+        - hourLabel
+        - minLabel
+
+    TvSlotsResponse:
+      type: object
+      properties:
+        date:
+          type: string
+        count:
+          type: integer
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/TvSlot"
+      required:
+        - date
+        - count
+        - slots
+
+    TvScheduleEntry:
+      type: object
+      properties:
+        slotId:
+          type: integer
+        minuteIndex:
+          type: integer
+        slotType:
+          type: string
+        hourLabel:
+          type: string
+        minLabel:
+          type: string
+        ownerName:
+          type: ["string", "null"]
+        hasRenderedVideo:
+          type: boolean
+        catcastUrl:
+          type: ["string", "null"]
+        mediaUrl:
+          type: ["string", "null"]
+        isRetro:
+          type: boolean
+      required:
+        - slotId
+        - minuteIndex
+        - slotType
+        - hourLabel
+        - minLabel
+        - ownerName
+        - hasRenderedVideo
+        - catcastUrl
+        - mediaUrl
+        - isRetro
+
+    TvScheduleResponse:
+      type: object
+      properties:
+        date:
+          type: string
+        totalSlots:
+          type: integer
+        bookedSlots:
+          type: integer
+        freeSlots:
+          type: integer
+        schedule:
+          type: array
+          items:
+            $ref: "#/components/schemas/TvScheduleEntry"
+      required:
+        - date
+        - totalSlots
+        - bookedSlots
+        - freeSlots
+        - schedule
