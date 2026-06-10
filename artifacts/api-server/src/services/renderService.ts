@@ -49,6 +49,30 @@ function hashStr(s: string): number {
 }
 
 // ── ElevenLabs TTS ─────────────────────────────────────────────────────────────
+
+/** Fetch first available voice for this API key (works on free plans). */
+async function resolveVoiceId(apiKey: string): Promise<string> {
+  try {
+    const res = await fetch("https://api.elevenlabs.io/v1/voices", {
+      headers: { "xi-api-key": apiKey },
+    });
+    if (!res.ok) return ELEVENLABS_VOICE_ID; // fallback
+    const data = (await res.json()) as { voices?: { voice_id: string; name: string; category?: string }[] };
+    const voices = data.voices ?? [];
+    // Prefer "cloned" or "generated" voices first (always usable on any plan),
+    // then any voice that belongs to this account ("my" category / no category).
+    const mine = voices.find(
+      (v) => v.category === "cloned" || v.category === "generated"
+    );
+    if (mine) return mine.voice_id;
+    // Fall back to the first voice in the list (may be premade — works on paid plans)
+    if (voices.length > 0) return voices[0]!.voice_id;
+  } catch {
+    // ignore, use default
+  }
+  return ELEVENLABS_VOICE_ID;
+}
+
 export async function generateTTSBuffer(text: string): Promise<Buffer | null> {
   const apiKey = process.env["ELEVENLABS_API_KEY"];
   if (!apiKey) {
@@ -56,9 +80,12 @@ export async function generateTTSBuffer(text: string): Promise<Buffer | null> {
     return null;
   }
 
+  const voiceId = await resolveVoiceId(apiKey);
+  logger.info({ voiceId }, "ElevenLabs TTS: using voice");
+
   try {
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
       {
         method: "POST",
         headers: {
@@ -74,10 +101,8 @@ export async function generateTTSBuffer(text: string): Promise<Buffer | null> {
     );
 
     if (!response.ok) {
-      logger.warn(
-        { status: response.status, body: await response.text() },
-        "ElevenLabs TTS error"
-      );
+      const body = await response.text();
+      logger.warn({ status: response.status, body, voiceId }, "ElevenLabs TTS error");
       return null;
     }
 
