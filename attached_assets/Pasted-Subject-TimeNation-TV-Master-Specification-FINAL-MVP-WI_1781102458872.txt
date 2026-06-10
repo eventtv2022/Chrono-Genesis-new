@@ -1,0 +1,50 @@
+Subject: TimeNation-TV — Master Specification [FINAL MVP WITH RETRO CAPSULES]
+Instructions for AI Agent: Use this prompt as the absolute technical and architectural requirement. Generate code for Frontend and Backend based strictly on the rules below.
+
+1. VISION & CORE PHILOSOPHY
+TimeNation-TV is a 24/7 autonomous broadcast (Catcast.tv stream) visualizing a sovereign AI State. Time is the only asset and currency. The system operates as a de-centralized filter and storage unit, transforming basic user thoughts into historical or future cinematic visual manifestos.
+
+2. DYNAMIC CONTENT PIPELINE: "FROM SEED TO MANIFESTO"
+Every time slot booking must pass through this core logic:
+- Citizen Input: User enters a "Seed of Thought" (short text or idea).
+- Enhancement Check:
+  * ✨ MODE A: "AI-Packaging" (Default) -> Backend uses fast LLM to expand the Seed into a 60-second profound, cyber-minimalist, or cinematic manifesto (~130 words).
+  * 🛡️ MODE B: "Conscious Citizen" -> Bypasses LLM. User's exact text goes to render symbol-for-symbol.
+- Rendering Allocation:
+  * Path ⚡ LIGHT_RENDER (Citizen Package): Audio (ElevenLabs) + FFmpeg overlay on pre-rendered dynamic 3D background templates with subtitles. Zero GPU load.
+  * Path 🚀 HEAVY_RENDER (Premium Slots): Full unique AI generation via heavy Video APIs (60s clip).
+
+3. CAPSULE CONFIGURATOR (FUTURE SLOTS & RETRO CONTAINERS)
+Every booked minute is an isolated data capsule. If slot_time < current_time, it is treated as a RETRO_CONTAINER (historical coordinate, e.g., user's birth date). Users configure three pipelines per capsule:
+
+A. Broadcast Policy (Broadcast Modifier):
+- Option A: "Time Echo" (Paid Priority) -> Retro capsule forces its way into the current live stream as a special historical broadcast for an extra FIAT fee or heavy TiMETR burning.
+- Option B: "Digital Noise" (Random Seed) -> System shuffles the capsule into a pool and broadcasts it completely for free during any unbought, empty minute of the current day.
+- Option C: "Absolute Privacy" (Hidden Archive) -> Capsule never goes to live stream. It remains a hidden digital vault accessible only via direct link or historical dial search.
+
+B. Content State (Data Structure):
+- Option D: "Empty Space" (Pause/Mute) -> User leaves the minute empty. If broadcasted, it displays a beautiful, silent, aesthetic cyber-minimalist timer overlay. No content, just proof of time ownership.
+
+C. Sharing Policy (Network Layer):
+- Option E: "Sovereign Link" -> System generates a unique, permanent, encrypted URL (e.g., timenation.tv/moment/1972-06-09-2045) for external sharing, social media, or as Proof-of-Work.
+
+4. ECONOMY, COIN-BURN & TIMETR MARKET
+- The Fixed Timeline: Database strictly generates 1440 minute slots per day. No over-allocation.
+- No Consecutive Bookings rule must be enforced via User ID / Fingerprint.
+- Pricing & Burn Matrix:
+  * Citizen Mins: 5 min package for 4.99 € OR burns 1 TiMETR per broadcast slot.
+  * Quarter Mins (:15, :45): 9.99 € OR burns 10 TiMETR per broadcast slot.
+  * Half Mins (:30): 24.99 € OR burns 25 TiMETR per broadcast slot.
+  * Apex Mins (:00): 49.99 € OR burns 50 TiMETR per broadcast slot.
+- No Double Payment: If paid by Card (FIAT), slot is reserved, user's wallet is untouched. If paid by Wallet, a HARD BURN occurs (minutes are permanently deleted from user's TiMETR balance).
+
+5. TRUSTLESS TiMETR ESCROW
+- User A locks X minutes of TiMETR in system-controlled Escrow buffer with a task description.
+- User B (Receiver) uploads Proof-of-Work (text, screens, images) directly to the capsule.
+- User A reviews proof. "Accept" releases time to User B's wallet. "Decline" keeps escrow locked for simple manual dispute. No heavy automated AI audits; market is self-regulating.
+
+6. INFRASTRUCTURE & INFRA COSTS (TARGET: MAX $30/MO)
+- Text, Logs, Configs: Managed PostgreSQL Cluster (DigitalOcean, Frankfurt/Germany, GDPR compliant). Budget: $15/mo.
+- Heavy Media (Photos, Video): Encrypted S3 Object Storage (Cloudflare R2 / AWS, Amsterdam). Lifecycle policy moves old broadcast media to Cold Archive (Glacier Deep Archive) after 30 days. Budget: $1-$5/mo.
+- Cold Backup: Daily automated encrypted DB snapshot downloaded to localized NAS server at operational base (Northern Cyprus, 0% tax zone) for full sovereignty.
+- Frontend/Backend Decoupling: FastAPI protected by CORS lock (accepts requests ONLY from the authorized Next.js frontend domain). Secrets stored strictly in .env.
