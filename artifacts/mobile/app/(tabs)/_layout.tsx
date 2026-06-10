@@ -30,6 +30,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "tag", selected: "tag.fill" }} />
         <Label>Аукцион</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="tv">
+        <Icon sf={{ default: "play.tv", selected: "play.tv.fill" }} />
+        <Label>TV</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -96,6 +100,13 @@ function ClassicTabLayout() {
         options={{
           title: "Аукцион",
           tabBarIcon: ({ color }) => <Feather name="tag" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="tv"
+        options={{
+          title: "TV",
+          tabBarIcon: ({ color }) => <Feather name="tv" size={22} color={color} />,
         }}
       />
     </Tabs>
