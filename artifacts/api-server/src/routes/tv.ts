@@ -13,6 +13,9 @@ import {
   BURN_MATRIX,
   type SlotType,
 } from "../services/tvService";
+import { renderCapsule, MEDIA_DIR } from "../services/renderService";
+import fs from "fs";
+import path from "path";
 
 const STRIPE_SECRET_KEY = process.env["STRIPE_SECRET_KEY"];
 
@@ -509,6 +512,75 @@ router.get("/tv/schedule", async (req, res): Promise<void> => {
     free: free.length,
     slots,
   });
+});
+
+// ─── POST /api/tv/capsule/:slotId/render ──────────────────────────────────────
+// Trigger LIGHT render pipeline: Mode A/B manifesto → ElevenLabs TTS → FFmpeg
+router.post("/tv/capsule/:slotId/render", async (req, res): Promise<void> => {
+  const slotId = parseInt(req.params["slotId"] ?? "", 10);
+  if (isNaN(slotId)) { res.status(400).json({ error: "Invalid slotId" }); return; }
+
+  const citizenId = z.number().int().positive().safeParse(req.body?.citizenId);
+  if (!citizenId.success) { res.status(400).json({ error: "citizenId обязателен" }); return; }
+
+  // Verify ownership
+  const [capsule] = await db
+    .select()
+    .from(tvCapsulesTable)
+    .where(eq(tvCapsulesTable.slotId, slotId))
+    .limit(1);
+
+  if (!capsule) { res.status(404).json({ error: "Капсула не найдена" }); return; }
+  if (capsule.citizenId !== citizenId.data) {
+    res.status(403).json({ error: "Только владелец может запустить рендер" });
+    return;
+  }
+  if (capsule.status === "pending_render") {
+    res.status(409).json({ error: "Рендер уже запущен" });
+    return;
+  }
+  if (capsule.status === "broadcast") {
+    res.status(409).json({ error: "Капсула уже в эфире" });
+    return;
+  }
+
+  req.log.info({ slotId, citizenId: citizenId.data, mode: capsule.mode }, "Render triggered");
+
+  // Run render synchronously for MVP (typically < 15s for 60s clip)
+  try {
+    const result = await renderCapsule(slotId);
+    res.json({
+      ok: true,
+      slotId,
+      status: result.status,
+      mediaUrl: result.mediaUrl,
+      manifestoWords: result.manifestoText.split(/\s+/).filter(Boolean).length,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    req.log.error({ err, slotId }, "Render failed");
+    res.status(500).json({ error: `Ошибка рендера: ${msg}` });
+  }
+});
+
+// ─── GET /api/tv/media/:filename ───────────────────────────────────────────────
+// Serve generated MP4 files from the media directory
+router.get("/tv/media/:filename", (req, res): void => {
+  const filename = req.params["filename"] ?? "";
+  if (!filename.endsWith(".mp4") || filename.includes("..") || filename.includes("/")) {
+    res.status(400).json({ error: "Invalid filename" });
+    return;
+  }
+
+  const filePath = path.join(MEDIA_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: "Медиафайл не найден. Запустите рендер." });
+    return;
+  }
+
+  res.setHeader("Content-Type", "video/mp4");
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  fs.createReadStream(filePath).pipe(res);
 });
 
 export default router;

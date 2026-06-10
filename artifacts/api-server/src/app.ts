@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { MEDIA_DIR } from "./services/renderService";
 
 const app: Express = express();
 
@@ -32,5 +33,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+// Serve generated TV media files (MP4) at /media/*
+// Placed after /api to avoid conflicts
+app.use("/media", express.static(MEDIA_DIR, {
+  maxAge: "1d",
+  setHeaders(res) {
+    res.setHeader("Content-Type", "video/mp4");
+  },
+}));
 
 export default app;
