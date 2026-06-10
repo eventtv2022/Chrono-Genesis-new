@@ -3,8 +3,9 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { db } from "@workspace/db";
-import { tvCapsulesTable } from "@workspace/db";
+import { tvCapsulesTable, citizensTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { uploadToCatcast } from "./catcastService";
 import { logger } from "../lib/logger";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -192,7 +193,20 @@ export async function renderLightVideo(
       });
     });
 
-    const vf = [titleFilter, slotFilter, ...segFilters].join(",");
+    // EU AI Act / China CAC: permanent AI watermark, bottom-right corner
+    const watermarkFilter =
+      `drawtext=text='TimeNation AI':fontsize=14:fontcolor=white@0.75:` +
+      `x=w-tw-10:y=h-th-10:shadowcolor=black@0.5:shadowx=1:shadowy=1`;
+
+    const vf = [titleFilter, slotFilter, ...segFilters, watermarkFilter].join(",");
+
+    // Cryptographic metadata injection (EU AI Act / CAC Article 25)
+    const metadataArgs = [
+      "-metadata", `title=TimeNation-TV — Slot ${slotId}`,
+      "-metadata", "comment=Author: TimeNation AI, Type: Synthesized Media",
+      "-metadata", "artist=TimeNation",
+      "-metadata", "description=AI Generated / Сгенерировано ИИ / Generated via Artificial Intelligence technologies.",
+    ];
 
     let args: string[];
 
@@ -206,6 +220,7 @@ export async function renderLightVideo(
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
         "-c:a", "aac", "-b:a", "128k",
         "-shortest",
+        ...metadataArgs,
         "-y", outputPath,
       ];
     } else {
@@ -216,6 +231,7 @@ export async function renderLightVideo(
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
         "-c:a", "aac",
         "-t", String(VIDEO_DURATION_SEC),
+        ...metadataArgs,
         "-y", outputPath,
       ];
     }
@@ -290,7 +306,7 @@ export async function renderCapsule(slotId: number): Promise<{
     finalStatus = "draft";
   }
 
-  // 4. Persist results
+  // 4. Persist local render
   await db
     .update(tvCapsulesTable)
     .set({
@@ -301,5 +317,40 @@ export async function renderCapsule(slotId: number): Promise<{
     })
     .where(eq(tvCapsulesTable.slotId, slotId));
 
-  return { manifestoText, mediaUrl, status: finalStatus };
+  // 5. Upload to Catcast.tv (async, non-blocking for caller)
+  let catcastUrl: string | null = null;
+  if (finalStatus === "rendered" && mediaUrl) {
+    const outputPath = path.join(MEDIA_DIR, `slot_${slotId}.mp4`);
+    const [citizen] = await db
+      .select({ name: citizensTable.name })
+      .from(citizensTable)
+      .where(eq(citizensTable.id, capsule.citizenId))
+      .limit(1);
+    const citizenName = citizen?.name ?? "Гражданин TimeNation";
+
+    const catcastResult = await uploadToCatcast(
+      outputPath,
+      slotId,
+      citizenName,
+      capsule.seedText ?? ""
+    ).catch((err) => {
+      logger.warn({ err, slotId }, "Catcast upload threw, skipping");
+      return null;
+    });
+
+    if (catcastResult) {
+      catcastUrl = catcastResult.videoUrl;
+      await db
+        .update(tvCapsulesTable)
+        .set({
+          catcastVideoId: catcastResult.videoId,
+          catcastUrl: catcastResult.videoUrl,
+          updatedAt: new Date(),
+        })
+        .where(eq(tvCapsulesTable.slotId, slotId));
+      logger.info({ slotId, catcastUrl }, "Capsule published to Catcast");
+    }
+  }
+
+  return { manifestoText, mediaUrl, catcastUrl, status: finalStatus };
 }

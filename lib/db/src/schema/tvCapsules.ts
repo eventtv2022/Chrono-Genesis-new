@@ -26,7 +26,14 @@ export const tvCapsulesTable = pgTable("tv_capsules", {
   contentState: text("content_state").notNull().default("filled"), // filled | empty
   hasSovereignLink: boolean("has_sovereign_link").notNull().default(false),
   sovereignUrl: text("sovereign_url").unique(), // timenation.tv/moment/YYYY-MM-DD-HHmm
-  mediaUrl: text("media_url"), // S3/R2 после рендера
+  mediaUrl: text("media_url"), // local rendered MP4 path
+  // ── Catcast.tv publishing ─────────────────────────────────────────────────
+  catcastVideoId: text("catcast_video_id"), // Catcast internal video ID
+  catcastUrl: text("catcast_url"), // public Catcast video URL (video_url in meaning_containers)
+  // ── Compliance & Moderation ───────────────────────────────────────────────
+  isReported: boolean("is_reported").notNull().default(false), // DMCA / takedown flag
+  reportStatus: text("report_status").notNull().default("active"), // active | suspended | removed
+  reportReason: text("report_reason"), // reason from reporter
   status: text("status").notNull().default("draft"), // draft | pending_render | rendered | scheduled | broadcast
   isRetro: boolean("is_retro").notNull().default(false), // slot_time < NOW
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

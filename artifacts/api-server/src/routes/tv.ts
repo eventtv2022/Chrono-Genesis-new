@@ -14,6 +14,8 @@ import {
   type SlotType,
 } from "../services/tvService";
 import { renderCapsule, MEDIA_DIR } from "../services/renderService";
+import { sanctionsMiddleware } from "../middleware/sanctions";
+import { moderateText } from "../middleware/moderation";
 import fs from "fs";
 import path from "path";
 
@@ -544,6 +546,26 @@ router.post("/tv/capsule/:slotId/render", async (req, res): Promise<void> => {
     return;
   }
 
+  // ── Sanctions check (OFAC / international compliance) ──────────────────────
+  await new Promise<void>((resolve, reject) => {
+    sanctionsMiddleware(req, res, (err?: unknown) => {
+      if (err) reject(err); else resolve();
+    });
+  }).catch(() => { /* res already sent by middleware */ });
+  if (res.headersSent) return;
+
+  // ── Content moderation (EU DSA / US/RU/CN frameworks) ───────────────────────
+  if (capsule.seedText) {
+    const modResult = moderateText(capsule.seedText);
+    if (!modResult.allowed) {
+      res.status(422).json({
+        error: "Ваш текст не прошел проверку глобальной безопасности контента.",
+        code: "CONTENT_MODERATION_BLOCK",
+      });
+      return;
+    }
+  }
+
   req.log.info({ slotId, citizenId: citizenId.data, mode: capsule.mode }, "Render triggered");
 
   // Run render synchronously for MVP (typically < 15s for 60s clip)
@@ -554,6 +576,7 @@ router.post("/tv/capsule/:slotId/render", async (req, res): Promise<void> => {
       slotId,
       status: result.status,
       mediaUrl: result.mediaUrl,
+      catcastUrl: result.catcastUrl ?? null,
       manifestoWords: result.manifestoText.split(/\s+/).filter(Boolean).length,
     });
   } catch (err) {
@@ -561,6 +584,56 @@ router.post("/tv/capsule/:slotId/render", async (req, res): Promise<void> => {
     req.log.error({ err, slotId }, "Render failed");
     res.status(500).json({ error: `Ошибка рендера: ${msg}` });
   }
+});
+
+// ─── POST /api/tv/capsule/:id/report  (DMCA / takedown) ───────────────────────
+// US DMCA § 512 notice-and-takedown: immediately suspends capsule from public view.
+router.post("/tv/capsule/:id/report", async (req, res): Promise<void> => {
+  const capsuleId = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(capsuleId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const bodySchema = z.object({
+    reason: z.string().min(1).max(2000),
+    reporterEmail: z.string().email().optional(),
+    copyrightOwner: z.string().max(200).optional(),
+  });
+  const body = bodySchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: "reason обязателен" }); return; }
+
+  const [capsule] = await db
+    .select({ id: tvCapsulesTable.id, reportStatus: tvCapsulesTable.reportStatus })
+    .from(tvCapsulesTable)
+    .where(eq(tvCapsulesTable.id, capsuleId))
+    .limit(1);
+
+  if (!capsule) { res.status(404).json({ error: "Капсула не найдена" }); return; }
+  if (capsule.reportStatus === "removed") {
+    res.status(410).json({ error: "Контент уже удалён" });
+    return;
+  }
+
+  const reportNote = [
+    body.data.reason,
+    body.data.copyrightOwner ? `Copyright owner: ${body.data.copyrightOwner}` : null,
+    body.data.reporterEmail ? `Reporter: ${body.data.reporterEmail}` : null,
+  ].filter(Boolean).join(" | ");
+
+  await db
+    .update(tvCapsulesTable)
+    .set({
+      isReported: true,
+      reportStatus: "suspended",
+      reportReason: reportNote,
+      updatedAt: new Date(),
+    })
+    .where(eq(tvCapsulesTable.id, capsuleId));
+
+  req.log.info({ capsuleId, reason: body.data.reason }, "DMCA report filed — capsule suspended");
+  res.json({
+    ok: true,
+    message: "Жалоба принята. Контент временно скрыт до проверки.",
+    capsuleId,
+  });
 });
 
 // ─── GET /api/tv/media/:filename ───────────────────────────────────────────────
