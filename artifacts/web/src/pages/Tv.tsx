@@ -306,36 +306,37 @@ export function Tv() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <div className="p-4 space-y-0.5 min-w-[720px]">
+                  <div className="p-3 space-y-[3px] min-w-[600px]">
                     {grid.map((row, hour) => (
                       <div key={hour} className="flex items-center gap-1">
-                        <span className="text-[10px] font-mono text-muted-foreground w-7 shrink-0 text-right">
+                        <span className="text-[10px] font-mono text-muted-foreground w-7 shrink-0 text-right select-none">
                           {String(hour).padStart(2, "0")}
                         </span>
-                        <div className="flex gap-[1px] flex-1">
+                        {/* flex-1 basis-0 distributes width evenly while respecting gap */}
+                        <div className="flex gap-[2px] flex-1">
                           {row.map((slot, min) => {
                             if (!slot) return (
                               <div
                                 key={min}
-                                className="w-[calc(100%/60)] h-3 bg-secondary/40 border border-border/20 rounded-[1px]"
+                                className="flex-1 basis-0 min-w-0 h-4 bg-white/5 border border-white/8 rounded-[2px]"
                               />
                             );
                             const isSel = selectedSlot?.id === slot.id;
                             const isFree = slot.status === "free";
                             const color = isSel
-                              ? "bg-yellow-400/70 border-yellow-300/80 ring-1 ring-yellow-300"
-                              : slot.status === "free"
-                                ? "bg-secondary/40 border-border/20"
-                                : SLOT_TYPE_COLORS[slot.slotType] ?? "bg-primary/30";
+                              ? "bg-yellow-400 border-yellow-300 ring-1 ring-yellow-200"
+                              : isFree
+                                ? "bg-white/8 border-white/12 hover:bg-primary/30 hover:border-primary/50"
+                                : (SLOT_TYPE_COLORS[slot.slotType] ?? "bg-primary/30 border-primary/50");
                             return (
                               <div
                                 key={min}
-                                title={`${slot.hourLabel}:${slot.minLabel} — ${TYPE_LABELS[slot.slotType] ?? slot.slotType} · ${slot.status === "free" ? "Свободно" : (slot.ownerName ?? "Занято")}`}
-                                onClick={() => handleSlotClick(slot)}
+                                title={`${slot.hourLabel}:${slot.minLabel} — ${TYPE_LABELS[slot.slotType] ?? slot.slotType} · ${isFree ? "Свободно" : (slot.ownerName ?? "Занято")}`}
+                                onClick={() => isFree && handleSlotClick(slot)}
                                 className={[
-                                  "w-[calc(100%/60)] h-3 border rounded-[1px] transition-opacity hover:opacity-80",
+                                  "flex-1 basis-0 min-w-0 h-4 border rounded-[2px] transition-colors",
                                   color,
-                                  isFree ? "cursor-pointer" : "cursor-default",
+                                  isFree ? "cursor-pointer" : "cursor-default opacity-70",
                                 ].join(" ")}
                               />
                             );
