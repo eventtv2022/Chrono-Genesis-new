@@ -1,0 +1,37 @@
+Implement an automatic video upload integration between our TimeNation Replit application and the Catcast.tv platform for channel ID: 27813 (TimeNation-TV). This version must feature a dual payment gateway architecture (Stripe for Fiat + Direct Crypto) and encapsulate full global compliance structures (EU AI Act, US Section 230/DMCA/COPPA, China CAC, RU FZ-152, and Global FinCEN/Sanctions regulations).
+
+### 1. Context & Platform Binding
+- Stream/upload the AI-generated 1-minute video files directly to the Catcast.tv profile.
+- Secure environment variables: `CATCAST_EMAIL`, `CATCAST_PASSWORD`, `CATCAST_CHANNEL_ID` = "27813".
+- Stream video inside the Expo mobile timeline smoothly using the Catcast video frame link.
+
+### 2. Dual Payment System Architecture (Fiat + Crypto)
+Modify the checkout/billing engine to support two separate pathways inside the timeline minute-purchase modal:
+- **Pathway A: Fiat (Stripe Checkout API):** * Process standard credit cards, Apple Pay, and Google Pay.
+  * In the Stripe payload metadata, explicitly label the transaction product as: "Compute-Time Utility Token / SaaS Infrastructure Access". Do not use terms like "Timeline purchase" or "State property" to prevent merchant account suspension.
+- **Pathway B: Crypto Gateway (Direct Smart Contract or Crypto API):**
+  * Integrate an option to pay with Stablecoins (USDT/USDC on Polygon/Solana/Arbitrum) or native tokens via a Web3 bridge (e.g., WalletConnect / Web3.js) or a lightweight processor API (e.g., CryptoCloud/Cryptomus).
+  * Upon receiving the successful payment webhook/blockchain confirmation event, instantly unlock the corresponding minute row in the database.
+
+### 3. Database Schema Modifications (Drizzle ORM)
+Ensure `meaning_containers` or a related `transactions` table tracks the legal and payment telemetry:
+- `payment_method`: text ('stripe', 'crypto').
+- `payment_status`: text ('pending', 'completed', 'refunded').
+- `billing_descriptor`: text (storing the exact SaaS utility token verification identifier).
+- `is_reported`: boolean (default false, for DMCA copyright enforcement).
+- `status`: text ('active', 'suspended').
+
+### 4. Technical Enforcement of Global Legal & Safety Rules
+
+#### A. Sanctions & Geo-Blocking Compliance (OFAC / International Sanctions)
+- Before executing any payment logic or generating an AI video, use a lightweight IP geolocation middleware. Block operations immediately for users originating from comprehensive sanction-listed territories (e.g., Iran, North Korea, Cuba, Syria, Crimea) to insulate the server and Stripe setup from severe regulatory penalties.
+
+#### B. Content Moderation & Criminal Disclaimer (US/EU/China/RU)
+- **Pre-Moderation Check:** Pass input texts through a safety filtering API prior to rendering or video compilation. Block texts violating localized strict statutes (hate speech, systemic political disinformation, extreme content violating RU FZ-149, or public order non-compliance under China's CAC). Show error: "Ваш текст не прошел проверку глобальной безопасности контента."
+- **AI Markings (EU AI Act Art. 50):** FFmpeg processing must hardcode a clear visual logo overlay "TimeNation AI" onto the video track and inject a machine-readable meta-tag into the file header designating it as synthetic media.
+
+#### C. Guardrails Against Transaction Speculation (Anti-Gharar for Shariah Compliance)
+- To eliminate structural transaction ambiguity, the application user interface must force the user to pick a deterministic video artistic style framework (e.g., Space Archive, Cyberpunk Chronicle, Historical Abstract) *before* clicking pay. This classifies the purchase legally as a predefined digital transformation service.
+
+### 5. Final Global Terms & Gateway Disclaimer
+- In the generation interface, render a mandatory multi-regulatory confirmation checkbox that stays disabled until checked: "I certify that I am 18+ (COPPA/DSA compliant), and that this purchase is strictly for a cloud computing automation utility. I assume 100% legal and civil ownership over the input text and generated media under US Section 230, EU regulations, RU FZ-152 cross-border data transfer rules, and local penal codes. TimeNation serves solely as an infrastructure host."

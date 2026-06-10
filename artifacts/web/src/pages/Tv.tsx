@@ -23,6 +23,7 @@ import {
   CreditCard,
   Wallet,
   ChevronRight,
+  Bitcoin,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -120,7 +121,7 @@ export function Tv() {
   const [seedText, setSeedText] = useState("");
   const [mode, setMode] = useState<"a" | "b">("a");
   const [visualStyle, setVisualStyle] = useState("space");
-  const [paymentType, setPaymentType] = useState<"fiat" | "timeltr">("timeltr");
+  const [paymentType, setPaymentType] = useState<"fiat" | "timeltr" | "crypto">("timeltr");
   const [booking, setBooking] = useState(false);
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
@@ -147,6 +148,30 @@ export function Tv() {
 
     try {
       const origin = window.location.origin;
+
+      // ── Pathway B: Crypto (Cryptomus USDT/USDC) ──────────────────────────
+      if (paymentType === "crypto") {
+        const res = await fetch("/api/tv/slots/book-crypto", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slotId: selectedSlot.id,
+            citizenId: Number(citizenId),
+            successUrl: `${origin}/tv?booked=1`,
+          }),
+        });
+        const data = (await res.json()) as { paymentUrl?: string; amountUsd?: string; error?: string };
+        if (!res.ok) {
+          setBookingError(data.error ?? "Ошибка крипто-шлюза");
+          return;
+        }
+        if (data.paymentUrl) {
+          window.location.href = data.paymentUrl;
+        }
+        return;
+      }
+
+      // ── Pathway A: FIAT (Stripe) or TiMETR ───────────────────────────────
       const res = await fetch("/api/tv/book", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -473,20 +498,22 @@ export function Tv() {
                   <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
                     Оплата
                   </Label>
-                  <div className="grid grid-cols-2 gap-1.5">
+                  <div className="grid grid-cols-3 gap-1.5">
                     <button
                       onClick={() => setPaymentType("timeltr")}
                       className={[
-                        "flex items-center gap-1.5 p-2 rounded-sm border text-xs font-mono transition-colors",
+                        "flex flex-col items-start gap-0.5 p-2 rounded-sm border text-xs font-mono transition-colors",
                         paymentType === "timeltr"
                           ? "border-primary/60 bg-primary/15 text-primary"
                           : "border-border text-muted-foreground hover:border-border/80",
                       ].join(" ")}
                     >
-                      <Wallet className="w-3 h-3 shrink-0" />
-                      <span>TiMETR</span>
+                      <div className="flex items-center gap-1">
+                        <Wallet className="w-3 h-3 shrink-0" />
+                        <span>TiMETR</span>
+                      </div>
                       {selectedSlot && (
-                        <span className="ml-auto text-[10px]">
+                        <span className="text-[10px] opacity-70">
                           {BURN_COST[selectedSlot.slotType] ?? "?"} Д
                         </span>
                       )}
@@ -494,15 +521,32 @@ export function Tv() {
                     <button
                       onClick={() => setPaymentType("fiat")}
                       className={[
-                        "flex items-center gap-1.5 p-2 rounded-sm border text-xs font-mono transition-colors",
+                        "flex flex-col items-start gap-0.5 p-2 rounded-sm border text-xs font-mono transition-colors",
                         paymentType === "fiat"
                           ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-400"
                           : "border-border text-muted-foreground hover:border-border/80",
                       ].join(" ")}
                     >
-                      <CreditCard className="w-3 h-3 shrink-0" />
-                      <span>FIAT</span>
-                      <span className="ml-auto text-[10px]">→ Stripe</span>
+                      <div className="flex items-center gap-1">
+                        <CreditCard className="w-3 h-3 shrink-0" />
+                        <span>FIAT</span>
+                      </div>
+                      <span className="text-[10px] opacity-70">Stripe</span>
+                    </button>
+                    <button
+                      onClick={() => setPaymentType("crypto")}
+                      className={[
+                        "flex flex-col items-start gap-0.5 p-2 rounded-sm border text-xs font-mono transition-colors",
+                        paymentType === "crypto"
+                          ? "border-orange-400/60 bg-orange-500/10 text-orange-400"
+                          : "border-border text-muted-foreground hover:border-border/80",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-center gap-1">
+                        <Bitcoin className="w-3 h-3 shrink-0" />
+                        <span>Crypto</span>
+                      </div>
+                      <span className="text-[10px] opacity-70">USDT/USDC</span>
                     </button>
                   </div>
                 </div>
@@ -539,7 +583,12 @@ export function Tv() {
 
                 {paymentType === "fiat" && selectedSlot && (
                   <p className="text-[10px] text-muted-foreground font-mono text-center">
-                    Вы будете перенаправлены на страницу Stripe для оплаты картой
+                    Редирект на Stripe — карта, Apple Pay, Google Pay
+                  </p>
+                )}
+                {paymentType === "crypto" && selectedSlot && (
+                  <p className="text-[10px] text-muted-foreground font-mono text-center">
+                    Редирект на Cryptomus — USDT/USDC (Polygon / Solana / Arbitrum)
                   </p>
                 )}
               </CardContent>

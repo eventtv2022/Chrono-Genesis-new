@@ -14,6 +14,11 @@ import {
   type SlotType,
 } from "../services/tvService";
 import { renderCapsule, MEDIA_DIR } from "../services/renderService";
+import {
+  isCryptomusConfigured,
+  createCryptoPayment,
+  verifyCryptomusWebhook,
+} from "../services/cryptomusService";
 import { sanctionsMiddleware } from "../middleware/sanctions";
 import { moderateText } from "../middleware/moderation";
 import fs from "fs";
@@ -208,6 +213,11 @@ router.post("/tv/slots/book", async (req, res): Promise<void> => {
   const hour = String(Math.floor(slot.minuteIndex / 60)).padStart(2, "0");
   const min = String(slot.minuteIndex % 60).padStart(2, "0");
 
+  // Billing descriptor: SaaS / compute-utility framing (prevents merchant account suspension)
+  const billingDescriptor =
+    `Compute-Time Utility Token — TimeNation SaaS Infrastructure | ` +
+    `Slot ${slot.date} ${hour}:${min} UTC | ${pricing.label}`;
+
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
     line_items: [
@@ -215,9 +225,11 @@ router.post("/tv/slots/book", async (req, res): Promise<void> => {
         price_data: {
           currency: "eur",
           product_data: {
-            name: `TimeNation-TV: ${pricing.label} — ${slot.date} ${hour}:${min} UTC`,
+            name: "Compute-Time Utility Token — TimeNation SaaS Infrastructure",
             description:
-              "Аренда минутного слота в эфире TimeNation-TV. Не является деньгами или ценными бумагами.",
+              `AI media synthesis compute-slot access. Slot: ${slot.date} ${hour}:${min} UTC — ` +
+              `${pricing.label}. Non-monetary SaaS infrastructure access token. ` +
+              `Not a security, financial instrument, or real-world asset.`,
           },
           unit_amount: pricing.priceEurCents,
         },
@@ -232,18 +244,165 @@ router.post("/tv/slots/book", async (req, res): Promise<void> => {
       slotId: String(slotId),
       citizenId: String(citizenId),
       fingerprintHash: fingerprint,
+      billingDescriptor,
     },
     client_reference_id: String(citizenId),
   });
 
-  // Save session ID so webhook can match it
+  // Save session ID + billing descriptor so webhook can match it
   await db
     .update(tvSlotsTable)
-    .set({ stripeSessionId: session.id })
+    .set({ stripeSessionId: session.id, billingDescriptor })
     .where(eq(tvSlotsTable.id, slotId));
 
   req.log.info({ citizenId, slotId, sessionId: session.id }, "TV slot Stripe checkout created");
   res.json({ url: session.url, sessionId: session.id });
+});
+
+// ─── POST /api/tv/slots/book-crypto ──────────────────────────────────────────
+// Pathway B: create a Cryptomus stablecoin (USDT/USDC) payment order.
+// Returns { paymentUrl, paymentUuid } — frontend redirects user to paymentUrl.
+// Cryptomus calls POST /api/tv/crypto/webhook when paid.
+const BookCryptoBody = z.object({
+  slotId: z.number().int().positive(),
+  citizenId: z.number().int().positive(),
+  successUrl: z.string().optional(),
+});
+
+router.post("/tv/slots/book-crypto", sanctionsMiddleware, async (req, res): Promise<void> => {
+  if (!isCryptomusConfigured()) {
+    res.status(503).json({
+      error: "Крипто-шлюз не настроен. Установите CRYPTOMUS_MERCHANT_ID и CRYPTOMUS_API_KEY.",
+    });
+    return;
+  }
+
+  const parsed = BookCryptoBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { slotId, citizenId, successUrl } = parsed.data;
+
+  const [slot] = await db
+    .select()
+    .from(tvSlotsTable)
+    .where(eq(tvSlotsTable.id, slotId))
+    .limit(1);
+
+  if (!slot) { res.status(404).json({ error: "Слот не найден" }); return; }
+  if (slot.status !== "free") { res.status(409).json({ error: "Слот уже занят" }); return; }
+
+  const [citizen] = await db
+    .select()
+    .from(citizensTable)
+    .where(eq(citizensTable.id, citizenId))
+    .limit(1);
+  if (!citizen) { res.status(404).json({ error: "Гражданин не найден" }); return; }
+
+  const pricing = BURN_MATRIX[slot.slotType as SlotType];
+  // Convert EUR cents → USD (approx: 1 EUR ≈ 1.08 USD for conservative estimate)
+  const amountUsd = (pricing.priceEurCents / 100 * 1.08).toFixed(2);
+
+  const hour = String(Math.floor(slot.minuteIndex / 60)).padStart(2, "0");
+  const min = String(slot.minuteIndex % 60).padStart(2, "0");
+  const billingDescriptor =
+    `Compute-Time Utility Token — TimeNation SaaS | Slot ${slot.date} ${hour}:${min} UTC | ${pricing.label}`;
+
+  const host = `${req.protocol}://${req.get("host")}`;
+  const callbackUrl = `${host}/api/tv/crypto/webhook`;
+  const finalSuccessUrl = successUrl ?? `${host}/api/tv/checkout/success`;
+
+  const payment = await createCryptoPayment({
+    orderId: `slot_${slotId}_c${citizenId}_${Date.now()}`,
+    amountUsd,
+    billingDescriptor,
+    callbackUrl,
+    successUrl: finalSuccessUrl,
+  });
+
+  // Mark slot as pending crypto payment
+  await db
+    .update(tvSlotsTable)
+    .set({
+      cryptoPaymentUuid: payment.uuid,
+      paymentStatus: "pending",
+      billingDescriptor,
+      paymentType: "crypto",
+    })
+    .where(eq(tvSlotsTable.id, slotId));
+
+  req.log.info(
+    { slotId, citizenId, uuid: payment.uuid, amountUsd },
+    "Cryptomus payment created for TV slot"
+  );
+
+  res.status(201).json({
+    paymentUrl: payment.url,
+    paymentUuid: payment.uuid,
+    amountUsd,
+    currency: payment.currency,
+  });
+});
+
+// ─── POST /api/tv/crypto/webhook ──────────────────────────────────────────────
+// Cryptomus calls this URL when payment status changes.
+// Confirms slot booking and records paymentStatus='completed'.
+router.post("/tv/crypto/webhook", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, unknown>;
+  const incomingSign = (req.headers["sign"] ?? body["sign"] ?? "") as string;
+
+  if (!verifyCryptomusWebhook(body, incomingSign)) {
+    req.log.warn({ body }, "Cryptomus webhook signature mismatch");
+    res.status(400).json({ error: "Invalid signature" });
+    return;
+  }
+
+  const uuid = body["uuid"] as string | undefined;
+  const status = body["status"] as string | undefined;
+  const citizenIdRaw = (body["order_id"] as string | undefined)?.match(/c(\d+)/)?.[1];
+
+  req.log.info({ uuid, status }, "Cryptomus webhook received");
+
+  if (!uuid || status !== "paid") {
+    // Not yet paid — acknowledge but don't unlock
+    res.json({ ok: true });
+    return;
+  }
+
+  const citizenId = citizenIdRaw ? parseInt(citizenIdRaw, 10) : null;
+
+  // Find slot by cryptoPaymentUuid
+  const [slot] = await db
+    .select()
+    .from(tvSlotsTable)
+    .where(eq(tvSlotsTable.cryptoPaymentUuid, uuid))
+    .limit(1);
+
+  if (!slot) {
+    req.log.warn({ uuid }, "Cryptomus webhook: slot not found");
+    res.json({ ok: true });
+    return;
+  }
+
+  if (slot.status === "free") {
+    await db
+      .update(tvSlotsTable)
+      .set({
+        status: "booked",
+        ownerId: citizenId ?? slot.ownerId,
+        paymentType: "crypto",
+        paymentStatus: "completed",
+      })
+      .where(eq(tvSlotsTable.id, slot.id));
+
+    req.log.info(
+      { slotId: slot.id, uuid, citizenId },
+      "TV slot confirmed via Cryptomus webhook"
+    );
+  }
+
+  res.json({ ok: true });
 });
 
 // ─── GET /api/tv/checkout/confirm?session_id=... ──────────────────────────────
@@ -289,6 +448,7 @@ router.get("/tv/checkout/confirm", async (req, res): Promise<void> => {
           status: "booked",
           ownerId: citizenId,
           paymentType: "fiat",
+          paymentStatus: "completed",
           stripeSessionId: sessionId,
           fingerprintHash,
         })

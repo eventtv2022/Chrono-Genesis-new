@@ -70,8 +70,11 @@ router.post("/payments/checkout", async (req, res): Promise<void> => {
         price_data: {
           currency: pack.currency,
           product_data: {
-            name: `${pack.label} — TimeNation`,
-            description: `Внутриигровые баллы (Дармины): ${pack.minutes} единиц для использования в IT-платформе TimeNation. Не являются деньгами или ценными бумагами.`,
+            name: "Compute-Time Utility Token — TimeNation SaaS Infrastructure",
+            description:
+              `SaaS cloud-compute access credits (${pack.minutes} units) for AI media synthesis ` +
+              `on TimeNation infrastructure. Non-monetary software utility tokens. ` +
+              `Not a security, financial instrument, or real-world asset.`,
           },
           unit_amount: pack.price * 100,
         },

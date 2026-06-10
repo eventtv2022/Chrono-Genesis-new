@@ -24,6 +24,9 @@ export const tvSlotsTable = pgTable(
     timeltrBurnCost: integer("timeltr_burn_cost").notNull(),
     fingerprintHash: text("fingerprint_hash"), // anti-consecutive guard
     stripeSessionId: text("stripe_session_id"),
+    cryptoPaymentUuid: text("crypto_payment_uuid"),   // Cryptomus payment UUID
+    paymentStatus: text("payment_status").default("pending"), // pending | completed | refunded
+    billingDescriptor: text("billing_descriptor"),    // exact label used in checkout
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("tv_slots_date_minute_idx").on(t.date, t.minuteIndex)]

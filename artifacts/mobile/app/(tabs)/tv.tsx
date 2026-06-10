@@ -13,6 +13,7 @@ import {
   ScrollView,
   Linking,
 } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -356,8 +357,11 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
     if (url) Linking.openURL(url);
   };
 
-  const openCatcast = (url: string) => {
-    Linking.openURL(url);
+  const openCatcast = async (url: string) => {
+    await WebBrowser.openBrowserAsync(url, {
+      presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+      toolbarColor: "#0D1B2A",
+    });
   };
 
   const activeRenderResult = renderResult ?? (
