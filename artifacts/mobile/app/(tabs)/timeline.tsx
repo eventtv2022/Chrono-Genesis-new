@@ -223,16 +223,12 @@ export default function TimelineScreen() {
         </ScrollView>
       )}
       {zoom === 5 && (
-        <View style={styles.minuteContainer}>
+        <ScrollView contentContainerStyle={styles.minuteContainer}>
           <Text style={styles.minuteTitle}>
             {pad2(selectedDay)}.{pad2(selectedMonth)}.{selectedYear} {pad2(selectedHour)}:00 — {pad2(selectedHour)}:59 — выберите минуту
           </Text>
-          <FlatList
-            data={Array.from({ length: 60 }, (_, m) => m)}
-            keyExtractor={(m) => String(m)}
-            numColumns={10}
-            scrollEnabled={false}
-            renderItem={({ item: min }) => {
+          <View style={styles.minuteGrid}>
+            {Array.from({ length: 60 }, (_, min) => {
               const coord = makeCoord(selectedYear, selectedMonth, selectedDay, selectedHour, min);
               const ownerId = occupied.find((o) => o.timelineCoord === coord)?.citizenId;
               const isMine = ownerId === citizen?.id;
@@ -240,6 +236,7 @@ export default function TimelineScreen() {
               const isAnchoring = anchoring === coord;
               return (
                 <TouchableOpacity
+                  key={min}
                   style={[
                     styles.minuteCell,
                     isMine && { backgroundColor: colors.primary, borderColor: colors.primary },
@@ -247,10 +244,10 @@ export default function TimelineScreen() {
                   ]}
                   onPress={() => !ownerId && anchorMinute(coord)}
                   disabled={!!ownerId || !!anchoring}
-                  activeOpacity={0.75}
+                  activeOpacity={0.7}
                 >
                   {isAnchoring ? (
-                    <ActivityIndicator size={8} color="#fff" />
+                    <ActivityIndicator size={10} color="#fff" />
                   ) : (
                     <Text style={[styles.minuteText, (isMine || isOccupied) && { color: "#fff" }]}>
                       {pad2(min)}
@@ -258,10 +255,9 @@ export default function TimelineScreen() {
                   )}
                 </TouchableOpacity>
               );
-            }}
-            contentContainerStyle={styles.minuteGrid}
-          />
-        </View>
+            })}
+          </View>
+        </ScrollView>
       )}
 
       <View style={[styles.legend, { paddingBottom: insets.bottom + 80 }]}>
@@ -306,16 +302,16 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     daysGrid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
     dayCell: { width: 40, height: 40, borderRadius: 8, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
     dayCellText: { color: colors.foreground, fontSize: 14, fontWeight: "500" },
-    minuteContainer: { flex: 1, paddingHorizontal: 12 },
+    minuteContainer: { paddingHorizontal: 12, paddingBottom: 16 },
     minuteTitle: { color: colors.mutedForeground, fontSize: 11, textAlign: "center", paddingVertical: 8 },
     hoursContainer: { padding: 12 },
     hoursGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     hourCell: { width: "21%", aspectRatio: 1.6, borderRadius: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center" as const, justifyContent: "center" as const, flexDirection: "row" as const, gap: 1 },
     hourCellText: { fontSize: 18, fontFamily: "Inter_700Bold", color: colors.foreground },
     hourCellSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 4 },
-    minuteGrid: { paddingBottom: 8 },
-    minuteCell: { flex: 1, aspectRatio: 1, margin: 3, borderRadius: 6, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-    minuteText: { color: colors.mutedForeground, fontSize: 10, fontFamily: "Inter_500Medium" },
+    minuteGrid: { flexDirection: "row" as const, flexWrap: "wrap" as const },
+    minuteCell: { width: "10%" as const, aspectRatio: 1, padding: 3, borderRadius: 6, backgroundColor: colors.card, alignItems: "center" as const, justifyContent: "center" as const, borderWidth: 1, borderColor: colors.border },
+    minuteText: { color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_500Medium" },
     legend: { flexDirection: "row", justifyContent: "center", gap: 20, paddingTop: 8, paddingHorizontal: 16 },
     legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
     legendDot: { width: 10, height: 10, borderRadius: 5 },
