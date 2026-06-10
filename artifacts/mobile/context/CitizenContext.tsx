@@ -18,6 +18,7 @@ export interface CitizenProfile {
   createdAt: string;
   walletAddress: string | null;
   walletVerified: number;
+  ageVerified: number;
 }
 
 interface CitizenContextType {

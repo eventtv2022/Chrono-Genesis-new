@@ -26,6 +26,9 @@ export const tvCapsulesTable = pgTable("tv_capsules", {
   contentState: text("content_state").notNull().default("filled"), // filled | empty
   hasSovereignLink: boolean("has_sovereign_link").notNull().default(false),
   sovereignUrl: text("sovereign_url").unique(), // timenation.tv/moment/YYYY-MM-DD-HHmm
+  // Shariah / anti-Gharar: theme chosen BEFORE render to make service deterministic.
+  // Values: space | cyberpunk | abstract | nature | minimal  (null = not yet chosen)
+  visualStyle: text("visual_style"),
   mediaUrl: text("media_url"), // local rendered MP4 path
   // ── Catcast.tv publishing ─────────────────────────────────────────────────
   catcastVideoId: text("catcast_video_id"), // Catcast internal video ID

@@ -1,0 +1,38 @@
+Я:
+Commercial ads targeting specific jurisdictions without registration are forbidden."
+
+Implement an automatic video upload integration between our TimeNation Replit application and the Catcast.tv platform for the user channel ID: 27813 (TimeNation-TV), ensuring full global compliance (EU AI Act/GDPR, USA Section 230/DMCA/COPPA, China CAC, RU FZ-152, Global Sanctions/OFAC, and Islamic Finance compliance).
+
+### 1. Context & Architecture (Based on open-source catcast-d)
+The Catcast.tv platform (source code available at github.com/mrcatman/catcast-d) supports video uploads and media streaming. 
+- Handle the upload of our AI-generated 1-minute video files directly to the Catcast.tv storage/profile backend.
+- Store the Catcast.tv credentials securely inside Replit Secrets: CATCAST_EMAIL, CATCAST_PASSWORD, CATCAST_CHANNEL_ID = "27813".
+
+### 2. Backend Upload, Processing & Cryptographic Watermarking
+- Once the Text-to-Video generation finishes creating a 1-minute video, trigger the Catcast upload process.
+- Metadata: Title: "TimeNation-TV — Минута №[Minute_Timestamp]". 
+- Description: Include the citizen's text, username, and the mandatory disclosure text: "AI Generated / Сгенерировано ИИ / Generated via Artificial Intelligence technologies."
+- Watermarking (EU AI Act / China CAC): FFmpeg must burn a permanent visual logo overlay "TimeNation AI" into the corner of the .mp4 file and inject a cryptographic metadata tag into the file header: "Author: TimeNation AI, Type: Synthesized Media".
+
+### 3. Database & Frontend Integration
+- Save the returning Catcast video URL into the video_url column in our meaning_containers table.
+- Stream the video on the mobile timeline via the Catcast hosting link.
+
+### 4. Global Security, Sanctions & Financial Sanity Layer (Backend Enforcement)
+
+#### A. Sanctions and Geo-Blocking (OFAC / International Compliance)
+- Implement a backend middleware that checks the user's IP/location before initiating a text-to-video request or billing workflow. Automatically reject connections and transactions originating from comprehensive sanction-listed regions (e.g., Iran, North Korea, Cuba, Syria, Crimea) to prevent merchant account suspension. Display error: "Access denied from this location due to regulatory compliance."
+
+#### B. Content Moderation & Political Compliance (US/EU/China/RU)
+- Multi-Layer Pre-Moderation: Pass the input text through an automated moderation API. Block generation instantly if it contains hate speech, harassment, illegal acts, severe political disinformation, or content violating public order/national security policies across US, EU, China, and RU frameworks. Show error: "Ваш текст не прошел проверку глобальной безопасности контента."
+
+#### C. Age Gating & Child Safety (US COPPA / EU DSA Compliance)
+- Ensure the database or user table tracks age affirmation. In the UI submission modal, enforce a hard 18+ age validation. If a user is identified as under 18, completely disable the Text-to-Video generation tool to protect the platform from youth digital safety liabilities.
+
+#### D. Shariah & Anti-Gharar Transaction Safety
+- To prevent the purchase from being classified as an illegal speculative transaction (Gharar) in Islamic jurisdictions, the UI must allow the user to select or preview the "Thematic Prompt/Visual Style" (e.g., Space theme, Cyberpunk theme, Abstract theme) *before* processing the payment or generation. The exact service deliverable must be deterministic and chosen by the user.
+
+### 5. Terms of Service, Legal Disclaimers & Forced Takedown Action
+
+#### A. Copyright Takedown (US DMCA)
+- In the schema, ensure meaning_containers has is_reported (boolean) and status ('active', 'suspended') fields. Create a POST /api/meanings/:id/report endpoint. If a copyright notice is triggered, immediately flag the video to hide it from the global timeline automatically.

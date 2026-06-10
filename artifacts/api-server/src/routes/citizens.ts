@@ -265,4 +265,33 @@ router.post("/citizens/:id/wallet-link", async (req, res): Promise<void> => {
   });
 });
 
+// ─── POST /api/citizens/:id/age-verify ────────────────────────────────────────
+// COPPA / EU DSA age affirmation: citizen self-declares they are 18+.
+// Platform records the timestamp and unblocks AI content generation.
+router.post("/citizens/:id/age-verify", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [citizen] = await db
+    .select({ id: citizensTable.id, ageVerified: citizensTable.ageVerified })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, id))
+    .limit(1);
+
+  if (!citizen) { res.status(404).json({ error: "Гражданин не найден" }); return; }
+
+  if (citizen.ageVerified) {
+    res.json({ ok: true, ageVerified: true, alreadyVerified: true });
+    return;
+  }
+
+  await db
+    .update(citizensTable)
+    .set({ ageVerified: 1 })
+    .where(eq(citizensTable.id, id));
+
+  req.log.info({ citizenId: id }, "Age verified (18+ affirmation — COPPA/DSA)");
+  res.json({ ok: true, ageVerified: true });
+});
+
 export default router;

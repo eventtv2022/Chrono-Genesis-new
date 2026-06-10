@@ -155,11 +155,22 @@ function esc(s: string): string {
     .replace(/\]/g, "\\]");
 }
 
+// ── Visual style themes (Shariah anti-Gharar: user pre-selects before payment) ─
+export const VISUAL_STYLE_THEMES = {
+  space:     { bg: "0x0D1B2A", title: "0x6B7E93", text: "0xC9A84C", accent: "0x4A90D9" },
+  cyberpunk: { bg: "0x0A0014", title: "0xFF00FF", text: "0x00FFFF", accent: "0xFF6B00" },
+  abstract:  { bg: "0x1A0A2E", title: "0x9B59B6", text: "0xE8D5B7", accent: "0xF39C12" },
+  nature:    { bg: "0x0F1B0F", title: "0x4CAF50", text: "0xA8D8A8", accent: "0x8BC34A" },
+  minimal:   { bg: "0x111111", title: "0x666666", text: "0xEEEEEE", accent: "0xFFFFFF" },
+} as const;
+export type VisualStyle = keyof typeof VISUAL_STYLE_THEMES;
+
 // ── FFmpeg LIGHT render ────────────────────────────────────────────────────────
 export async function renderLightVideo(
   audioBuffer: Buffer | null,
   manifestoText: string,
-  slotId: number
+  slotId: number,
+  visualStyle?: string | null
 ): Promise<string> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `tn-tv-${slotId}-`));
   const outputPath = path.join(MEDIA_DIR, `slot_${slotId}.mp4`);
@@ -168,13 +179,18 @@ export async function renderLightVideo(
     const segCount = Math.ceil(VIDEO_DURATION_SEC / SEGMENT_DURATION_SEC);
     const segments = splitSegments(manifestoText, segCount);
 
+    // Apply visual style theme (Shariah anti-Gharar: user chose this before render)
+    const style = visualStyle && visualStyle in VISUAL_STYLE_THEMES
+      ? VISUAL_STYLE_THEMES[visualStyle as VisualStyle]
+      : VISUAL_STYLE_THEMES.space;
+
     // Build drawtext filters: title always visible + rotating text segments
     const titleFilter =
-      `drawtext=text='TIMENATION TV':fontsize=18:fontcolor=0x6B7E93:` +
+      `drawtext=text='TIMENATION TV':fontsize=18:fontcolor=${style.title}:` +
       `x=(w-text_w)/2:y=48:alpha=0.8`;
 
     const slotFilter =
-      `drawtext=text='SLOT ${slotId}':fontsize=14:fontcolor=0x3D4F63:` +
+      `drawtext=text='SLOT ${slotId}':fontsize=14:fontcolor=${style.accent}@0.6:` +
       `x=(w-text_w)/2:y=78`;
 
     const segFilters: string[] = [];
@@ -186,7 +202,7 @@ export async function renderLightVideo(
       const baseY = Math.round((720 - totalH) / 2);
       lines.forEach((line, li) => {
         segFilters.push(
-          `drawtext=text='${esc(line)}':fontsize=28:fontcolor=0xC9A84C:` +
+          `drawtext=text='${esc(line)}':fontsize=28:fontcolor=${style.text}:` +
           `x=(w-text_w)/2:y=${baseY + li * 42}:` +
           `enable='between(t\\,${t0}\\,${t1})'`
         );
@@ -205,7 +221,7 @@ export async function renderLightVideo(
       "-metadata", `title=TimeNation-TV — Slot ${slotId}`,
       "-metadata", "comment=Author: TimeNation AI, Type: Synthesized Media",
       "-metadata", "artist=TimeNation",
-      "-metadata", "description=AI Generated / Сгенерировано ИИ / Generated via Artificial Intelligence technologies.",
+      "-metadata", `description=AI Generated / Сгенерировано ИИ / Generated via Artificial Intelligence technologies. Visual style: ${visualStyle ?? "space"}.`,
     ];
 
     let args: string[];
@@ -214,7 +230,7 @@ export async function renderLightVideo(
       const audioPath = path.join(tmpDir, "audio.mp3");
       fs.writeFileSync(audioPath, audioBuffer);
       args = [
-        "-f", "lavfi", "-i", "color=c=0x0D1B2A:s=1280x720:r=25",
+        "-f", "lavfi", "-i", `color=c=${style.bg}:s=1280x720:r=25`,
         "-i", audioPath,
         "-vf", vf,
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
@@ -225,7 +241,7 @@ export async function renderLightVideo(
       ];
     } else {
       args = [
-        "-f", "lavfi", "-i", "color=c=0x0D1B2A:s=1280x720:r=25",
+        "-f", "lavfi", "-i", `color=c=${style.bg}:s=1280x720:r=25`,
         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
         "-vf", vf,
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
@@ -300,7 +316,7 @@ export async function renderCapsule(slotId: number): Promise<{
   let finalStatus = "draft";
 
   try {
-    mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId);
+    mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle);
     finalStatus = "rendered";
   } catch (err) {
     logger.error({ err, slotId }, "renderLightVideo failed");

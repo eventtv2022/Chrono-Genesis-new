@@ -33,6 +33,9 @@ const BookSlotBody = z.object({
   cancelUrl: z.string().optional(),
 });
 
+const VISUAL_STYLES = ["space", "cyberpunk", "abstract", "nature", "minimal"] as const;
+type VisualStyle = typeof VISUAL_STYLES[number];
+
 const CreateCapsuleBody = z.object({
   citizenId: z.number().int().positive(),
   seedText: z.string().max(500).optional(),
@@ -41,6 +44,8 @@ const CreateCapsuleBody = z.object({
   broadcastPolicy: z.enum(["echo", "noise", "private"]).default("noise"),
   contentState: z.enum(["filled", "empty"]).default("filled"),
   hasSovereignLink: z.boolean().default(false),
+  // Shariah/anti-Gharar: visual style chosen BEFORE render makes service deterministic
+  visualStyle: z.enum(VISUAL_STYLES).optional(),
 });
 
 const UpdateCapsuleBody = z.object({
@@ -50,6 +55,7 @@ const UpdateCapsuleBody = z.object({
   broadcastPolicy: z.enum(["echo", "noise", "private"]).optional(),
   contentState: z.enum(["filled", "empty"]).optional(),
   hasSovereignLink: z.boolean().optional(),
+  visualStyle: z.enum(VISUAL_STYLES).optional(),
 });
 
 // ─── GET /api/tv/slots?date=YYYY-MM-DD ────────────────────────────────────────
@@ -330,7 +336,7 @@ router.post("/tv/capsule/:slotId", async (req, res): Promise<void> => {
   const parsed = CreateCapsuleBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { citizenId, seedText, mode, renderPath, broadcastPolicy, contentState, hasSovereignLink } =
+  const { citizenId, seedText, mode, renderPath, broadcastPolicy, contentState, hasSovereignLink, visualStyle } =
     parsed.data;
 
   // Verify slot ownership
@@ -379,6 +385,7 @@ router.post("/tv/capsule/:slotId", async (req, res): Promise<void> => {
       contentState,
       hasSovereignLink,
       sovereignUrl,
+      visualStyle: visualStyle ?? null,
       isRetro: retro,
       status: "draft",
     })
@@ -416,7 +423,7 @@ router.patch("/tv/capsule/:slotId", async (req, res): Promise<void> => {
     return;
   }
 
-  const { seedText, mode, renderPath, broadcastPolicy, contentState, hasSovereignLink } =
+  const { seedText, mode, renderPath, broadcastPolicy, contentState, hasSovereignLink, visualStyle } =
     parsed.data;
 
   // Regenerate sovereign URL if requested
@@ -441,6 +448,7 @@ router.patch("/tv/capsule/:slotId", async (req, res): Promise<void> => {
       ...(broadcastPolicy !== undefined && { broadcastPolicy }),
       ...(contentState !== undefined && { contentState }),
       ...(hasSovereignLink !== undefined && { hasSovereignLink, sovereignUrl }),
+      ...(visualStyle !== undefined && { visualStyle }),
       updatedAt: new Date(),
     })
     .where(eq(tvCapsulesTable.slotId, slotId))
@@ -543,6 +551,25 @@ router.post("/tv/capsule/:slotId/render", async (req, res): Promise<void> => {
   }
   if (capsule.status === "broadcast") {
     res.status(409).json({ error: "Капсула уже в эфире" });
+    return;
+  }
+
+  // ── Age verification (COPPA / EU DSA) ──────────────────────────────────────
+  const [citizenRecord] = await db
+    .select({ ageVerified: citizensTable.ageVerified })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, citizenId.data))
+    .limit(1);
+
+  if (!citizenRecord) {
+    res.status(404).json({ error: "Гражданин не найден" });
+    return;
+  }
+  if (!citizenRecord.ageVerified) {
+    res.status(403).json({
+      error: "Для генерации AI-контента необходимо подтвердить возраст 18+.",
+      code: "AGE_VERIFICATION_REQUIRED",
+    });
     return;
   }
 

@@ -46,9 +46,10 @@ interface TvCapsule {
   broadcastPolicy: "echo" | "noise" | "private";
   contentState: "filled" | "empty";
   hasSovereignLink: boolean;
+  visualStyle: string | null;
   renderStatus: string | null;
   renderedAt: string | null;
-  mediaFilename: string | null;
+  mediaUrl: string | null;
   catcastUrl: string | null;
   isReported: boolean;
 }
@@ -60,6 +61,16 @@ interface RenderResult {
   catcastUrl: string | null;
   manifestoWords: number;
 }
+
+type VisualStyle = "space" | "cyberpunk" | "abstract" | "nature" | "minimal";
+
+const VISUAL_STYLES: { value: VisualStyle; label: string; desc: string; preview: string }[] = [
+  { value: "space",     label: "Космос",    desc: "Тёмно-синий, янтарь",    preview: "#0D1B2A" },
+  { value: "cyberpunk", label: "Киберпанк", desc: "Чёрный, неон",           preview: "#0A0014" },
+  { value: "abstract",  label: "Абстракт",  desc: "Фиолетовый, золото",     preview: "#1A0A2E" },
+  { value: "nature",    label: "Природа",   desc: "Тёмно-зелёный, мята",    preview: "#0F1B0F" },
+  { value: "minimal",   label: "Минимал",   desc: "Чёрный, белый",          preview: "#111111" },
+];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -90,15 +101,116 @@ const BROADCAST_LABELS: Record<string, string> = {
   private: "Приватный",
 };
 
+// ── AgeGateModal ─────────────────────────────────────────────────────────────
+
+interface AgeGateModalProps {
+  citizenId: number;
+  onVerified: () => void;
+  onCancel: () => void;
+  colors: ReturnType<typeof useColors>;
+}
+
+function AgeGateModal({ citizenId, onVerified, onCancel, colors }: AgeGateModalProps) {
+  const [confirmed, setConfirmed] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleConfirm = async () => {
+    if (!confirmed) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/citizens/${citizenId}/age-verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        onVerified();
+      } else {
+        Alert.alert("Ошибка", "Не удалось подтвердить возраст");
+      }
+    } catch {
+      Alert.alert("Ошибка", "Нет соединения с сервером");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal visible animationType="fade" transparent onRequestClose={onCancel}>
+      <View style={[ageGateStyles.overlay]}>
+        <View style={[ageGateStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[ageGateStyles.icon]}>🔞</Text>
+          <Text style={[ageGateStyles.title, { color: colors.foreground }]}>
+            Подтверждение возраста
+          </Text>
+          <Text style={[ageGateStyles.body, { color: colors.mutedForeground }]}>
+            Функция AI-генерации видео доступна только для пользователей 18 лет и старше (COPPA / EU DSA).
+          </Text>
+          <TouchableOpacity
+            style={ageGateStyles.checkRow}
+            onPress={() => setConfirmed(v => !v)}
+          >
+            <View style={[ageGateStyles.checkbox, {
+              borderColor: colors.border,
+              backgroundColor: confirmed ? colors.primary : "transparent",
+            }]}>
+              {confirmed && <Feather name="check" size={11} color="#fff" />}
+            </View>
+            <Text style={[ageGateStyles.checkLabel, { color: colors.foreground }]}>
+              Мне исполнилось 18 лет
+            </Text>
+          </TouchableOpacity>
+          <View style={ageGateStyles.btnRow}>
+            <TouchableOpacity
+              style={[ageGateStyles.cancelBtn, { borderColor: colors.border }]}
+              onPress={onCancel}
+            >
+              <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Отмена</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[ageGateStyles.confirmBtn, {
+                backgroundColor: confirmed ? colors.primary : colors.muted,
+                opacity: !confirmed || loading ? 0.6 : 1,
+              }]}
+              onPress={handleConfirm}
+              disabled={!confirmed || loading}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>Подтвердить</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const ageGateStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "center", alignItems: "center", padding: 24 },
+  card: { width: "100%", maxWidth: 360, borderRadius: 12, borderWidth: 1, padding: 24 },
+  icon: { fontSize: 36, textAlign: "center", marginBottom: 8 },
+  title: { fontSize: 18, fontWeight: "700", textAlign: "center", marginBottom: 10 },
+  body: { fontSize: 13, textAlign: "center", lineHeight: 20, marginBottom: 20 },
+  checkRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 24 },
+  checkbox: { width: 18, height: 18, borderWidth: 1.5, borderRadius: 3, alignItems: "center", justifyContent: "center" },
+  checkLabel: { fontSize: 14, flex: 1 },
+  btnRow: { flexDirection: "row", gap: 10 },
+  cancelBtn: { flex: 1, height: 42, borderWidth: 1, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  confirmBtn: { flex: 1, height: 42, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+});
+
 // ── CapsuleModal ─────────────────────────────────────────────────────────────
 
 interface CapsuleModalProps {
   slot: TvSlot;
   onClose: () => void;
   colors: ReturnType<typeof useColors>;
+  citizenAgeVerified: boolean;
+  onNeedAgeVerify: () => void;
 }
 
-function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
+function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVerify }: CapsuleModalProps) {
   const qc = useQueryClient();
   const { citizen } = useCitizen();
   const styles = getStyles(colors);
@@ -106,6 +218,7 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
   const [seedText, setSeedText] = useState("");
   const [broadcastPolicy, setBroadcastPolicy] = useState<"echo" | "noise" | "private">("noise");
   const [hasSovereignLink, setHasSovereignLink] = useState(false);
+  const [visualStyle, setVisualStyle] = useState<VisualStyle>("space");
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
 
   // Load existing capsule
@@ -119,6 +232,7 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
       setSeedText(data.seedText ?? "");
       setBroadcastPolicy(data.broadcastPolicy);
       setHasSovereignLink(data.hasSovereignLink);
+      if (data.visualStyle) setVisualStyle(data.visualStyle as VisualStyle);
       return data;
     },
     retry: false,
@@ -135,6 +249,7 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
           seedText: seedText.trim() || undefined,
           broadcastPolicy,
           hasSovereignLink,
+          visualStyle,
           mode: "a",
           renderPath: "light",
           contentState: "filled",
@@ -162,6 +277,7 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
           seedText: seedText.trim() || undefined,
           broadcastPolicy,
           hasSovereignLink,
+          visualStyle,
         }),
       });
       if (!res.ok) {
@@ -185,7 +301,11 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
         body: JSON.stringify({ citizenId: citizen!.id }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
+        const err = await res.json().catch(() => ({})) as { error?: string; code?: string };
+        if (err.code === "AGE_VERIFICATION_REQUIRED") {
+          onNeedAgeVerify();
+          throw new Error("age_gate");
+        }
         throw new Error(err.error ?? "Ошибка рендера");
       }
       return res.json() as Promise<RenderResult>;
@@ -194,7 +314,9 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
       setRenderResult(data);
       qc.invalidateQueries({ queryKey: ["tvCapsule", slot.id] });
     },
-    onError: (e: Error) => Alert.alert("Ошибка рендера", e.message),
+    onError: (e: Error) => {
+      if (e.message !== "age_gate") Alert.alert("Ошибка рендера", e.message);
+    },
   });
 
   const hasCapsule = !!capsule;
@@ -210,9 +332,13 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
   };
 
   const handleRender = () => {
+    if (!citizenAgeVerified) {
+      onNeedAgeVerify();
+      return;
+    }
     Alert.alert(
       "Рендер капсулы",
-      "Запустить генерацию AI-манифеста + озвучку + видео? Займёт ~30–60 секунд.",
+      `Тема: ${VISUAL_STYLES.find(s => s.value === visualStyle)?.label ?? visualStyle}\n\nЗапустить генерацию AI-манифеста + озвучку + видео? Займёт ~30–60 секунд.`,
       [
         { text: "Отмена", style: "cancel" },
         { text: "Рендерить", onPress: () => renderMutation.mutate() },
@@ -223,8 +349,8 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
   const openVideo = () => {
     const url = renderResult?.mediaUrl
       ? `${BASE_URL}${renderResult.mediaUrl}`
-      : capsule?.mediaFilename
-        ? `${BASE_URL}/api/tv/media/${capsule.mediaFilename}`
+      : capsule?.mediaUrl
+        ? `${BASE_URL}${capsule.mediaUrl}`
         : null;
     if (url) Linking.openURL(url);
   };
@@ -234,8 +360,8 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
   };
 
   const activeRenderResult = renderResult ?? (
-    capsule?.mediaFilename
-      ? { ok: true, status: "rendered", mediaUrl: `/api/tv/media/${capsule.mediaFilename}`, catcastUrl: capsule.catcastUrl, manifestoWords: 0 }
+    capsule?.mediaUrl
+      ? { ok: true, status: "rendered", mediaUrl: capsule.mediaUrl, catcastUrl: capsule.catcastUrl ?? null, manifestoWords: 0 }
       : null
   );
 
@@ -246,7 +372,7 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
         <View style={styles.modalHeader}>
           <View>
             <Text style={styles.modalTitle}>
-              🕐 {slotLabel(slot)} — {SLOT_TYPE_LABELS[slot.slotType] ?? slot.slotType}
+              {slotLabel(slot)} — {SLOT_TYPE_LABELS[slot.slotType] ?? slot.slotType}
             </Text>
             <Text style={styles.modalSubtitle}>{slot.date}{slot.isRetro ? " · Ретро" : ""}</Text>
           </View>
@@ -263,14 +389,14 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
             <>
               {/* Status badge */}
               {hasCapsule && (
-                <View style={[styles.statusBadge, { backgroundColor: capsule.mediaFilename ? colors.primary + "22" : colors.muted }]}>
+                <View style={[styles.statusBadge, { backgroundColor: capsule.mediaUrl ? colors.primary + "22" : colors.muted }]}>
                   <Feather
-                    name={capsule.mediaFilename ? "film" : "edit-3"}
+                    name={capsule.mediaUrl ? "film" : "edit-3"}
                     size={14}
-                    color={capsule.mediaFilename ? colors.primary : colors.mutedForeground}
+                    color={capsule.mediaUrl ? colors.primary : colors.mutedForeground}
                   />
-                  <Text style={[styles.statusBadgeText, { color: capsule.mediaFilename ? colors.primary : colors.mutedForeground }]}>
-                    {capsule.mediaFilename ? "Отрендерено" : "Капсула создана"}
+                  <Text style={[styles.statusBadgeText, { color: capsule.mediaUrl ? colors.primary : colors.mutedForeground }]}>
+                    {capsule.mediaUrl ? "Отрендерено" : "Капсула создана"}
                   </Text>
                 </View>
               )}
@@ -310,6 +436,36 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
               </View>
               <Text style={styles.hintText}>{BROADCAST_LABELS[broadcastPolicy]}</Text>
 
+              {/* ── Visual style (Shariah/anti-Gharar: choose BEFORE paying/rendering) ── */}
+              <Text style={styles.sectionLabel}>Визуальный стиль</Text>
+              <Text style={[styles.hintText, { marginBottom: 8 }]}>
+                Выберите тему до рендера — итоговый результат будет именно таким
+              </Text>
+              <View style={styles.styleGrid}>
+                {VISUAL_STYLES.map((s) => (
+                  <TouchableOpacity
+                    key={s.value}
+                    style={[
+                      styles.styleCard,
+                      {
+                        borderColor: visualStyle === s.value ? colors.primary : colors.border,
+                        backgroundColor: colors.card,
+                      },
+                    ]}
+                    onPress={() => setVisualStyle(s.value)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={[styles.stylePreview, { backgroundColor: s.preview }]} />
+                    <Text style={[styles.styleLabel, { color: visualStyle === s.value ? colors.primary : colors.foreground }]}>
+                      {s.label}
+                    </Text>
+                    <Text style={[styles.styleDesc, { color: colors.mutedForeground }]}>
+                      {s.desc}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               {/* ── Sovereign link ── */}
               <TouchableOpacity
                 style={styles.toggleRow}
@@ -339,6 +495,19 @@ function CapsuleModal({ slot, onClose, colors }: CapsuleModalProps) {
                 <>
                   <View style={[styles.divider, { backgroundColor: colors.border }]} />
                   <Text style={styles.sectionLabel}>AI-рендер</Text>
+
+                  {!citizenAgeVerified && (
+                    <TouchableOpacity
+                      style={[styles.ageGateWarning, { backgroundColor: colors.card, borderColor: colors.primary + "44" }]}
+                      onPress={onNeedAgeVerify}
+                    >
+                      <Feather name="alert-circle" size={15} color={colors.primary} />
+                      <Text style={[styles.ageGateText, { color: colors.primary }]}>
+                        Требуется подтверждение возраста 18+
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
                   <Text style={[styles.hintText, { marginBottom: 12 }]}>
                     LLM генерирует манифест → ElevenLabs озвучивает → FFmpeg собирает MP4 с водяным знаком TimeNation AI
                   </Text>
@@ -420,6 +589,10 @@ export default function TvScreen() {
   const { citizen } = useCitizen();
   const [date, setDate] = useState(todayISO());
   const [selectedSlot, setSelectedSlot] = useState<TvSlot | null>(null);
+  const [showAgeGate, setShowAgeGate] = useState(false);
+  const [citizenAgeVerified, setCitizenAgeVerified] = useState(
+    () => !!(citizen?.ageVerified ?? 0)
+  );
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const styles = getStyles(colors);
 
@@ -554,31 +727,40 @@ export default function TvScreen() {
           slot={selectedSlot}
           onClose={() => setSelectedSlot(null)}
           colors={colors}
+          citizenAgeVerified={citizenAgeVerified}
+          onNeedAgeVerify={() => setShowAgeGate(true)}
+        />
+      )}
+
+      {/* Age gate modal */}
+      {showAgeGate && citizen && (
+        <AgeGateModal
+          citizenId={citizen.id}
+          onVerified={() => {
+            setCitizenAgeVerified(true);
+            setShowAgeGate(false);
+          }}
+          onCancel={() => setShowAgeGate(false)}
+          colors={colors}
         />
       )}
     </View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
 function getStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
     container: { flex: 1 },
-
-    // Date navigation
     dateNav: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: 16,
       paddingVertical: 10,
-      borderBottomWidth: 1,
+      borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    dateArrow: { padding: 8 },
-    dateLabel: { fontSize: 16, fontWeight: "600", letterSpacing: 0.5 },
-
-    // Summary
+    dateArrow: { padding: 6 },
+    dateLabel: { fontSize: 15, fontWeight: "600", fontVariant: ["tabular-nums"] },
     summaryRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -588,23 +770,19 @@ function getStyles(colors: ReturnType<typeof useColors>) {
       borderBottomWidth: StyleSheet.hairlineWidth,
     },
     summaryText: { fontSize: 13 },
-
-    // List
-    listContent: { padding: 16 },
-    listHeader: { fontSize: 12, marginBottom: 12, textAlign: "center" },
-
-    // Slot card
+    listContent: { paddingHorizontal: 16, paddingTop: 12 },
+    listHeader: { fontSize: 12, marginBottom: 10 },
     slotCard: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       padding: 14,
-      borderRadius: 12,
-      borderWidth: 1,
+      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth,
     },
     slotCardLeft: { flex: 1 },
     slotCardRight: { flexDirection: "row", alignItems: "center" },
-    slotTime: { fontSize: 20, fontWeight: "700", fontVariant: ["tabular-nums"] },
+    slotTime: { fontSize: 16, fontWeight: "700", fontVariant: ["tabular-nums"] },
     slotType: { fontSize: 12, marginTop: 2 },
     slotBadge: {
       flexDirection: "row",
@@ -612,163 +790,164 @@ function getStyles(colors: ReturnType<typeof useColors>) {
       gap: 4,
       paddingHorizontal: 8,
       paddingVertical: 4,
-      borderRadius: 20,
+      borderRadius: 6,
     },
-    slotBadgeText: { fontSize: 11, fontWeight: "600" },
+    slotBadgeText: { fontSize: 11, fontWeight: "500" },
+    emptyState: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40, gap: 12 },
+    emptyTitle: { fontSize: 16, fontWeight: "600", textAlign: "center" },
+    emptyText: { fontSize: 13, textAlign: "center", lineHeight: 20 },
 
-    // Empty state
-    emptyState: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 40,
-      gap: 12,
-    },
-    emptyTitle: { fontSize: 17, fontWeight: "600", textAlign: "center" },
-    emptyText: { fontSize: 14, textAlign: "center", lineHeight: 20 },
-
-    // ── Modal ──
+    // Modal styles
     modalContainer: { flex: 1 },
     modalHeader: {
       flexDirection: "row",
       alignItems: "flex-start",
       justifyContent: "space-between",
       padding: 20,
-      paddingTop: 24,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
+      paddingBottom: 12,
     },
-    modalTitle: { fontSize: 17, fontWeight: "700", color: colors.foreground },
+    modalTitle: { fontSize: 16, fontWeight: "700", color: colors.foreground },
     modalSubtitle: { fontSize: 12, color: colors.mutedForeground, marginTop: 2 },
     closeBtn: { padding: 4 },
-    modalScroll: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
-
-    // Status badge
+    modalScroll: { flex: 1, paddingHorizontal: 20 },
     statusBadge: {
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
-      alignSelf: "flex-start",
       paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 20,
+      paddingVertical: 6,
+      borderRadius: 6,
       marginBottom: 16,
+      alignSelf: "flex-start",
     },
-    statusBadgeText: { fontSize: 12, fontWeight: "600" },
-
-    // Form
+    statusBadgeText: { fontSize: 12, fontWeight: "500" },
     sectionLabel: {
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: "600",
-      color: colors.mutedForeground,
       textTransform: "uppercase",
-      letterSpacing: 0.8,
+      letterSpacing: 0.5,
+      color: colors.mutedForeground,
       marginBottom: 8,
       marginTop: 16,
     },
     textInput: {
       borderWidth: 1,
-      borderRadius: 10,
+      borderRadius: 8,
       padding: 12,
-      fontSize: 15,
-      minHeight: 100,
+      fontSize: 14,
+      minHeight: 88,
     },
-    charCount: {
-      fontSize: 11,
-      color: colors.mutedForeground,
-      textAlign: "right",
-      marginTop: 4,
-    },
+    charCount: { fontSize: 11, color: colors.mutedForeground, textAlign: "right", marginTop: 4 },
     segmentRow: { flexDirection: "row", gap: 8 },
     segmentBtn: {
       flex: 1,
-      paddingVertical: 9,
-      borderRadius: 8,
+      paddingVertical: 8,
       borderWidth: 1,
+      borderRadius: 6,
       alignItems: "center",
     },
-    segmentText: { fontSize: 13, fontWeight: "600" },
+    segmentText: { fontSize: 13, fontWeight: "500" },
     hintText: { fontSize: 12, color: colors.mutedForeground, marginTop: 4 },
-
-    // Toggle row
+    styleGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
+    styleCard: {
+      width: "30%",
+      flexGrow: 1,
+      borderWidth: 1.5,
+      borderRadius: 8,
+      padding: 8,
+      alignItems: "center",
+    },
+    stylePreview: {
+      width: "100%",
+      height: 32,
+      borderRadius: 4,
+      marginBottom: 6,
+    },
+    styleLabel: { fontSize: 12, fontWeight: "600", textAlign: "center" },
+    styleDesc: { fontSize: 10, textAlign: "center", marginTop: 2, lineHeight: 13 },
     toggleRow: {
       flexDirection: "row",
       alignItems: "center",
+      gap: 10,
       marginTop: 16,
-      gap: 8,
+      marginBottom: 4,
     },
     checkbox: {
       width: 20,
       height: 20,
-      borderRadius: 4,
       borderWidth: 1.5,
+      borderRadius: 4,
       alignItems: "center",
       justifyContent: "center",
     },
-    toggleLabel: { fontSize: 14, fontWeight: "600" },
+    toggleLabel: { fontSize: 14, fontWeight: "500" },
     toggleHint: { fontSize: 12 },
-
-    // Buttons
     primaryBtn: {
-      marginTop: 20,
       paddingVertical: 14,
-      borderRadius: 12,
+      borderRadius: 10,
       alignItems: "center",
+      marginTop: 20,
     },
-    primaryBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-
+    primaryBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
     divider: { height: StyleSheet.hairlineWidth, marginVertical: 20 },
-
+    ageGateWarning: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      padding: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      marginBottom: 10,
+    },
+    ageGateText: { fontSize: 13, fontWeight: "500", flex: 1 },
     renderBtn: {
-      paddingVertical: 14,
-      borderRadius: 12,
       borderWidth: 1.5,
+      borderRadius: 10,
+      paddingVertical: 14,
       alignItems: "center",
     },
     renderBtnInner: { flexDirection: "row", alignItems: "center", gap: 8 },
-    renderBtnText: { fontSize: 15, fontWeight: "600" },
-
-    // Result card
+    renderBtnText: { fontWeight: "600", fontSize: 15 },
     resultCard: {
-      marginTop: 16,
-      padding: 16,
-      borderRadius: 12,
       borderWidth: 1,
+      borderRadius: 10,
+      padding: 14,
+      marginTop: 16,
       gap: 10,
     },
     resultHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-    resultTitle: { fontSize: 15, fontWeight: "700", flex: 1 },
+    resultTitle: { fontWeight: "600", fontSize: 14, flex: 1 },
     resultMeta: { fontSize: 12 },
-
     mediaBtn: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "center",
       gap: 8,
-      paddingVertical: 12,
-      borderRadius: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 8,
+      justifyContent: "center",
     },
-    mediaBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-
+    mediaBtnText: { color: "#fff", fontWeight: "600", fontSize: 14 },
     catcastBtn: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "center",
       gap: 8,
-      paddingVertical: 11,
-      borderRadius: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 8,
       borderWidth: 1.5,
+      justifyContent: "center",
     },
     catcastBtnDisabled: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "center",
       gap: 8,
-      paddingVertical: 11,
-      borderRadius: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 8,
       borderWidth: 1,
-      opacity: 0.5,
+      justifyContent: "center",
     },
-    catcastBtnText: { fontSize: 13, fontWeight: "600" },
+    catcastBtnText: { fontWeight: "500", fontSize: 13 },
   });
 }

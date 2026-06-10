@@ -18,6 +18,8 @@ export const citizensTable = pgTable("citizens", {
   rank: text("rank").notNull().default("Странник"),
   lastActivity: timestamp("last_activity", { withTimezone: true }),
   tosAcceptedAt: timestamp("tos_accepted_at", { withTimezone: true }),
+  // COPPA / EU DSA age affirmation (18+). false = not yet affirmed → render blocked.
+  ageVerified: integer("age_verified").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
