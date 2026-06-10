@@ -37,8 +37,9 @@ async function getAuthToken(): Promise<string | null> {
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        // catcast-d nginx needs explicit Accept: application/json to avoid SPA fallback
         "X-Requested-With": "XMLHttpRequest",
+        Referer: `${CATCAST_BASE}/`,
+        Origin: CATCAST_BASE,
       },
       body: JSON.stringify({ username, password }),
       signal: AbortSignal.timeout(15_000),
@@ -46,9 +47,13 @@ async function getAuthToken(): Promise<string | null> {
 
     const contentType = res.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {
+      // catcast.tv production nginx returns SPA HTML for all paths —
+      // their API is only accessible from the browser (same-origin).
+      // To use Catcast upload, set CATCAST_BASE_URL to a self-hosted catcast-d instance.
       logger.warn(
-        { status: res.status, contentType },
-        "Catcast auth returned non-JSON — API may be unreachable or URL is wrong"
+        { base: CATCAST_BASE, status: res.status },
+        "Catcast: API returned HTML (SPA). " +
+        "Set CATCAST_BASE_URL env var to a self-hosted catcast-d instance URL to enable uploads."
       );
       return null;
     }
