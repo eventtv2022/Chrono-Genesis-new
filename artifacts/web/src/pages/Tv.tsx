@@ -172,7 +172,7 @@ export function Tv() {
       }
 
       // ── Pathway A: FIAT (Stripe) or TiMETR ───────────────────────────────
-      const res = await fetch("/api/tv/book", {
+      const res = await fetch("/api/tv/slots/book", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
