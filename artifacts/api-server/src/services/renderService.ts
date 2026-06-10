@@ -273,6 +273,22 @@ function runFFmpeg(args: string[]): Promise<void> {
   });
 }
 
+// ── HEAVY render stub (Queue for external Video API: Kling / Luma / Runway) ───
+// When a real Video API key is added, replace this stub with the actual call.
+async function renderHeavyVideo(
+  manifestoText: string,
+  slotId: number,
+  visualStyle?: string | null
+): Promise<{ mediaUrl: null; status: "pending_heavy_render" }> {
+  logger.warn(
+    { slotId, visualStyle, words: manifestoText.split(" ").length },
+    "HEAVY_RENDER queued — awaiting external Video API (Kling/Luma/Runway). Returning pending status."
+  );
+  // TODO: send to video generation queue (Kling / Luma / Runway)
+  // When implemented, write generated video URL to capsule.mediaUrl and set status = "rendered"
+  return { mediaUrl: null, status: "pending_heavy_render" };
+}
+
 // ── Main Orchestrator ──────────────────────────────────────────────────────────
 export async function renderCapsule(slotId: number): Promise<{
   manifestoText: string;
@@ -308,19 +324,38 @@ export async function renderCapsule(slotId: number): Promise<{
       : "TimeNation — суверенное государство времени.";
   }
 
-  // 2. TTS audio
-  const audioBuffer = manifestoText ? await generateTTSBuffer(manifestoText) : null;
-
-  // 3. FFmpeg video render
+  // 2. Route by render path ─────────────────────────────────────────────────
+  //    LIGHT → ElevenLabs TTS + FFmpeg (instant)
+  //    HEAVY → external Video API stub (Quarter / Half / Apex slots)
   let mediaUrl: string | null = null;
   let finalStatus = "draft";
 
-  try {
-    mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle);
-    finalStatus = "rendered";
-  } catch (err) {
-    logger.error({ err, slotId }, "renderLightVideo failed");
-    finalStatus = "draft";
+  if (capsule.renderPath === "heavy") {
+    // Premium slot: queue for full AI video generation
+    const ttsBuffer = manifestoText ? await generateTTSBuffer(manifestoText) : null;
+    const heavyResult = await renderHeavyVideo(manifestoText, slotId, capsule.visualStyle);
+    mediaUrl = heavyResult.mediaUrl;
+    finalStatus = heavyResult.status;
+    // Still run LIGHT render as fallback preview while heavy is queued
+    if (!mediaUrl) {
+      try {
+        mediaUrl = await renderLightVideo(ttsBuffer, manifestoText, slotId, capsule.visualStyle);
+        finalStatus = "pending_heavy_render"; // override: heavy is still queued
+        logger.info({ slotId }, "HEAVY slot got LIGHT preview while awaiting Video API");
+      } catch (err) {
+        logger.error({ err, slotId }, "LIGHT fallback for HEAVY slot also failed");
+      }
+    }
+  } else {
+    // LIGHT path: ElevenLabs TTS + FFmpeg (Citizen slots)
+    const audioBuffer = manifestoText ? await generateTTSBuffer(manifestoText) : null;
+    try {
+      mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle);
+      finalStatus = "rendered";
+    } catch (err) {
+      logger.error({ err, slotId }, "renderLightVideo failed");
+      finalStatus = "draft";
+    }
   }
 
   // 4. Persist local render
