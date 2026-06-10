@@ -220,6 +220,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
   const [hasSovereignLink, setHasSovereignLink] = useState(false);
   const [visualStyle, setVisualStyle] = useState<VisualStyle>("space");
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
+  const [legalConsent, setLegalConsent] = useState(false);
 
   // Load existing capsule
   const { data: capsule, isLoading: capsuleLoading } = useQuery<TvCapsule>({
@@ -512,10 +513,30 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                     LLM генерирует манифест → ElevenLabs озвучивает → FFmpeg собирает MP4 с водяным знаком TimeNation AI
                   </Text>
 
+                  {/* ── Global User Contract Gate ── */}
                   <TouchableOpacity
-                    style={[styles.renderBtn, { borderColor: colors.primary, opacity: isRendering ? 0.6 : 1 }]}
+                    style={[styles.legalRow, { backgroundColor: colors.card, borderColor: legalConsent ? colors.primary + "55" : colors.border }]}
+                    onPress={() => setLegalConsent(v => !v)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.legalCheckbox, {
+                      borderColor: legalConsent ? colors.primary : colors.border,
+                      backgroundColor: legalConsent ? colors.primary : "transparent",
+                    }]}>
+                      {legalConsent && <Feather name="check" size={10} color="#fff" />}
+                    </View>
+                    <Text style={[styles.legalText, { color: colors.mutedForeground }]}>
+                      Я соглашаюсь с{" "}
+                      <Text style={{ color: colors.primary, textDecorationLine: "underline" }}>Условиями использования</Text>
+                      {". "}
+                      Подтверждаю, что мне исполнилось 18 лет; данная транзакция является покупкой технической вычислительной услуги; я несу единоличную правовую ответственность за текст и результирующее AI-видео согласно US Section 230, законодательству ЕС, ФЗ-152 РФ и местным законам. TimeNation действует исключительно как поставщик вычислительной инфраструктуры. Коммерческая реклама, нацеленная на конкретные юрисдикции без соответствующей регистрации, запрещена. Трансграничная передача данных инициируется пользователем самостоятельно.
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.renderBtn, { borderColor: colors.primary, opacity: (isRendering || !legalConsent) ? 0.4 : 1 }]}
                     onPress={handleRender}
-                    disabled={isRendering}
+                    disabled={isRendering || !legalConsent}
                   >
                     {isRendering ? (
                       <View style={styles.renderBtnInner}>
@@ -949,5 +970,25 @@ function getStyles(colors: ReturnType<typeof useColors>) {
       justifyContent: "center",
     },
     catcastBtnText: { fontWeight: "500", fontSize: 13 },
+    legalRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 10,
+      padding: 12,
+      borderWidth: 1,
+      borderRadius: 8,
+      marginBottom: 14,
+    },
+    legalCheckbox: {
+      width: 18,
+      height: 18,
+      borderWidth: 1.5,
+      borderRadius: 3,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 1,
+      flexShrink: 0,
+    },
+    legalText: { fontSize: 11, lineHeight: 17, flex: 1 },
   });
 }
