@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   FlatList,
   TextInput,
   ActivityIndicator,
-  Alert,
   ScrollView,
   Platform,
 } from "react-native";
@@ -49,6 +49,8 @@ export default function TimelineScreen() {
   const [occupied, setOccupied] = useState<OccupiedEntry[]>([]);
   const [loadingOccupied, setLoadingOccupied] = useState(false);
   const [anchoring, setAnchoring] = useState<string | null>(null);
+  const [confirmCoord, setConfirmCoord] = useState<string | null>(null);
+  const [anchorResult, setAnchorResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [jumpYear, setJumpYear] = useState("");
   const [jumpMonth, setJumpMonth] = useState("");
   const [jumpDay, setJumpDay] = useState("");
@@ -70,36 +72,36 @@ export default function TimelineScreen() {
     if (zoom === 5) fetchOccupied(selectedYear, selectedMonth, selectedDay);
   }, [zoom, selectedYear, selectedMonth, selectedDay, fetchOccupied]);
 
-  const anchorMinute = useCallback(async (coord: string) => {
-    if (!citizen) { Alert.alert("Нужна авторизация", "Зарегистрируйтесь как гражданин"); return; }
-    const humanCoord = `${coord.slice(6, 8)}.${coord.slice(4, 6)}.${parseInt(coord.slice(0, 4), 10)} ${coord.slice(8, 10)}:${coord.slice(10, 12)}`;
-    Alert.alert("⏳ Закрепить координату", `Зафиксировать координату ${humanCoord} навсегда за вашим родом?\n\nСтоимость: 1 Дармин`, [
-      { text: "Отмена", style: "cancel" },
-      { text: "Закрепить", onPress: async () => {
-        setAnchoring(coord);
-        try {
-          const res = await fetch(`${BASE_URL}/api/timeline/anchor`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ citizenId: citizen.id, timelineCoord: coord }),
-          });
-          const data = await res.json() as { error?: string; newBalance?: number };
-          if (!res.ok) Alert.alert("Ошибка", data.error ?? "Не удалось закрепить координату");
-          else {
-            Alert.alert("✅ Зафиксировано!", `Координата ${humanCoord} закреплена навсегда!\nОстаток: ${data.newBalance} Д`);
-            await fetchOccupied(selectedYear, selectedMonth, selectedDay);
-          }
-        } catch { Alert.alert("Ошибка", "Не удалось подключиться к серверу"); }
-        finally { setAnchoring(null); }
-      }},
-    ]);
+  const doAnchor = useCallback(async (coord: string) => {
+    if (!citizen) { setAnchorResult({ ok: false, msg: "Зарегистрируйтесь как гражданин" }); return; }
+    setConfirmCoord(null);
+    setAnchoring(coord);
+    setAnchorResult(null);
+    try {
+      const res = await fetch(`${BASE_URL}/api/timeline/anchor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ citizenId: citizen.id, timelineCoord: coord }),
+      });
+      const data = await res.json() as { error?: string; newBalance?: number };
+      if (!res.ok) {
+        setAnchorResult({ ok: false, msg: data.error ?? "Не удалось закрепить координату" });
+      } else {
+        setAnchorResult({ ok: true, msg: `Зафиксировано! Остаток: ${data.newBalance} Д` });
+        await fetchOccupied(selectedYear, selectedMonth, selectedDay);
+      }
+    } catch {
+      setAnchorResult({ ok: false, msg: "Ошибка соединения с сервером" });
+    } finally {
+      setAnchoring(null);
+    }
   }, [citizen, selectedYear, selectedMonth, selectedDay, fetchOccupied]);
 
   const jumpToDate = useCallback(() => {
     const y = parseInt(jumpYear, 10);
     const m = parseInt(jumpMonth || "1", 10);
     const d = parseInt(jumpDay || "1", 10);
-    if (!y || y < 1 || y > 9999) { Alert.alert("Ошибка", "Год должен быть от 1 до 9999"); return; }
+    if (!y || y < 1 || y > 9999) { setAnchorResult({ ok: false, msg: "Год должен быть от 1 до 9999" }); return; }
     setSelectedCentury(Math.ceil(y / 100));
     setSelectedYear(y);
     setSelectedMonth(Math.min(Math.max(m, 1), 12));
@@ -234,29 +236,63 @@ export default function TimelineScreen() {
               const isMine = ownerId === citizen?.id;
               const isOccupied = !!ownerId && !isMine;
               const isAnchoring = anchoring === coord;
+              const isPending = confirmCoord === coord;
               return (
-                <TouchableOpacity
+                <Pressable
                   key={min}
-                  style={[
+                  style={({ pressed }) => [
                     styles.minuteCell,
                     isMine && { backgroundColor: colors.primary, borderColor: colors.primary },
                     isOccupied && { backgroundColor: "#e63946", borderColor: "#e63946" },
+                    isPending && { backgroundColor: colors.primary + "66", borderColor: colors.primary },
+                    pressed && !ownerId && { opacity: 0.6 },
                   ]}
-                  onPress={() => !ownerId && anchorMinute(coord)}
+                  onPress={() => {
+                    if (ownerId) return;
+                    setAnchorResult(null);
+                    setConfirmCoord(coord);
+                  }}
                   disabled={!!ownerId || !!anchoring}
-                  activeOpacity={0.7}
                 >
                   {isAnchoring ? (
                     <ActivityIndicator size={10} color="#fff" />
                   ) : (
-                    <Text style={[styles.minuteText, (isMine || isOccupied) && { color: "#fff" }]}>
+                    <Text style={[styles.minuteText, (isMine || isOccupied || isPending) && { color: "#fff" }]}>
                       {pad2(min)}
                     </Text>
                   )}
-                </TouchableOpacity>
+                </Pressable>
               );
             })}
           </View>
+
+          {/* Inline confirm panel — shown when a free minute is tapped */}
+          {confirmCoord && (
+            <View style={styles.confirmPanel}>
+              <Text style={styles.confirmTitle}>⏳ Закрепить координату</Text>
+              <Text style={styles.confirmMsg}>
+                {`${confirmCoord.slice(6,8)}.${confirmCoord.slice(4,6)}.${parseInt(confirmCoord.slice(0,4),10)} ${confirmCoord.slice(8,10)}:${confirmCoord.slice(10,12)}`}
+                {"\n"}Навсегда за вашим родом · Стоимость: 1 Дармин
+              </Text>
+              <View style={styles.confirmBtns}>
+                <Pressable style={[styles.confirmBtn, styles.confirmBtnCancel]} onPress={() => setConfirmCoord(null)}>
+                  <Text style={styles.confirmBtnCancelText}>Отмена</Text>
+                </Pressable>
+                <Pressable style={[styles.confirmBtn, styles.confirmBtnOk]} onPress={() => doAnchor(confirmCoord)}>
+                  <Text style={styles.confirmBtnOkText}>Закрепить</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* Result message */}
+          {anchorResult && (
+            <Pressable onPress={() => setAnchorResult(null)}>
+              <View style={[styles.resultPanel, anchorResult.ok ? styles.resultOk : styles.resultErr]}>
+                <Text style={styles.resultText}>{anchorResult.ok ? "✅ " : "❌ "}{anchorResult.msg}</Text>
+              </View>
+            </Pressable>
+          )}
         </ScrollView>
       )}
 
@@ -312,6 +348,19 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     minuteGrid: { flexDirection: "row" as const, flexWrap: "wrap" as const },
     minuteCell: { width: "10%" as const, aspectRatio: 1, padding: 3, borderRadius: 6, backgroundColor: colors.card, alignItems: "center" as const, justifyContent: "center" as const, borderWidth: 1, borderColor: colors.border },
     minuteText: { color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_500Medium" },
+    confirmPanel: { marginTop: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.primary + "55", backgroundColor: colors.card, padding: 16 },
+    confirmTitle: { color: colors.foreground, fontSize: 15, fontWeight: "700", marginBottom: 6 },
+    confirmMsg: { color: colors.mutedForeground, fontSize: 13, lineHeight: 20, marginBottom: 14 },
+    confirmBtns: { flexDirection: "row" as const, gap: 10 },
+    confirmBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: "center" as const },
+    confirmBtnCancel: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+    confirmBtnOk: { backgroundColor: colors.primary },
+    confirmBtnCancelText: { color: colors.foreground, fontSize: 14, fontWeight: "600" },
+    confirmBtnOkText: { color: colors.background, fontSize: 14, fontWeight: "700" },
+    resultPanel: { marginTop: 12, borderRadius: 10, padding: 12 },
+    resultOk: { backgroundColor: "#1a3a2a", borderWidth: 1, borderColor: "#2d6a4f" },
+    resultErr: { backgroundColor: "#3a1a1a", borderWidth: 1, borderColor: "#e63946" },
+    resultText: { color: colors.foreground, fontSize: 13 },
     legend: { flexDirection: "row", justifyContent: "center", gap: 20, paddingTop: 8, paddingHorizontal: 16 },
     legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
     legendDot: { width: 10, height: 10, borderRadius: 5 },
