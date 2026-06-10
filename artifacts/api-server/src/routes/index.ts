@@ -9,6 +9,7 @@ import walletRouter from "./wallet";
 import embassiesRouter from "./embassies";
 import auctionsRouter from "./auctions";
 import emissionRouter from "./emission";
+import tvRouter from "./tv";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(walletRouter);
 router.use(embassiesRouter);
 router.use(auctionsRouter);
 router.use(emissionRouter);
+router.use(tvRouter);
 
 export default router;

@@ -5,3 +5,5 @@ export * from "./timelineAnchors";
 export * from "./emissionLogs";
 export * from "./auctionLogs";
 export * from "./nationalEmbassies";
+export * from "./tvSlots";
+export * from "./tvCapsules";

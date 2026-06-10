@@ -1,0 +1,95 @@
+import crypto from "crypto";
+import type { Request } from "express";
+import { db } from "@workspace/db";
+import { tvSlotsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { logger } from "../lib/logger";
+
+// ── Slot type by minute position ─────────────────────────────────────────────
+// apex    : minuteIndex % 60 === 0           (:00)  → 24/day
+// half    : minuteIndex % 30 === 0, ≠ :00    (:30)  → 24/day
+// quarter : minuteIndex % 15 === 0, ≠ :00/:30 (:15/:45) → 48/day
+// citizen : all others                                 → 1344/day
+// ─────────────────────────────────────────────────────────────────────────────
+export type SlotType = "citizen" | "quarter" | "half" | "apex";
+
+export function getSlotType(minuteIndex: number): SlotType {
+  const m = minuteIndex % 60;
+  if (m === 0) return "apex";
+  if (m === 30) return "half";
+  if (m % 15 === 0) return "quarter";
+  return "citizen";
+}
+
+// ── Burn Matrix ───────────────────────────────────────────────────────────────
+export const BURN_MATRIX: Record<
+  SlotType,
+  { eur: number; priceEurCents: number; timeltr: number; label: string }
+> = {
+  citizen: { eur: 4.99,  priceEurCents: 499,  timeltr: 1,  label: "Citizen Minute" },
+  quarter: { eur: 9.99,  priceEurCents: 999,  timeltr: 10, label: "Quarter Minute (:15/:45)" },
+  half:    { eur: 24.99, priceEurCents: 2499, timeltr: 25, label: "Half Minute (:30)" },
+  apex:    { eur: 49.99, priceEurCents: 4999, timeltr: 50, label: "Apex Minute (:00)" },
+};
+
+// ── Fingerprint for anti-consecutive guard ────────────────────────────────────
+export function getFingerprint(req: Request): string {
+  const raw = `${req.ip ?? "unknown"}:${req.headers["user-agent"] ?? ""}`;
+  return crypto.createHash("sha256").update(raw).digest("hex");
+}
+
+// ── Sovereign URL ─────────────────────────────────────────────────────────────
+export function generateSovereignUrl(date: string, minuteIndex: number): string {
+  const hour = String(Math.floor(minuteIndex / 60)).padStart(2, "0");
+  const min = String(minuteIndex % 60).padStart(2, "0");
+  return `timenation.tv/moment/${date}-${hour}${min}`;
+}
+
+// ── Retro detection (slot_time < NOW) ─────────────────────────────────────────
+export function isRetroSlot(date: string, minuteIndex: number): boolean {
+  const hour = Math.floor(minuteIndex / 60);
+  const min = minuteIndex % 60;
+  const slotTime = new Date(
+    `${date}T${String(hour).padStart(2, "0")}:${String(min).padStart(2, "0")}:00Z`
+  );
+  return slotTime < new Date();
+}
+
+// ── Date validation helper ────────────────────────────────────────────────────
+export function isValidDate(date: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) && !isNaN(Date.parse(date));
+}
+
+// ── Generate all 1440 slots for a given date (idempotent) ────────────────────
+export async function ensureSlotsForDate(date: string): Promise<void> {
+  const [existing] = await db
+    .select({ id: tvSlotsTable.id })
+    .from(tvSlotsTable)
+    .where(eq(tvSlotsTable.date, date))
+    .limit(1);
+
+  if (existing) return; // Already generated
+
+  const rows = Array.from({ length: 1440 }, (_, i) => {
+    const slotType = getSlotType(i);
+    const pricing = BURN_MATRIX[slotType];
+    return {
+      date,
+      minuteIndex: i,
+      slotType,
+      status: "free" as const,
+      priceEur: pricing.eur,
+      timeltrBurnCost: pricing.timeltr,
+    };
+  });
+
+  // Insert in chunks of 200 to avoid large parameter arrays
+  for (let offset = 0; offset < rows.length; offset += 200) {
+    await db
+      .insert(tvSlotsTable)
+      .values(rows.slice(offset, offset + 200))
+      .onConflictDoNothing();
+  }
+
+  logger.info({ date, count: 1440 }, "TV slots generated for date");
+}

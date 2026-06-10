@@ -38,6 +38,10 @@
 - `artifacts/api-server/src/lib/googleSheets.ts` — Google Sheets (Service Account, автосоздание листов)
 - `artifacts/mobile/` — Expo мобильное приложение (5 вкладок: TiMETR, Таймлайн, Экономика, Посольства, Аукцион)
 - Вспомогательные экраны: `shop.tsx`, `wallet.tsx`, `tos.tsx`, `register.tsx`
+- `artifacts/api-server/src/services/tvService.ts` — TV: типы слотов, Burn Matrix, fingerprint, sovereign URL
+- `artifacts/api-server/src/routes/tv.ts` — TV API (slots, book, capsule, schedule, sovereign lookup)
+- `lib/db/src/schema/tvSlots.ts` — таблица `tv_slots` (1440/день, unique date+minuteIndex)
+- `lib/db/src/schema/tvCapsules.ts` — таблица `tv_capsules` (seed, manifesto, 3 независимых измерения)
 
 ## Architecture decisions
 
@@ -52,6 +56,7 @@
 - Google Sheets логирование — подключено через Service Account (googleapis).
 - **SQL View** `excel_export_view` — объединяет transactions + emission_logs + auction_logs для выгрузки в Excel.
 - Terms of Service экран (`/tos`) — юридическая изоляция: Дармины = внутриигровые баллы, не деньги.
+- **TimeNation-TV**: 1440 слотов/день (lazy generation при первом запросе). Burn Matrix: citizen 1Д/4.99€, quarter 10Д/9.99€, half 25Д/24.99€, apex 50Д/49.99€. Anti-consecutive guard (fingerprint). 3 измерения капсулы: broadcastPolicy (echo/noise/private), contentState (filled/empty), hasSovereignLink. Retro = slot_time < NOW.
 
 ## Product
 
