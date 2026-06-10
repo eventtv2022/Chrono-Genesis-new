@@ -261,6 +261,7 @@ function runFFmpeg(args: string[]): Promise<void> {
 export async function renderCapsule(slotId: number): Promise<{
   manifestoText: string;
   mediaUrl: string | null;
+  catcastUrl: string | null;
   status: string;
 }> {
   const [capsule] = await db
