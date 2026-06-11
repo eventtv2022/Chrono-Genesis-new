@@ -149,11 +149,15 @@ export function Tv() {
 
   // ── Render capsule
   async function handleRender() {
-    if (!bookedSlotId) return;
+    if (!bookedSlotId || !citizen) return;
     setRendering(true);
     setRenderError(null);
     try {
-      const res = await fetch(`/api/tv/capsule/${bookedSlotId}/render`, { method: "POST" });
+      const res = await fetch(`/api/tv/capsule/${bookedSlotId}/render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ citizenId: citizen.id }),
+      });
       const data = (await res.json()) as { ok?: boolean; status?: string; mediaUrl?: string; catcastUrl?: string | null; manifestoWords?: number; error?: string };
       if (!res.ok) {
         setRenderError(data.error ?? "Ошибка рендера");
