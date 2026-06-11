@@ -10,9 +10,11 @@ import {
   ActivityIndicator,
   ScrollView,
   Platform,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { LogoBrand } from "@/components/LogoBrand";
@@ -54,6 +56,20 @@ export default function TimelineScreen() {
   const [jumpYear, setJumpYear] = useState("");
   const [jumpMonth, setJumpMonth] = useState("");
   const [jumpDay, setJumpDay] = useState("");
+  const [showMyAnchors, setShowMyAnchors] = useState(false);
+
+  const { data: myAnchors = [], refetch: refetchMyAnchors } = useQuery<
+    { timelineCoord: string; status: string; createdAt: string }[]
+  >({
+    queryKey: ["myAnchors", citizen?.id],
+    queryFn: async () => {
+      if (!citizen) return [];
+      const res = await fetch(`${BASE_URL}/api/timeline/my-anchors?citizenId=${citizen.id}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!citizen,
+  });
 
   const fetchOccupied = useCallback(async (year: number, month?: number, day?: number) => {
     setLoadingOccupied(true);
@@ -89,6 +105,7 @@ export default function TimelineScreen() {
       } else {
         setAnchorResult({ ok: true, msg: `Зафиксировано! Остаток: ${data.newBalance} Д` });
         await fetchOccupied(selectedYear, selectedMonth, selectedDay);
+        void refetchMyAnchors();
       }
     } catch {
       setAnchorResult({ ok: false, msg: "Ошибка соединения с сервером" });
@@ -132,6 +149,17 @@ export default function TimelineScreen() {
           <LogoBrand size={24} />
           <Text style={styles.headerTitle}>Таймлайн</Text>
           <Text style={styles.breadcrumb}>{getBreadcrumb()}</Text>
+          {citizen && (
+            <TouchableOpacity
+              style={[styles.myAnchorsBtn, { borderColor: colors.primary + "55", backgroundColor: colors.card }]}
+              onPress={() => setShowMyAnchors(true)}
+            >
+              <Feather name="map-pin" size={13} color={colors.primary} />
+              {myAnchors.length > 0 && (
+                <Text style={[styles.myAnchorsBadge, { color: colors.primary }]}>{myAnchors.length}</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
         <View style={styles.jumpRow}>
           <TextInput style={styles.jumpInput} placeholder="Год" placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpYear} onChangeText={setJumpYear} maxLength={4} />
@@ -296,6 +324,70 @@ export default function TimelineScreen() {
         </ScrollView>
       )}
 
+      {/* ── My Anchors Modal ─────────────────────────────────────────────── */}
+      <Modal visible={showMyAnchors} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowMyAnchors(false)}>
+        <View style={[styles.maModal, { backgroundColor: colors.background }]}>
+          <View style={[styles.maHeader, { borderBottomColor: colors.border }]}>
+            <View style={styles.maHeaderLeft}>
+              <Feather name="map-pin" size={18} color={colors.primary} />
+              <Text style={[styles.maHeaderTitle, { color: colors.foreground }]}>Мои координаты</Text>
+              <View style={[styles.maCount, { backgroundColor: colors.primary }]}>
+                <Text style={styles.maCountText}>{myAnchors.length}</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setShowMyAnchors(false)} style={styles.maClose}>
+              <Feather name="x" size={22} color={colors.foreground} />
+            </TouchableOpacity>
+          </View>
+
+          {myAnchors.length === 0 ? (
+            <View style={styles.maEmpty}>
+              <Feather name="clock" size={40} color={colors.mutedForeground} />
+              <Text style={[styles.maEmptyTitle, { color: colors.foreground }]}>Нет закреплённых координат</Text>
+              <Text style={[styles.maEmptyText, { color: colors.mutedForeground }]}>
+                Перейдите к нужной минуте в таймлайне и нажмите на неё — стоимость 1 Д
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={myAnchors}
+              keyExtractor={(a) => a.timelineCoord}
+              contentContainerStyle={styles.maList}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item: a }) => {
+                const c = a.timelineCoord;
+                const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)}  ${c.slice(8,10)}:${c.slice(10,12)}`;
+                const goTo = () => {
+                  const y = parseInt(c.slice(0,4),10);
+                  const mo = parseInt(c.slice(4,6),10);
+                  const d = parseInt(c.slice(6,8),10);
+                  const h = parseInt(c.slice(8,10),10);
+                  setSelectedYear(y);
+                  setSelectedCentury(Math.ceil(y/100));
+                  setSelectedMonth(mo);
+                  setSelectedDay(d);
+                  setSelectedHour(h);
+                  setZoom(5);
+                  setShowMyAnchors(false);
+                };
+                return (
+                  <View style={[styles.maRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <View style={styles.maRowLeft}>
+                      <Text style={[styles.maCoordLabel, { color: colors.foreground }]}>{label}</Text>
+                      <Text style={[styles.maCoordRaw, { color: colors.mutedForeground }]}>{c}</Text>
+                    </View>
+                    <TouchableOpacity style={[styles.maGoBtn, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "44" }]} onPress={goTo}>
+                      <Feather name="navigation" size={13} color={colors.primary} />
+                      <Text style={[styles.maGoBtnText, { color: colors.primary }]}>Перейти</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }}
+            />
+          )}
+        </View>
+      </Modal>
+
       <View style={[styles.legend, { paddingBottom: insets.bottom + 80 }]}>
         {[{ color: colors.primary, label: "Мои" }, { color: "#e63946", label: "Занято" }, { color: colors.card, label: "Свободно" }].map((item) => (
           <View key={item.label} style={styles.legendItem}>
@@ -365,5 +457,26 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
     legendDot: { width: 10, height: 10, borderRadius: 5 },
     legendText: { color: colors.mutedForeground, fontSize: 12 },
+    // My Anchors button (header)
+    myAnchorsBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, borderWidth: 1, marginLeft: "auto" },
+    myAnchorsBadge: { fontSize: 12, fontWeight: "700" },
+    // My Anchors modal
+    maModal: { flex: 1 },
+    maHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },
+    maHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+    maHeaderTitle: { fontSize: 18, fontWeight: "700" },
+    maCount: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
+    maCountText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+    maClose: { padding: 4 },
+    maEmpty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 40 },
+    maEmptyTitle: { fontSize: 17, fontWeight: "700", textAlign: "center" },
+    maEmptyText: { fontSize: 13, textAlign: "center", lineHeight: 20 },
+    maList: { padding: 16, gap: 10 },
+    maRow: { flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, padding: 14, gap: 12 },
+    maRowLeft: { flex: 1, gap: 3 },
+    maCoordLabel: { fontSize: 16, fontWeight: "600", fontVariant: ["tabular-nums"] },
+    maCoordRaw: { fontSize: 11, fontFamily: "Inter_400Regular", letterSpacing: 1 },
+    maGoBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+    maGoBtnText: { fontSize: 13, fontWeight: "600" },
   });
 }

@@ -171,4 +171,28 @@ router.get("/timeline/occupied", async (req, res): Promise<void> => {
   );
 });
 
+// ── GET /timeline/my-anchors?citizenId=X ─────────────────────────────────────
+// Returns all timeline anchors owned by a citizen, sorted chronologically.
+router.get("/timeline/my-anchors", async (req, res): Promise<void> => {
+  const citizenId = parseInt(String(req.query["citizenId"] ?? ""), 10);
+  if (isNaN(citizenId) || citizenId <= 0) {
+    res.status(400).json({ error: "citizenId обязателен" });
+    return;
+  }
+
+  const anchors = await db
+    .select()
+    .from(timelineAnchorsTable)
+    .where(eq(timelineAnchorsTable.citizenId, citizenId))
+    .orderBy(timelineAnchorsTable.timelineCoord);
+
+  res.json(
+    anchors.map((a) => ({
+      timelineCoord: a.timelineCoord,
+      status: a.status,
+      createdAt: a.createdAt.toISOString(),
+    }))
+  );
+});
+
 export default router;
