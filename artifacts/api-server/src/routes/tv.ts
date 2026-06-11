@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tvSlotsTable, tvCapsulesTable, citizensTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import {
@@ -14,6 +14,7 @@ import {
   type SlotType,
 } from "../services/tvService";
 import { renderCapsule, MEDIA_DIR } from "../services/renderService";
+import { calcTreasuryTax, TREASURY_CITIZEN_ID } from "../services/videoStorage";
 import {
   isCryptomusConfigured,
   createCryptoPayment,
@@ -166,19 +167,33 @@ router.post("/tv/slots/book", async (req, res): Promise<void> => {
   // ── TiMETR hard burn ──────────────────────────────────────────────────────
   if (paymentType === "timeltr") {
     const burnCost = slot.timeltrBurnCost;
+    const treasuryTax = calcTreasuryTax(burnCost);
+    const totalCost = burnCost + treasuryTax;
     const transferable = citizen.balanceMinutes - 1; // Родовая минута неприкосновенна
-    if (burnCost > transferable) {
+    if (totalCost > transferable) {
       res.status(400).json({
-        error: `Недостаточно Дарминов. Нужно ${burnCost} Д, доступно ${transferable} Д`,
+        error: `Недостаточно Дарминов. Нужно ${totalCost} Д (слот ${burnCost} Д + налог ${treasuryTax} Д), доступно ${transferable} Д`,
       });
       return;
     }
 
-    // Hard burn — постоянное списание
+    // Hard burn — списание с гражданина
     await db
       .update(citizensTable)
-      .set({ balanceMinutes: citizen.balanceMinutes - burnCost })
+      .set({ balanceMinutes: citizen.balanceMinutes - totalCost })
       .where(eq(citizensTable.id, citizenId));
+
+    // Казначейский налог — зачислить системному кошельку (id=1), если существует
+    if (TREASURY_CITIZEN_ID !== citizenId) {
+      try {
+        await db
+          .execute(
+            sql`UPDATE citizens SET balance_minutes = balance_minutes + ${treasuryTax} WHERE id = ${TREASURY_CITIZEN_ID}`
+          );
+      } catch {
+        /* казначейский аккаунт необязателен в dev */
+      }
+    }
 
     await db
       .update(tvSlotsTable)
@@ -190,8 +205,8 @@ router.post("/tv/slots/book", async (req, res): Promise<void> => {
       })
       .where(eq(tvSlotsTable.id, slotId));
 
-    req.log.info({ citizenId, slotId, burnCost }, "TV slot booked via TiMETR burn");
-    res.status(201).json({ ok: true, slotId, burnCost, paymentType: "timeltr" });
+    req.log.info({ citizenId, slotId, burnCost, treasuryTax, totalCost }, "TV slot booked via TiMETR burn");
+    res.status(201).json({ ok: true, slotId, burnCost, treasuryTax, totalCost, paymentType: "timeltr" });
     return;
   }
 

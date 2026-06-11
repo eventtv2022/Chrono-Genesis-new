@@ -3,9 +3,11 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { db } from "@workspace/db";
-import { tvCapsulesTable, citizensTable } from "@workspace/db";
+import { tvCapsulesTable, citizensTable, tvSlotsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { uploadToCatcast } from "./catcastService";
+import { generateManifesto } from "./geminiService";
+import { buildStorageRecord } from "./videoStorage";
 import { logger } from "../lib/logger";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -310,18 +312,37 @@ export async function renderCapsule(slotId: number): Promise<{
     .set({ status: "pending_render", updatedAt: new Date() })
     .where(eq(tvCapsulesTable.slotId, slotId));
 
-  // 1. Determine manifesto text
+  // 1. Load slot for date/minuteIndex (needed for Gemini prompt context)
+  const [slot] = await db
+    .select({ date: tvSlotsTable.date, minuteIndex: tvSlotsTable.minuteIndex })
+    .from(tvSlotsTable)
+    .where(eq(tvSlotsTable.id, slotId))
+    .limit(1);
+
+  // 2. Determine manifesto text
   let manifestoText: string;
   if (capsule.contentState === "empty") {
     manifestoText = "TimeNation — пространство тишины. Момент принадлежит тебе.";
   } else if (capsule.mode === "b") {
-    // Mode B: raw seed, no LLM
+    // Mode B: raw seed, no LLM expansion
     manifestoText = capsule.seedText ?? "";
   } else {
-    // Mode A: AI packaging (template expansion; swap to real LLM when key available)
-    manifestoText = capsule.seedText
-      ? expandSeedToManifesto(capsule.seedText)
-      : "TimeNation — суверенное государство времени.";
+    // Mode A: Gemini AI packaging → fallback to template if key missing or error
+    if (capsule.seedText && slot) {
+      const geminiResult = await generateManifesto(
+        capsule.seedText,
+        slot.date,
+        slot.minuteIndex
+      );
+      manifestoText = geminiResult ?? expandSeedToManifesto(capsule.seedText);
+      if (!geminiResult) {
+        logger.info({ slotId }, "Gemini unavailable — used template manifesto fallback");
+      }
+    } else {
+      manifestoText = capsule.seedText
+        ? expandSeedToManifesto(capsule.seedText)
+        : "TimeNation — суверенное государство времени.";
+    }
   }
 
   // 2. Route by render path ─────────────────────────────────────────────────
@@ -358,12 +379,21 @@ export async function renderCapsule(slotId: number): Promise<{
     }
   }
 
-  // 4. Persist local render
+  // 4. Build storage record and persist
+  const localPath = path.join(MEDIA_DIR, `slot_${slotId}.mp4`);
+  let sizeBytes: number | undefined;
+  try {
+    sizeBytes = fs.existsSync(localPath) ? fs.statSync(localPath).size : undefined;
+  } catch { /* ignore */ }
+  const storageRecord = buildStorageRecord(slotId, localPath, sizeBytes);
+  // Use hot CDN URL as the canonical mediaUrl if available
+  const canonicalMediaUrl = storageRecord.hotUrl ?? mediaUrl;
+
   await db
     .update(tvCapsulesTable)
     .set({
       manifestoText: manifestoText || null,
-      mediaUrl,
+      mediaUrl: canonicalMediaUrl,
       status: finalStatus,
       updatedAt: new Date(),
     })
