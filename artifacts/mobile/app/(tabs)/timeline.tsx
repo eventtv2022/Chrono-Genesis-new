@@ -330,7 +330,7 @@ export default function TimelineScreen() {
           <View style={[styles.maHeader, { borderBottomColor: colors.border }]}>
             <View style={styles.maHeaderLeft}>
               <Feather name="map-pin" size={18} color={colors.primary} />
-              <Text style={[styles.maHeaderTitle, { color: colors.foreground }]}>Мои координаты</Text>
+              <Text style={[styles.maHeaderTitle, { color: colors.foreground }]}>My TIME</Text>
               <View style={[styles.maCount, { backgroundColor: colors.primary }]}>
                 <Text style={styles.maCountText}>{myAnchors.length}</Text>
               </View>
