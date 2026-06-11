@@ -85,6 +85,159 @@ function stepDate(base: string, delta: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function isoToYM(iso: string): { year: number; month: number } {
+  const [y, m] = iso.split("-").map(Number);
+  return { year: y, month: m };
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+function firstDayOfMonth(year: number, month: number): number {
+  const d = new Date(year, month - 1, 1).getDay();
+  return d === 0 ? 6 : d - 1; // Monday-first (0=Mon … 6=Sun)
+}
+
+const RU_MONTHS = [
+  "Январь","Февраль","Март","Апрель","Май","Июнь",
+  "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь",
+];
+const RU_DOW = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+
+// ── DatePickerModal ───────────────────────────────────────────────────────────
+
+interface DatePickerModalProps {
+  current: string;
+  onSelect: (iso: string) => void;
+  onClose: () => void;
+  colors: ReturnType<typeof useColors>;
+}
+
+function DatePickerModal({ current, onSelect, onClose, colors }: DatePickerModalProps) {
+  const init = isoToYM(current);
+  const [viewYear, setViewYear] = useState(init.year);
+  const [viewMonth, setViewMonth] = useState(init.month);
+
+  const today = todayISO();
+  const totalDays = daysInMonth(viewYear, viewMonth);
+  const firstOffset = firstDayOfMonth(viewYear, viewMonth);
+
+  const cells: (number | null)[] = [
+    ...Array(firstOffset).fill(null),
+    ...Array.from({ length: totalDays }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const prevMonth = () => {
+    if (viewMonth === 1) { setViewYear(y => y - 1); setViewMonth(12); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 12) { setViewYear(y => y + 1); setViewMonth(1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  const pick = (day: number) => {
+    const iso = `${viewYear}-${String(viewMonth).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    onSelect(iso);
+    onClose();
+  };
+
+  const todayBtn = () => { onSelect(today); onClose(); };
+
+  return (
+    <Modal visible animationType="fade" transparent onRequestClose={onClose}>
+      <TouchableOpacity
+        style={dpStyles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+          <View style={[dpStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {/* Month nav */}
+            <View style={dpStyles.header}>
+              <TouchableOpacity onPress={prevMonth} style={dpStyles.arrow}>
+                <Feather name="chevron-left" size={20} color={colors.foreground} />
+              </TouchableOpacity>
+              <Text style={[dpStyles.monthLabel, { color: colors.foreground }]}>
+                {RU_MONTHS[viewMonth - 1]} {viewYear}
+              </Text>
+              <TouchableOpacity onPress={nextMonth} style={dpStyles.arrow}>
+                <Feather name="chevron-right" size={20} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Day-of-week row */}
+            <View style={dpStyles.dowRow}>
+              {RU_DOW.map(d => (
+                <Text key={d} style={[dpStyles.dowCell, { color: colors.mutedForeground }]}>{d}</Text>
+              ))}
+            </View>
+
+            {/* Days grid */}
+            <View style={dpStyles.grid}>
+              {cells.map((day, idx) => {
+                if (day === null) return <View key={`e-${idx}`} style={dpStyles.cell} />;
+                const iso = `${viewYear}-${String(viewMonth).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+                const isSelected = iso === current;
+                const isToday = iso === today;
+                return (
+                  <TouchableOpacity
+                    key={iso}
+                    style={[
+                      dpStyles.cell,
+                      isSelected && { backgroundColor: colors.primary, borderRadius: 8 },
+                      !isSelected && isToday && { borderWidth: 1, borderRadius: 8, borderColor: colors.primary },
+                    ]}
+                    onPress={() => pick(day)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      dpStyles.dayText,
+                      { color: isSelected ? "#fff" : isToday ? colors.primary : colors.foreground },
+                    ]}>
+                      {day}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Footer */}
+            <View style={dpStyles.footer}>
+              <TouchableOpacity onPress={todayBtn} style={[dpStyles.todayBtn, { borderColor: colors.border }]}>
+                <Text style={[dpStyles.todayText, { color: colors.primary }]}>Сегодня</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onClose} style={[dpStyles.cancelBtn, { borderColor: colors.border }]}>
+                <Text style={[dpStyles.cancelText, { color: colors.mutedForeground }]}>Закрыть</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+const dpStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 24 },
+  card: { width: 300, borderRadius: 14, borderWidth: 1, padding: 16 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  arrow: { padding: 6 },
+  monthLabel: { fontSize: 16, fontWeight: "700" },
+  dowRow: { flexDirection: "row", marginBottom: 4 },
+  dowCell: { width: 38, textAlign: "center", fontSize: 11, fontWeight: "600" },
+  grid: { flexDirection: "row", flexWrap: "wrap" },
+  cell: { width: 38, height: 36, alignItems: "center", justifyContent: "center" },
+  dayText: { fontSize: 14 },
+  footer: { flexDirection: "row", gap: 8, marginTop: 12 },
+  todayBtn: { flex: 1, height: 36, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  todayText: { fontSize: 14, fontWeight: "600" },
+  cancelBtn: { flex: 1, height: 36, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  cancelText: { fontSize: 14 },
+});
+
 function slotLabel(s: TvSlot): string {
   return `${s.hourLabel}:${s.minLabel}`;
 }
@@ -613,6 +766,7 @@ export default function TvScreen() {
   const insets = useSafeAreaInsets();
   const { citizen } = useCitizen();
   const [date, setDate] = useState(todayISO());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<TvSlot | null>(null);
   const [showAgeGate, setShowAgeGate] = useState(false);
   const [citizenAgeVerified, setCitizenAgeVerified] = useState(
@@ -679,7 +833,14 @@ export default function TvScreen() {
         <TouchableOpacity onPress={handlePrevDay} style={styles.dateArrow}>
           <Feather name="chevron-left" size={20} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.dateLabel, { color: colors.foreground }]}>{date}</Text>
+        <TouchableOpacity
+          onPress={() => setShowDatePicker(true)}
+          style={styles.dateLabelBtn}
+          activeOpacity={0.7}
+        >
+          <Feather name="calendar" size={14} color={colors.primary} style={{ marginRight: 6 }} />
+          <Text style={[styles.dateLabel, { color: colors.foreground }]}>{date}</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={handleNextDay} style={styles.dateArrow}>
           <Feather name="chevron-right" size={20} color={colors.foreground} />
         </TouchableOpacity>
@@ -769,6 +930,16 @@ export default function TvScreen() {
           colors={colors}
         />
       )}
+
+      {/* Date picker */}
+      {showDatePicker && (
+        <DatePickerModal
+          current={date}
+          onSelect={setDate}
+          onClose={() => setShowDatePicker(false)}
+          colors={colors}
+        />
+      )}
     </View>
   );
 }
@@ -785,6 +956,7 @@ function getStyles(colors: ReturnType<typeof useColors>) {
       borderBottomWidth: StyleSheet.hairlineWidth,
     },
     dateArrow: { padding: 6 },
+    dateLabelBtn: { flexDirection: "row", alignItems: "center", paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8 },
     dateLabel: { fontSize: 15, fontWeight: "600", fontVariant: ["tabular-nums"] },
     summaryRow: {
       flexDirection: "row",
