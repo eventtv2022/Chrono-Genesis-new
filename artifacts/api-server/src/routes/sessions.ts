@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { citizensTable, sessionsTable, transactionsTable } from "@workspace/db";
 import { StartSessionBody } from "@workspace/api-zod";
 import { logTransactionToSheets } from "../lib/googleSheets";
 import { sendTransactionNotification } from "../services/telegramService";
 import { applyMeritAfterSession } from "../services/meritocracyService";
+import { calcTreasuryTax, TREASURY_CITIZEN_ID } from "../services/videoStorage";
 
 const router: IRouter = Router();
 
@@ -136,6 +137,9 @@ router.post("/sessions/:id/stop", async (req, res): Promise<void> => {
   }
 
   const actualMinutes = Math.min(minutesTransferred, fromCitizen.balanceMinutes - 1);
+  // 2% казначейский налог (Math.ceil). Минимум 0 для защиты от переполнения.
+  const treasuryTax = actualMinutes > 0 ? calcTreasuryTax(actualMinutes) : 0;
+  const toReceives = Math.max(0, actualMinutes - treasuryTax);
 
   const [updatedSession] = await db
     .update(sessionsTable)
@@ -159,10 +163,19 @@ router.post("/sessions/:id/stop", async (req, res): Promise<void> => {
   await db
     .update(citizensTable)
     .set({
-      balanceMinutes: toCitizen.balanceMinutes + actualMinutes,
-      totalReceived: toCitizen.totalReceived + actualMinutes,
+      balanceMinutes: toCitizen.balanceMinutes + toReceives,
+      totalReceived: toCitizen.totalReceived + toReceives,
     })
     .where(eq(citizensTable.id, session.toCitizenId));
+
+  // Зачислить налог Казначейству (id=1)
+  if (treasuryTax > 0 && TREASURY_CITIZEN_ID !== session.fromCitizenId && TREASURY_CITIZEN_ID !== session.toCitizenId) {
+    try {
+      await db.execute(
+        sql`UPDATE citizens SET balance_minutes = balance_minutes + ${treasuryTax} WHERE id = ${TREASURY_CITIZEN_ID}`
+      );
+    } catch { /* казначейство необязательно в dev */ }
+  }
 
   const [transaction] = await db
     .insert(transactionsTable)
@@ -203,15 +216,17 @@ router.post("/sessions/:id/stop", async (req, res): Promise<void> => {
     ? "✅ Закреплено в Казначействе"
     : "⚠️ Реестр временно недоступен";
 
+  const taxNote = treasuryTax > 0 ? `\n🏦 Налог Казначейства: *${treasuryTax} Д* (2%)` : "";
+
   const notifyFrom =
     `🏛 *Казначейство TimeNation*\n\n` +
-    `Транзакция времени завершена: *${actualMinutes} мин* передано гражданину *${toCitizen.name}*.\n\n` +
+    `Транзакция завершена: *${actualMinutes} Д* → *${toCitizen.name}*.${taxNote}\n\n` +
     `${registryStatus}`;
 
   const notifyTo =
     `🏛 *Казначейство TimeNation*\n\n` +
-    `Вы получили *${actualMinutes} мин* от гражданина *${fromCitizen.name}*.\n\n` +
-    `💰 Ваш новый баланс: *${toCitizen.balanceMinutes + actualMinutes} мин*\n\n` +
+    `Получено *${toReceives} Д* от *${fromCitizen.name}*.${taxNote}\n\n` +
+    `💰 Ваш новый баланс: *${toCitizen.balanceMinutes + toReceives} Д*\n\n` +
     `${registryStatus}`;
 
   const meritResult = await applyMeritAfterSession(session.fromCitizenId, actualMinutes).catch((err) => {

@@ -96,10 +96,10 @@ export function buildStorageRecord(
 }
 
 // ── Treasury tax calculator ───────────────────────────────────────────────────
-// Казначейский налог: 10% от стоимости слота в Дарминах, округление вверх.
-// Удерживается при бронировании через TiMETR (timeltr payment path).
-// Для fiat/crypto — налог учитывается в EUR цене (уже включён в BURN_MATRIX).
-export const TREASURY_TAX_RATE = 0.10;
+// Казначейский налог: 2% на все Дармин-транзакции, Math.ceil.
+// Применяется к: TiMETR-сессиям, TV-бронированию (timeltr), аукционам.
+// Fiat/crypto платежи: налог включён в EUR-цену (BURN_MATRIX).
+export const TREASURY_TAX_RATE = 0.02;
 
 export function calcTreasuryTax(timeltrBurnCost: number): number {
   return Math.ceil(timeltrBurnCost * TREASURY_TAX_RATE);
