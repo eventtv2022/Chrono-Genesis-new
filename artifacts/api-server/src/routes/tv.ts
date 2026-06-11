@@ -855,7 +855,7 @@ router.get("/tv/schedule", async (req, res): Promise<void> => {
     .where(eq(tvSlotsTable.date, date))
     .orderBy(tvSlotsTable.minuteIndex);
 
-  const bookedSlots = slots.filter((s) => s.status === "booked" || s.status === "aired");
+  const bookedSlots = slots.filter((s) => s.status === "booked" || s.status === "broadcast");
 
   // Load capsules for booked slots
   const bookedIds = bookedSlots.map((s) => s.id);

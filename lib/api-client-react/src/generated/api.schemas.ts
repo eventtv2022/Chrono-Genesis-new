@@ -206,7 +206,7 @@ export type TvSlotStatus = typeof TvSlotStatus[keyof typeof TvSlotStatus];
 export const TvSlotStatus = {
   free: 'free',
   booked: 'booked',
-  aired: 'aired',
+  broadcast: 'broadcast',
 } as const;
 
 export interface TvSlot {

@@ -1,9 +1,10 @@
 import crypto from "crypto";
 import type { Request } from "express";
 import { db } from "@workspace/db";
-import { tvSlotsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { tvSlotsTable, tvCapsulesTable } from "@workspace/db";
+import { and, eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { sendTransactionNotification } from "./telegramService";
 
 // ── Slot type by minute position ─────────────────────────────────────────────
 // apex    : minuteIndex % 60 === 0           (:00)  → 24/day
@@ -92,4 +93,51 @@ export async function ensureSlotsForDate(date: string): Promise<void> {
   }
 
   logger.info({ date, count: 1440 }, "TV slots generated for date");
+}
+
+// ── Air Due Slots (runs every minute) ─────────────────────────────────────────
+// Finds booked slots whose date+minuteIndex matches the current UTC minute,
+// marks them "broadcast", marks their capsule "broadcast", notifies owner.
+export async function airDueSlots(): Promise<number> {
+  const now = new Date();
+  const todayUTC = now.toISOString().slice(0, 10);
+  const minuteIndex = now.getUTCHours() * 60 + now.getUTCMinutes();
+
+  const dueSlots = await db
+    .select()
+    .from(tvSlotsTable)
+    .where(
+      and(
+        eq(tvSlotsTable.date, todayUTC),
+        eq(tvSlotsTable.minuteIndex, minuteIndex),
+        eq(tvSlotsTable.status, "booked"),
+      )
+    );
+
+  if (dueSlots.length === 0) return 0;
+
+  for (const slot of dueSlots) {
+    await db
+      .update(tvSlotsTable)
+      .set({ status: "broadcast" })
+      .where(eq(tvSlotsTable.id, slot.id));
+
+    await db
+      .update(tvCapsulesTable)
+      .set({ status: "broadcast" })
+      .where(eq(tvCapsulesTable.slotId, slot.id))
+      .catch(() => {});
+
+    if (slot.ownerId) {
+      const hh = String(Math.floor(minuteIndex / 60)).padStart(2, "0");
+      const mm = String(minuteIndex % 60).padStart(2, "0");
+      sendTransactionNotification(
+        slot.ownerId,
+        `📡 *Ваш слот в эфире!*\n\n🗓 ${todayUTC} · ${hh}:${mm} UTC\nТип: ${slot.slotType}\n\nВаша капсула вышла в эфир TimeNation-TV.`,
+      ).catch(() => {});
+    }
+  }
+
+  logger.info({ todayUTC, minuteIndex, count: dueSlots.length }, "Slots aired");
+  return dueSlots.length;
 }

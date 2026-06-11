@@ -403,7 +403,7 @@ export const GetTvSlotsResponse = zod.object({
   "date": zod.string(),
   "minuteIndex": zod.number(),
   "slotType": zod.enum(['citizen', 'quarter', 'half', 'apex']),
-  "status": zod.enum(['free', 'booked', 'aired']),
+  "status": zod.enum(['free', 'booked', 'broadcast']),
   "ownerId": zod.number().nullable(),
   "ownerName": zod.string().nullable(),
   "timeltrBurnCost": zod.number(),

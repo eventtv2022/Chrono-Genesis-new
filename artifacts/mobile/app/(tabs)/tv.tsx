@@ -30,7 +30,7 @@ interface TvSlot {
   date: string;
   minuteIndex: number;
   slotType: "citizen" | "quarter" | "half" | "apex";
-  status: "free" | "booked" | "aired";
+  status: "free" | "booked" | "broadcast";
   ownerId: number | null;
   timeltrBurnCost: number;
   isRetro: boolean;
@@ -806,17 +806,17 @@ export default function TvScreen() {
       </View>
       <View style={styles.slotCardRight}>
         <View style={[styles.slotBadge, {
-          backgroundColor: item.status === "aired"
+          backgroundColor: item.status === "broadcast"
             ? colors.primary + "33"
             : colors.primary + "22",
         }]}>
           <Feather
-            name={item.status === "aired" ? "film" : "clock"}
+            name={item.status === "broadcast" ? "film" : "clock"}
             size={12}
             color={colors.primary}
           />
           <Text style={[styles.slotBadgeText, { color: colors.primary }]}>
-            {item.status === "aired" ? "Вышел в эфир" : "Мой слот"}
+            {item.status === "broadcast" ? "Вышел в эфир" : "Мой слот"}
           </Text>
         </View>
         <Feather name="chevron-right" size={16} color={colors.mutedForeground} style={{ marginLeft: 8 }} />

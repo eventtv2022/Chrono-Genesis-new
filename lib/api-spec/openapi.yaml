@@ -923,7 +923,7 @@ components:
           enum: [citizen, quarter, half, apex]
         status:
           type: string
-          enum: [free, booked, aired]
+          enum: [free, booked, broadcast]
         ownerId:
           type: ["integer", "null"]
         ownerName:

@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { applyEntropy } from "./services/meritocracyService";
 import { drainEmissionQueue } from "./services/emissionService";
+import { airDueSlots } from "./services/tvService";
 import { initBot } from "./services/telegramService";
 
 const rawPort = process.env["PORT"];
@@ -74,6 +75,25 @@ function scheduleMidnightUTCEmissionDrain() {
 }
 
 scheduleMidnightUTCEmissionDrain();
+
+// ── Minute tick: air due TV slots ─────────────────────────────────────────────
+function scheduleMinuteTick() {
+  const now = new Date();
+  const msToNextMinute =
+    (60 - now.getUTCSeconds()) * 1000 - now.getUTCMilliseconds() + 200;
+
+  setTimeout(() => {
+    airDueSlots().catch((err) => logger.error({ err }, "airDueSlots cron failed"));
+    setInterval(
+      () => airDueSlots().catch((err) => logger.error({ err }, "airDueSlots cron failed")),
+      60 * 1000,
+    );
+  }, msToNextMinute);
+
+  logger.info({ msToNextMinute }, "Minute tick cron scheduled (TV slot airing)");
+}
+
+scheduleMinuteTick();
 
 app.listen(port, (err) => {
   if (err) {
