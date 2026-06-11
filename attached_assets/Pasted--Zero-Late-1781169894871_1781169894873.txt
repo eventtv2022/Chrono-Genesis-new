@@ -1,0 +1,29 @@
+Я:
+ИНФРАСТРУКТУРА ХРАНЕНИЯ ВИДЕО (ТРЕХКОНТУРНАЯ СИСТЕМА)
+Для обеспечения нулевой задержки (Zero Latency) и неограниченного масштабирования, файлы контента физически изолированы от сервера Replit:
+Контур «Горячий» (Вещание/Стриминг):
+Технология: AWS S3 (или DigitalOcean Spaces) + Cloudflare CDN.
+Назначение: Кэширование и мгновенная раздача HLS (.m3u8) / MP4 потоков Граждан в реальном времени по всему миру.
+Контур «Холодный» (Архив):
+Технология: Google Cloud Storage / Backblaze B2.
+Назначение: Долгосрочное и дешевое хранение архивных записей прошедших минут эфира.
+Контур «Метаданные» (БД):
+Технология: PostgreSQL.
+Назначение: Хранение текстовых ссылок на файлы, ID Граждан и временных меток. Код в Replit оперирует только ссылками.
+3. СХЕМА БАЗЫ ДАННЫХ (POSTGRESQL / APPEND-ONLY)
+Добавляется системная таблица расписания эфира, жестко завязанная на 1440 минут в сутках:
+SQL
+CREATE TABLE broadcast_slots ( id SERIAL PRIMARY KEY, slot_date DATE NOT NULL, -- Дата эфира minute_of_day INT NOT NULL, -- Индекс минуты в сутках (0-1439) citizen_id VARCHAR(255) NOT NULL, -- ID Гражданина-вещателя video_url VARCHAR(512) NOT NULL, -- Ссылка на видео в CDN (S3) manifest_id INT, -- Ссылка на сгенерированный ИИ Манифест cost_darmin NUMERIC(10, 2) NOT NULL, -- Стоимость слота tax_darmin NUMERIC(10, 2) NOT NULL, -- Удержанный налог (2%) status VARCHAR(50) DEFAULT 'scheduled' -- scheduled, live, passed ); -- Защита от двойного бронирования одной и той же минуты суток ALTER TABLE broadcast_slots ADD CONSTRAINT unique_slot_per_day UNIQUE (slot_date, minute_of_day); 
+4. СДВОЕННЫЙ ДВИЖЕК: MANIFEST & CHRONOS-CAST (FASTAPI)
+А. Модуль генерации манифестов (manifest_engine)
+Интегрирует Google Gemini API (через ключ из Replit Secrets) для генерации идеологического контента, который конвертируется в NFT-капсулы времени.
+Б. Модуль вещания минуты эфира (broadcast_engine)
+Обеспечивает поминутную сетку вещания и автоматическое удержание налога Казначейства.
+Python
+import math import os from datetime import datetime, date from fastapi import FastAPI, HTTPException, Depends from pydantic import BaseModel, Field import google.generativeai as genai app = FastAPI(title="TimeNation Core V6") # Настройка Gemini AI genai.configure(api_key=os.environ.get("GOOGLE_API_KEY")) gemini_model = genai.GenerativeModel('gemini-1.5-pro') class SlotBooking(BaseModel): citizen_id: str target_date: date minute_of_day: int = Field(..., ge=0, le=1439) video_url: str manifest_topic: str @app.post("/api/v1/broadcast/book") async def book_minute_slot(booking: SlotBooking): # 1. Проверка доступности слота в БД (Псевдокод) slot_exists = False if slot_exists: raise HTTPException(status_code=400, detail="Эта минута времени уже занята.") # 2. Юридическое Айкидо: Экономика слота и налог 2% в Казначейство base_cost = 10.00 # Базовая стоимость минуты в DARMIN tax = math.ceil(base_cost * 0.02 * 100) / 100 total_burned = base_cost + tax # 3. Интеграция Gemini: Генерация манифеста под этот минутный слот prompt = f"Ты — ИИ-архивариус TimeNation. Напиши суровый футуристичный манифест на тему: {booking.manifest_topic}." ai_response = gemini_model.generate_content(prompt) manifest_text = ai_response.text # 4. Сохранение записи (Слот + Ссылка на S3 видео + Текст манифеста от ИИ) # db.save_slot(..., manifest_text, total_burned) return { "status": "success", "slot_id": 101, "burned_darmin": total_burned, "treasury_tax": tax, "manifest_preview": manifest_text[:100] + "..." } @app.get("/api/v1/broadcast/live") async def get_live_stream(): # Вычисление текущей минуты суток на сервере now = datetime.now() current_minute = (now.hour * 60) + now.minute # Запрос к БД: WHERE slot_date = today AND minute_of_day = current_minute # Если видео нет -> отдаем дефолтный стрим системы (генератор манифестов) live_slot = None if not live_slot: return { "status": "system_broadcast", "video_url": "https://cdn.timenation.org/default_manifest_stream.m3u8", "info": "Трансляция Системного Манифеста TimeNation" } return { "status": "citizen_broadcast", "video_url": live_slot.video_url, "citizen_id": live_slot.citizen_id }
+
+5. ВНЕШНИЕ ПЛАТЕЖНЫЕ ШЛЮЗЫ (ВЕРИФИЦИРОВАНО)
+Фиатный контур: Stripe (активен).
+Крипто-контур: Cryptomus API (активируется через ключи CRYPTOMUS_MERCHANT_ID и CRYPTOMUS_API_KEY в Replit Secrets на базе верифицированного профиля).
+
+безошибочно свяжи видео-хранилище, Gemini и Казначейство.
