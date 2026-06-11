@@ -11,7 +11,7 @@ export function Home() {
     <Layout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Государственный дашборд</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Хронос-Консоль</h1>
           <p className="text-muted-foreground font-mono text-sm mt-2">Пульс экономики в реальном времени</p>
         </div>
 
