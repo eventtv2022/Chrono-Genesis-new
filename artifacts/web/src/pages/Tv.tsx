@@ -125,6 +125,10 @@ export function Tv() {
   const [booking, setBooking] = useState(false);
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
+  const [bookedSlotId, setBookedSlotId] = useState<number | null>(null);
+  const [rendering, setRendering] = useState(false);
+  const [renderResult, setRenderResult] = useState<{ mediaUrl: string; catcastUrl: string | null; manifestoWords: number } | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
 
   // Build 24×60 matrix
   const grid: (SlotLike | null)[][] = Array.from({ length: 24 }, (_, h) =>
@@ -137,6 +141,33 @@ export function Tv() {
     setSelectedSlot(slot);
     setBookingResult(null);
     setBookingError(null);
+    setBookedSlotId(null);
+    setRenderResult(null);
+    setRenderError(null);
+  }
+
+  // ── Render capsule
+  async function handleRender() {
+    if (!bookedSlotId) return;
+    setRendering(true);
+    setRenderError(null);
+    try {
+      const res = await fetch(`/api/tv/capsule/${bookedSlotId}/render`, { method: "POST" });
+      const data = (await res.json()) as { ok?: boolean; status?: string; mediaUrl?: string; catcastUrl?: string | null; manifestoWords?: number; error?: string };
+      if (!res.ok) {
+        setRenderError(data.error ?? "Ошибка рендера");
+        return;
+      }
+      setRenderResult({
+        mediaUrl: data.mediaUrl ?? "",
+        catcastUrl: data.catcastUrl ?? null,
+        manifestoWords: data.manifestoWords ?? 0,
+      });
+    } catch {
+      setRenderError("Ошибка соединения с сервером");
+    } finally {
+      setRendering(false);
+    }
   }
 
   // ── Book
@@ -211,8 +242,13 @@ export function Tv() {
         }),
       });
 
+      const slotIdForRender = selectedSlot.id;
+
       if (capsuleRes.ok) {
-        setBookingResult({ message: "Слот забронирован и капсула создана. Запустите рендер в мобильном приложении." });
+        setBookedSlotId(slotIdForRender);
+        setRenderResult(null);
+        setRenderError(null);
+        setBookingResult({ message: "Слот забронирован и капсула создана." });
       } else {
         setBookingResult({ message: "Слот забронирован. Создайте капсулу позже." });
       }
@@ -559,10 +595,72 @@ export function Tv() {
                   </div>
                 )}
 
-                {/* Success */}
+                {/* Success + Render */}
                 {bookingResult?.message && (
-                  <div className="p-2.5 bg-primary/10 border border-primary/30 rounded-sm">
-                    <p className="text-xs text-primary font-mono">{bookingResult.message}</p>
+                  <div className="space-y-2">
+                    <div className="p-2.5 bg-primary/10 border border-primary/30 rounded-sm">
+                      <p className="text-xs text-primary font-mono">{bookingResult.message}</p>
+                    </div>
+
+                    {bookedSlotId && !renderResult && (
+                      <>
+                        {renderError && (
+                          <div className="p-2 bg-destructive/10 border border-destructive/30 rounded-sm">
+                            <p className="text-xs text-destructive font-mono">{renderError}</p>
+                          </div>
+                        )}
+                        <Button
+                          onClick={handleRender}
+                          disabled={rendering}
+                          variant="outline"
+                          className="w-full font-mono text-sm gap-2 border-primary text-primary hover:bg-primary/10"
+                        >
+                          <Video className="w-4 h-4" />
+                          {rendering ? "Рендер… ~30–60 сек" : "Запустить рендер"}
+                        </Button>
+                      </>
+                    )}
+
+                    {renderResult && (
+                      <div className="p-3 bg-primary/10 border border-primary/40 rounded-sm space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-primary font-mono">
+                          <Video className="w-3.5 h-3.5" />
+                          <span>Готово{renderResult.manifestoWords > 0 ? ` · ${renderResult.manifestoWords} слов` : ""}</span>
+                        </div>
+                        {renderResult.mediaUrl && (
+                          <a
+                            href={renderResult.mediaUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 text-xs text-primary underline font-mono hover:opacity-80"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Открыть MP4
+                          </a>
+                        )}
+                        {renderResult.catcastUrl && (
+                          <a
+                            href={renderResult.catcastUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 text-xs text-blue-400 underline font-mono hover:opacity-80"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Открыть на Catcast.tv
+                          </a>
+                        )}
+                        <Button
+                          onClick={handleRender}
+                          disabled={rendering}
+                          variant="ghost"
+                          size="sm"
+                          className="w-full font-mono text-xs text-muted-foreground gap-1.5 h-7"
+                        >
+                          <Video className="w-3 h-3" />
+                          {rendering ? "Рендер…" : "Перерендерить"}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
 
