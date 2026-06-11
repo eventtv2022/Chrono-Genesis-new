@@ -18,20 +18,12 @@ function CitizenWidget() {
     setError(null);
     try {
       const byId = /^\d+$/.test(val);
-      const url = byId ? `/api/citizens/${val}` : `/api/citizens?phone=${encodeURIComponent(val)}`;
+      const url = byId
+        ? `/api/citizens/${val}`
+        : `/api/citizens/by-phone/${encodeURIComponent(val)}`;
       const res = await fetch(url);
       if (!res.ok) { setError("Гражданин не найден"); setLoading(false); return; }
-      const data = await res.json() as { id?: number; citizens?: { id: number }[] } & Record<string, unknown>;
-      let citizenData: Record<string, unknown> | null = null;
-      if (byId) {
-        citizenData = data as Record<string, unknown>;
-      } else {
-        const list = (data as { citizens?: unknown[] }).citizens;
-        if (list && list.length > 0) {
-          const r = await fetch(`/api/citizens/${(list[0] as { id: number }).id}`);
-          if (r.ok) citizenData = await r.json() as Record<string, unknown>;
-        }
-      }
+      const citizenData = await res.json() as Record<string, unknown>;
       if (!citizenData || !citizenData["id"]) { setError("Гражданин не найден"); setLoading(false); return; }
       setCitizen(citizenData as unknown as Parameters<typeof setCitizen>[0]);
       setInput("");
