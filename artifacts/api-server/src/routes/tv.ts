@@ -838,6 +838,38 @@ router.post("/tv/capsule/:id/report", async (req, res): Promise<void> => {
   });
 });
 
+// ─── POST /api/tv/slots/:id/air ──────────────────────────────────────────────
+// Owner manually transitions a booked+rendered slot to "broadcast".
+// Useful for retro slots that the cron missed (slot time already in the past).
+router.post("/tv/slots/:id/air", async (req, res): Promise<void> => {
+  const slotId = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(slotId)) { res.status(400).json({ error: "Invalid slot id" }); return; }
+
+  const body = z.object({ citizenId: z.number().int().positive() }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: "citizenId обязателен" }); return; }
+  const { citizenId } = body.data;
+
+  const [slot] = await db.select().from(tvSlotsTable).where(eq(tvSlotsTable.id, slotId)).limit(1);
+  if (!slot) { res.status(404).json({ error: "Слот не найден" }); return; }
+  if (slot.ownerId !== citizenId) { res.status(403).json({ error: "Только владелец может выпустить слот в эфир" }); return; }
+  if (slot.status !== "booked") {
+    res.status(409).json({ error: `Статус слота: ${slot.status}. Можно выпустить только booked-слот.` });
+    return;
+  }
+
+  const [capsule] = await db.select().from(tvCapsulesTable).where(eq(tvCapsulesTable.slotId, slotId)).limit(1);
+  if (!capsule?.mediaUrl) {
+    res.status(422).json({ error: "Сначала отрендерируйте капсулу — видео ещё не готово" });
+    return;
+  }
+
+  await db.update(tvSlotsTable).set({ status: "broadcast" }).where(eq(tvSlotsTable.id, slotId));
+  await db.update(tvCapsulesTable).set({ status: "broadcast" }).where(eq(tvCapsulesTable.slotId, slotId));
+
+  req.log.info({ slotId, citizenId }, "Slot manually aired");
+  res.json({ ok: true, slotId, mediaUrl: capsule.mediaUrl });
+});
+
 // ─── GET /api/tv/schedule?date=YYYY-MM-DD ────────────────────────────────────
 // Public schedule summary: booked slots + capsule render status for a date.
 router.get("/tv/schedule", async (req, res): Promise<void> => {

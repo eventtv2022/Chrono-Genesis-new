@@ -447,6 +447,27 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
     onError: (e: Error) => Alert.alert("Ошибка", e.message),
   });
 
+  // Air capsule manually (for retro slots)
+  const airMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${BASE_URL}/api/tv/slots/${slot.id}/air`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ citizenId: citizen!.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Ошибка выхода в эфир");
+      }
+      return res.json() as Promise<{ ok: boolean; mediaUrl: string }>;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tvSlots"] });
+      qc.invalidateQueries({ queryKey: ["tvCapsule", slot.id] });
+    },
+    onError: (e: Error) => Alert.alert("Ошибка", e.message),
+  });
+
   // Render capsule
   const renderMutation = useMutation({
     mutationFn: async () => {
@@ -746,6 +767,27 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                             Catcast недоступен (требуется self-hosted)
                           </Text>
                         </View>
+                      )}
+
+                      {/* Manual air button — for retro slots or missed cron */}
+                      {slot.status === "booked" && (
+                        <TouchableOpacity
+                          style={[styles.airBtn, {
+                            borderColor: "#F59E0B",
+                            opacity: airMutation.isPending ? 0.5 : 1,
+                          }]}
+                          onPress={() => airMutation.mutate()}
+                          disabled={airMutation.isPending}
+                        >
+                          {airMutation.isPending ? (
+                            <ActivityIndicator size="small" color="#F59E0B" />
+                          ) : (
+                            <Feather name="radio" size={14} color="#F59E0B" />
+                          )}
+                          <Text style={[styles.catcastBtnText, { color: "#F59E0B" }]}>
+                            {slot.isRetro ? "Выйти в эфир (ретро)" : "Выйти в эфир сейчас"}
+                          </Text>
+                        </TouchableOpacity>
                       )}
                     </View>
                   )}
@@ -1146,6 +1188,7 @@ function getStyles(colors: ReturnType<typeof useColors>) {
       justifyContent: "center",
     },
     catcastBtnText: { fontWeight: "500", fontSize: 13 },
+    airBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, marginTop: 8 },
     legalRow: {
       flexDirection: "row",
       alignItems: "flex-start",
