@@ -8,4 +8,13 @@ router.get("/healthz", (_req, res) => {
   res.json(data);
 });
 
+router.get("/system/time", (_req, res) => {
+  const now = new Date();
+  res.json({
+    iso: now.toISOString(),
+    utc: now.toISOString().slice(11, 19),
+    ts: now.getTime(),
+  });
+});
+
 export default router;

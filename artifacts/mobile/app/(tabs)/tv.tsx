@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -833,6 +833,37 @@ export default function TvScreen() {
   const handlePrevDay = useCallback(() => setDate((d) => stepDate(d, -1)), []);
   const handleNextDay = useCallback(() => setDate((d) => stepDate(d, 1)), []);
 
+  // ── Dual clock (Local + UTC) ─────────────────────────────────────────────
+  const [localTime, setLocalTime] = useState("--:--:--");
+  const [utcTime, setUtcTime] = useState("--:--:--");
+  const [clockSynced, setClockSynced] = useState(false);
+  const clockOffset = useRef(0);
+
+  useEffect(() => {
+    const sync = async () => {
+      try {
+        const before = Date.now();
+        const res = await fetch(`${BASE_URL}/api/system/time`);
+        const after = Date.now();
+        if (res.ok) {
+          const d = (await res.json()) as { ts: number };
+          clockOffset.current = d.ts - after + (after - before) / 2;
+          setClockSynced(true);
+        }
+      } catch { setClockSynced(false); }
+    };
+    void sync();
+    const syncTimer = setInterval(sync, 60_000);
+    const tick = setInterval(() => {
+      const nowLocal = new Date();
+      const nowServer = new Date(Date.now() + clockOffset.current);
+      const p = (n: number) => String(n).padStart(2, "0");
+      setLocalTime(`${p(nowLocal.getHours())}:${p(nowLocal.getMinutes())}:${p(nowLocal.getSeconds())}`);
+      setUtcTime(nowServer.toISOString().slice(11, 19));
+    }, 1000);
+    return () => { clearInterval(tick); clearInterval(syncTimer); };
+  }, []);
+
   const renderSlotCard = ({ item }: { item: TvSlot }) => (
     <TouchableOpacity
       style={[styles.slotCard, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -869,6 +900,27 @@ export default function TvScreen() {
   return (
     <View style={[styles.container, { paddingTop: topPad, backgroundColor: colors.background }]}>
       <LogoBrand />
+
+      {/* ── Dual clock ─────────────────────────────────────────────────────── */}
+      <View style={[styles.clockBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        {/* Local time — primary */}
+        <View style={styles.clockBlock}>
+          <Text style={[styles.clockLabel, { color: colors.mutedForeground }]}>LOCAL</Text>
+          <Text style={[styles.clockValueLarge, { color: colors.foreground }]}>{localTime}</Text>
+        </View>
+
+        {/* Sync dot */}
+        <View style={styles.clockSyncDot}>
+          <View style={[styles.syncDot, { backgroundColor: clockSynced ? "#22c55e" : "#f59e0b" }]} />
+          <Text style={[styles.syncLabel, { color: colors.mutedForeground }]}>{clockSynced ? "SYNC" : "..."}</Text>
+        </View>
+
+        {/* UTC time — secondary */}
+        <View style={[styles.clockBlock, { alignItems: "flex-end" }]}>
+          <Text style={[styles.clockLabel, { color: colors.mutedForeground }]}>UTC</Text>
+          <Text style={[styles.clockValueSmall, { color: colors.mutedForeground }]}>{utcTime}</Text>
+        </View>
+      </View>
 
       {/* Date nav */}
       <View style={[styles.dateNav, { borderBottomColor: colors.border }]}>
@@ -1209,5 +1261,14 @@ function getStyles(colors: ReturnType<typeof useColors>) {
       flexShrink: 0,
     },
     legalText: { fontSize: 11, lineHeight: 17, flex: 1 },
+    // Dual clock bar
+    clockBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
+    clockBlock: { alignItems: "flex-start", minWidth: 80 },
+    clockLabel: { fontSize: 9, fontWeight: "700", letterSpacing: 1.5, fontFamily: "Inter_700Bold" },
+    clockValueLarge: { fontSize: 20, fontWeight: "700", fontFamily: "Inter_700Bold", fontVariant: ["tabular-nums"] },
+    clockValueSmall: { fontSize: 14, fontFamily: "Inter_400Regular", fontVariant: ["tabular-nums"] },
+    clockSyncDot: { alignItems: "center", gap: 4 },
+    syncDot: { width: 8, height: 8, borderRadius: 4 },
+    syncLabel: { fontSize: 8, fontWeight: "700", letterSpacing: 1 },
   });
 }

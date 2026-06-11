@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Activity, Tv, Users, History, ShoppingCart, UserPlus } from "lucide-react";
+import { SystemClock } from "./SystemClock";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -49,10 +50,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="p-4 border-t border-border mt-auto">
-          <div className="text-[10px] font-mono text-muted-foreground flex justify-between items-center">
-            <span>SYS: ONLINE</span>
-            <span className="text-primary font-bold">OK</span>
+        <div className="mt-auto">
+          <SystemClock />
+          <div className="px-4 pb-3">
+            <div className="text-[10px] font-mono text-muted-foreground flex justify-between items-center">
+              <span>SYS: ONLINE</span>
+              <span className="text-primary font-bold">OK</span>
+            </div>
           </div>
         </div>
       </aside>
