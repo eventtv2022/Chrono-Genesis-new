@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "q2pY3Mamjio1uXqjjeX6E"
+uri = "file://assets/id_card_template_perfect.png"
+type = "image"
+title = "TimeNation ID Card — чистый бланк"
