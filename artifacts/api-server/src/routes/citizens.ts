@@ -33,6 +33,26 @@ async function generateNextCitizenNumber(): Promise<string> {
 
 function p2(n: number): string { return String(Math.floor(n)).padStart(2, "0"); }
 
+// ICAO Doc 9303 transliteration table (Russian Cyrillic → Latin)
+const CYR_TO_LAT: Record<string, string> = {
+  А:"A", Б:"B", В:"V", Г:"G", Д:"D", Е:"E", Ё:"E", Ж:"ZH", З:"Z",
+  И:"I", Й:"I", К:"K", Л:"L", М:"M", Н:"N", О:"O", П:"P", Р:"R",
+  С:"S", Т:"T", У:"U", Ф:"F", Х:"KH", Ц:"TS", Ч:"CH", Ш:"SH",
+  Щ:"SHCH", Ъ:"IE", Ы:"Y", Ь:"", Э:"E", Ю:"IU", Я:"IA",
+  а:"A", б:"B", в:"V", г:"G", д:"D", е:"E", ё:"E", ж:"ZH", з:"Z",
+  и:"I", й:"I", к:"K", л:"L", м:"M", н:"N", о:"O", п:"P", р:"R",
+  с:"S", т:"T", у:"U", ф:"F", х:"KH", ц:"TS", ч:"CH", ш:"SH",
+  щ:"SHCH", ъ:"IE", ы:"Y", ь:"", э:"E", ю:"IU", я:"IA",
+};
+
+function translit(s: string): string {
+  return s
+    .split("")
+    .map(ch => CYR_TO_LAT[ch] ?? (/[A-Za-z0-9\s<]/.test(ch) ? ch.toUpperCase() : ""))
+    .join("")
+    .toUpperCase();
+}
+
 function starPath(cx: number, cy: number, r: number, fill: string): string {
   const pts: string[] = [];
   for (let i = 0; i < 10; i++) {
@@ -114,8 +134,10 @@ function generatePassportSvg(c: {
   const issued = new Date(c.createdAt);
   const issueDT = `${p2(issued.getDate())}.${p2(issued.getMonth() + 1)}.${issued.getFullYear()}  ${p2(issued.getHours())}:${p2(issued.getMinutes())}`;
 
-  // MRZ (decorative TD3)
-  const mrzName = `${surnameVal.replace(/\s+/g, "<")}<<${givenVal.replace(/\s+/g, "<")}`;
+  // MRZ (ICAO TD3, transliterated to Latin)
+  const mrzSurname = translit(surnameVal).replace(/\s+/g, "<");
+  const mrzGiven  = translit(givenVal).replace(/\s+/g, "<");
+  const mrzName = `${mrzSurname}<<${mrzGiven}`;
   const mrz1 = `IN${mrzName}`.padEnd(30, "<").slice(0, 30);
   const dobMrz = dobRaw ? `${dobRaw.slice(2,4)}${dobRaw.slice(5,7)}${dobRaw.slice(8,10)}` : "000000";
   const mrz2 = `${c.citizenNumber}<TN${dobMrz}M9912319`.padEnd(30, "<").slice(0, 30);
