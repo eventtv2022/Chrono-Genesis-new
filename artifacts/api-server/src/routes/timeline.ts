@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { citizensTable, timelineAnchorsTable } from "@workspace/db";
+import { citizensTable, timelineAnchorsTable, timelineCapsulesTable } from "@workspace/db";
 import { z } from "zod";
 import { logTimelineAnchorToSheets } from "../lib/googleSheets";
 import { sendTransactionNotification } from "../services/telegramService";
@@ -193,6 +193,54 @@ router.get("/timeline/my-anchors", async (req, res): Promise<void> => {
       createdAt: a.createdAt.toISOString(),
     }))
   );
+});
+
+// ── POST /timeline/capsule ────────────────────────────────────────────────────
+// Saves a semantic capsule (free-text meaning) for a citizen's timeline anchor.
+const CapsuleBody = z.object({
+  citizenId: z.number().int().positive(),
+  timelineCoord: z.string().regex(/^\d{12}$/, "timelineCoord must be 12 digits"),
+  text: z.string().min(1).max(1000),
+});
+
+router.post("/timeline/capsule", async (req, res): Promise<void> => {
+  const parsed = CapsuleBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Неверные данные" });
+    return;
+  }
+  const { citizenId, timelineCoord, text } = parsed.data;
+
+  const citizen = await db
+    .select({ id: citizensTable.id })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, citizenId))
+    .limit(1)
+    .then((r) => r[0]);
+
+  if (!citizen) {
+    res.status(404).json({ error: "Гражданин не найден" });
+    return;
+  }
+
+  const anchor = await db
+    .select({ id: timelineAnchorsTable.id })
+    .from(timelineAnchorsTable)
+    .where(and(eq(timelineAnchorsTable.citizenId, citizenId), eq(timelineAnchorsTable.timelineCoord, timelineCoord)))
+    .limit(1)
+    .then((r) => r[0]);
+
+  if (!anchor) {
+    res.status(403).json({ error: "Эта координата вам не принадлежит" });
+    return;
+  }
+
+  const [capsule] = await db
+    .insert(timelineCapsulesTable)
+    .values({ citizenId, timelineCoord, text })
+    .returning();
+
+  res.status(201).json({ id: capsule!.id, timelineCoord, createdAt: capsule!.createdAt.toISOString() });
 });
 
 export default router;

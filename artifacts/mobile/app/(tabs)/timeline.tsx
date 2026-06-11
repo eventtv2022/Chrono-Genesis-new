@@ -11,10 +11,12 @@ import {
   ScrollView,
   Platform,
   Modal,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { LogoBrand } from "@/components/LogoBrand";
@@ -57,6 +59,13 @@ export default function TimelineScreen() {
   const [jumpMonth, setJumpMonth] = useState("");
   const [jumpDay, setJumpDay] = useState("");
   const [showMyAnchors, setShowMyAnchors] = useState(false);
+  const [selectedAnchor, setSelectedAnchor] = useState<{ timelineCoord: string; status: string; createdAt: string } | null>(null);
+  const [showAnchorActions, setShowAnchorActions] = useState(false);
+  const [showCapsule, setShowCapsule] = useState(false);
+  const [capsuleText, setCapsuleText] = useState("");
+  const [capsuleSaving, setCapsuleSaving] = useState(false);
+
+  const router = useRouter();
 
   const { data: myAnchors = [], refetch: refetchMyAnchors } = useQuery<
     { timelineCoord: string; status: string; createdAt: string }[]
@@ -324,6 +333,184 @@ export default function TimelineScreen() {
         </ScrollView>
       )}
 
+      {/* ── Anchor Action Sheet ──────────────────────────────────────────── */}
+      <Modal visible={showAnchorActions} transparent animationType="slide" onRequestClose={() => setShowAnchorActions(false)}>
+        <Pressable style={styles.asOverlay} onPress={() => setShowAnchorActions(false)}>
+          <Pressable style={[styles.asSheet, { backgroundColor: colors.card }]} onPress={() => {}}>
+            {/* drag handle */}
+            <View style={[styles.asHandle, { backgroundColor: colors.border }]} />
+
+            {/* coord label */}
+            {selectedAnchor && (() => {
+              const c = selectedAnchor.timelineCoord;
+              const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)}  ${c.slice(8,10)}:${c.slice(10,12)}`;
+              return (
+                <View style={[styles.asCoordBox, { borderColor: colors.border }]}>
+                  <Feather name="map-pin" size={14} color={colors.primary} />
+                  <Text style={[styles.asCoordText, { color: colors.foreground }]}>{label}</Text>
+                  <Text style={[styles.asCoordRaw, { color: colors.mutedForeground }]}>{c}</Text>
+                </View>
+              );
+            })()}
+
+            {/* action 1 — navigate */}
+            <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() => {
+              if (!selectedAnchor) return;
+              const c = selectedAnchor.timelineCoord;
+              setSelectedYear(parseInt(c.slice(0,4),10));
+              setSelectedCentury(Math.ceil(parseInt(c.slice(0,4),10)/100));
+              setSelectedMonth(parseInt(c.slice(4,6),10));
+              setSelectedDay(parseInt(c.slice(6,8),10));
+              setSelectedHour(parseInt(c.slice(8,10),10));
+              setZoom(5);
+              setShowAnchorActions(false);
+              setShowMyAnchors(false);
+            }}>
+              <View style={[styles.asIconBox, { backgroundColor: colors.primary + "22" }]}>
+                <Feather name="navigation" size={18} color={colors.primary} />
+              </View>
+              <View style={styles.asRowText}>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>Перейти к минуте</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>Открыть в таймлайне</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* action 2 — capsule */}
+            <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() => {
+              setShowAnchorActions(false);
+              setTimeout(() => { setCapsuleText(""); setShowCapsule(true); }, 350);
+            }}>
+              <View style={[styles.asIconBox, { backgroundColor: "#7c3aed22" }]}>
+                <Feather name="box" size={18} color="#7c3aed" />
+              </View>
+              <View style={styles.asRowText}>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>Создать смысловую капсулу</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>Вложить текст в координату времени</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* action 3 — auction */}
+            <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() => {
+              setShowAnchorActions(false);
+              setShowMyAnchors(false);
+              setTimeout(() => router.push("/(tabs)/auctions" as never), 400);
+            }}>
+              <View style={[styles.asIconBox, { backgroundColor: "#e6952222" }]}>
+                <Feather name="tag" size={18} color="#e69522" />
+              </View>
+              <View style={styles.asRowText}>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>Выставить на аукцион</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>Продать минуту на P2P-рынке за Дармины</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* action 4 — swap free */}
+            <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() =>
+              Alert.alert("Скоро", "Обмен на свободную минуту будет доступен в следующем обновлении.")
+            }>
+              <View style={[styles.asIconBox, { backgroundColor: "#0ea5e922" }]}>
+                <Feather name="refresh-cw" size={18} color="#0ea5e9" />
+              </View>
+              <View style={styles.asRowText}>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>Обменять на свободную минуту</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>Переместить якорь на незанятую координату</Text>
+              </View>
+              <View style={styles.asSoon}><Text style={styles.asSoonText}>Скоро</Text></View>
+            </TouchableOpacity>
+
+            {/* action 5 — swap occupied */}
+            <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() =>
+              Alert.alert("Скоро", "Обмен с другим гражданином будет доступен в следующем обновлении.")
+            }>
+              <View style={[styles.asIconBox, { backgroundColor: "#e6394622" }]}>
+                <Feather name="users" size={18} color="#e63946" />
+              </View>
+              <View style={styles.asRowText}>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>Обменять на занятую минуту</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>Договорной своп с другим гражданином</Text>
+              </View>
+              <View style={styles.asSoon}><Text style={styles.asSoonText}>Скоро</Text></View>
+            </TouchableOpacity>
+
+            {/* cancel */}
+            <TouchableOpacity style={styles.asCancel} onPress={() => setShowAnchorActions(false)}>
+              <Text style={[styles.asCancelText, { color: colors.mutedForeground }]}>Отмена</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Capsule Creation Modal ────────────────────────────────────────── */}
+      <Modal visible={showCapsule} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCapsule(false)}>
+        <View style={[styles.capModal, { backgroundColor: colors.background }]}>
+          <View style={[styles.capHeader, { borderBottomColor: colors.border }]}>
+            <View style={styles.capHeaderLeft}>
+              <Feather name="box" size={18} color="#7c3aed" />
+              <Text style={[styles.capHeaderTitle, { color: colors.foreground }]}>Смысловая капсула</Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowCapsule(false)} style={styles.maClose}>
+              <Feather name="x" size={22} color={colors.foreground} />
+            </TouchableOpacity>
+          </View>
+
+          {selectedAnchor && (() => {
+            const c = selectedAnchor.timelineCoord;
+            const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)}  ${c.slice(8,10)}:${c.slice(10,12)}`;
+            return (
+              <View style={[styles.capCoordBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Feather name="map-pin" size={12} color={colors.primary} />
+                <Text style={[styles.capCoordBadgeText, { color: colors.mutedForeground }]}>{label} · {c}</Text>
+              </View>
+            );
+          })()}
+
+          <Text style={[styles.capLabel, { color: colors.foreground }]}>Смысл этой минуты</Text>
+          <TextInput
+            style={[styles.capInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            multiline
+            numberOfLines={6}
+            placeholder="Опишите, что значит для вас эта минута…"
+            placeholderTextColor={colors.mutedForeground}
+            value={capsuleText}
+            onChangeText={setCapsuleText}
+            maxLength={1000}
+            textAlignVertical="top"
+          />
+          <Text style={[styles.capCount, { color: colors.mutedForeground }]}>{capsuleText.length}/1000</Text>
+
+          <TouchableOpacity
+            style={[styles.capSaveBtn, { backgroundColor: capsuleText.trim() ? "#7c3aed" : colors.border, opacity: capsuleSaving ? 0.6 : 1 }]}
+            disabled={!capsuleText.trim() || capsuleSaving}
+            onPress={async () => {
+              if (!citizen || !selectedAnchor || !capsuleText.trim()) return;
+              setCapsuleSaving(true);
+              try {
+                const res = await fetch(`${BASE_URL}/api/timeline/capsule`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ citizenId: citizen.id, timelineCoord: selectedAnchor.timelineCoord, text: capsuleText.trim() }),
+                });
+                if (res.ok) {
+                  setShowCapsule(false);
+                  Alert.alert("Готово", "Капсула сохранена в вашей координатe времени.");
+                } else {
+                  const d = await res.json() as { error?: string };
+                  Alert.alert("Ошибка", d.error ?? "Не удалось сохранить капсулу");
+                }
+              } catch {
+                Alert.alert("Ошибка", "Ошибка соединения с сервером");
+              } finally {
+                setCapsuleSaving(false);
+              }
+            }}
+          >
+            {capsuleSaving
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.capSaveBtnText}>Сохранить капсулу</Text>}
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
       {/* ── My Anchors Modal ─────────────────────────────────────────────── */}
       <Modal visible={showMyAnchors} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowMyAnchors(false)}>
         <View style={[styles.maModal, { backgroundColor: colors.background }]}>
@@ -357,30 +544,18 @@ export default function TimelineScreen() {
               renderItem={({ item: a }) => {
                 const c = a.timelineCoord;
                 const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)}  ${c.slice(8,10)}:${c.slice(10,12)}`;
-                const goTo = () => {
-                  const y = parseInt(c.slice(0,4),10);
-                  const mo = parseInt(c.slice(4,6),10);
-                  const d = parseInt(c.slice(6,8),10);
-                  const h = parseInt(c.slice(8,10),10);
-                  setSelectedYear(y);
-                  setSelectedCentury(Math.ceil(y/100));
-                  setSelectedMonth(mo);
-                  setSelectedDay(d);
-                  setSelectedHour(h);
-                  setZoom(5);
-                  setShowMyAnchors(false);
-                };
                 return (
-                  <View style={[styles.maRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    style={[styles.maRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => { setSelectedAnchor(a); setShowAnchorActions(true); }}
+                  >
                     <View style={styles.maRowLeft}>
                       <Text style={[styles.maCoordLabel, { color: colors.foreground }]}>{label}</Text>
                       <Text style={[styles.maCoordRaw, { color: colors.mutedForeground }]}>{c}</Text>
                     </View>
-                    <TouchableOpacity style={[styles.maGoBtn, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "44" }]} onPress={goTo}>
-                      <Feather name="navigation" size={13} color={colors.primary} />
-                      <Text style={[styles.maGoBtnText, { color: colors.primary }]}>Перейти</Text>
-                    </TouchableOpacity>
-                  </View>
+                    <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                  </TouchableOpacity>
                 );
               }}
             />
@@ -460,6 +635,34 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     // My Anchors button (header)
     myAnchorsBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, borderWidth: 1, marginLeft: "auto" },
     myAnchorsBadge: { fontSize: 12, fontWeight: "700" },
+    // Action Sheet
+    asOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+    asSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 34, paddingTop: 10 },
+    asHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 12 },
+    asCoordBox: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1 },
+    asCoordText: { fontSize: 16, fontWeight: "700", fontVariant: ["tabular-nums"] },
+    asCoordRaw: { fontSize: 11, marginLeft: 4, letterSpacing: 1 },
+    asRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+    asIconBox: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+    asRowText: { flex: 1 },
+    asRowTitle: { fontSize: 15, fontWeight: "600" },
+    asRowSub: { fontSize: 12, marginTop: 2 },
+    asSoon: { backgroundColor: "#0ea5e933", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+    asSoonText: { fontSize: 10, fontWeight: "700", color: "#0ea5e9" },
+    asCancel: { marginTop: 8, paddingVertical: 14, alignItems: "center" },
+    asCancelText: { fontSize: 16, fontWeight: "500" },
+    // Capsule modal
+    capModal: { flex: 1, padding: 20 },
+    capHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 16, borderBottomWidth: 1, marginBottom: 16 },
+    capHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+    capHeaderTitle: { fontSize: 18, fontWeight: "700" },
+    capCoordBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, marginBottom: 20 },
+    capCoordBadgeText: { fontSize: 12 },
+    capLabel: { fontSize: 14, fontWeight: "600", marginBottom: 8 },
+    capInput: { borderWidth: 1, borderRadius: 12, padding: 14, fontSize: 15, minHeight: 140, marginBottom: 6 },
+    capCount: { fontSize: 11, textAlign: "right", marginBottom: 24 },
+    capSaveBtn: { borderRadius: 14, paddingVertical: 16, alignItems: "center" },
+    capSaveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
     // My Anchors modal
     maModal: { flex: 1 },
     maHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },

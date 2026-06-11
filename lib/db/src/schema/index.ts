@@ -8,3 +8,4 @@ export * from "./nationalEmbassies";
 export * from "./tvSlots";
 export * from "./tvCapsules";
 export * from "./deals";
+export * from "./timelineCapsules";
