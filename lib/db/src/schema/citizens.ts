@@ -18,9 +18,19 @@ export const citizensTable = pgTable("citizens", {
   rank: text("rank").notNull().default("Странник"),
   lastActivity: timestamp("last_activity", { withTimezone: true }),
   tosAcceptedAt: timestamp("tos_accepted_at", { withTimezone: true }),
-  // COPPA / EU DSA age affirmation (18+). false = not yet affirmed → render blocked.
   ageVerified: integer("age_verified").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+
+  // ── ICAO Doc 9303 Passport fields ──────────────────────────────────────────
+  citizenNumber: text("citizen_number").unique(), // 000000001 … 999999999
+  surname: text("surname"),
+  givenNames: text("given_names"),
+  dateOfBirth: text("date_of_birth"), // YYYY-MM-DD
+  photoUrl: text("photo_url"),
+  idCardUrl: text("id_card_url"), // filled when issued
+  // 'pending' → 'issued' | 'rejected'. NULL = legacy citizen (treated as issued)
+  registrationStatus: text("registration_status"),
+  availableAt: timestamp("available_at", { withTimezone: true }), // NOW + 1h
 });
 
 export const insertCitizenSchema = createInsertSchema(citizensTable).omit({

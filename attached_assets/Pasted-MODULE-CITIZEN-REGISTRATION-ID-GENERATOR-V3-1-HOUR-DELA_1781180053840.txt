@@ -1,0 +1,46 @@
+MODULE "CITIZEN_REGISTRATION" & ID GENERATOR (V3 - 1 HOUR DELAY)
+1. CONTEXT & GOAL
+Создать модуль регистрации новых Граждан TimeNation с 9-значным ID (стандарт ICAO Doc 9303). Добавить механизм искусственной задержки (1 час) перед финальной выдачей паспорта для проведения автоматической или ручной проверки данных и фотографии.
+
+2. REGISTRATION & DELAY LOGIC
+Отправка формы: Пользователь заполняет данные и загружает фото.
+
+Первичный ответ: Сервер моментально сохраняет заявку в БД со статусом pending и возвращает пользователю экран ожидания: «Ваши данные приняты и отправлены на верификацию. Инспекция займет ровно 60 минут». На экране запускается обратный отсчет (таймер на 1 час).
+
+Проверка (Background Task): Через 1 час (используя встроенный BackgroundTasks в FastAPI или Celery/APScheduler) система проверяет статус. Если нарушений нет, статус меняется на issued, запускается скрипт генерации графической карты Pillow, и ссылка на готовый паспорт отправляется в Telegram/WhatsApp, а также становится доступна на сайте.
+
+3. DB SCHEMA (UPDATED WITH STATUS & TIMESTAMPS)
+SQL
+CREATE TABLE citizens (
+    id SERIAL PRIMARY KEY,
+    citizen_number VARCHAR(9) UNIQUE NOT NULL, -- Формат: 000000005
+    surname VARCHAR(255) NOT NULL,
+    given_names VARCHAR(255) NOT NULL,
+    date_of_birth DATE NOT NULL,
+    phone VARCHAR(50),
+    telegram VARCHAR(100),
+    whatsapp VARCHAR(50),
+    photo_url VARCHAR(512) NOT NULL,           -- Исходное фото пользователя
+    id_card_url VARCHAR(512),                  -- NULL пока статус 'pending', заполняется через 1 час
+    status VARCHAR(50) DEFAULT 'pending',      -- 'pending' (на проверке), 'issued' (выпущен), 'rejected' (отклонен)
+    registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    available_at TIMESTAMP NOT NULL            -- Время CURRENT_TIMESTAMP + INTERVAL '1 hour'
+);
+4. API ENDPOINTS WITH TIME LOGIC
+[POST] /api/v1/citizen/register
+Принимает данные формы.
+
+Генерирует следующий по порядку 9-значный citizen_number.
+
+Рассчитывает available_at = datetime.utcnow() + timedelta(hours=1).
+
+Сохраняет в БД со статусом pending.
+
+Выход: JSON с номером ID, временем окончания проверки и статусом.
+
+[GET] /api/v1/citizen/{citizen_number}/status
+Проверяет текущий статус паспорта.
+
+Если текущее время сервера меньше available_at, возвращает: {"status": "pending", "time_left_seconds": X} (для синхронизации таймера на фронтенде).
+
+Если 1 час прошел, а статус все еще pending, автоматически триггерит функцию генерации ID-карты (Pillow), обновляет статус на issued и возвращает: {"status": "issued", "id_card_url": "..."}.
