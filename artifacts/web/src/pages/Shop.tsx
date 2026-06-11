@@ -1,18 +1,18 @@
-import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import {
   useGetMinutePackages,
   getGetMinutePackagesQueryKey,
   useCreateCheckoutSession,
 } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShoppingBag, Clock, AlertCircle } from "lucide-react";
+import { useCitizen } from "@/context/CitizenContext";
+import { useState } from "react";
 
 export function Shop() {
-  const [citizenId, setCitizenId] = useState("");
+  const { citizen } = useCitizen();
   const [loadingPkg, setLoadingPkg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,9 +39,8 @@ export function Shop() {
   });
 
   function handleBuy(packageId: string) {
-    const id = parseInt(citizenId, 10);
-    if (!citizenId || isNaN(id)) {
-      setError("Введите корректный ID гражданина");
+    if (!citizen) {
+      setError("Войдите в аккаунт в боковом меню");
       return;
     }
     setError(null);
@@ -49,7 +48,7 @@ export function Shop() {
     const base = window.location.origin + "/web/shop";
     checkout.mutate({
       data: {
-        citizenId: id,
+        citizenId: citizen.id,
         packageId,
         successUrl: base + "?status=success",
         cancelUrl: base + "?status=cancel",
@@ -81,26 +80,21 @@ export function Shop() {
           </div>
         )}
 
-        {/* Citizen ID */}
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest font-mono">
-              Идентификатор гражданина
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Input
-              type="number"
-              value={citizenId}
-              onChange={(e) => { setCitizenId(e.target.value); setError(null); }}
-              placeholder="Введите ваш ID (числовой)"
-              className="bg-secondary border-border font-mono max-w-xs"
-            />
-            <p className="text-xs text-muted-foreground mt-2 font-mono">
-              ID отображается в мобильном приложении на вкладке профиля
-            </p>
-          </CardContent>
-        </Card>
+        {/* Citizen info or login prompt */}
+        {citizen ? (
+          <div className="flex items-center gap-3 p-3 bg-primary/10 border border-primary/30 rounded-sm">
+            <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
+            <div className="min-w-0">
+              <span className="text-sm font-mono text-primary font-bold">{citizen.name}</span>
+              <span className="text-xs text-muted-foreground font-mono ml-3">Баланс: {citizen.balanceMinutes} Д</span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 p-3 bg-yellow-400/10 border border-yellow-400/30 rounded-sm text-yellow-300 text-sm font-mono">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            Войдите в аккаунт в боковом меню, чтобы купить Дармины
+          </div>
+        )}
 
         {error && (
           <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive font-mono">
@@ -145,7 +139,7 @@ export function Shop() {
                   </div>
                   <Button
                     onClick={() => handleBuy(pkg.id)}
-                    disabled={loadingPkg !== null}
+                    disabled={loadingPkg !== null || !citizen}
                     className="bg-primary text-primary-foreground hover:bg-primary/90 font-mono"
                   >
                     {loadingPkg === pkg.id ? (

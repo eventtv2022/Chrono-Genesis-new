@@ -1,6 +1,98 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Tv, Users, History, ShoppingCart, UserPlus } from "lucide-react";
+import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw } from "lucide-react";
 import { SystemClock } from "./SystemClock";
+import { useCitizen } from "@/context/CitizenContext";
+
+function CitizenWidget() {
+  const { citizen, setCitizen, refreshCitizen } = useCitizen();
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    const val = input.trim();
+    if (!val) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const byId = /^\d+$/.test(val);
+      const url = byId ? `/api/citizens/${val}` : `/api/citizens?phone=${encodeURIComponent(val)}`;
+      const res = await fetch(url);
+      if (!res.ok) { setError("Гражданин не найден"); setLoading(false); return; }
+      const data = await res.json() as { id?: number; citizens?: { id: number }[] } & Record<string, unknown>;
+      let citizenData: Record<string, unknown> | null = null;
+      if (byId) {
+        citizenData = data as Record<string, unknown>;
+      } else {
+        const list = (data as { citizens?: unknown[] }).citizens;
+        if (list && list.length > 0) {
+          const r = await fetch(`/api/citizens/${(list[0] as { id: number }).id}`);
+          if (r.ok) citizenData = await r.json() as Record<string, unknown>;
+        }
+      }
+      if (!citizenData || !citizenData["id"]) { setError("Гражданин не найден"); setLoading(false); return; }
+      setCitizen(citizenData as unknown as Parameters<typeof setCitizen>[0]);
+      setInput("");
+    } catch {
+      setError("Ошибка соединения");
+    }
+    setLoading(false);
+  }
+
+  if (citizen) {
+    return (
+      <div className="px-3 py-3 border-t border-border space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-foreground truncate">{citizen.name}</p>
+            <p className="text-[10px] text-primary font-mono">{citizen.balanceMinutes} Д · #{citizen.id}</p>
+          </div>
+          <div className="flex gap-1 shrink-0">
+            <button
+              onClick={() => void refreshCitizen()}
+              className="text-muted-foreground hover:text-foreground p-1 rounded-sm transition-colors"
+              title="Обновить"
+            >
+              <RefreshCw className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => setCitizen(null)}
+              className="text-muted-foreground hover:text-destructive p-1 rounded-sm transition-colors"
+              title="Выйти"
+            >
+              <LogOut className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+        <div className="text-[9px] text-muted-foreground font-mono truncate">{citizen.rank}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 py-3 border-t border-border">
+      <p className="text-[10px] text-muted-foreground font-mono mb-1.5 uppercase tracking-wider">Войти</p>
+      <form onSubmit={(e) => void handleLogin(e)} className="space-y-1.5">
+        <input
+          value={input}
+          onChange={e => { setInput(e.target.value); setError(null); }}
+          placeholder="ID или телефон"
+          className="w-full bg-background border border-border rounded-sm px-2 py-1 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60"
+        />
+        {error && <p className="text-[10px] text-destructive font-mono">{error}</p>}
+        <button
+          type="submit"
+          disabled={loading || !input.trim()}
+          className="w-full bg-primary/90 hover:bg-primary text-primary-foreground rounded-sm py-1 text-xs font-mono transition-colors disabled:opacity-50"
+        >
+          {loading ? "…" : "Войти"}
+        </button>
+      </form>
+    </div>
+  );
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -52,7 +144,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="mt-auto">
           <SystemClock />
-          <div className="px-4 pb-3">
+          <CitizenWidget />
+          <div className="px-4 pb-3 pt-2">
             <div className="text-[10px] font-mono text-muted-foreground flex justify-between items-center">
               <span>SYS: ONLINE</span>
               <span className="text-primary font-bold">OK</span>

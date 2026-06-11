@@ -9,7 +9,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -26,6 +25,7 @@ import {
   Bitcoin,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCitizen } from "@/context/CitizenContext";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -115,8 +115,9 @@ export function Tv() {
   const slots = (slotsData?.slots ?? []) as SlotLike[];
   const schedule = scheduleData?.schedule ?? [];
 
+  const { citizen } = useCitizen();
+
   // ── Terminal form state
-  const [citizenId, setCitizenId] = useState("");
   const [selectedSlot, setSelectedSlot] = useState<SlotLike | null>(null);
   const [seedText, setSeedText] = useState("");
   const [mode, setMode] = useState<"a" | "b">("a");
@@ -172,7 +173,7 @@ export function Tv() {
 
   // ── Book
   async function handleBook() {
-    if (!selectedSlot || !citizenId.trim()) return;
+    if (!selectedSlot || !citizen) return;
     setBooking(true);
     setBookingError(null);
     setBookingResult(null);
@@ -187,7 +188,7 @@ export function Tv() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             slotId: selectedSlot.id,
-            citizenId: Number(citizenId),
+            citizenId: citizen!.id,
             successUrl: `${origin}/tv?booked=1`,
           }),
         });
@@ -208,7 +209,7 @@ export function Tv() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           slotId: selectedSlot.id,
-          citizenId: Number(citizenId),
+          citizenId: citizen!.id,
           paymentType,
           successUrl: `${origin}/tv?booked=1`,
           cancelUrl: `${origin}/tv`,
@@ -231,7 +232,7 @@ export function Tv() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          citizenId: Number(citizenId),
+          citizenId: citizen!.id,
           seedText: seedText.trim() || undefined,
           mode,
           renderPath: RENDER_PATH_BY_SLOT[selectedSlot.slotType] ?? "light",
@@ -265,11 +266,7 @@ export function Tv() {
     }
   }
 
-  const canBook =
-    !!selectedSlot &&
-    citizenId.trim().length > 0 &&
-    !isNaN(Number(citizenId)) &&
-    !booking;
+  const canBook = !!selectedSlot && !!citizen && !booking;
 
   return (
     <Layout>
@@ -429,19 +426,18 @@ export function Tv() {
                   </div>
                 )}
 
-                {/* Citizen ID */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
-                    ID Гражданина
-                  </Label>
-                  <Input
-                    type="number"
-                    placeholder="Ваш citizen ID"
-                    value={citizenId}
-                    onChange={e => setCitizenId(e.target.value)}
-                    className="font-mono h-8 text-sm bg-background border-border"
-                  />
-                </div>
+                {/* No citizen logged in */}
+                {!citizen && (
+                  <div className="p-2.5 bg-yellow-400/10 border border-yellow-400/30 rounded-sm">
+                    <p className="text-xs text-yellow-300 font-mono">Войдите в аккаунт в боковом меню, чтобы забронировать слот</p>
+                  </div>
+                )}
+                {citizen && (
+                  <div className="flex items-center gap-2 p-2 bg-primary/10 border border-primary/20 rounded-sm">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                    <p className="text-xs text-primary font-mono truncate">{citizen.name} · {citizen.balanceMinutes} Д</p>
+                  </div>
+                )}
 
                 {/* Seed of Thought */}
                 <div className="space-y-1.5">
