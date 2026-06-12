@@ -11,8 +11,6 @@ import {
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { MEDIA_DIR } from "../services/renderService";
-import { generateManifesto } from "../services/geminiService";
-import { expandSeedToManifesto } from "../services/renderService";
 
 // ── Multer: avatar photo upload ────────────────────────────────────────────────
 const AVATARS_DIR = path.join(MEDIA_DIR, "avatars");
@@ -296,7 +294,7 @@ const RegisterCitizenBody = z.object({
   tosAcceptedAt: z.string().optional(),
   telegramId: z.string().optional(),
   email: z.string().email("Неверный формат email").optional().or(z.literal("")).optional(),
-  seedThought: z.string().max(500).optional(),
+  privacyAgreementAccepted: z.string().optional(), // "true" from FormData
 });
 
 router.post("/citizens", upload.single("passport_photo"), async (req, res): Promise<void> => {
@@ -320,12 +318,14 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
   const citizenNumber = await generateNextCitizenNumber();
   const availableAt = new Date(Date.now() + 60 * 60 * 1000); // +1 hour
 
-  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, seedThought } = parsed.data;
+  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted } = parsed.data;
 
   // Build photoUrl from uploaded file (multer) or from explicit photoUrl field
   const uploadedPhotoUrl = req.file
     ? `/media/avatars/${req.file.filename}`
     : (parsed.data.photoUrl || null);
+
+  const privacyAccepted = privacyAgreementAccepted === "true";
 
   const [citizen] = await db
     .insert(citizensTable)
@@ -342,33 +342,12 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
       tosAcceptedAt: tosAcceptedAt ? new Date(tosAcceptedAt) : undefined,
       telegramId: telegramId ?? undefined,
       email: email || null,
-      seedThought: seedThought || null,
+      privacyAgreementAccepted: privacyAccepted ? 1 : 0,
+      privacyAgreementDate: privacyAccepted ? new Date() : null,
     })
     .returning();
 
   req.log.info({ citizenId: citizen!.id, citizenNumber }, "New citizen registered — pending verification");
-
-  // ── Fire-and-forget: expand seed thought into AI manifesto ──────────────────
-  if (seedThought && citizen) {
-    const citizenId = citizen.id;
-    setImmediate(async () => {
-      try {
-        const today = new Date().toISOString().slice(0, 10);
-        const now = new Date();
-        const minuteIndex = now.getUTCHours() * 60 + now.getUTCMinutes();
-        const manifesto =
-          (await generateManifesto(seedThought, today, minuteIndex)) ??
-          expandSeedToManifesto(seedThought);
-        await db
-          .update(citizensTable)
-          .set({ aiManifesto: manifesto })
-          .where(eq(citizensTable.id, citizenId));
-        logger.info({ citizenId }, "AI manifesto saved for new citizen");
-      } catch (err) {
-        logger.error({ err, citizenId }, "Failed to generate registration manifesto");
-      }
-    });
-  }
 
   res.status(201).json({
     ...formatCitizenRow(citizen!),
