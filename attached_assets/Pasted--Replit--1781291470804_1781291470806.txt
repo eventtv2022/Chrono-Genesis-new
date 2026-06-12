@@ -1,0 +1,124 @@
+Вот детальный технический промт для Replit-агента, который решает обе ваши проблемы: внедряет новые графические элементы (логотип и эмблему) в макеты документов и чинит аудиовизуальный пайплайн генерации официального портрета.
+
+Код написан так, чтобы Replit-агент мог использовать библиотеку Pillow (PIL) для точного наложения графики и интеграции с ИИ-движком (remove.bg или локальной моделью).
+
+---
+
+# REPLIT ACTUATOR: FIX — ID/PASSPORT GRAPHICS INTEGRATION & OFFICIAL PHOTO GENERATION ENGINE
+
+## 1. OBJECTIVE
+
+Решить две критические проблемы в модуле «Реестр Граждан»:
+
+1. **Внедрение графики:** Автоматически наложить новые активы (Лого TimeNation и Эмблему Государства) на макеты ID-карты (`image_25.png`) и бланка Паспорта ICAO по точным координатам.
+2. **Исправление генерации фото:** Починить пайплайн, который должен преобразовывать любое загруженное фото пользователя в официальный стиль (человек на сером фоне) и вставлять его в документы.
+
+---
+
+## 2. REPAIRING PHOTO GENERATION ENGINE (Under the Hood Fix)
+
+Проблема с генерацией фото обычно связана с тем, что скрипт либо не удаляет фон правильно, либо падает при наложении слоев (альфа-композиция). Необходимо жестко прописать логику обработки.
+
+**Найди файл `photo_engine.py` (или соответствующий модуль бэкенда) и примени эту логику:**
+
+```python
+import os
+import io
+from PIL import Image, ImageOps
+import requests # Если используете remove.bg API
+
+def process_photo_to_icao_standard(input_image_path, output_path):
+    """
+    Принимает любое фото пользователя. Вырезает фон (ИИ), 
+    накладывает нейтральный серый фон ICAO и кропает под паспорт.
+    """
+    try:
+        # 1. ЗАГРУЗКА И ВАЛИДАЦИЯ (Исправление падений при чтении)
+        with open(input_image_path, "rb") as f:
+            input_image_data = f.read()
+        user_image = Image.open(io.BytesIO(input_image_data)).convert("RGBA")
+
+        # 2. ИИ-ВЫРЕЗАНИЕ ФОНА (Здесь был баг)
+        # ВАРИАНТ А: remove.bg API (Надежный, платный)
+        # api_key = os.getenv("REMOVE_BG_API_KEY")
+        # if not api_key: raise Exception("Missing API Key")
+        # response = requests.post(
+        #     'https://api.remove.bg/v1.0/removebg',
+        #     files={'image_file': input_image_data},
+        #     data={'size': 'auto'},
+        #     headers={'X-Api-Key': api_key},
+        # )
+        # if response.status_code == 200:
+        #     processed_image_bytes = response.content
+        #     object_no_bg = Image.open(io.BytesIO(processed_image_bytes)).convert("RGBA")
+        # else: raise Exception(f"AI removal failed: {response.text}")
+
+        # ВАРИАНТ Б (Используем его для локального Replit): Используем локальную библиотеку 'rembg'
+        from rembg import remove # <--- Обязательно добавить в pyproject.toml
+        object_no_bg = remove(user_image)
+
+        # 3. НАЛОЖЕНИЕ НА ОФИЦИАЛЬНЫЙ СЕРЫЙ ФОН ICAO
+        icao_grey_color = (200, 200, 200, 255) # Светло-серый
+        grey_background = Image.new("RGBA", object_no_bg.size, icao_grey_color)
+        final_portrait = Image.alpha_composite(grey_background, object_no_bg)
+
+        # 4. ФИНАЛЬНЫЙ КРОП И МАСШТАБИРОВАНИЕ (Под размер рамки документа, напр. 300x400)
+        # Делаем умный кроп, чтобы лицо было в фокусе (Face-Aware Crop, можно добавить Dlib или MediaPipe)
+        # Для простоты используем центрированный кроп
+        final_icao_photo = ImageOps.fit(final_portrait, (300, 400), Image.Resampling.LANCZOS)
+        
+        # 5. СОХРАНЕНИЕ
+        final_icao_photo.convert("RGB").save(output_path, "JPEG")
+        return True
+
+    except Exception as e:
+        print(f"CRITICAL ERROR IN PHOTO ENGINE: {e}")
+        # Создаем пустую серую заглушку, чтобы бэкенд не падал дальше
+        dummy_photo = Image.new("RGB", (300, 400), (200, 200, 200))
+        dummy_photo.save(output_path, "JPEG")
+        return False
+
+```
+
+---
+
+## 3. ID CARD INTEGRATION: LOGO & EMBLEM LAYERING (image_25.png)
+
+Используя Pillow (PIL), наложи графику на существующий бланк ID-карты. **Необходимо загрузить в Replit два ассета:** `assets/logos/logo_main.png` и `assets/logos/emblem_state.png`.
+
+**Координаты для ID-карты (`image_25.png`):**
+
+* **Ассет Лого TimeNation:** `logo_main.png`. Координаты: x=24, y=24 (Top-Left, заменяет существующий текстовый маркер, если он был). Масштаб: ширина ~200px.
+* **Ассет Эмблема Государства:** `emblem_state.png`. Координаты: x=618, y=24 (Top-Right, симметрично логотипу). Масштаб: ширина ~150px.
+* **Сгенерированное Фото (Исправленное):** `portrait_issued.jpg`. Рамка: x=618, y=223 (Справа). Масштаб: 320x430.
+
+```python
+# Псевдокод наложения в PIL (блок генерации ID)
+base_id = Image.open("assets/id_template.png").convert("RGBA") #image_25.png
+logo_img = Image.open("assets/logos/logo_main.png").convert("RGBA")
+emblem_img = Image.open("assets/logos/emblem_state.png").convert("RGBA")
+icao_portrait = Image.open("storage/portraits/icao_user.jpg").convert("RGBA") # Исправленное фото
+
+# 1. Масштабирование ассетов (если нужно)
+logo_img.thumbnail((200, 60))
+emblem_img.thumbnail((150, 150))
+icao_portrait.thumbnail((320, 430))
+
+# 2. Наложение Лого (Top-Left)
+base_id.paste(logo_img, (24, 24), logo_img)
+
+# 3. Наложение Эмблемы (Top-Right)
+base_id.paste(emblem_img, (618, 24), emblem_img)
+
+# 4. Наложение сгенерированного ИИ портрета (Справа)
+base_id.paste(icao_portrait, (618, 223), icao_portrait)
+
+# ... далее следует наложение текстовых полей ...
+
+```
+
+---
+
+## 4. INSTRUCTION FOR REPLIT AGENT
+
+> *"Исправь модуль генерации фото: пайплайн должен вырезать фон с любого загруженного изображения пользователя, накладывать нейтральный серый фон ICAO и кропать под формат паспорта. Внедрить это исправленное фото во все документы. Модифицируй бэкенд, чтобы он использовал существующий бланк ID-карты (`image_25.png`) и накладывал на него по точным координатам: Логотип TimeNation (`assets/logos/logo_main.png`) в верхний левый угол (24, 24) и Эмблему Государства (`assets/logos/emblem_state.png`) в верхний правый угол (618, 24). Убедись, что графика накладывается поверх всех узоров бланка и не перекрывает текстовые поля. Примени ту же графику к бланку Паспорта ICAO."*

@@ -13,6 +13,7 @@ import { logger } from "../lib/logger";
 import { MEDIA_DIR } from "../services/renderService";
 import { generateIdCardSvg, loadPhotoAsDataUri } from "../services/idCardService";
 import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
+import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
 export const VAULT_DIR = path.join(process.cwd(), "secure_vault");
@@ -206,22 +207,25 @@ function generatePassportSvg(c: {
   ${stars}
 
   <!-- ══ HEADER ══ -->
-  <!-- Flag (top-left) -->
-  <rect x="18" y="15" width="50" height="35" rx="3" fill="white" stroke="#9ab8d8" stroke-width="0.8"/>
-  <rect x="18" y="15" width="50" height="12" rx="3" fill="#1e3a8a"/>
-  <rect x="18" y="15" width="50" height="3" rx="0" fill="#1e3a8a"/>
-  <rect x="18" y="38" width="50" height="12" rx="3" fill="#1e3a8a"/>
-  <rect x="18" y="44" width="50" height="6" rx="0" fill="#1e3a8a"/>
-  <circle cx="43" cy="32.5" r="8" fill="none" stroke="#c8d8f0" stroke-width="0.8" opacity="0.7"/>
-  <text x="43" y="36.5" font-family="Georgia,serif" font-size="11" fill="#d0e4ff" text-anchor="middle" opacity="0.9">∞</text>
+  <!-- Emblem (top-left, real image) -->
+  ${EMBLEM_DATA_URI
+    ? `<defs><clipPath id="pEmblemClip"><circle cx="43" cy="32" r="22"/></clipPath></defs>
+  <image href="${EMBLEM_DATA_URI}" x="21" y="10" width="44" height="44" clip-path="url(#pEmblemClip)" preserveAspectRatio="xMidYMid meet"/>
+  <circle cx="43" cy="32" r="22" fill="none" stroke="#8ab4d4" stroke-width="1"/>`
+    : `<rect x="18" y="15" width="50" height="35" rx="3" fill="#1e3a8a"/>
+  <text x="43" y="36" font-family="Georgia,serif" font-size="11" fill="#d0e4ff" text-anchor="middle">∞</text>`}
 
   <!-- TIMENATION left -->
   <text x="76" y="33" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="bold" fill="#1a3a8a" letter-spacing="0.5">TIMENATION</text>
   <text x="76" y="47" font-family="Arial,Helvetica,sans-serif" font-size="10" fill="#4468a8">Republic of TimeNation</text>
 
-  <!-- TIMENATION right -->
-  <text x="662" y="33" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="bold" fill="#1a3a8a" text-anchor="end" letter-spacing="0.5">TIMENATION</text>
-  <text x="662" y="47" font-family="Arial,Helvetica,sans-serif" font-size="10" fill="#4468a8" text-anchor="end">FUTURE BEGINS NOW</text>
+  <!-- Flag (top-right, real image) -->
+  ${FLAG_DATA_URI
+    ? `<defs><clipPath id="pFlagClip"><rect x="590" y="12" width="72" height="43" rx="3"/></clipPath></defs>
+  <image href="${FLAG_DATA_URI}" x="590" y="12" width="72" height="43" clip-path="url(#pFlagClip)" preserveAspectRatio="xMidYMid slice"/>
+  <rect x="590" y="12" width="72" height="43" rx="3" fill="none" stroke="#8ab4d4" stroke-width="0.8"/>`
+    : `<text x="662" y="33" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="bold" fill="#1a3a8a" text-anchor="end" letter-spacing="0.5">TIMENATION</text>
+  <text x="662" y="47" font-family="Arial,Helvetica,sans-serif" font-size="10" fill="#4468a8" text-anchor="end">FUTURE BEGINS NOW</text>`}
 
   <!-- Divider -->
   <line x1="18" y1="60" x2="662" y2="60" stroke="#8ab0d4" stroke-width="0.9"/>

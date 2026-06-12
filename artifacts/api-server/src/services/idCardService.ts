@@ -6,6 +6,7 @@
 import fs from "fs";
 import path from "path";
 import { MEDIA_DIR } from "./renderService";
+import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "./assetsService";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -189,20 +190,20 @@ export function generateIdCardSvg(c: IdCardCitizen, photoDataUri?: string | null
   ${stars}
 
   <!-- ── Header ─────────────────────────────────────────────── -->
-  <!-- Flag block -->
-  <rect x="22" y="16" width="62" height="42" rx="4" fill="white" stroke="#96b8d8" stroke-width="1"/>
-  <rect x="22" y="16" width="62" height="14" rx="4" fill="#1a3988"/>
-  <rect x="22" y="16" width="62" height="4"  fill="#1a3988"/>
-  <rect x="22" y="44" width="62" height="14" rx="4" fill="#1a3988"/>
-  <rect x="22" y="52" width="62" height="6"  fill="#1a3988"/>
-  <circle cx="53" cy="37" r="9" fill="none" stroke="#c0d8f4" stroke-width="1" opacity="0.8"/>
-  <text x="53" y="41" font-family="Georgia,serif" font-size="13" fill="#d4ecff" text-anchor="middle" opacity="0.95">∞</text>
+  <!-- Emblem (top-left, real image) -->
+  ${EMBLEM_DATA_URI ? `<defs><clipPath id="emblemClipL"><circle cx="53" cy="37" r="26"/></clipPath></defs>
+  <image href="${EMBLEM_DATA_URI}" x="27" y="11" width="52" height="52" clip-path="url(#emblemClipL)" preserveAspectRatio="xMidYMid meet"/>
+  <circle cx="53" cy="37" r="26" fill="none" stroke="#8ab4d4" stroke-width="1.2"/>` : `<rect x="22" y="16" width="62" height="42" rx="4" fill="#1a3988"/>
+  <text x="53" y="41" font-family="Georgia,serif" font-size="13" fill="#d4ecff" text-anchor="middle">∞</text>`}
 
   <text x="92"  y="34" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="bold" fill="#132e7a" letter-spacing="1">TIMENATION</text>
   <text x="92"  y="51" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#3a5a9e">Republic of TimeNation</text>
 
-  <text x="${W - 24}" y="34" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="bold" fill="#132e7a" text-anchor="end" letter-spacing="1">TIMENATION</text>
-  <text x="${W - 24}" y="51" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#3a5a9e" text-anchor="end">FUTURE BEGINS NOW</text>
+  <!-- Flag (top-right, real image) -->
+  ${FLAG_DATA_URI ? `<defs><clipPath id="flagClipR"><rect x="${W - 110}" y="10" width="88" height="54" rx="4"/></clipPath></defs>
+  <image href="${FLAG_DATA_URI}" x="${W - 110}" y="10" width="88" height="54" clip-path="url(#flagClipR)" preserveAspectRatio="xMidYMid slice"/>
+  <rect x="${W - 110}" y="10" width="88" height="54" rx="4" fill="none" stroke="#8ab4d4" stroke-width="1"/>` : `<text x="${W - 24}" y="34" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="bold" fill="#132e7a" text-anchor="end" letter-spacing="1">TIMENATION</text>
+  <text x="${W - 24}" y="51" font-family="Arial,Helvetica,sans-serif" font-size="12" fill="#3a5a9e" text-anchor="end">FUTURE BEGINS NOW</text>`}
 
   <line x1="22" y1="72" x2="${W - 22}" y2="72" stroke="#88aed0" stroke-width="1.1"/>
 
@@ -258,10 +259,13 @@ export function generateIdCardSvg(c: IdCardCitizen, photoDataUri?: string | null
   <!-- MRZ line 2 -->
   <text x="22" y="${MRZ_Y + 62}" font-family="Courier New,monospace" font-size="16.5" fill="#4a88c8" letter-spacing="3.2">${esc(mrz2.padEnd(30,"<"))}</text>
 
-  <!-- Country stamp bottom-right -->
-  <circle cx="${W - 60}" cy="${MRZ_Y + 48}" r="34" fill="none" stroke="#1e3a8a" stroke-width="1.2" opacity="0.5"/>
-  <circle cx="${W - 60}" cy="${MRZ_Y + 48}" r="28" fill="none" stroke="#1e3a8a" stroke-width="0.6" opacity="0.4"/>
-  <text x="${W - 60}" y="${MRZ_Y + 43}" font-family="Georgia,serif" font-size="18" fill="#1e3a8a" text-anchor="middle" opacity="0.55">∞</text>
-  <text x="${W - 60}" y="${MRZ_Y + 58}" font-family="Arial,sans-serif" font-size="7" fill="#1e3a8a" text-anchor="middle" letter-spacing="1.5" opacity="0.55">TN</text>
+  <!-- Emblem stamp bottom-right (real image) -->
+  ${EMBLEM_DATA_URI
+    ? `<defs><clipPath id="stampClip"><circle cx="${W - 60}" cy="${MRZ_Y + 48}" r="34"/></clipPath></defs>
+  <image href="${EMBLEM_DATA_URI}" x="${W - 94}" y="${MRZ_Y + 14}" width="68" height="68"
+         clip-path="url(#stampClip)" preserveAspectRatio="xMidYMid meet" opacity="0.55"/>
+  <circle cx="${W - 60}" cy="${MRZ_Y + 48}" r="34" fill="none" stroke="#1e3a8a" stroke-width="1" opacity="0.4"/>`
+    : `<circle cx="${W - 60}" cy="${MRZ_Y + 48}" r="34" fill="none" stroke="#1e3a8a" stroke-width="1.2" opacity="0.5"/>
+  <text x="${W - 60}" y="${MRZ_Y + 43}" font-family="Georgia,serif" font-size="18" fill="#1e3a8a" text-anchor="middle" opacity="0.55">∞</text>`}
 </svg>`;
 }
