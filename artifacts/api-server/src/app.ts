@@ -35,8 +35,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
-// Serve citizen avatar photos at /media/avatars/* (must come before /media)
-app.use("/media/avatars", express.static(path.join(MEDIA_DIR, "avatars"), { maxAge: "7d" }));
+// NOTE: citizen photos are stored in secure_vault/ (NOT served statically — privacy compliance)
 
 // Serve generated TV media files (MP4) at /media/*
 app.use("/media", express.static(MEDIA_DIR, {

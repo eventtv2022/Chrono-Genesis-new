@@ -12,17 +12,19 @@ import { z } from "zod";
 import { logger } from "../lib/logger";
 import { MEDIA_DIR } from "../services/renderService";
 import { generateIdCardSvg, loadPhotoAsDataUri } from "../services/idCardService";
+import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
 
-// ── Multer: avatar photo upload ────────────────────────────────────────────────
-const AVATARS_DIR = path.join(MEDIA_DIR, "avatars");
-fs.mkdirSync(AVATARS_DIR, { recursive: true });
+// ── Secure vault: citizen photos stored outside web-accessible paths ──────────
+export const VAULT_DIR = path.join(process.cwd(), "secure_vault");
+const VAULT_PHOTOS_DIR = path.join(VAULT_DIR, "photos");
+fs.mkdirSync(VAULT_PHOTOS_DIR, { recursive: true });
 
 const upload = multer({
   storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, AVATARS_DIR),
+    destination: (_req, _file, cb) => cb(null, VAULT_PHOTOS_DIR),
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
-      cb(null, `avatar_${Date.now()}${ext}`);
+      cb(null, `photo_${Date.now()}${ext}`);
     },
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -39,6 +41,12 @@ const router: IRouter = Router();
 function formatCitizenRow(c: typeof citizensTable.$inferSelect) {
   return {
     ...c,
+    // Decrypt PII fields before returning — encrypted values stored as v1:... in DB
+    email:      tryDecrypt(c.email)      ?? null,
+    surname:    tryDecrypt(c.surname)    ?? null,
+    givenNames: tryDecrypt(c.givenNames) ?? null,
+    // Never expose the raw vault path as a web URL
+    photoUrl: c.photoUrl ? "vault:protected" : null,
     transferableBalance: c.balanceMinutes - 1,
     lastActivity: c.lastActivity?.toISOString() ?? null,
     createdAt: c.createdAt.toISOString(),
@@ -322,28 +330,28 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
 
   const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted } = parsed.data;
 
-  // Build photoUrl from uploaded file (multer) or from explicit photoUrl field
-  const uploadedPhotoUrl = req.file
-    ? `/media/avatars/${req.file.filename}`
-    : (parsed.data.photoUrl || null);
+  // Photo saved to secure_vault — store internal vault reference, not a web URL
+  const vaultPhotoRef = req.file
+    ? `vault:photos/${req.file.filename}`
+    : null;
 
   const privacyAccepted = privacyAgreementAccepted === "true";
 
   const [citizen] = await db
     .insert(citizensTable)
     .values({
-      name,
+      name,                                            // display name stays plaintext
       phone,
-      surname: surname ?? null,
-      givenNames: givenNames ?? null,
+      surname:    encryptNullable(surname ?? null),    // PII — encrypted
+      givenNames: encryptNullable(givenNames ?? null), // PII — encrypted
       dateOfBirth: dateOfBirth || null,
-      photoUrl: uploadedPhotoUrl,
+      photoUrl: vaultPhotoRef,
       citizenNumber,
       registrationStatus: "pending",
       availableAt,
       tosAcceptedAt: tosAcceptedAt ? new Date(tosAcceptedAt) : undefined,
       telegramId: telegramId ?? undefined,
-      email: email || null,
+      email: encryptNullable(email || null),           // PII — encrypted
       privacyAgreementAccepted: privacyAccepted ? 1 : 0,
       privacyAgreementDate: privacyAccepted ? new Date() : null,
     })
@@ -458,8 +466,8 @@ router.get("/citizens/number/:num/passport", async (req, res): Promise<void> => 
   const svg = generatePassportSvg({
     citizenNumber: citizen.citizenNumber ?? num,
     name: citizen.name,
-    surname: citizen.surname,
-    givenNames: citizen.givenNames,
+    surname: tryDecrypt(citizen.surname),     // decrypt PII
+    givenNames: tryDecrypt(citizen.givenNames), // decrypt PII
     dateOfBirth: citizen.dateOfBirth,
     rank: citizen.rank,
     meritScore: citizen.meritScore,
@@ -468,7 +476,7 @@ router.get("/citizens/number/:num/passport", async (req, res): Promise<void> => 
   });
 
   res.setHeader("Content-Type", "image/svg+xml");
-  res.setHeader("Cache-Control", "public, max-age=300");
+  res.setHeader("Cache-Control", "no-cache");
   res.send(svg);
 });
 
@@ -493,8 +501,8 @@ router.get("/citizens/number/:num/id-card", async (req, res): Promise<void> => {
   const svg = generateIdCardSvg({
     citizenNumber: citizen.citizenNumber ?? num,
     name: citizen.name,
-    surname: citizen.surname,
-    givenNames: citizen.givenNames,
+    surname: tryDecrypt(citizen.surname),     // decrypt PII
+    givenNames: tryDecrypt(citizen.givenNames), // decrypt PII
     dateOfBirth: citizen.dateOfBirth,
     rank: citizen.rank,
     meritScore: citizen.meritScore,

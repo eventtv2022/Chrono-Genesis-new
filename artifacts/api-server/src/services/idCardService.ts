@@ -80,11 +80,28 @@ function starRing(cx: number, cy: number, r: number, count: number, fill: string
 
 // ── Photo loader (disk → base64 data-URI) ─────────────────────────────────────
 
+/** VAULT_DIR is exported from citizens router; lazy-resolved here to avoid circular deps */
+function resolveVaultDir(): string {
+  return path.join(process.cwd(), "secure_vault");
+}
+
 export function loadPhotoAsDataUri(photoUrl: string | null | undefined): string | null {
-  if (!photoUrl) return null;
-  // photoUrl is like "/media/avatars/avatar_123.jpg"
-  const rel = photoUrl.startsWith("/media/") ? photoUrl.slice("/media/".length) : photoUrl;
-  const filePath = path.join(MEDIA_DIR, rel);
+  if (!photoUrl || photoUrl === "vault:protected") return null;
+
+  let filePath: string;
+
+  if (photoUrl.startsWith("vault:")) {
+    // New secure vault path: vault:photos/photo_123.jpg
+    const rel = photoUrl.slice("vault:".length); // e.g. "photos/photo_123.jpg"
+    filePath = path.join(resolveVaultDir(), rel);
+  } else if (photoUrl.startsWith("/media/")) {
+    // Legacy path: /media/avatars/avatar_123.jpg
+    const rel = photoUrl.slice("/media/".length);
+    filePath = path.join(MEDIA_DIR, rel);
+  } else {
+    return null;
+  }
+
   try {
     if (!fs.existsSync(filePath)) return null;
     const buf = fs.readFileSync(filePath);

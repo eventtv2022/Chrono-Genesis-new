@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Secure vault — citizen PII photos (never commit)
+secure_vault/
