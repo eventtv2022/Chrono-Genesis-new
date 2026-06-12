@@ -115,7 +115,7 @@ export function Tv() {
   const slots = (slotsData?.slots ?? []) as SlotLike[];
   const schedule = scheduleData?.schedule ?? [];
 
-  const { citizen } = useCitizen();
+  const { citizen, refreshCitizen } = useCitizen();
 
   // ── Terminal form state
   const [selectedSlot, setSelectedSlot] = useState<SlotLike | null>(null);
@@ -168,6 +168,10 @@ export function Tv() {
         catcastUrl: data.catcastUrl ?? null,
         manifestoWords: data.manifestoWords ?? 0,
       });
+      // Refresh grid + schedule so broadcast slot appears immediately
+      await qc.invalidateQueries({ queryKey: getGetTvSlotsQueryKey({ date }) });
+      await qc.invalidateQueries({ queryKey: getGetTvScheduleQueryKey({ date }) });
+      void refreshCitizen();
     } catch {
       setRenderError("Ошибка соединения с сервером");
     } finally {
@@ -321,6 +325,10 @@ export function Tv() {
             <span className="w-2.5 h-2.5 rounded-sm bg-rose-500/30 border border-rose-400/50 inline-block" />
             Апекс · 50 Д / 49.99 €
           </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-orange-500 border border-orange-400 inline-block" />
+            В эфире
+          </div>
           <span className="text-muted-foreground/60">← кликните свободный слот</span>
         </div>
 
@@ -360,15 +368,23 @@ export function Tv() {
                             );
                             const isSel = selectedSlot?.id === slot.id;
                             const isFree = slot.status === "free";
+                            const isBroadcast = slot.status === "broadcast";
                             const color = isSel
                               ? "bg-yellow-400 border-yellow-300 ring-1 ring-yellow-200"
-                              : isFree
-                                ? "bg-white/8 border-white/12 hover:bg-primary/30 hover:border-primary/50"
-                                : (SLOT_TYPE_COLORS[slot.slotType] ?? "bg-primary/30 border-primary/50");
+                              : isBroadcast
+                                ? "bg-orange-500 border-orange-400 opacity-100"
+                                : isFree
+                                  ? "bg-white/8 border-white/12 hover:bg-primary/30 hover:border-primary/50"
+                                  : (SLOT_TYPE_COLORS[slot.slotType] ?? "bg-primary/30 border-primary/50");
+                            const statusLabel = isFree
+                              ? "Свободно"
+                              : isBroadcast
+                                ? `${slot.ownerName ?? "Занято"} · В ЭФИРЕ`
+                                : (slot.ownerName ?? "Занято");
                             return (
                               <div
                                 key={min}
-                                title={`${slot.hourLabel}:${slot.minLabel} — ${TYPE_LABELS[slot.slotType] ?? slot.slotType} · ${isFree ? "Свободно" : (slot.ownerName ?? "Занято")}`}
+                                title={`${slot.hourLabel}:${slot.minLabel} — ${TYPE_LABELS[slot.slotType] ?? slot.slotType} · ${statusLabel}`}
                                 onClick={() => isFree && handleSlotClick(slot)}
                                 className={[
                                   "flex-1 basis-0 min-w-0 h-4 border rounded-[2px] transition-colors",

@@ -773,10 +773,24 @@ router.post("/tv/capsule/:slotId/render", async (req, res): Promise<void> => {
   // Run render synchronously for MVP (typically < 15s for 60s clip)
   try {
     const result = await renderCapsule(slotId);
+
+    // Auto-publish: link capsule to Chronos Grid as "broadcast" once media is ready
+    if (result.mediaUrl) {
+      await db
+        .update(tvSlotsTable)
+        .set({ status: "broadcast" })
+        .where(eq(tvSlotsTable.id, slotId));
+      await db
+        .update(tvCapsulesTable)
+        .set({ status: "broadcast", updatedAt: new Date() })
+        .where(eq(tvCapsulesTable.slotId, slotId));
+      req.log.info({ slotId, citizenId: citizenId.data }, "Capsule auto-published to broadcast");
+    }
+
     res.json({
       ok: true,
       slotId,
-      status: result.status,
+      status: result.mediaUrl ? "broadcast" : result.status,
       mediaUrl: result.mediaUrl,
       catcastUrl: result.catcastUrl ?? null,
       manifestoWords: result.manifestoText.split(/\s+/).filter(Boolean).length,
