@@ -1,0 +1,11 @@
+Разделение секретов 
+REPLIT ACTUATOR: ENCRYPTION KEY SECURITY UPGRADE
+1. OBJECTIVE
+Перевести модуль шифрования персональных данных граждан с временной деривации (из SESSION_SECRET) на выделенный криптографический ключ ENCRYPTION_KEY (AES-256), сохраненный в Replit Secrets.
+2. BACKEND UPDATE (Python/Cryptography)
+Найди в коде (обычно в файлах регистрации или утилитах безопасности вроде security.py или main.py) блок инициализации шифрования и замени его на безопасный метод работы с Hex-ключом.
+Если используется библиотека cryptography (Fernet), ключ должен быть приведен к формату URL-safe base64 (Fernet требует именно его, поэтому 32 байта из Hex нужно перекодировать):
+Python
+import os import base64 from cryptography.fernet import Fernet # 1. Извлекаем Hex-ключ из Secrets Replit hex_key = os.getenv("ENCRYPTION_KEY") if not hex_key: # Фоллбэк-заглушка на случай, если ключ забыли прописать в Secrets (для предотвращения падения) print("WARNING: ENCRYPTION_KEY is not set in Secrets! Using temporary fallback.") # Используем ваш старый SESSION_SECRET как соль для генерации временного ключа session_secret = os.getenv("SESSION_SECRET", "default_fallback_secret_32_bytes_long_!!") # Переводим в 32 байта для Fernet fernet_key = base64.urlsafe_b64encode(session_secret[:32].encode().ljust(32, b'_')) else: # 2. Правильная конвертация 64-hex символов (32 байта) в URL-safe Base64 для Fernet raw_bytes = bytes.fromhex(hex_key) fernet_key = base64.urlsafe_b64encode(raw_bytes) # Инициализируем объект шифрования fernet = Fernet(fernet_key) # Теперь функции fernet.encrypt() и fernet.decrypt() используют выделенный 256-битный ключ 
+3. INSTRUCTION FOR REPLIT AGENT
+"Найди модуль шифрования персональных данных в бэкенде. Замени деривацию ключа из SESSION_SECRET на чтение независимой переменной окружения ENCRYPTION_KEY. Реализуй конвертацию 64-символьного Hex-ключа в формат Base64, совместимый с Fernet, как показано в ТЗ. Убедись, что при отсутствии ключа сервер выводит предупреждение в лог, но продолжает работать на временном фоллбэке."
