@@ -4,9 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { UserPlus, Clock, CheckCircle2, AlertCircle, Shield, Award, ExternalLink, Upload, Camera, Lock } from "lucide-react";
+import { UserPlus, Clock, CheckCircle2, AlertCircle, Shield, Award, ExternalLink, Upload, Camera, Lock, BookOpen } from "lucide-react";
 
-const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const BASE_WEB = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const MANIFESTO_URL = "https://issuu.com/timenation2025/docs/_timenatio";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function formatCountdown(s: number) {
@@ -25,8 +26,11 @@ export function Register() {
   const [email, setEmail] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+  const [manifestoAccepted, setManifestoAccepted] = useState(false);
   const [tosAccepted, setTosAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,11 +48,15 @@ export function Register() {
     const tick = setInterval(() => setCountdown(computeLeft()), 1000);
     const poll = async () => {
       try {
-        const res = await fetch(`${BASE}/api/citizens/number/${pendingData.citizenNumber}/status`);
+        const res = await fetch(`/api/citizens/number/${pendingData.citizenNumber}/status`);
         if (!res.ok) return;
         const data = await res.json() as { status: string };
-        if (data.status === "issued") { clearInterval(tick); if (pollRef.current) clearInterval(pollRef.current); setMode("issued"); }
-      } catch {}
+        if (data.status === "issued") {
+          clearInterval(tick);
+          if (pollRef.current) clearInterval(pollRef.current);
+          setMode("issued");
+        }
+      } catch { /* silent */ }
     };
     pollRef.current = setInterval(poll, 15_000);
     return () => { clearInterval(tick); if (pollRef.current) clearInterval(pollRef.current); };
@@ -60,9 +68,11 @@ export function Register() {
     setPhotoPreview(file ? URL.createObjectURL(file) : null);
   }
 
+  const canSubmit = tosAccepted && privacyAccepted && manifestoAccepted;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!tosAccepted || !privacyAccepted) return;
+    if (!canSubmit) return;
     setError(null);
     setLoading(true);
     try {
@@ -77,17 +87,21 @@ export function Register() {
       formData.append("privacyAgreementAccepted", "true");
       if (photo) formData.append("passport_photo", photo);
 
-      const res = await fetch(`${BASE}/api/citizens`, { method: "POST", body: formData });
+      const res = await fetch("/api/citizens", { method: "POST", body: formData });
       const data = await res.json() as { id?: number; name?: string; citizenNumber?: string; availableAt?: string; error?: string; };
       if (!res.ok) { setError(data.error ?? "Ошибка регистрации"); return; }
       if (data.citizenNumber && data.availableAt) {
         setPendingData({ citizenNumber: data.citizenNumber, availableAt: data.availableAt, citizenId: data.id!, citizenName: data.name! });
         setMode("pending");
       }
-    } catch { setError("Ошибка соединения с сервером"); }
-    finally { setLoading(false); }
+    } catch {
+      setError("Ошибка соединения с сервером");
+    } finally {
+      setLoading(false);
+    }
   }
 
+  /* ── Pending screen ─────────────────────────────────────────────────────── */
   if (mode === "pending" && pendingData) {
     return (
       <Layout>
@@ -120,6 +134,7 @@ export function Register() {
     );
   }
 
+  /* ── Issued screen ──────────────────────────────────────────────────────── */
   if (mode === "issued" && pendingData) {
     return (
       <Layout>
@@ -138,8 +153,12 @@ export function Register() {
                 <p className="text-3xl font-mono font-bold text-primary tracking-widest">{pendingData.citizenNumber}</p>
                 <p className="text-base font-medium mt-2">{pendingData.citizenName}</p>
               </div>
-              <a href={`${BASE}/api/citizens/number/${pendingData.citizenNumber}/passport`} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-2 w-full justify-center bg-emerald-500 hover:bg-emerald-600 text-white font-mono font-bold py-3 px-4 rounded-sm transition-colors">
+              <a
+                href={`/api/citizens/number/${pendingData.citizenNumber}/passport`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 w-full justify-center bg-emerald-500 hover:bg-emerald-600 text-white font-mono font-bold py-3 px-4 rounded-sm transition-colors"
+              >
                 <ExternalLink className="w-4 h-4" />
                 Открыть цифровой паспорт (SVG)
               </a>
@@ -150,12 +169,35 @@ export function Register() {
     );
   }
 
+  /* ── Registration form ──────────────────────────────────────────────────── */
   return (
     <Layout>
       <div className="max-w-lg space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Стать гражданином</h1>
           <p className="text-muted-foreground font-mono text-sm mt-1">Каждый гражданин получает 1 Дармин — родовую минуту</p>
+        </div>
+
+        {/* ── Manifesto read banner ──────────────────────────────────────── */}
+        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-sm space-y-3">
+          <div className="flex items-start gap-3">
+            <BookOpen className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-sm">Перед подачей заявки ознакомьтесь с документом</p>
+              <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                Регистрация возможна только после прочтения основополагающего документа TimeNation.
+              </p>
+            </div>
+          </div>
+          <a
+            href={MANIFESTO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 w-full justify-center bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-mono font-semibold text-sm py-2.5 px-4 rounded-sm transition-colors"
+          >
+            <ExternalLink className="w-4 h-4" />
+            Открыть документ TimeNation (Issuu)
+          </a>
         </div>
 
         <div className="flex items-start gap-3 p-4 bg-primary/5 border border-primary/20 rounded-sm">
@@ -227,28 +269,58 @@ export function Register() {
                 </label>
               </div>
 
-              {/* ── Compliance checkboxes ────────────────────────────────── */}
-              <div className="space-y-3 pt-1 border-t border-border/50">
+              {/* ── Three compliance checkboxes ───────────────────────────── */}
+              <div className="space-y-3 pt-2 border-t border-border/50">
+
+                {/* 1. Document read confirmation */}
+                <div className="flex items-start gap-3 p-3 bg-amber-500/5 border border-amber-500/25 rounded-sm">
+                  <BookOpen className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                  <div className="flex-1 flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      id="manifesto"
+                      checked={manifestoAccepted}
+                      onChange={e => setManifestoAccepted(e.target.checked)}
+                      className="mt-0.5 accent-primary"
+                      required
+                    />
+                    <label htmlFor="manifesto" className="text-xs text-muted-foreground font-mono leading-relaxed">
+                      Я ознакомлен с{" "}
+                      <a href={MANIFESTO_URL} target="_blank" rel="noopener noreferrer" className="text-amber-400 underline">
+                        основополагающим документом TimeNation
+                      </a>.
+                      {" "}Я понимаю принципы и правила цифрового государства.
+                    </label>
+                  </div>
+                </div>
+
+                {/* 2. TOS */}
                 <div className="flex items-start gap-3">
                   <input type="checkbox" id="tos" checked={tosAccepted} onChange={e => setTosAccepted(e.target.checked)} className="mt-0.5 accent-primary" />
                   <label htmlFor="tos" className="text-xs text-muted-foreground font-mono leading-relaxed">
                     Я ознакомлен с{" "}
-                    <a href="/web/tos" target="_blank" className="text-primary underline">Условиями использования</a>.
+                    <a href={`${BASE_WEB}/tos`} target="_blank" className="text-primary underline">Условиями использования</a>.
                     {" "}Дармины — внутриигровые баллы, не являются денежными средствами.
                   </label>
                 </div>
 
+                {/* 3. Privacy / GDPR */}
                 <div className="flex items-start gap-3 p-3 bg-muted/20 border border-border/40 rounded-sm">
                   <Lock className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                  <div className="flex-1">
-                    <div className="flex items-start gap-2">
-                      <input type="checkbox" id="privacy" checked={privacyAccepted} onChange={e => setPrivacyAccepted(e.target.checked)} className="mt-0.5 accent-primary" required />
-                      <label htmlFor="privacy" className="text-xs text-muted-foreground font-mono leading-relaxed">
-                        Я даю согласие на обработку моих персональных данных (ФИО, email, фото) в целях выпуска цифрового удостоверения TimeNation.
-                        Данные хранятся в защищённой базе и не передаются третьим лицам.
-                        Я вправе отозвать согласие в любой момент (GDPR / 152-ФЗ).
-                      </label>
-                    </div>
+                  <div className="flex-1 flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      id="privacy"
+                      checked={privacyAccepted}
+                      onChange={e => setPrivacyAccepted(e.target.checked)}
+                      className="mt-0.5 accent-primary"
+                      required
+                    />
+                    <label htmlFor="privacy" className="text-xs text-muted-foreground font-mono leading-relaxed">
+                      Я даю согласие на обработку моих персональных данных (ФИО, email, фото) в целях выпуска цифрового удостоверения TimeNation.
+                      Данные хранятся в защищённой базе и не передаются третьим лицам.
+                      Вправе отозвать в любой момент (GDPR / 152-ФЗ).
+                    </label>
                   </div>
                 </div>
               </div>
@@ -260,15 +332,24 @@ export function Register() {
                 </div>
               )}
 
-              <Button type="submit" disabled={loading || !tosAccepted || !privacyAccepted}
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-mono font-bold">
+              <Button
+                type="submit"
+                disabled={loading || !canSubmit}
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-mono font-bold disabled:opacity-40"
+              >
                 {loading ? "Регистрация…" : (
                   <span className="flex items-center gap-2">
                     <UserPlus className="w-4 h-4" />
-                    Зарегистрироваться
+                    Подать заявку на гражданство
                   </span>
                 )}
               </Button>
+
+              {!canSubmit && (
+                <p className="text-center text-xs text-muted-foreground font-mono">
+                  Отметьте все три пункта, чтобы продолжить
+                </p>
+              )}
 
               <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-sm">
                 <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
