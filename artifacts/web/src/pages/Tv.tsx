@@ -729,53 +729,75 @@ export function Tv() {
                 На сегодня нет забронированных слотов
               </p>
             ) : (
-              <div className="space-y-2">
-                {schedule.map(entry => (
-                  <div
-                    key={entry.slotId}
-                    className="flex items-center justify-between p-3 bg-secondary/40 border border-border/50 rounded-sm"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-primary text-sm font-bold tabular-nums">
-                        {entry.hourLabel}:{entry.minLabel}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] font-mono ${SLOT_TYPE_BADGE[entry.slotType] ?? ""}`}
-                      >
-                        {TYPE_LABELS[entry.slotType] ?? entry.slotType}
-                      </Badge>
-                      <span className="text-sm">{entry.ownerName ?? "—"}</span>
-                      {entry.isRetro && (
-                        <span className="text-[10px] font-mono text-muted-foreground uppercase">РЕТРО</span>
+              <div className="space-y-3">
+                {schedule.map(entry => {
+                  const mp4Url = entry.hasRenderedVideo && entry.mediaUrl
+                    ? `/api/tv/media/${entry.mediaUrl.split("/").pop()}`
+                    : null;
+                  return (
+                    <div key={entry.slotId} className="border border-border/50 rounded-sm overflow-hidden bg-secondary/40">
+                      {/* Row header */}
+                      <div className="flex items-center justify-between px-3 py-2">
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-primary text-sm font-bold tabular-nums">
+                            {entry.hourLabel}:{entry.minLabel}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] font-mono ${SLOT_TYPE_BADGE[entry.slotType] ?? ""}`}
+                          >
+                            {TYPE_LABELS[entry.slotType] ?? entry.slotType}
+                          </Badge>
+                          <span className="text-sm text-foreground/80">{entry.ownerName ?? "—"}</span>
+                          {entry.isRetro && (
+                            <span className="text-[10px] font-mono text-muted-foreground uppercase">РЕТРО</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {mp4Url && (
+                            <span className="flex items-center gap-1 text-[10px] text-orange-400 font-mono uppercase font-bold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse inline-block" />
+                              В ЭФИРЕ
+                            </span>
+                          )}
+                          {mp4Url && (
+                            <a
+                              href={mp4Url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1 text-xs text-primary hover:underline font-mono"
+                            >
+                              <Video className="w-3 h-3" />
+                              MP4
+                            </a>
+                          )}
+                          {entry.catcastUrl && (
+                            <a
+                              href={entry.catcastUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1 text-xs text-blue-400 hover:underline font-mono"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              Catcast
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                      {/* Inline video player */}
+                      {mp4Url && (
+                        <div className="px-3 pb-3">
+                          <video
+                            src={mp4Url}
+                            controls
+                            className="w-full rounded-sm bg-black max-h-64"
+                            style={{ aspectRatio: "16/9" }}
+                          />
+                        </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      {entry.hasRenderedVideo && entry.mediaUrl && (
-                        <a
-                          href={`/api/tv/media/${entry.mediaUrl.split("/").pop()}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-1 text-xs text-primary hover:underline font-mono"
-                        >
-                          <Video className="w-3 h-3" />
-                          MP4
-                        </a>
-                      )}
-                      {entry.catcastUrl && (
-                        <a
-                          href={entry.catcastUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-1 text-xs text-blue-400 hover:underline font-mono"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          Catcast
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>

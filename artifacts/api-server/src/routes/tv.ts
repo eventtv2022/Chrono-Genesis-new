@@ -76,8 +76,19 @@ router.get("/tv/slots", async (req, res): Promise<void> => {
   await ensureSlotsForDate(date);
 
   const slots = await db
-    .select()
+    .select({
+      id: tvSlotsTable.id,
+      date: tvSlotsTable.date,
+      minuteIndex: tvSlotsTable.minuteIndex,
+      slotType: tvSlotsTable.slotType,
+      status: tvSlotsTable.status,
+      ownerId: tvSlotsTable.ownerId,
+      priceEur: tvSlotsTable.priceEur,
+      timeltrBurnCost: tvSlotsTable.timeltrBurnCost,
+      ownerName: citizensTable.name,
+    })
     .from(tvSlotsTable)
+    .leftJoin(citizensTable, eq(tvSlotsTable.ownerId, citizensTable.id))
     .where(eq(tvSlotsTable.date, date))
     .orderBy(tvSlotsTable.minuteIndex);
 
@@ -660,43 +671,6 @@ router.get("/tv/moment/:date/:time", async (req, res): Promise<void> => {
   }
 
   res.json({ sovereignUrl, capsule });
-});
-
-// ─── GET /api/tv/schedule?date=YYYY-MM-DD ────────────────────────────────────
-// Broadcast schedule: booked + noise-pool slots for the day
-router.get("/tv/schedule", async (req, res): Promise<void> => {
-  const date = (req.query["date"] as string | undefined) ?? "";
-  if (!isValidDate(date)) {
-    res.status(400).json({ error: "Параметр date обязателен в формате YYYY-MM-DD" });
-    return;
-  }
-
-  await ensureSlotsForDate(date);
-
-  const slots = await db
-    .select({
-      id: tvSlotsTable.id,
-      minuteIndex: tvSlotsTable.minuteIndex,
-      slotType: tvSlotsTable.slotType,
-      status: tvSlotsTable.status,
-      ownerId: tvSlotsTable.ownerId,
-      ownerName: citizensTable.name,
-    })
-    .from(tvSlotsTable)
-    .leftJoin(citizensTable, eq(tvSlotsTable.ownerId, citizensTable.id))
-    .where(eq(tvSlotsTable.date, date))
-    .orderBy(tvSlotsTable.minuteIndex);
-
-  const booked = slots.filter((s) => s.status === "booked");
-  const free = slots.filter((s) => s.status === "free");
-
-  res.json({
-    date,
-    total: slots.length,
-    booked: booked.length,
-    free: free.length,
-    slots,
-  });
 });
 
 // ─── POST /api/tv/capsule/:slotId/render ──────────────────────────────────────
