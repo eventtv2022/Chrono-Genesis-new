@@ -270,6 +270,10 @@ export function Tv() {
   const [date] = useState(todayDate);
   const qc = useQueryClient();
 
+  useEffect(() => {
+    document.title = "TimeNation-TV | TimeNation";
+  }, []);
+
   // ── Grid / schedule queries
   const { data: slotsData, isLoading: slotsLoading } = useGetTvSlots(
     { date },

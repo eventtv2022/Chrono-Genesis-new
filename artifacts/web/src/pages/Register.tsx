@@ -22,6 +22,10 @@ export function Register() {
   const [surname, setSurname] = useState("");
   const [givenNames, setGivenNames] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+
+  useEffect(() => {
+    document.title = "Стать гражданином | TimeNation";
+  }, []);
   const [phone, setPhone] = useState("");
   const [tosAccepted, setTosAccepted] = useState(false);
   const [loading, setLoading] = useState(false);

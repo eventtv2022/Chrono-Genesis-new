@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { useGetStats } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +7,10 @@ import { Activity, Clock, Users, Zap } from "lucide-react";
 
 export function Home() {
   const { data: stats, isLoading } = useGetStats();
+
+  useEffect(() => {
+    document.title = "Хронос-Консоль | TimeNation";
+  }, []);
 
   return (
     <Layout>

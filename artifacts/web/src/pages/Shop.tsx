@@ -9,10 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShoppingBag, Clock, AlertCircle } from "lucide-react";
 import { useCitizen } from "@/context/CitizenContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function Shop() {
   const { citizen } = useCitizen();
+
+  useEffect(() => {
+    document.title = "Казначейство | TimeNation";
+  }, []);
   const [loadingPkg, setLoadingPkg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 

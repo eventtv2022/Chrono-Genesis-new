@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import {
   useGetTimelineOccupied,
@@ -20,6 +20,10 @@ const currentMonth = new Date().getMonth() + 1;
 export function Timeline() {
   const [year, setYear] = useState(currentYear);
   const [month, setMonth] = useState(currentMonth);
+
+  useEffect(() => {
+    document.title = "Таймлайн | TimeNation";
+  }, []);
 
   const yearStr = String(year);
   const monthStr = String(month);

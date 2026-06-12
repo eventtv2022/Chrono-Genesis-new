@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { useListCitizens, getListCitizensQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,10 @@ const RANK_STYLES: Record<string, string> = {
 
 export function Citizens() {
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    document.title = "Реестр граждан | TimeNation";
+  }, []);
   const { data: citizens, isLoading } = useListCitizens({
     query: { queryKey: getListCitizensQueryKey() },
   });
