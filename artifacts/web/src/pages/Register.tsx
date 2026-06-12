@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { UserPlus, Clock, CheckCircle2, AlertCircle, Shield, Award, ExternalLink } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { UserPlus, Clock, CheckCircle2, AlertCircle, Shield, Award, ExternalLink, Upload, Camera } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -22,11 +23,11 @@ export function Register() {
   const [surname, setSurname] = useState("");
   const [givenNames, setGivenNames] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
-
-  useEffect(() => {
-    document.title = "Стать гражданином | TimeNation";
-  }, []);
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [seedThought, setSeedThought] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [tosAccepted, setTosAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +36,10 @@ export function Register() {
   const [pendingData, setPendingData] = useState<PendingData | null>(null);
   const [countdown, setCountdown] = useState(3600);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    document.title = "Стать гражданином | TimeNation";
+  }, []);
 
   // Countdown + poll
   useEffect(() => {
@@ -61,6 +66,17 @@ export function Register() {
     return () => { clearInterval(tick); if (pollRef.current) clearInterval(pollRef.current); };
   }, [mode, pendingData]);
 
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setPhoto(file);
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setPhotoPreview(url);
+    } else {
+      setPhotoPreview(null);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!tosAccepted) return;
@@ -68,15 +84,20 @@ export function Register() {
     setLoading(true);
     try {
       const n = name.trim() || `${surname.trim()} ${givenNames.trim()}`.trim();
-      const body: Record<string, string> = { name: n, phone: phone.trim() };
-      if (surname.trim()) body["surname"] = surname.trim();
-      if (givenNames.trim()) body["givenNames"] = givenNames.trim();
-      if (dateOfBirth.match(/^\d{4}-\d{2}-\d{2}$/)) body["dateOfBirth"] = dateOfBirth;
+
+      const formData = new FormData();
+      formData.append("name", n);
+      formData.append("phone", phone.trim());
+      if (surname.trim()) formData.append("surname", surname.trim());
+      if (givenNames.trim()) formData.append("givenNames", givenNames.trim());
+      if (dateOfBirth.match(/^\d{4}-\d{2}-\d{2}$/)) formData.append("dateOfBirth", dateOfBirth);
+      if (email.trim()) formData.append("email", email.trim());
+      if (seedThought.trim()) formData.append("seedThought", seedThought.trim());
+      if (photo) formData.append("passport_photo", photo);
 
       const res = await fetch(`${BASE}/api/citizens`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: formData,
       });
       const data = await res.json() as {
         id?: number; name?: string; citizenNumber?: string; availableAt?: string; error?: string;
@@ -218,6 +239,60 @@ export function Register() {
                 <Input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+7XXXXXXXXXX" required className="bg-secondary border-border font-mono" />
               </div>
 
+              <div className="space-y-1.5">
+                <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">E-mail для получения паспорта</Label>
+                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="example@timenation.com" className="bg-secondary border-border font-mono" />
+              </div>
+
+              {/* ── Photo upload ────────────────────────────────────────────── */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <Camera className="w-3.5 h-3.5" />
+                  Фотография гражданина (для паспорта)
+                </Label>
+                <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-border rounded-sm cursor-pointer bg-secondary hover:bg-secondary/80 transition-colors overflow-hidden">
+                  {photoPreview ? (
+                    <div className="relative w-full">
+                      <img src={photoPreview} alt="Предпросмотр" className="w-full h-48 object-cover" />
+                      <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs font-mono px-2 py-1 rounded">
+                        Нажмите для замены
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 gap-2">
+                      <Upload className="w-8 h-8 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground font-mono">
+                        <span className="font-semibold">Загрузить фото анфас</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono">Светлый фон · JPG, PNG · до 5 МБ</p>
+                    </div>
+                  )}
+                  <input
+                    id="passport_photo"
+                    name="passport_photo"
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handlePhotoChange}
+                  />
+                </label>
+              </div>
+
+              {/* ── Seed thought ────────────────────────────────────────────── */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Моя мысль — зерно манифеста</Label>
+                <Textarea
+                  value={seedThought}
+                  onChange={e => setSeedThought(e.target.value)}
+                  placeholder="Напишите свою главную мысль о времени, жизни или мире. ИИ разовьёт её в 60-секундный манифест..."
+                  className="bg-secondary border-border font-mono text-sm resize-none h-24"
+                  maxLength={500}
+                />
+                <p className="text-xs text-muted-foreground font-mono text-right">
+                  {seedThought.length}/500
+                </p>
+              </div>
+
               <div className="flex items-start gap-3 pt-1">
                 <input type="checkbox" id="tos" checked={tosAccepted} onChange={e => setTosAccepted(e.target.checked)} className="mt-0.5 accent-primary" />
                 <label htmlFor="tos" className="text-xs text-muted-foreground font-mono leading-relaxed">
@@ -244,7 +319,7 @@ export function Register() {
               <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-sm">
                 <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
                 <p className="text-xs text-muted-foreground font-mono">
-                  Паспорт будет выдан через 60 минут. Доступ к системе — немедленно.
+                  Паспорт будет выдан через 60 минут. ИИ-манифест генерируется автоматически.
                 </p>
               </div>
             </CardContent>

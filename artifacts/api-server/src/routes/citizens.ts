@@ -1,11 +1,37 @@
 import { Router, type IRouter } from "express";
 import { eq, sql } from "drizzle-orm";
+import path from "path";
+import fs from "fs";
+import multer from "multer";
 import { db } from "@workspace/db";
 import { citizensTable, timelineAnchorsTable } from "@workspace/db";
 import {
   UpdateCitizenBody,
 } from "@workspace/api-zod";
 import { z } from "zod";
+import { logger } from "../lib/logger";
+import { MEDIA_DIR } from "../services/renderService";
+import { generateManifesto } from "../services/geminiService";
+import { expandSeedToManifesto } from "../services/renderService";
+
+// ── Multer: avatar photo upload ────────────────────────────────────────────────
+const AVATARS_DIR = path.join(MEDIA_DIR, "avatars");
+fs.mkdirSync(AVATARS_DIR, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, AVATARS_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
+      cb(null, `avatar_${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Только изображения разрешены"));
+  },
+});
 
 const router: IRouter = Router();
 
@@ -259,18 +285,21 @@ router.get("/citizens", async (req, res): Promise<void> => {
 
 // ── POST /citizens ────────────────────────────────────────────────────────────
 // Extended registration: generates 9-digit citizenNumber, sets 1-hour pending delay.
+// Accepts both multipart/form-data (with photo) and application/json.
 const RegisterCitizenBody = z.object({
   name: z.string().min(1, "Имя обязательно"),
   phone: z.string().min(5, "Телефон обязателен"),
   surname: z.string().optional(),
   givenNames: z.string().optional(),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")).optional(),
-  photoUrl: z.string().url().optional().or(z.literal("")).optional(),
+  photoUrl: z.string().optional(),
   tosAcceptedAt: z.string().optional(),
   telegramId: z.string().optional(),
+  email: z.string().email("Неверный формат email").optional().or(z.literal("")).optional(),
+  seedThought: z.string().max(500).optional(),
 });
 
-router.post("/citizens", async (req, res): Promise<void> => {
+router.post("/citizens", upload.single("passport_photo"), async (req, res): Promise<void> => {
   const parsed = RegisterCitizenBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Неверные данные" });
@@ -291,7 +320,12 @@ router.post("/citizens", async (req, res): Promise<void> => {
   const citizenNumber = await generateNextCitizenNumber();
   const availableAt = new Date(Date.now() + 60 * 60 * 1000); // +1 hour
 
-  const { name, phone, surname, givenNames, dateOfBirth, photoUrl, tosAcceptedAt, telegramId } = parsed.data;
+  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, seedThought } = parsed.data;
+
+  // Build photoUrl from uploaded file (multer) or from explicit photoUrl field
+  const uploadedPhotoUrl = req.file
+    ? `/media/avatars/${req.file.filename}`
+    : (parsed.data.photoUrl || null);
 
   const [citizen] = await db
     .insert(citizensTable)
@@ -301,16 +335,40 @@ router.post("/citizens", async (req, res): Promise<void> => {
       surname: surname ?? null,
       givenNames: givenNames ?? null,
       dateOfBirth: dateOfBirth || null,
-      photoUrl: photoUrl || null,
+      photoUrl: uploadedPhotoUrl,
       citizenNumber,
       registrationStatus: "pending",
       availableAt,
       tosAcceptedAt: tosAcceptedAt ? new Date(tosAcceptedAt) : undefined,
       telegramId: telegramId ?? undefined,
+      email: email || null,
+      seedThought: seedThought || null,
     })
     .returning();
 
   req.log.info({ citizenId: citizen!.id, citizenNumber }, "New citizen registered — pending verification");
+
+  // ── Fire-and-forget: expand seed thought into AI manifesto ──────────────────
+  if (seedThought && citizen) {
+    const citizenId = citizen.id;
+    setImmediate(async () => {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const now = new Date();
+        const minuteIndex = now.getUTCHours() * 60 + now.getUTCMinutes();
+        const manifesto =
+          (await generateManifesto(seedThought, today, minuteIndex)) ??
+          expandSeedToManifesto(seedThought);
+        await db
+          .update(citizensTable)
+          .set({ aiManifesto: manifesto })
+          .where(eq(citizensTable.id, citizenId));
+        logger.info({ citizenId }, "AI manifesto saved for new citizen");
+      } catch (err) {
+        logger.error({ err, citizenId }, "Failed to generate registration manifesto");
+      }
+    });
+  }
 
   res.status(201).json({
     ...formatCitizenRow(citizen!),

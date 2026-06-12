@@ -31,6 +31,11 @@ export const citizensTable = pgTable("citizens", {
   // 'pending' → 'issued' | 'rejected'. NULL = legacy citizen (treated as issued)
   registrationStatus: text("registration_status"),
   availableAt: timestamp("available_at", { withTimezone: true }), // NOW + 1h
+
+  // ── Registration manifesto fields ──────────────────────────────────────────
+  email: text("email"),                // contact email (optional)
+  seedThought: text("seed_thought"),   // original short thought from citizen
+  aiManifesto: text("ai_manifesto"),   // Gemini-expanded 60-second manifesto
 });
 
 export const insertCitizenSchema = createInsertSchema(citizensTable).omit({

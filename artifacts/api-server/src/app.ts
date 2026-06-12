@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import path from "path";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -34,8 +35,10 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
+// Serve citizen avatar photos at /media/avatars/* (must come before /media)
+app.use("/media/avatars", express.static(path.join(MEDIA_DIR, "avatars"), { maxAge: "7d" }));
+
 // Serve generated TV media files (MP4) at /media/*
-// Placed after /api to avoid conflicts
 app.use("/media", express.static(MEDIA_DIR, {
   maxAge: "1d",
   setHeaders(res) {

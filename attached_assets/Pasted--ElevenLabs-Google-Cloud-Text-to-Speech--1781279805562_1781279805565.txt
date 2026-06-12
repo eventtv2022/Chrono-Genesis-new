@@ -1,0 +1,154 @@
+Отличный маневр. Смена ElevenLabs на **Google Cloud Text-to-Speech** заметно сэкономит бюджет проекта и ускорит отклик, так как инфраструктура Google работает стабильнее при массовых запросах.
+
+Поскольку мы фокусируемся **строго на модуле регистрации граждан**, нам нужно заставить Replit-агента связать новые фронтенд-поля (фото + email), сохранить всё в базу и отправить данные на генерацию ИИ-манифеста с последующей озвучкой от Google.
+
+Вот мощный и точный технический промт для полной пересборки этого узла в Replit:
+
+---
+
+# REPLIT ACTUATOR: NEW CITIZEN REGISTRATION — FRONTEND, POSTGRESQL & GOOGLE TTS INTEGRATION
+
+## 1. OBJECTIVE
+
+Полностью переписать логику и интерфейс формы «Стать гражданином». Добавить недостающие поля (загрузка фото, Email), настроить персистентное хранение данных в PostgreSQL, подключить подкапотную LLM для расширения мысли Гражданина в манифест и озвучить результат через **Google Text-to-Speech API** (вместо ElevenLabs).
+
+---
+
+## 2. FRONTEND UPGRADE (Добавление полей на форму)
+
+Найди файл, отвечающий за форму регистрации (например, `register.html` или компонент `RegisterForm`), и добавь в неё два обязательных поля сразу после даты рождения:
+
+```html
+<div class="mb-4">
+    <label class="block text-gray-400 text-sm font-bold mb-2" for="email">E-MAIL ДЛЯ ПОЛУЧЕНИЯ ПАСПОРТА *</label>
+    <input class="shadow appearance-none border rounded w-full py-2 px-3 text-white bg-zinc-800 leading-tight focus:outline-none focus:shadow-outline" id="email" type="email" name="email" placeholder="example@timenation.com" required>
+</div>
+
+<div class="mb-4">
+    <label class="block text-gray-400 text-sm font-bold mb-2">ФОТОГРАФИЯ ГРАЖДАНЫНА *</label>
+    <div class="flex items-center justify-center w-full">
+        <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-zinc-700 border-dash rounded-lg cursor-pointer bg-zinc-800 hover:bg-zinc-750">
+            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                <svg class="w-8 h-8 mb-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <p class="text-sm text-gray-450"><span class="font-semibold">Загрузить фото анфас</span></p>
+                <p class="text-xs text-gray-550">Размер для паспорта (светлый фон)</p>
+            </div>
+            <input id="passport_photo" name="passport_photo" type="file" class="hidden" accept="image/*" required />
+        </label>
+    </div>
+</div>
+
+```
+
+*Убедись, что тег `<form>` теперь имеет атрибут `enctype="multipart/form-data"`.*
+
+---
+
+## 3. DATABASE STRUCTURE (PostgreSQL)
+
+Модифицируй модель/таблицу `citizens` в базе данных, чтобы она поддерживала новые поля и хранила расширенный ИИ-текст:
+
+```sql
+ALTER TABLE citizens ADD COLUMN email VARCHAR(255) NOT NULL;
+ALTER TABLE citizens ADD COLUMN photo_path VARCHAR(512);
+ALTER TABLE citizens ADD COLUMN ai_manifesto TEXT; -- Для хранения развитой ИИ мысли
+ALTER TABLE citizens ADD COLUMN darmin_balance INT DEFAULT 100; -- Стартовый бонус при регистрации
+
+```
+
+---
+
+## 4. BACKEND INTEGRATION (FastAPI + Google TTS Engine)
+
+Реализуй обработчик формы, который принимает данные, запускает ИИ для «развития мысли» Гражданина, а затем использует **Google Text-to-Speech** для генерации аудиофайла.
+
+```python
+import os
+from fastapi import APIRouter, Depends, UploadFile, File, Form
+from google.cloud import texttospeech
+from sqlalchemy.orm import Session
+
+router = APIRouter()
+
+# Инициализация клиента Google TTS
+# Важно: Переменная окружения GOOGLE_APPLICATION_CREDENTIALS должна быть настроена в Secrets Replit!
+tts_client = texttospeech.TextToSpeechClient()
+
+@app.post("/api/v1/citizens/register")
+async def register_citizen(
+    surname: str = Form(...),
+    given_names: str = Form(...),
+    birth_date: str = Form(...),
+    email: str = Form(...),
+    short_thought: str = Form(...), # Исходная мысль гражданина
+    passport_photo: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    # 1. Сохраняем фото в локальное хранилище assets
+    photo_dir = "storage/avatars"
+    os.makedirs(photo_dir, exist_ok=True)
+    file_path = f"{photo_dir}/{surname}_{email}.jpg"
+    with open(file_path, "wb") as buffer:
+        buffer.write(await passport_photo.read())
+
+    # 2. ПОДКАПОТНЫЙ ИИ: Развиваем короткую мысль гражданина в 90-секундный манифест
+    # (Вызов вашей LLM с системной инструкцией не копировать фразу, а масштабировать её)
+    expanded_manifesto = expand_thought_via_llm(short_thought)
+
+    # 3. GOOGLE TEXT-TO-SPEECH ENGINE
+    # Настраиваем текст для озвучки
+    synthesis_input = texttospeech.SynthesisInput(text=expanded_manifesto)
+
+    # Настройки голоса (Выбираем качественный русский Wavenet или Neural2 голос)
+    voice = texttospeech.VoiceSelectionParams(
+        language_code="ru-RU",
+        name="ru-RU-Wavenet-D", # Глубокий мужской голос (или ru-RU-Neural2-B)
+        ssml_gender=texttospeech.SsmlVoiceGender.MALE
+    )
+
+    # Настройки аудио-контейнера (MP3 высокого качества)
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3,
+        speaking_rate=1.0, # Естественная скорость
+        pitch=0.0
+    )
+
+    # Синтез речи
+    response = tts_client.synthesize_speech(
+        input=synthesis_input, voice=voice, audio_config=audio_config
+    )
+
+    # Сохраняем аудиодорожку для капсулы
+    audio_output_path = f"storage/audio/{surname}_{email}.mp3"
+    os.makedirs("storage/audio", exist_ok=True)
+    with open(audio_output_path, "wb") as out:
+        out.write(response.audio_content)
+
+    # 4. СОХРАНЕНИЕ В ПОСТГРЕС
+    new_citizen = Citizen(
+        surname=surname,
+        given_names=given_names,
+        email=email,
+        photo_path=file_path,
+        ai_manifesto=expanded_manifesto,
+        audio_path=audio_output_path
+    )
+    db.add(new_citizen)
+    db.commit()
+
+    return {
+        "status": "success", 
+        "message": "Гражданин зарегистрирован, мысль развита ИИ и озвучена через Google TTS"
+    }
+
+```
+
+---
+
+## 5. INSTRUCTION FOR REPLIT AGENT
+
+> *"Внедри новые поля Email и фото на фронтенд-страницу регистрации. В бэкенде замени старый модуль ElevenLabs на официальную библиотеку `google-cloud-text-to-speech`. Настрой сохранение загруженного фото и сгенерированного `.mp3` аудиофайла в директорию `storage/`. Убедись, что в Google TTS отправляется именно `expanded_manifesto` (результат работы подкапотного ИИ), а не исходная короткая строчка."*
+
+---
+
+Этот промт полностью решает проблему сбора данных на этапе регистрации и переводит систему на рельсы Google TTS. Отправляем в Replit?
