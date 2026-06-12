@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { google } from "googleapis";
 import { db } from "@workspace/db";
 import { tvCapsulesTable, citizensTable, tvSlotsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -12,7 +13,9 @@ import { logger } from "../lib/logger";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 export const MEDIA_DIR = path.join(process.cwd(), "media");
-const ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel — EN/RU multilingual
+// Google TTS voice — Wavenet-D (male) is the best Russian voice on free tier
+const GOOGLE_TTS_VOICE = "ru-RU-Wavenet-D";
+const GOOGLE_TTS_LANG  = "ru-RU";
 const VIDEO_DURATION_SEC = 60;   // 60-second broadcast slot
 const SEGMENT_DURATION_SEC = 12; // 5 × 12s = 60s exactly
 
@@ -52,67 +55,70 @@ function hashStr(s: string): number {
   return h;
 }
 
-// ── ElevenLabs TTS ─────────────────────────────────────────────────────────────
+// ── Google Cloud TTS ──────────────────────────────────────────────────────────
 
-/** Fetch first available voice for this API key (works on free plans). */
-async function resolveVoiceId(apiKey: string): Promise<string> {
+function getGoogleTTSAuth() {
+  const raw = process.env["GOOGLE_SERVICE_ACCOUNT_JSON"];
+  if (!raw) return null;
   try {
-    const res = await fetch("https://api.elevenlabs.io/v1/voices", {
-      headers: { "xi-api-key": apiKey },
+    const credentials = JSON.parse(raw);
+    return new google.auth.GoogleAuth({
+      credentials,
+      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
     });
-    if (!res.ok) return ELEVENLABS_VOICE_ID; // fallback
-    const data = (await res.json()) as { voices?: { voice_id: string; name: string; category?: string }[] };
-    const voices = data.voices ?? [];
-    // Prefer "cloned" or "generated" voices first (always usable on any plan),
-    // then any voice that belongs to this account ("my" category / no category).
-    const mine = voices.find(
-      (v) => v.category === "cloned" || v.category === "generated"
-    );
-    if (mine) return mine.voice_id;
-    // Fall back to the first voice in the list (may be premade — works on paid plans)
-    if (voices.length > 0) return voices[0]!.voice_id;
-  } catch {
-    // ignore, use default
+  } catch (err) {
+    logger.error({ err }, "Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON for TTS");
+    return null;
   }
-  return ELEVENLABS_VOICE_ID;
 }
 
 export async function generateTTSBuffer(text: string): Promise<Buffer | null> {
-  const apiKey = process.env["ELEVENLABS_API_KEY"];
-  if (!apiKey) {
-    logger.info("ELEVENLABS_API_KEY not set — rendering without audio");
+  const auth = getGoogleTTSAuth();
+  if (!auth) {
+    logger.info("GOOGLE_SERVICE_ACCOUNT_JSON not set — rendering without audio");
     return null;
   }
 
-  const voiceId = await resolveVoiceId(apiKey);
-  logger.info({ voiceId }, "ElevenLabs TTS: using voice");
+  logger.info({ voice: GOOGLE_TTS_VOICE }, "Google TTS: synthesizing");
 
   try {
+    const accessToken = await auth.getAccessToken();
+    if (!accessToken) {
+      logger.warn("Google TTS: failed to obtain access token");
+      return null;
+    }
+
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      "https://texttospeech.googleapis.com/v1/text:synthesize",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "xi-api-key": apiKey,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          text: text.slice(0, 5000),
-          model_id: "eleven_multilingual_v2",
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+          input: { text: text.slice(0, 5000) },
+          voice: { languageCode: GOOGLE_TTS_LANG, name: GOOGLE_TTS_VOICE },
+          audioConfig: { audioEncoding: "MP3", speakingRate: 1.0, pitch: 0 },
         }),
       }
     );
 
     if (!response.ok) {
       const body = await response.text();
-      logger.warn({ status: response.status, body, voiceId }, "ElevenLabs TTS error");
+      logger.warn({ status: response.status, body }, "Google TTS error");
       return null;
     }
 
-    return Buffer.from(await response.arrayBuffer());
+    const data = (await response.json()) as { audioContent?: string };
+    if (!data.audioContent) {
+      logger.warn("Google TTS: empty audioContent in response");
+      return null;
+    }
+
+    return Buffer.from(data.audioContent, "base64");
   } catch (err) {
-    logger.warn({ err }, "ElevenLabs TTS fetch failed");
+    logger.warn({ err }, "Google TTS fetch failed");
     return null;
   }
 }
