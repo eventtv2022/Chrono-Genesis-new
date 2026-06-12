@@ -11,6 +11,7 @@ import {
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { MEDIA_DIR } from "../services/renderService";
+import { generateIdCardSvg, loadPhotoAsDataUri } from "../services/idCardService";
 
 // ── Multer: avatar photo upload ────────────────────────────────────────────────
 const AVATARS_DIR = path.join(MEDIA_DIR, "avatars");
@@ -143,6 +144,7 @@ function generatePassportSvg(c: {
   rank: string;
   meritScore: number;
   createdAt: Date | string;
+  photoUri?: string | null;
 }): string {
   const surnameVal = (c.surname ?? c.name.split(" ")[0] ?? c.name).toUpperCase();
   const givenVal = (c.givenNames ?? (c.name.split(" ").slice(1).join(" ") || c.name)).toUpperCase();
@@ -437,7 +439,7 @@ router.get("/citizens/number/:num/status", async (req, res): Promise<void> => {
 });
 
 // ── GET /citizens/number/:num/passport ───────────────────────────────────────
-// Returns SVG digital passport card for the citizen.
+// Returns legacy SVG passport (kept for backwards-compatibility).
 router.get("/citizens/number/:num/passport", async (req, res): Promise<void> => {
   const num = req.params["num"] ?? "";
 
@@ -452,6 +454,7 @@ router.get("/citizens/number/:num/passport", async (req, res): Promise<void> => 
     return;
   }
 
+  const photoUri = loadPhotoAsDataUri(citizen.photoUrl);
   const svg = generatePassportSvg({
     citizenNumber: citizen.citizenNumber ?? num,
     name: citizen.name,
@@ -461,10 +464,46 @@ router.get("/citizens/number/:num/passport", async (req, res): Promise<void> => 
     rank: citizen.rank,
     meritScore: citizen.meritScore,
     createdAt: citizen.createdAt,
+    photoUri,
   });
 
   res.setHeader("Content-Type", "image/svg+xml");
   res.setHeader("Cache-Control", "public, max-age=300");
+  res.send(svg);
+});
+
+// ── GET /citizens/number/:num/id-card ─────────────────────────────────────────
+// Returns the new ID card SVG (matches physical TimeNation card template).
+router.get("/citizens/number/:num/id-card", async (req, res): Promise<void> => {
+  const num = req.params["num"] ?? "";
+
+  const [citizen] = await db
+    .select()
+    .from(citizensTable)
+    .where(eq(citizensTable.citizenNumber, num))
+    .limit(1);
+
+  if (!citizen) {
+    res.status(404).send("Гражданин не найден");
+    return;
+  }
+
+  const photoUri = loadPhotoAsDataUri(citizen.photoUrl);
+
+  const svg = generateIdCardSvg({
+    citizenNumber: citizen.citizenNumber ?? num,
+    name: citizen.name,
+    surname: citizen.surname,
+    givenNames: citizen.givenNames,
+    dateOfBirth: citizen.dateOfBirth,
+    rank: citizen.rank,
+    meritScore: citizen.meritScore,
+    createdAt: citizen.createdAt,
+    photoUrl: citizen.photoUrl,
+  }, photoUri);
+
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.setHeader("Cache-Control", "no-cache");
   res.send(svg);
 });
 

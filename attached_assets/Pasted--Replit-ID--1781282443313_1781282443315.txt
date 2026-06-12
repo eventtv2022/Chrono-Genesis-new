@@ -1,0 +1,108 @@
+Вот готовый технический промт для Replit-агента, который автоматизирует генерацию ID-карт на основе загруженного шаблона и данных гражданина.
+
+---
+
+# REPLIT ACTUATOR: AUTOMATED ID CARD GENERATION PIPELINE
+
+## 1. OBJECTIVE
+
+Реализовать бэкенд-модуль для автоматической генерации цифровых ID-карт граждан Республики TimeNation. Модуль должен принимать данные гражданина (ФИО, дата рождения, ID, фото), использовать загруженный макет ID (`image_25.png`) в качестве подложки, преобразовывать загруженное фото в официальный стиль (человек на сером фоне) и накладывать текст на бланк по заданным координатам.
+
+## 2. PIPELINE COMPONENTS (TECHNOLOGY STACK)
+
+* **Backend:** FastAPI (Python).
+* **Image Processing (Base):** Pillow (PIL).
+* **AI Photo Styling (The "Under the Hood" Converter):** Для автоматического преобразования любого фото в официальный стиль (вырезание фона + наложение серого фона) необходимо использовать готовую модель сегментации. Рекомендуемые варианты:
+* **Rembg (Python library):** Быстрая и простая библиотека на базе U-2-Net для удаления фона локально в Replit.
+* **API (напр. remove.bg):** (Если локальный вариант слишком медленный), но Rembg предпочтительнее.
+
+
+* **ICAO / MRZ Generation:** Скрипт `mrz_generator.py` (или библиотека `mrz`) для генерации машиночитаемой зоны.
+
+## 3. PHOTO STYLE CONVERTER LOGIC (Python snippet)
+
+Реализуй функцию `process_photo_to_official_style`, которая принимает загруженное изображение, удаляет фон и накладывает строго нейтральный светло-серый студийный фон.
+
+```python
+import os
+from rembg import remove # Необходима библиотека rembg
+from PIL import Image, ImageOps
+
+def process_photo_to_official_style(input_path, output_path):
+    """
+    Преобразует любое фото пользователя в официальный формат ICAO (человек на сером фоне).
+    """
+    # 1. Загрузка исходного фото
+    input_image = Image.open(input_path).convert("RGBA")
+    
+    # 2. Удаление фона (RemBG локальная сегментация)
+    output_image = remove(input_image)
+    
+    # 3. Создание нового светло-серого фона (neutral grey)
+    # Используем цвет ICAO-стандарта (напр., RGB 200, 200, 200)
+    bg_color = (200, 200, 200, 255) 
+    grey_background = Image.new("RGBA", input_image.size, bg_color)
+    
+    # 4. Наложение человека без фона на серый фон
+    final_portrait = Image.alpha_composite(grey_background, output_image)
+    
+    # 5. Кадрирование ( cropping) и масштабирование
+    # Кропаем изображение по центру, чтобы лицо было в фокусе (соотношение сторон для ID-карты)
+    # (Добавь логику кропа под размер бланка)
+    
+    # 6. Сохранение в JPG
+    final_portrait.convert("RGB").save(output_path, "JPEG")
+
+```
+
+## 4. ID CARD LAYERING LOGIC (FastAPI + PIL)
+
+Создай эндпоинт `/api/v1/generate-id/{citizen_id}`, который выполняет наложение данных на макет `image_25.png`.
+
+**Координаты наложения текста (Примерные, требующие точной настройки):**
+
+* **Surname (Фамилия):** x=372, y=282
+* **Given Name (Имя и Отчество):** x=372, y=348
+* **Nationality (Национальность):** x=372, y=414
+* **Date of Birth (Дата Рождения):** x=372, y=478
+* **Date/Time Issue (Дата Выдачи):** x=372, y=542
+* **Document No. (Номер ID):** x=176, y=606 (small blue text)
+* **Portrait Area (Рамка для фото):** Расположена справа, заменяет заполнитель `image_25.png`. (Примерные координаты рамки: x=618, y=223, width=320, height=430)
+* **MRZ Zone (Машиночитаемая зона):** x=32, y=696 (Monospace, dark blue)
+
+```python
+# Псевдокод функции наложения (PIL)
+base_template = Image.open("assets/id_template.png").convert("RGBA") #image_25.png
+processed_portrait = Image.open(f"storage/citizens/portrait_{citizen_id}.jpg").convert("RGBA")
+draw = ImageDraw.Draw(base_template)
+
+# Шрифты: Необходимо использовать Helvetica или Arial для основного текста и OcrB для MRZ
+font_blue = ImageFont.truetype("assets/fonts/HelveticaBold.ttf", size=24) # Dark Blue
+font_mrz = ImageFont.truetype("assets/fonts/OCR-B.ttf", size=26) # Dark Blue Monospace
+
+# 1. Вставка обработанного портрета (серого на сером)
+# Масштабируем портрет под размер рамки (напр., 320x430)
+processed_portrait.thumbnail((320, 430))
+base_template.paste(processed_portrait, (618, 223), processed_portrait)
+
+# 2. Наложение текста
+draw.text((372, 282), citizen_surname, font=font_blue, fill=(10, 40, 90, 255))
+draw.text((372, 348), citizen_given_names, font=font_blue, fill=(10, 40, 90, 255))
+draw.text((372, 414), "TIMENATION", font=font_blue, fill=(10, 40, 90, 255))
+# ... добавь остальные текстовые поля ...
+
+# 3. Наложение MRZ (2 строки)
+mrz_line1 = generate_mrz_line1(citizen)
+mrz_line2 = generate_mrz_line2(citizen)
+draw.text((32, 696), mrz_line1, font=font_mrz, fill=(10, 30, 70, 255))
+draw.text((32, 730), mrz_line2, font=font_mrz, fill=(10, 30, 70, 255))
+
+# 4. Финализация и сохранение
+final_id = base_template.convert("RGB")
+final_id.save(f"storage/citizens/id_card_{citizen_id}.jpg", "JPEG")
+
+```
+
+## 5. INSTRUCTION FOR REPLIT AGENT
+
+> *"Найди обработчик POST-запроса регистрации гражданина. После сохранения данных в PostgreSQL, запусти фоновую задачу для генерации ID-карты. Сначала используй загруженное изображение шаблона `image_25.png` как базовый слой. Напиши функцию преобразования загруженного фото пользователя: используй библиотеку `rembg` для удаления фона и наложения строго нейтрального серого фона (RGB 200, 200, 200). Вставь этот обработанный портрет в рамку справа. Затем, используя библиотеку `PIL`, наложи текстовые данные (ФИО, ID, Дату) и сгенерированную MRZ зону синим шрифтом по точным координатам, соответствующим расположению полей на макете."*

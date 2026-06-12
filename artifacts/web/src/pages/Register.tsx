@@ -154,13 +154,22 @@ export function Register() {
                 <p className="text-base font-medium mt-2">{pendingData.citizenName}</p>
               </div>
               <a
-                href={`/api/citizens/number/${pendingData.citizenNumber}/passport`}
+                href={`/api/citizens/number/${pendingData.citizenNumber}/id-card`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 w-full justify-center bg-emerald-500 hover:bg-emerald-600 text-white font-mono font-bold py-3 px-4 rounded-sm transition-colors"
               >
                 <ExternalLink className="w-4 h-4" />
-                Открыть цифровой паспорт (SVG)
+                Открыть ID-карту
+              </a>
+              <a
+                href={`/api/citizens/number/${pendingData.citizenNumber}/passport`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 w-full justify-center bg-muted/60 hover:bg-muted border border-border text-muted-foreground font-mono text-sm py-2.5 px-4 rounded-sm transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Паспорт (классический формат)
               </a>
             </CardContent>
           </Card>
