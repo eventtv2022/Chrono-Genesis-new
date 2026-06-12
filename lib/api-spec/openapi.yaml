@@ -528,6 +528,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /tv/live-slot:
+    get:
+      operationId: getTvLiveSlot
+      tags: [tv]
+      summary: Get broadcast slot for a specific UTC minute (live player engine)
+      parameters:
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            description: "YYYY-MM-DD (defaults to today)"
+        - name: minute
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 1439
+            description: "UTC minute index 0-1439"
+      responses:
+        "200":
+          description: Live slot info for the requested minute
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TvLiveSlotResponse"
+        "400":
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /tv/schedule:
     get:
       operationId: getTvSchedule
@@ -999,6 +1033,29 @@ components:
         - catcastUrl
         - mediaUrl
         - isRetro
+
+    TvLiveSlotResponse:
+      type: object
+      properties:
+        minuteIndex:
+          type: integer
+        videoUrl:
+          type: ["string", "null"]
+        hasContent:
+          type: boolean
+        ownerName:
+          type: ["string", "null"]
+        slotType:
+          type: ["string", "null"]
+        slotId:
+          type: ["integer", "null"]
+      required:
+        - minuteIndex
+        - videoUrl
+        - hasContent
+        - ownerName
+        - slotType
+        - slotId
 
     TvScheduleResponse:
       type: object

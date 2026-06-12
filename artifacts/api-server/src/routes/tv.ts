@@ -858,6 +858,73 @@ router.post("/tv/slots/:id/air", async (req, res): Promise<void> => {
   res.json({ ok: true, slotId, mediaUrl: capsule.mediaUrl });
 });
 
+// ─── GET /api/tv/live-slot?date=YYYY-MM-DD&minute=0-1439 ─────────────────────
+// Live broadcast engine: returns the slot & video URL for a given UTC minute.
+// Used by the Chronos Live Player for seamless 24/7 switching.
+router.get("/tv/live-slot", async (req, res): Promise<void> => {
+  const date =
+    (req.query["date"] as string | undefined) ??
+    new Date().toISOString().slice(0, 10);
+  const minuteRaw = parseInt((req.query["minute"] as string | undefined) ?? "", 10);
+
+  if (isNaN(minuteRaw)) {
+    res.status(400).json({ error: "minute параметр обязателен (0–1439)" });
+    return;
+  }
+
+  const minute = ((minuteRaw % 1440) + 1440) % 1440;
+  await ensureSlotsForDate(date);
+
+  const [slot] = await db
+    .select({
+      id: tvSlotsTable.id,
+      slotType: tvSlotsTable.slotType,
+      status: tvSlotsTable.status,
+      ownerId: tvSlotsTable.ownerId,
+      ownerName: citizensTable.name,
+    })
+    .from(tvSlotsTable)
+    .leftJoin(citizensTable, eq(tvSlotsTable.ownerId, citizensTable.id))
+    .where(
+      and(
+        eq(tvSlotsTable.date, date),
+        eq(tvSlotsTable.minuteIndex, minute),
+        inArray(tvSlotsTable.status, ["broadcast", "booked"])
+      )
+    )
+    .limit(1);
+
+  if (!slot) {
+    res.json({
+      minuteIndex: minute,
+      videoUrl: null,
+      hasContent: false,
+      ownerName: null,
+      slotType: null,
+      slotId: null,
+    });
+    return;
+  }
+
+  const [capsule] = await db
+    .select({ mediaUrl: tvCapsulesTable.mediaUrl })
+    .from(tvCapsulesTable)
+    .where(eq(tvCapsulesTable.slotId, slot.id))
+    .limit(1);
+
+  const filename = capsule?.mediaUrl?.split("/").pop();
+  const videoUrl = filename ? `/api/tv/media/${filename}` : null;
+
+  res.json({
+    minuteIndex: minute,
+    videoUrl,
+    hasContent: !!videoUrl,
+    ownerName: slot.ownerName ?? null,
+    slotType: slot.slotType,
+    slotId: slot.id,
+  });
+});
+
 // ─── GET /api/tv/schedule?date=YYYY-MM-DD ────────────────────────────────────
 // Public schedule summary: booked slots + capsule render status for a date.
 router.get("/tv/schedule", async (req, res): Promise<void> => {

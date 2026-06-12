@@ -415,6 +415,29 @@ export const GetTvSlotsResponse = zod.object({
 
 
 /**
+ * @summary Get broadcast slot for a specific UTC minute (live player engine)
+ */
+export const getTvLiveSlotQueryMinuteMin = 0;
+export const getTvLiveSlotQueryMinuteMax = 1439;
+
+
+
+export const GetTvLiveSlotQueryParams = zod.object({
+  "date": zod.coerce.string().optional(),
+  "minute": zod.coerce.number().min(getTvLiveSlotQueryMinuteMin).max(getTvLiveSlotQueryMinuteMax)
+})
+
+export const GetTvLiveSlotResponse = zod.object({
+  "minuteIndex": zod.number(),
+  "videoUrl": zod.string().nullable(),
+  "hasContent": zod.boolean(),
+  "ownerName": zod.string().nullable(),
+  "slotType": zod.string().nullable(),
+  "slotId": zod.number().nullable()
+})
+
+
+/**
  * @summary Daily TV schedule summary — booked slots with capsule info
  */
 export const GetTvScheduleQueryParams = zod.object({

@@ -27,6 +27,7 @@ import type {
   EconomyStats,
   ErrorResponse,
   GetTimelineOccupiedParams,
+  GetTvLiveSlotParams,
   GetTvScheduleParams,
   GetTvSlotsParams,
   HealthStatus,
@@ -44,6 +45,7 @@ import type {
   TimelineAnchorResult,
   TimelineOccupiedEntry,
   Transaction,
+  TvLiveSlotResponse,
   TvScheduleResponse,
   TvSlotsResponse
 } from './api.schemas';
@@ -1480,6 +1482,90 @@ export function useGetTvSlots<TData = Awaited<ReturnType<typeof getTvSlots>>, TE
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetTvSlotsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTvLiveSlotUrl = (params: GetTvLiveSlotParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/tv/live-slot?${stringifiedParams}` : `/api/tv/live-slot`
+}
+
+/**
+ * @summary Get broadcast slot for a specific UTC minute (live player engine)
+ */
+export const getTvLiveSlot = async (params: GetTvLiveSlotParams, options?: RequestInit): Promise<TvLiveSlotResponse> => {
+
+  return customFetch<TvLiveSlotResponse>(getGetTvLiveSlotUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTvLiveSlotQueryKey = (params?: GetTvLiveSlotParams,) => {
+    return [
+    `/api/tv/live-slot`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTvLiveSlotQueryOptions = <TData = Awaited<ReturnType<typeof getTvLiveSlot>>, TError = ErrorType<ErrorResponse>>(params: GetTvLiveSlotParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTvLiveSlot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTvLiveSlotQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTvLiveSlot>>> = ({ signal }) => getTvLiveSlot(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTvLiveSlot>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTvLiveSlotQueryResult = NonNullable<Awaited<ReturnType<typeof getTvLiveSlot>>>
+export type GetTvLiveSlotQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get broadcast slot for a specific UTC minute (live player engine)
+ */
+
+export function useGetTvLiveSlot<TData = Awaited<ReturnType<typeof getTvLiveSlot>>, TError = ErrorType<ErrorResponse>>(
+ params: GetTvLiveSlotParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTvLiveSlot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTvLiveSlotQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

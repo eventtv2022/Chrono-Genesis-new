@@ -247,6 +247,19 @@ export interface TvScheduleEntry {
   isRetro: boolean;
 }
 
+export interface TvLiveSlotResponse {
+  minuteIndex: number;
+  /** @nullable */
+  videoUrl: string | null;
+  hasContent: boolean;
+  /** @nullable */
+  ownerName: string | null;
+  /** @nullable */
+  slotType: string | null;
+  /** @nullable */
+  slotId: number | null;
+}
+
 export interface TvScheduleResponse {
   date: string;
   totalSlots: number;
@@ -275,6 +288,19 @@ export type GetTvSlotsParams = {
  * YYYY-MM-DD
  */
 date: string;
+};
+
+export type GetTvLiveSlotParams = {
+/**
+ * YYYY-MM-DD (defaults to today)
+ */
+date?: string;
+/**
+ * UTC minute index 0-1439
+ * @minimum 0
+ * @maximum 1439
+ */
+minute: number;
 };
 
 export type GetTvScheduleParams = {

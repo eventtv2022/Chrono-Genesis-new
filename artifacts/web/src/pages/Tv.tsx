@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Layout } from "@/components/Layout";
 import {
   useGetTvSlots,
@@ -23,6 +23,7 @@ import {
   Wallet,
   ChevronRight,
   Bitcoin,
+  Radio,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCitizen } from "@/context/CitizenContext";
@@ -76,6 +77,173 @@ const RENDER_PATH_BY_SLOT: Record<string, "light" | "heavy"> = {
   half: "heavy",
   apex: "heavy",
 };
+
+// ── Chronos Live Player ────────────────────────────────────────────────────────
+
+interface LiveSlotInfo {
+  minuteIndex: number;
+  videoUrl: string | null;
+  hasContent: boolean;
+  ownerName: string | null;
+  slotType: string | null;
+  slotId: number | null;
+}
+
+function ChronosLivePlayer({ date }: { date: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const [currentMinute, setCurrentMinute] = useState<number>(() => {
+    const now = new Date();
+    return now.getUTCHours() * 60 + now.getUTCMinutes();
+  });
+  const [utcClock, setUtcClock] = useState("");
+  const [slot, setSlot] = useState<LiveSlotInfo | null>(null);
+  const prefetch = useRef<{ minute: number; data: LiveSlotInfo | null } | null>(null);
+
+  const fetchSlot = useCallback(async (minute: number): Promise<LiveSlotInfo | null> => {
+    try {
+      const res = await fetch(`/api/tv/live-slot?date=${date}&minute=${minute}`);
+      if (!res.ok) return null;
+      return (await res.json()) as LiveSlotInfo;
+    } catch {
+      return null;
+    }
+  }, [date]);
+
+  // Switch the player to a new slot info
+  const applySlot = useCallback((info: LiveSlotInfo | null) => {
+    setSlot(info);
+    const v = videoRef.current;
+    if (!v) return;
+    if (info?.videoUrl) {
+      if (v.src !== info.videoUrl) {
+        v.src = info.videoUrl;
+        v.load();
+      }
+      void v.play().catch(() => {/* autoplay blocked — user must click */});
+    } else {
+      v.pause();
+      v.removeAttribute("src");
+      v.load();
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    const now = new Date();
+    const m = now.getUTCHours() * 60 + now.getUTCMinutes();
+    setCurrentMinute(m);
+    void fetchSlot(m).then(applySlot);
+  }, [fetchSlot, applySlot]);
+
+  // 500ms ticker: clock + minute-change engine + prefetch
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      const h = now.getUTCHours();
+      const m = now.getUTCMinutes();
+      const s = now.getUTCSeconds();
+      const minute = h * 60 + m;
+
+      setUtcClock(
+        `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")} UTC`
+      );
+
+      // Prefetch next minute at second 55+
+      if (s >= 55) {
+        const next = (minute + 1) % 1440;
+        if (!prefetch.current || prefetch.current.minute !== next) {
+          void fetchSlot(next).then(data => {
+            prefetch.current = { minute: next, data };
+          });
+        }
+      }
+
+      // On minute change: apply prefetched or fetch fresh
+      if (minute !== currentMinute) {
+        setCurrentMinute(minute);
+        if (prefetch.current?.minute === minute) {
+          applySlot(prefetch.current.data);
+          prefetch.current = null;
+        } else {
+          void fetchSlot(minute).then(applySlot);
+        }
+      }
+    }, 500);
+
+    return () => clearInterval(timer);
+  }, [currentMinute, fetchSlot, applySlot]);
+
+  const hh = String(Math.floor(currentMinute / 60)).padStart(2, "0");
+  const mm = String(currentMinute % 60).padStart(2, "0");
+
+  return (
+    <Card className="bg-card border-border overflow-hidden">
+      {/* Status bar */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50 bg-black/30">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="flex items-center gap-1.5 text-orange-400 font-mono text-xs font-bold uppercase tracking-widest">
+            <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse shrink-0" />
+            В ЭФИРЕ
+          </span>
+          <span className="font-mono text-sm font-bold text-primary tabular-nums">
+            {hh}:{mm}
+          </span>
+          {slot?.hasContent ? (
+            <>
+              <span className="text-border/60 select-none">|</span>
+              {slot.slotType && (
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] font-mono ${SLOT_TYPE_BADGE[slot.slotType] ?? ""}`}
+                >
+                  {TYPE_LABELS[slot.slotType] ?? slot.slotType}
+                </Badge>
+              )}
+              <span className="text-sm text-foreground/80 truncate max-w-[200px]">
+                {slot.ownerName}
+              </span>
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground font-mono">
+              Слот пуст — ожидание эфира
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] font-mono text-muted-foreground/60 tabular-nums shrink-0">
+          {utcClock}
+        </span>
+      </div>
+
+      {/* Screen */}
+      <div className="relative bg-black" style={{ aspectRatio: "16/9" }}>
+        {/* Idle overlay */}
+        {!slot?.hasContent && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-[#0D1B2A] via-[#05000F] to-[#0D1B2A]">
+            <Radio className="w-10 h-10 text-primary/30" />
+            <div className="text-center">
+              <div className="font-mono text-xl font-bold text-primary/40 tracking-[0.3em] uppercase">
+                TN·TV
+              </div>
+              <div className="font-mono text-[11px] text-muted-foreground/50 uppercase tracking-widest mt-1 animate-pulse">
+                Эфир ожидает · слот {hh}:{mm}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Single persistent video element */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          controls
+          loop
+          className={`w-full h-full ${slot?.hasContent ? "block" : "hidden"}`}
+        />
+      </div>
+    </Card>
+  );
+}
 
 const BURN_COST: Record<string, number> = {
   citizen: 1,
@@ -301,6 +469,9 @@ export function Tv() {
             )}
           </div>
         </div>
+
+        {/* ── Chronos Live Player ──────────────────────────────────────────── */}
+        <ChronosLivePlayer date={date} />
 
         {/* Legend */}
         <div className="flex flex-wrap gap-4 text-xs font-mono text-muted-foreground">
@@ -735,66 +906,55 @@ export function Tv() {
                     ? `/api/tv/media/${entry.mediaUrl.split("/").pop()}`
                     : null;
                   return (
-                    <div key={entry.slotId} className="border border-border/50 rounded-sm overflow-hidden bg-secondary/40">
-                      {/* Row header */}
-                      <div className="flex items-center justify-between px-3 py-2">
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-primary text-sm font-bold tabular-nums">
-                            {entry.hourLabel}:{entry.minLabel}
-                          </span>
-                          <Badge
-                            variant="outline"
-                            className={`text-[10px] font-mono ${SLOT_TYPE_BADGE[entry.slotType] ?? ""}`}
-                          >
-                            {TYPE_LABELS[entry.slotType] ?? entry.slotType}
-                          </Badge>
-                          <span className="text-sm text-foreground/80">{entry.ownerName ?? "—"}</span>
-                          {entry.isRetro && (
-                            <span className="text-[10px] font-mono text-muted-foreground uppercase">РЕТРО</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {mp4Url && (
-                            <span className="flex items-center gap-1 text-[10px] text-orange-400 font-mono uppercase font-bold">
-                              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse inline-block" />
-                              В ЭФИРЕ
-                            </span>
-                          )}
-                          {mp4Url && (
-                            <a
-                              href={mp4Url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1 text-xs text-primary hover:underline font-mono"
-                            >
-                              <Video className="w-3 h-3" />
-                              MP4
-                            </a>
-                          )}
-                          {entry.catcastUrl && (
-                            <a
-                              href={entry.catcastUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1 text-xs text-blue-400 hover:underline font-mono"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                              Catcast
-                            </a>
-                          )}
-                        </div>
+                    <div
+                      key={entry.slotId}
+                      className="flex items-center justify-between px-3 py-2.5 border border-border/50 rounded-sm bg-secondary/40"
+                    >
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="font-mono text-primary text-sm font-bold tabular-nums">
+                          {entry.hourLabel}:{entry.minLabel}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] font-mono ${SLOT_TYPE_BADGE[entry.slotType] ?? ""}`}
+                        >
+                          {TYPE_LABELS[entry.slotType] ?? entry.slotType}
+                        </Badge>
+                        <span className="text-sm text-foreground/80">{entry.ownerName ?? "—"}</span>
+                        {entry.isRetro && (
+                          <span className="text-[10px] font-mono text-muted-foreground uppercase">РЕТРО</span>
+                        )}
                       </div>
-                      {/* Inline video player */}
-                      {mp4Url && (
-                        <div className="px-3 pb-3">
-                          <video
-                            src={mp4Url}
-                            controls
-                            className="w-full rounded-sm bg-black max-h-64"
-                            style={{ aspectRatio: "16/9" }}
-                          />
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {mp4Url && (
+                          <span className="flex items-center gap-1 text-[10px] text-orange-400 font-mono uppercase font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse inline-block" />
+                            В ЭФИРЕ
+                          </span>
+                        )}
+                        {mp4Url && (
+                          <a
+                            href={mp4Url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 text-xs text-primary hover:underline font-mono"
+                          >
+                            <Video className="w-3 h-3" />
+                            MP4
+                          </a>
+                        )}
+                        {entry.catcastUrl && (
+                          <a
+                            href={entry.catcastUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 text-xs text-blue-400 hover:underline font-mono"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Catcast
+                          </a>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
