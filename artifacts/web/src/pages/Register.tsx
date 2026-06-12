@@ -127,6 +127,14 @@ export function Register() {
               <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">НОМЕР ГРАЖДАНИНА</p>
               <p className="text-3xl font-mono font-bold text-primary tracking-widest">{pendingData.citizenNumber}</p>
               <p className="text-xs text-muted-foreground font-mono">Сохраните этот номер — он ваш идентификатор в TimeNation</p>
+              <div className="pt-3 border-t border-border">
+                <p className="text-xs text-muted-foreground font-mono leading-relaxed">
+                  Закрыли вкладку? Документы всегда доступны по номеру на странице{" "}
+                  <a href={`${BASE_WEB}/passport-lookup`} className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors">
+                    Реестр граждан
+                  </a>
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>

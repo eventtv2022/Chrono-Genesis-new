@@ -11,6 +11,7 @@ import { Citizens } from "./pages/Citizens";
 import { Timeline } from "./pages/Timeline";
 import { Shop } from "./pages/Shop";
 import { Register } from "./pages/Register";
+import { PassportLookup } from "./pages/PassportLookup";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/timeline" component={Timeline} />
       <Route path="/shop" component={Shop} />
       <Route path="/register" component={Register} />
+      <Route path="/passport-lookup" component={PassportLookup} />
       <Route component={NotFound} />
     </Switch>
   );

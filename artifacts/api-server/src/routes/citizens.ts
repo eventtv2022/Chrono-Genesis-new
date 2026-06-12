@@ -515,6 +515,40 @@ router.get("/citizens/number/:num/id-card", async (req, res): Promise<void> => {
   res.send(svg);
 });
 
+// ── GET /citizens/lookup/:num — public passport lookup by citizen number ───────
+router.get("/citizens/lookup/:num", async (req, res): Promise<void> => {
+  const num = (req.params["num"] ?? "").trim().replace(/\D/g, "").padStart(9, "0");
+
+  const [citizen] = await db
+    .select()
+    .from(citizensTable)
+    .where(eq(citizensTable.citizenNumber, num))
+    .limit(1);
+
+  if (!citizen) {
+    res.status(404).json({ error: "Гражданин с таким номером не найден в реестре" });
+    return;
+  }
+
+  if (citizen.registrationStatus !== "issued") {
+    res.json({
+      status: "pending",
+      citizenNumber: num,
+      message: "Документы находятся на этапе верификации. Пожалуйста, подождите.",
+    });
+    return;
+  }
+
+  res.json({
+    status: "issued",
+    citizenNumber: num,
+    name: citizen.name,
+    rank: citizen.rank,
+    idCardUrl: `/api/citizens/number/${num}/id-card`,
+    passportUrl: `/api/citizens/number/${num}/passport`,
+  });
+});
+
 // ── GET /citizens/:id ─────────────────────────────────────────────────────────
 router.get("/citizens/:id", async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
