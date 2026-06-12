@@ -13,36 +13,37 @@ import { logger } from "../lib/logger";
 // ── Constants ─────────────────────────────────────────────────────────────────
 export const MEDIA_DIR = path.join(process.cwd(), "media");
 const ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel — EN/RU multilingual
-const VIDEO_DURATION_SEC = 60;
-const SEGMENT_DURATION_SEC = 12;
+const VIDEO_DURATION_SEC = 90;   // 90-second broadcast slot
+const SEGMENT_DURATION_SEC = 15; // 6 × 15s = 90s exactly
 
 // Ensure media directory exists at startup
 fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
-// ── Mode A: Template Manifesto Expansion (~130 words, cyber-minimalist) ───────
+// ── Mode A: Template Manifesto Expansion (~220 words, 90-second fallback) ─────
+// Used when Gemini is unavailable. Approx 200–250 words = 90 sec at natural pace.
 export function expandSeedToManifesto(seed: string): string {
   const clean = seed.trim().replace(/\s+/g, " ");
   const idx = Math.abs(hashStr(clean)) % 3;
 
   const openings = [
-    `В хронике TimeNation зафиксирован сигнал эпохи. Из зерна мысли — координата манифеста: «${clean}»`,
-    `Летопись суверенного государства принимает новую точку на таймлайне. Семя: «${clean}»`,
-    `Цифровой архив фиксирует истину настоящего момента. Исходный код мысли: «${clean}»`,
+    `Я стою на пересечении 1440 минут, из которых сделаны сутки. Моя мысль — простая, как и любая настоящая: «${clean}».`,
+    `Каждый день планета совершает один оборот — ровно 1440 минут синхронного глобального времени. В одну из этих минут я говорю: «${clean}».`,
+    `Мы живём в эпоху, когда любое слово может раствориться бесследно. Я выбираю иначе. Моя точка зрения: «${clean}».`,
   ];
 
-  const cores = [
-    `Время — единственная неподдельная валюта. Каждый Дармин — не абстракция, а пульс живого организма под названием история. Эта минута больше не принадлежит случаю: она выкуплена, зафиксирована, застрахована от забвения. Цифровое государство не хранит воспоминания — оно хранит доказательства существования.`,
-    `Мысль, не зафиксированная в пространстве-времени, растворяется в шуме эпохи. Здесь — в архитектуре TimeNation — идея обретает плоть координат. Не архив, не музей: живая ДНК цивилизации, где каждая секунда является доказательством присутствия разума во вселенной.`,
-    `Пока системы мира торгуют иллюзиями, гражданин TimeNation выбирает абсолютное: быть здесь, быть сейчас, оставить след в ткани цифровой истории. Каждый слот — экзистенциальный акт владения своим местом в таймлайне. Дармин сгорает — координата остаётся навсегда.`,
+  const bodies = [
+    `Я думаю об этом постоянно. Мир устроен так, что мы вещаем в пустоту — публикуем, кричим, пишем — и всё это исчезает. Но здесь, в TimeNation, каждая минута является координатой. Её нельзя стереть, нельзя купить задним числом, нельзя подделать. Сеть из тысяч узлов синхронизируется каждую секунду, и когда я занимаю свою минуту в глобальном эфире, это больше не просто слова. Это доказательство присутствия. Я говорю именно сейчас, именно в эту точку на таймлайне человеческой истории. Глобальное вещание — это не привилегия корпораций. Это право каждого гражданина, у которого есть что сказать. Дармин — это не монета. Это сжатая минута твоей жизни, вложенная в суверенный эфир планеты.`,
+    `Я долго искал место, где мой голос имеет точные координаты. Не аккаунт в сети, не пост с лайками — а буквально зафиксированная минута на глобальной временной шкале. 1440 слотов в сутках. Каждый из них — это чья-то история, чья-то мысль, чей-то сигнал в будущее. Когда я говорю через TimeNation, меня слышат одновременно в любой точке мира, потому что время — единственная абсолютно синхронная валюта. Нет часового пояса, который обошёл бы полночь. Нет человека, у которого сутки длятся 1441 минуту. В этой универсальности и есть сила синхронизированного вещания. Я здесь не ради охвата. Я здесь ради точности.`,
+    `Представь: прямо сейчас, в эту секунду, на планете идёт непрерывный эфир, который никто не контролирует централизованно. Тысячи граждан TimeNation занимают свои минуты — и каждая из них несёт в себе реальную мысль реального человека. Не алгоритм, не рекламный бюджет, не редакционная политика. Просто голос, синхронизированный с глобальным временем. Я считаю, что именно так должно работать вещание будущего. Мы все живём в одном времени. Значит, у каждого из нас есть право на свою минуту в общем эфире. Дармин — это не просто токен. Это твоя доля в архитектуре глобального времени.`,
   ];
 
   const closings = [
-    `Манифест принят. Временная координата запечатана. Свидетели — все узлы сети TimeNation.`,
-    `Это не история — это настоящее, замороженное в янтаре вечности. Суверенный архив пополнен.`,
-    `Минута выкуплена. Дармин сожжён. Момент — твой навсегда. Сеть подтверждает.`,
+    `Эта мысль больше не только моя. Таймлайн принял мой сигнал. Координата запечатана.`,
+    `Я сказал это сейчас, в эту минуту, для всех, кто синхронизирован со мной. Сеть слышит меня.`,
+    `Момент зафиксирован. Минута выкуплена. Мой голос — часть глобального эфира навсегда.`,
   ];
 
-  return `${openings[idx]}\n\n${cores[idx]}\n\n${closings[idx]}`;
+  return `${openings[idx]}\n\n${bodies[idx]}\n\n${closings[idx]}`;
 }
 
 function hashStr(s: string): number {
@@ -226,23 +227,38 @@ export async function renderLightVideo(
       "-metadata", `description=AI Generated / Сгенерировано ИИ / Generated via Artificial Intelligence technologies. Visual style: ${visualStyle ?? "space"}.`,
     ];
 
-    let args: string[];
-
     if (audioBuffer) {
+      // ── 2-pass audio/video sync (as per Synchronized AI Capsule spec) ──────
+      // Pass 1: generate visual-only MP4 with exactly VIDEO_DURATION_SEC duration
       const audioPath = path.join(tmpDir, "audio.mp3");
+      const visualPath = path.join(tmpDir, "visual_only.mp4");
       fs.writeFileSync(audioPath, audioBuffer);
-      args = [
+
+      await runFFmpeg([
         "-f", "lavfi", "-i", `color=c=${style.bg}:s=1280x720:r=25`,
-        "-i", audioPath,
+        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
         "-vf", vf,
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+        "-c:a", "aac",
+        "-t", String(VIDEO_DURATION_SEC),
+        "-y", visualPath,
+      ]);
+
+      // Pass 2: merge ElevenLabs audio into visual — copy video stream (no re-encode)
+      await runFFmpeg([
+        "-i", visualPath,
+        "-i", audioPath,
+        "-c:v", "copy",
         "-c:a", "aac", "-b:a", "128k",
+        "-map", "0:v:0",
+        "-map", "1:a:0",
         "-shortest",
         ...metadataArgs,
         "-y", outputPath,
-      ];
+      ]);
     } else {
-      args = [
+      // No audio: single pass with silent track
+      await runFFmpeg([
         "-f", "lavfi", "-i", `color=c=${style.bg}:s=1280x720:r=25`,
         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
         "-vf", vf,
@@ -251,10 +267,8 @@ export async function renderLightVideo(
         "-t", String(VIDEO_DURATION_SEC),
         ...metadataArgs,
         "-y", outputPath,
-      ];
+      ]);
     }
-
-    await runFFmpeg(args);
     logger.info({ slotId, hasAudio: !!audioBuffer }, "LIGHT render complete");
     return `/api/tv/media/slot_${slotId}.mp4`;
   } finally {
