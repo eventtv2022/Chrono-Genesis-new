@@ -55,7 +55,7 @@ function hashStr(s: string): number {
   return h;
 }
 
-// ── Google Cloud TTS ──────────────────────────────────────────────────────────
+// ── Google Cloud TTS (Service Account — Wavenet quality) ──────────────────────
 
 function getGoogleTTSAuth() {
   const raw = process.env["GOOGLE_SERVICE_ACCOUNT_JSON"];
@@ -72,30 +72,17 @@ function getGoogleTTSAuth() {
   }
 }
 
-export async function generateTTSBuffer(text: string): Promise<Buffer | null> {
+async function googleCloudTTS(text: string): Promise<Buffer | null> {
   const auth = getGoogleTTSAuth();
-  if (!auth) {
-    logger.info("GOOGLE_SERVICE_ACCOUNT_JSON not set — rendering without audio");
-    return null;
-  }
-
-  logger.info({ voice: GOOGLE_TTS_VOICE }, "Google TTS: synthesizing");
-
+  if (!auth) return null;
   try {
     const accessToken = await auth.getAccessToken();
-    if (!accessToken) {
-      logger.warn("Google TTS: failed to obtain access token");
-      return null;
-    }
-
+    if (!accessToken) return null;
     const response = await fetch(
       "https://texttospeech.googleapis.com/v1/text:synthesize",
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
           input: { text: text.slice(0, 5000) },
           voice: { languageCode: GOOGLE_TTS_LANG, name: GOOGLE_TTS_VOICE },
@@ -103,24 +90,118 @@ export async function generateTTSBuffer(text: string): Promise<Buffer | null> {
         }),
       }
     );
-
     if (!response.ok) {
       const body = await response.text();
-      logger.warn({ status: response.status, body }, "Google TTS error");
+      logger.warn({ status: response.status, body }, "Google Cloud TTS error");
       return null;
     }
-
     const data = (await response.json()) as { audioContent?: string };
-    if (!data.audioContent) {
-      logger.warn("Google TTS: empty audioContent in response");
-      return null;
-    }
-
+    if (!data.audioContent) return null;
     return Buffer.from(data.audioContent, "base64");
   } catch (err) {
-    logger.warn({ err }, "Google TTS fetch failed");
+    logger.warn({ err }, "Google Cloud TTS failed");
     return null;
   }
+}
+
+// ── Google Translate TTS fallback (no API key, chunked for >200 chars) ────────
+
+/** Split text into sentence-aware chunks ≤200 chars */
+function splitIntoChunks(text: string, maxLen = 180): string[] {
+  const chunks: string[] = [];
+  // Split at sentence boundaries first
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  let cur = "";
+  for (const sent of sentences) {
+    if ((cur + " " + sent).trim().length <= maxLen) {
+      cur = (cur + " " + sent).trim();
+    } else {
+      if (cur) chunks.push(cur);
+      // If single sentence is too long, split by comma/clause
+      if (sent.length > maxLen) {
+        const parts = sent.split(/,\s*/);
+        let sub = "";
+        for (const p of parts) {
+          if ((sub + ", " + p).trim().length <= maxLen) {
+            sub = sub ? sub + ", " + p : p;
+          } else {
+            if (sub) chunks.push(sub);
+            sub = p;
+          }
+        }
+        if (sub) cur = sub;
+        else cur = "";
+      } else {
+        cur = sent;
+      }
+    }
+  }
+  if (cur) chunks.push(cur);
+  return chunks.filter(Boolean);
+}
+
+async function fetchChunkTTS(chunk: string): Promise<Buffer | null> {
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=ru&client=tw-ob&q=${encodeURIComponent(chunk)}`;
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; TimeNation/1.0)" },
+    });
+    if (!res.ok) { logger.warn({ status: res.status, chunk: chunk.slice(0, 30) }, "gTTS chunk failed"); return null; }
+    return Buffer.from(await res.arrayBuffer());
+  } catch (err) {
+    logger.warn({ err }, "gTTS chunk fetch error");
+    return null;
+  }
+}
+
+async function googleTranslateTTS(text: string): Promise<Buffer | null> {
+  const chunks = splitIntoChunks(text);
+  if (chunks.length === 0) return null;
+  logger.info({ chunks: chunks.length }, "gTTS: fetching chunks");
+
+  const buffers = await Promise.all(chunks.map(fetchChunkTTS));
+  const valid = buffers.filter((b): b is Buffer => b !== null);
+  if (valid.length === 0) return null;
+  if (valid.length === 1) return valid[0]!;
+
+  // Concatenate MP3 chunks via FFmpeg concat filter
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "gtts-"));
+  try {
+    const tmpFiles = valid.map((buf, i) => {
+      const f = path.join(tmpDir, `chunk_${i}.mp3`);
+      fs.writeFileSync(f, buf);
+      return f;
+    });
+    const listFile = path.join(tmpDir, "list.txt");
+    fs.writeFileSync(listFile, tmpFiles.map(f => `file '${f}'`).join("\n"));
+    const outFile = path.join(tmpDir, "combined.mp3");
+
+    await new Promise<void>((resolve, reject) => {
+      const ff = spawn("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", outFile]);
+      ff.on("close", code => code === 0 ? resolve() : reject(new Error(`ffmpeg concat exit ${code}`)));
+    });
+
+    return fs.readFileSync(outFile);
+  } catch (err) {
+    logger.warn({ err }, "gTTS: ffmpeg concat failed, returning first chunk");
+    return valid[0] ?? null;
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+// ── Main TTS entry point (Cloud TTS → gTTS fallback) ──────────────────────────
+
+export async function generateTTSBuffer(text: string): Promise<Buffer | null> {
+  // Try Google Cloud TTS first (Wavenet, highest quality)
+  const cloudBuf = await googleCloudTTS(text);
+  if (cloudBuf) {
+    logger.info("TTS: using Google Cloud TTS (Wavenet)");
+    return cloudBuf;
+  }
+  // Fallback: Google Translate TTS (no API key required)
+  logger.info("TTS: Cloud TTS unavailable, falling back to Google Translate TTS");
+  return googleTranslateTTS(text);
 }
 
 // ── Text helpers ───────────────────────────────────────────────────────────────
