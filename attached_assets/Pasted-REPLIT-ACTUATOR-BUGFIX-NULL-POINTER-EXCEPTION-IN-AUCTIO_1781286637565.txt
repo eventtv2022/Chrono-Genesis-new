@@ -1,0 +1,21 @@
+REPLIT ACTUATOR: BUGFIX — NULL POINTER EXCEPTION IN AUCTIONSSCREEN
+1. THE PROBLEM
+В мобильном приложении на экране AuctionsScreen приложение падает в критическую ошибку (White Screen of Death) с сообщением TypeError: Cannot read properties of null (reading 'id'). Это ломает пользовательский опыт, когда данные профиля гражданина или массив активных аукционов еще не подгрузились из общей базы данных.
+2. REPAIR ARCHITECTURE (Safe Navigation & Loading States)
+Необходимо внедрить опциональную цепочку (?.), дефолтные значения и экраны загрузки (своевременные проверки на null), чтобы компонент не пытался читать свойства объектов до их фактического наполнения данными.
+3. CODE PATCH DIRECTIONS (React Native / Expo Router)
+Найди файл, содержащий компонент AuctionsScreen (обычно в папке app/auctions.tsx, app/(tabs)/auctions.tsx или внутри папки компонентов) и примени следующие исправления:
+А. Защита контекста пользователя / гражданина
+Если ошибка вызвана чтением ID текущего юзера (например, для проверки ставок):
+TypeScript
+// БЫЛО: const citizenId = currentCitizen.id; // НАДО (Опциональная цепочка): const citizenId = currentCitizen?.id || null; 
+Б. Добавление защитного экрана загрузки (Skeleton / Loader)
+В самом начале рендеринга функции компонента добавь рубильник, который не пустит код дальше, если критически важные данные равны null:
+TypeScript
+if (!currentCitizen || loading) { return ( <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }}> <ActivityIndicator size="large" color="#FF8C00" /> <Text style={{ color: '#aaa', marginTop: 10 }}>Загрузка реестра аукционов...</Text> </View> ); } 
+В. Защита итерации списков (Индексы аукционов)
+Если код падает при попытке отрендерить список лотов через .map(), убедись, что проверяется наличие элементов:
+TypeScript
+// БЫЛО: {auctions.map(item => <AuctionCard key={item.id} item={item} />)} // НАДО: {auctions && auctions.length > 0 ? ( auctions.map(item => <AuctionCard key={item?.id || Math.random().toString()} item={item} />) ) : ( <Text style={{ color: '#666', textAlign: 'center', marginTop: 20 }}>Нет активных аукционов минут</Text> )} 
+4. INSTRUCTION FOR REPLIT AGENT
+"Найди файл, в котором объявлен компонент AuctionsScreen. Исправь ошибку Cannot read properties of null (reading 'id'), заменив все прямые обращения к свойствам .id объектов (таких как user, citizen или элементов списка лотов) на безопасное чтение через опциональную цепочку ?.id. Добавь условие if (!data) return <ActivityIndicator /> в начало компонента, чтобы предотвратить рендеринг интерфейса аукционов до полной загрузки данных из базы."

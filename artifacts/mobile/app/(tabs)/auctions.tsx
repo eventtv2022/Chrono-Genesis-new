@@ -36,7 +36,7 @@ function timeLeft(endsAt: string): string {
 export default function AuctionsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { citizen } = useCitizen();
+  const { citizen, isLoading: citizenLoading } = useCitizen();
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [bidModal, setBidModal] = useState<Auction | null>(null);
@@ -62,7 +62,7 @@ export default function AuctionsScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sellerId: citizen!.id,
+          sellerId: citizen?.id,
           amountDarmins: parseInt(amount, 10),
           startingPrice: parseFloat(price),
           durationHours: parseInt(hours, 10),
@@ -86,7 +86,7 @@ export default function AuctionsScreen() {
       const res = await fetch(`${BASE_URL}/api/auctions/${auctionId}/bid`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ buyerId: citizen!.id, bid }),
+        body: JSON.stringify({ buyerId: citizen?.id, bid }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error((data as { error: string }).error);
@@ -100,6 +100,17 @@ export default function AuctionsScreen() {
     },
     onError: (err: Error) => Alert.alert("Ошибка", err.message),
   });
+
+  if (citizenLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ color: colors.mutedForeground, marginTop: 10, fontFamily: "Inter_400Regular" }}>
+          Загрузка реестра аукционов...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
@@ -216,7 +227,7 @@ export default function AuctionsScreen() {
               value={bidAmount} onChangeText={setBidAmount} keyboardType="decimal-pad" />
             <TouchableOpacity
               style={[styles.submitBtn, bidMutation.isPending && { opacity: 0.6 }]}
-              onPress={() => bidMutation.mutate({ auctionId: bidModal!.id, bid: parseFloat(bidAmount) })}
+              onPress={() => bidModal && bidMutation.mutate({ auctionId: bidModal.id, bid: parseFloat(bidAmount) })}
               disabled={bidMutation.isPending || !bidAmount}
               activeOpacity={0.8}
             >
