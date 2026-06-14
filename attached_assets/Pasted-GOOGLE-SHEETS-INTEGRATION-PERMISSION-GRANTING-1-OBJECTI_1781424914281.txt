@@ -1,0 +1,61 @@
+GOOGLE SHEETS INTEGRATION & PERMISSION GRANTING
+1. OBJECTIVE
+Grant Access: Сделать вашу личную почту [ВАШ_EMAIL@gmail.com] редактором таблицы 13PgzgxjZ60cZT5ATbDYyTLi01psHIYxRoTOJY-CWNw4.
+
+Logic Integration: Настроить автоматическую отправку данных гражданина (ФИО, номер, статус, баланс) в эту таблицу сразу после изменения статуса на issued или регистрации в базе Drizzle.
+
+2. GOOGLE SHEETS PERMISSION SCRIPT (TypeScript)
+Попроси агента создать и запустить скрипт scripts/grant_access.ts, который использует учетные данные сервисного аккаунта для выдачи вам прав:
+
+TypeScript
+// scripts/grant_access.ts
+import { google } from 'googleapis';
+import { getServiceAccountAuth } from '../lib/google/auth'; // Твой путь к auth
+
+async function grantAccess() {
+  const auth = await getServiceAccountAuth();
+  const drive = google.drive({ version: 'v3', auth });
+  
+  await drive.permissions.create({
+    fileId: '13PgzgxjZ60cZT5ATbDYyTLi01psHIYxRoTOJY-CWNw4',
+    requestBody: {
+      role: 'writer',
+      type: 'user',
+      emailAddress: 'ВАШ_EMAIL@gmail.com', // <--- Вставь сюда свою почту
+    },
+  });
+  console.log("Доступ успешно предоставлен!");
+}
+grantAccess();
+3. DATA PUSH INTEGRATION (Drizzle/TypeScript)
+Найди место в бэкенде, где статус гражданина меняется на issued, и добавь туда вызов функции логирования:
+
+TypeScript
+// В файле, где происходит обновление статуса гражданина:
+import { google } from 'googleapis';
+
+async function logCitizenToSheets(citizen: any) {
+  const auth = await getServiceAccountAuth(); // Твоя функция авторизации
+  const sheets = google.sheets({ version: 'v4', auth });
+  
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: '13PgzgxjZ60cZT5ATbDYyTLi01psHIYxRoTOJY-CWNw4',
+    range: 'Лист1!A1', // Убедись, что лист называется так
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      values: [[
+        new Date().toISOString(),
+        citizen.citizen_number,
+        citizen.name,
+        citizen.status,
+        citizen.balance_minutes
+      ]],
+    },
+  });
+}
+4. INSTRUCTION FOR REPLIT AGENT
+*"У меня есть таблица 13PgzgxjZ60cZT5ATbDYyTLi01psHIYxRoTOJY-CWNw4, но у меня нет к ней доступа, так как она принадлежит Service Account.
+
+Создай скрипт для выдачи прав редактора моему аккаунту [ВАШ_EMAIL@gmail.com].
+
+Интегрируй в логику регистрации (после изменения статуса гражданина на issued) автоматическую отправку строки с данными гражданина в эту таблицу через Google Sheets API. Используй существующую авторизацию через Service Account в проекте.

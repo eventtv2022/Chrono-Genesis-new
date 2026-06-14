@@ -132,3 +132,41 @@ export async function logTimelineAnchorToSheets(data: {
   }
   return ok;
 }
+
+export async function logCitizenIssuedToSheets(data: {
+  citizenNumber: string;
+  citizenId: number;
+  name: string;
+  phone: string;
+  rank: string;
+  balanceMinutes: number;
+  meritScore: number;
+  registrationStatus: string;
+  issuedAt: string;
+}): Promise<boolean> {
+  if (!process.env["GOOGLE_SHEETS_ID"]) {
+    return false;
+  }
+
+  const headers = [
+    "Дата выдачи", "Номер гражданина", "ID", "Имя", "Телефон",
+    "Ранг", "Баланс (Д)", "Merit Score", "Статус",
+  ];
+  const row = [
+    data.issuedAt,
+    data.citizenNumber,
+    data.citizenId,
+    data.name,
+    data.phone,
+    data.rank,
+    data.balanceMinutes,
+    data.meritScore,
+    data.registrationStatus,
+  ];
+
+  const ok = await appendRow("Граждане", headers, row);
+  if (ok) {
+    logger.info({ citizenNumber: data.citizenNumber }, "Citizen issued — logged to Google Sheets");
+  }
+  return ok;
+}

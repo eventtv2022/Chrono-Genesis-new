@@ -15,6 +15,7 @@ import { generateIdCardSvg, loadPhotoAsDataUri } from "../services/idCardService
 import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
 import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
+import { logCitizenIssuedToSheets } from "../lib/googleSheets";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
 export const VAULT_DIR = path.join(process.cwd(), "secure_vault");
@@ -451,6 +452,20 @@ router.get("/citizens/number/:num/status", async (req, res): Promise<void> => {
       .where(eq(citizensTable.citizenNumber, num));
 
     req.log.info({ citizenNumber: num, citizenId: citizen.id }, "Passport auto-issued after 1-hour delay");
+
+    // Log newly-issued citizen to Google Sheets (fire-and-forget)
+    logCitizenIssuedToSheets({
+      citizenNumber: num,
+      citizenId: citizen.id,
+      name: citizen.name,
+      phone: citizen.phone,
+      rank: citizen.rank,
+      balanceMinutes: citizen.balanceMinutes,
+      meritScore: citizen.meritScore,
+      registrationStatus: "issued",
+      issuedAt: new Date().toISOString(),
+    }).catch((err) => req.log.warn({ err }, "Sheets citizen log failed (non-critical)"));
+
     res.json({ status: "issued", citizenNumber: num, idCardUrl: passportUrl });
     return;
   }
