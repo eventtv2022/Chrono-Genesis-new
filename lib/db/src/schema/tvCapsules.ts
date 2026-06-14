@@ -38,6 +38,7 @@ export const tvCapsulesTable = pgTable("tv_capsules", {
   reportStatus: text("report_status").notNull().default("active"), // active | suspended | removed
   reportReason: text("report_reason"), // reason from reporter
   status: text("status").notNull().default("draft"), // draft | pending_render | rendered | scheduled | broadcast
+  renderProgress: text("render_progress"), // generating_prompt | generating_tts | fetching_video | encoding | done
   isRetro: boolean("is_retro").notNull().default(false), // slot_time < NOW
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

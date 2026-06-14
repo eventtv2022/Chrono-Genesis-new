@@ -48,12 +48,20 @@ interface TvCapsule {
   contentState: "filled" | "empty";
   hasSovereignLink: boolean;
   visualStyle: string | null;
-  renderStatus: string | null;
-  renderedAt: string | null;
+  status: string | null;
+  renderProgress: string | null;
   mediaUrl: string | null;
   catcastUrl: string | null;
   isReported: boolean;
 }
+
+const RENDER_PROGRESS_LABELS: Record<string, string> = {
+  generating_prompt: "Создание манифеста…",
+  generating_tts: "Генерация озвучки…",
+  fetching_video: "Загрузка AI-фона…",
+  encoding: "Сборка MP4…",
+  done: "Готово!",
+};
 
 interface RenderResult {
   ok: boolean;
@@ -375,8 +383,10 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
   const [visualStyle, setVisualStyle] = useState<VisualStyle>("space");
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
   const [legalConsent, setLegalConsent] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
+  const prevStatusRef = useRef<string | null>(null);
 
-  // Load existing capsule
+  // Load existing capsule — auto-polls every 3s while render is in progress
   const { data: capsule, isLoading: capsuleLoading } = useQuery<TvCapsule>({
     queryKey: ["tvCapsule", slot.id],
     queryFn: async () => {
@@ -391,7 +401,31 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
       return data;
     },
     retry: false,
+    refetchInterval: (query) => {
+      const data = query.state.data as TvCapsule | null | undefined;
+      return (isPolling || data?.status === "pending_render") ? 3000 : false;
+    },
   });
+
+  // When capsule transitions out of pending_render → stop polling, show result
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    const current = capsule?.status ?? null;
+    prevStatusRef.current = current;
+
+    if (isPolling && current && current !== "pending_render" && prev === "pending_render") {
+      setIsPolling(false);
+      if (capsule?.mediaUrl) {
+        setRenderResult({
+          ok: true,
+          status: current,
+          mediaUrl: capsule.mediaUrl,
+          catcastUrl: capsule.catcastUrl ?? null,
+          manifestoWords: 0,
+        });
+      }
+    }
+  }, [capsule?.status, isPolling, capsule?.mediaUrl, capsule?.catcastUrl]);
 
   // Create capsule
   const createMutation = useMutation({
@@ -468,7 +502,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
     onError: (e: Error) => Alert.alert("Ошибка", e.message),
   });
 
-  // Render capsule
+  // Render capsule — returns 202 immediately; poll capsule status for progress
   const renderMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`${BASE_URL}/api/tv/capsule/${slot.id}/render`, {
@@ -484,10 +518,12 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
         }
         throw new Error(err.error ?? "Ошибка рендера");
       }
-      return res.json() as Promise<RenderResult>;
+      return res.json() as Promise<{ ok: boolean; status: string; slotId: number }>;
     },
-    onSuccess: (data) => {
-      setRenderResult(data);
+    onSuccess: () => {
+      // Render is running in background — start polling capsule for progress
+      setIsPolling(true);
+      prevStatusRef.current = "pending_render";
       qc.invalidateQueries({ queryKey: ["tvCapsule", slot.id] });
     },
     onError: (e: Error) => {
@@ -497,7 +533,8 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
 
   const hasCapsule = !!capsule;
   const isSaving = createMutation.isPending || updateMutation.isPending;
-  const isRendering = renderMutation.isPending;
+  const isPendingRender = isPolling || capsule?.status === "pending_render";
+  const isRendering = renderMutation.isPending || isPendingRender;
 
   const handleSave = () => {
     if (hasCapsule) {
@@ -514,7 +551,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
     }
     Alert.alert(
       "Рендер капсулы",
-      `Тема: ${VISUAL_STYLES.find(s => s.value === visualStyle)?.label ?? visualStyle}\n\nЗапустить генерацию AI-манифеста + озвучку + видео? Займёт ~30–60 секунд.`,
+      `Тема: ${VISUAL_STYLES.find(s => s.value === visualStyle)?.label ?? visualStyle}\n\nЗапустить AI-рендер? Прогресс будет показан прямо здесь (~30–120 сек). Вы получите уведомление в Telegram когда видео будет готово.`,
       [
         { text: "Отмена", style: "cancel" },
         { text: "Рендерить", onPress: () => renderMutation.mutate() },
@@ -716,10 +753,10 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                     onPress={handleRender}
                     disabled={isRendering || !legalConsent}
                   >
-                    {isRendering ? (
+                    {renderMutation.isPending ? (
                       <View style={styles.renderBtnInner}>
                         <ActivityIndicator color={colors.primary} size="small" />
-                        <Text style={[styles.renderBtnText, { color: colors.primary }]}>Рендер… ~30–60 сек</Text>
+                        <Text style={[styles.renderBtnText, { color: colors.primary }]}>Запуск…</Text>
                       </View>
                     ) : (
                       <View style={styles.renderBtnInner}>
@@ -730,6 +767,54 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                       </View>
                     )}
                   </TouchableOpacity>
+
+                  {/* ── Render progress indicator ── */}
+                  {isPendingRender && (
+                    <View style={[styles.renderProgressCard, { backgroundColor: colors.card, borderColor: colors.primary + "44" }]}>
+                      <View style={styles.renderProgressRow}>
+                        <ActivityIndicator color={colors.primary} size="small" />
+                        <Text style={[styles.renderProgressText, { color: colors.primary }]}>
+                          {capsule?.renderProgress
+                            ? (RENDER_PROGRESS_LABELS[capsule.renderProgress] ?? "Рендер…")
+                            : "Инициализация рендера…"}
+                        </Text>
+                      </View>
+                      {capsule?.renderProgress && (
+                        <View style={styles.renderProgressSteps}>
+                          {(["generating_prompt", "generating_tts", "fetching_video", "encoding"] as const).map((step) => {
+                            const stages = ["generating_prompt", "generating_tts", "fetching_video", "encoding", "done"];
+                            const currentIdx = stages.indexOf(capsule.renderProgress ?? "");
+                            const stepIdx = stages.indexOf(step);
+                            const isDone = currentIdx > stepIdx;
+                            const isCurrent = currentIdx === stepIdx;
+                            return (
+                              <View key={step} style={styles.renderProgressStep}>
+                                <View style={[
+                                  styles.renderProgressDot,
+                                  {
+                                    backgroundColor: isDone
+                                      ? colors.primary
+                                      : isCurrent
+                                        ? colors.primary + "88"
+                                        : colors.muted,
+                                  },
+                                ]} />
+                                <Text style={[
+                                  styles.renderProgressStepLabel,
+                                  { color: isDone || isCurrent ? colors.foreground : colors.mutedForeground },
+                                ]}>
+                                  {RENDER_PROGRESS_LABELS[step]?.replace("…", "") ?? step}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      )}
+                      <Text style={[styles.renderProgressHint, { color: colors.mutedForeground }]}>
+                        AI-рендер занимает 30–120 сек. Не закрывайте экран.
+                      </Text>
+                    </View>
+                  )}
 
                   {/* ── Result ── */}
                   {activeRenderResult && (
@@ -1241,6 +1326,43 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     },
     catcastBtnText: { fontWeight: "500", fontSize: 13 },
     airBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, marginTop: 8 },
+    renderProgressCard: {
+      borderWidth: 1,
+      borderRadius: 10,
+      padding: 14,
+      marginTop: 12,
+      gap: 10,
+    },
+    renderProgressRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    renderProgressText: {
+      fontSize: 14,
+      fontWeight: "600",
+      flex: 1,
+    },
+    renderProgressSteps: {
+      gap: 6,
+    },
+    renderProgressStep: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    renderProgressDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    renderProgressStepLabel: {
+      fontSize: 12,
+    },
+    renderProgressHint: {
+      fontSize: 11,
+      lineHeight: 16,
+    },
     legalRow: {
       flexDirection: "row",
       alignItems: "flex-start",

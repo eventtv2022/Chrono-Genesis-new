@@ -262,7 +262,8 @@ export async function renderLightVideo(
   audioBuffer: Buffer | null,
   manifestoText: string,
   slotId: number,
-  visualStyle?: string | null
+  visualStyle?: string | null,
+  onProgress?: ProgressReporter
 ): Promise<string> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `tn-tv-${slotId}-`));
   const outputPath = path.join(MEDIA_DIR, `slot_${slotId}.mp4`);
@@ -316,6 +317,7 @@ export async function renderLightVideo(
       "-metadata", `description=AI Generated / Сгенерировано ИИ / Generated via Artificial Intelligence technologies. Visual style: ${visualStyle ?? "space"}.`,
     ];
 
+    await onProgress?.("encoding");
     if (audioBuffer) {
       // ── 2-pass audio/video sync (as per Synchronized AI Capsule spec) ──────
       // Pass 1: generate visual-only MP4 with exactly VIDEO_DURATION_SEC duration
@@ -378,6 +380,20 @@ function runFFmpeg(args: string[]): Promise<void> {
   });
 }
 
+// ── Progress reporter ──────────────────────────────────────────────────────────
+type ProgressReporter = (stage: string) => Promise<void>;
+
+async function setRenderProgress(slotId: number, stage: string): Promise<void> {
+  try {
+    await db
+      .update(tvCapsulesTable)
+      .set({ renderProgress: stage, updatedAt: new Date() })
+      .where(eq(tvCapsulesTable.slotId, slotId));
+  } catch (err) {
+    logger.warn({ err, slotId, stage }, "Failed to update renderProgress");
+  }
+}
+
 // ── AI Background Render ───────────────────────────────────────────────────────
 // Renders a video using an AI-generated background (HuggingFace or Pollinations),
 // overlaying the text manifesto and TTS audio on top.
@@ -388,7 +404,8 @@ async function renderWithAIBackground(
   slotId: number,
   visualStyle?: string | null,
   seedText?: string | null,
-  citizenId?: number | null
+  citizenId?: number | null,
+  onProgress?: ProgressReporter
 ): Promise<string> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `tn-ai-${slotId}-`));
   const outputPath = path.join(MEDIA_DIR, `slot_${slotId}.mp4`);
@@ -424,6 +441,7 @@ async function renderWithAIBackground(
     }
 
     // Step 2: Fetch AI background video (HuggingFace → Pollinations → null)
+    await onProgress?.("fetching_video");
     const { videoPath: aiVideoPath } = await generateAIBackground(
       cinematicPrompt,
       tmpDir
@@ -502,6 +520,7 @@ async function renderWithAIBackground(
       "-metadata", `description=AI Generated / Сгенерировано ИИ / AI cinematic background. Visual style: ${style}. Prompt: ${cinematicPrompt.slice(0, 120)}.`,
     ];
 
+    await onProgress?.("encoding");
     if (audioBuffer) {
       const audioPath = path.join(tmpDir, "audio.mp3");
       fs.writeFileSync(audioPath, audioBuffer);
@@ -538,7 +557,7 @@ async function renderWithAIBackground(
     return `/api/tv/media/slot_${slotId}.mp4`;
   } catch (err) {
     logger.error({ err, slotId }, "renderWithAIBackground failed — falling back to solid-color");
-    return renderLightVideo(audioBuffer, manifestoText, slotId, visualStyle);
+    return renderLightVideo(audioBuffer, manifestoText, slotId, visualStyle, onProgress);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -560,9 +579,11 @@ export async function renderCapsule(slotId: number): Promise<{
   if (!capsule) throw new Error(`No capsule found for slotId=${slotId}`);
 
   // Mark as processing
+  const reportProgress: ProgressReporter = (stage) => setRenderProgress(slotId, stage);
+
   await db
     .update(tvCapsulesTable)
-    .set({ status: "pending_render", updatedAt: new Date() })
+    .set({ status: "pending_render", renderProgress: "generating_prompt", updatedAt: new Date() })
     .where(eq(tvCapsulesTable.slotId, slotId));
 
   // 1. Load slot for date/minuteIndex (needed for Gemini prompt context)
@@ -605,6 +626,7 @@ export async function renderCapsule(slotId: number): Promise<{
   let finalStatus = "draft";
 
   // Generate TTS audio once (shared by both paths)
+  await reportProgress("generating_tts");
   const audioBuffer = manifestoText ? await generateTTSBuffer(manifestoText) : null;
 
   if (capsule.renderPath === "heavy") {
@@ -616,14 +638,15 @@ export async function renderCapsule(slotId: number): Promise<{
         slotId,
         capsule.visualStyle,
         capsule.seedText,
-        capsule.citizenId
+        capsule.citizenId,
+        reportProgress
       );
       finalStatus = "rendered";
       logger.info({ slotId }, "HEAVY slot rendered with AI background");
     } catch (err) {
       logger.error({ err, slotId }, "renderWithAIBackground failed for HEAVY slot — falling back to LIGHT");
       try {
-        mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle);
+        mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle, reportProgress);
         finalStatus = "rendered";
       } catch (lightErr) {
         logger.error({ lightErr, slotId }, "LIGHT fallback for HEAVY slot also failed");
@@ -639,13 +662,14 @@ export async function renderCapsule(slotId: number): Promise<{
         slotId,
         capsule.visualStyle,
         capsule.seedText,
-        capsule.citizenId
+        capsule.citizenId,
+        reportProgress
       );
       finalStatus = "rendered";
     } catch (err) {
       logger.error({ err, slotId }, "renderWithAIBackground failed for LIGHT slot — falling back to solid-color");
       try {
-        mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle);
+        mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle, reportProgress);
         finalStatus = "rendered";
       } catch (lightErr) {
         logger.error({ lightErr, slotId }, "renderLightVideo also failed");
