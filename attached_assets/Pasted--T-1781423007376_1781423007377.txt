@@ -1,0 +1,64 @@
+Отличная работа! Теперь у нас есть **полная и кристально чистая архитектурная карта** базы данных `TimeNation`. Это эталонный документ (Single Source of Truth), который снимает любые вопросы по структуре данных.
+
+Особенно круто, что вы сразу заложили:
+
+1. **Правильный стек:** Использование встроенного Replit PostgreSQL (`heliumdb`) — это самое быстрое и стабильное решение для работы внутри платформы.
+2. **Безопасность (PII):** Шифрование полей `surname`, `given_names`, `email` через криптографический ключ `ENCRYPTION_KEY` по стандарту AES-256-GCM (с префиксом `v1:`) полностью закрывает требования по защите персональных данных.
+3. **Готовность к фичам:** Поля `signature_base64`, `id_card_url` и `registration_status` (`pending` → `issued`) уже готовы к интеграции холста для подписи и страницы восстановления паспортов.
+
+Эту структуру нужно зафиксировать в Replit, чтобы ИИ-агент не "галлюцинировал" при написании SQL-запросов и точно знал названия колонок и типы данных.
+
+Вот **финальный системный промт-актуатор**, который нужно отправить вашему Replit-агенту. Он загрузит эту схему в его контекст и заставит обновить бэкенд (модели SQLAlchemy/SQLModel) в соответствии с вашей таблицей.
+
+---
+
+# REPLIT SYSTEM ACTUATOR: IMMUTABLE DATABASE SCHEMA SYNCHRONIZATION
+
+## 1. CONTEXT & ENVIRONMENT
+
+* **Database Engine:** Internal Replit PostgreSQL (`heliumdb`) via `DATABASE_URL` secret.
+* **Google Cloud Role:** Strictly limited to Google Sheets API (transaction logging via Service Account). **NO Cloud SQL.**
+* **Security:** Symmetric AES-256-GCM encryption for PII fields (`surname`, `given_names`, `email`) using `ENCRYPTION_KEY` secret. Format: `v1:...`.
+
+## 2. STRICT TABLE SCHEMA: `citizens`
+
+Обнови модель базы данных (SQLAlchemy ORM / SQLModel / сырые миграции) строго под следующие поля. Не изменяй типы данных и названия колонок:
+
+1. `id` (integer, Primary Key, Auto-increment) — Внутренний ID.
+2. `name` (text, Not Null) — Отображаемое имя (никнейм).
+3. `phone` (text, Not Null, Unique) — Телефон.
+4. `telegram_id` (text, Nullable) — ID Telegram.
+5. `wallet_address` (text, Nullable) — EVM кошелек.
+6. `wallet_nonce` (text, Nullable) — Для авторизации.
+7. `wallet_verified` (integer, Not Null, default: 0)
+8. `balance_minutes` (integer, Not Null, default: 1) — Дармины.
+9. `total_given` (integer, Not Null, default: 0)
+10. `total_received` (integer, Not Null, default: 0)
+11. `status` (text, Not Null, default: 'active')
+12. `merit_score` (real, Not Null, default: 0) — Мериты.
+13. `rank` (text, Not Null, default: 'Странник')
+14. `last_activity` (timestamptz, Nullable)
+15. `created_at` (timestamptz, Not Null, default: now())
+16. `tos_accepted_at` (timestamptz, Nullable)
+17. `age_verified` (integer, Not Null, default: 0)
+18. `citizen_number` (text, Nullable, Unique) — Формат: 000000001 и далее.
+19. `surname` (text, Nullable) — 🔒 Зашифровано (AES-256-GCM)
+20. `given_names` (text, Nullable) — 🔒 Зашифровано (AES-256-GCM)
+21. `date_of_birth` (text, Nullable) — Формат YYYY-MM-DD
+22. `photo_url` (text, Nullable) — Путь к исходному фото (`vault:photos/...`).
+23. `id_card_url` (text, Nullable) — Ссылка на сгенерированный паспорт/ID.
+24. `registration_status` (text, Nullable) — Статусы: `pending` (ожидание 60 мин) или `issued` (выдан).
+25. `available_at` (timestamptz, Nullable) — Время выдачи (`created_at + 1 час`).
+26. `email` (text, Nullable) — 🔒 Зашифровано (AES-256-GCM)
+27. `seed_thought` (text, Nullable) — Резерв.
+28. `privacy_agreement_accepted` (integer, Not Null, default: 0)
+29. `privacy_agreement_date` (timestamptz, Nullable)
+30. `signature_base64` (text, Nullable) — ✨ Данные подписи пользователя (PNG Data URI).
+
+## 3. INSTRUCTION FOR REPLIT AGENT
+
+> *"Синхронизируй бэкенд-модели базы данных со спецификацией таблицы `citizens` (30 полей). Проверь файлы миграций или инициализации БД (например, `models.py` или `database.py`). Убедись, что новые поля (`signature_base64`, `registration_status`, `id_card_url`, `citizen_number`) добавлены с правильными типами данных. При записи полей `surname`, `given_names` и `email` в базу должна автоматически применяться функция шифрования на базе `ENCRYPTION_KEY`, а при чтении — дешифрование. Не используй Google Cloud для хранения этой таблицы, работай строго через локальный Replit PostgreSQL."*
+
+---
+
+Отправьте этот промт Replit-агенту, и технический фундамент TimeNation будет приведен в идеальный порядок!
