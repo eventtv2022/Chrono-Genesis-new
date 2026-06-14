@@ -13,8 +13,8 @@ import {
   BURN_MATRIX,
   type SlotType,
 } from "../services/tvService";
-import { renderCapsule, MEDIA_DIR } from "../services/renderService";
-import { sendTransactionNotification } from "../services/telegramService";
+import { MEDIA_DIR } from "../services/renderService";
+import { enqueueRender, getRenderJobStatus, getRenderQueueStats } from "../services/renderQueue";
 import { calcTreasuryTax, TREASURY_CITIZEN_ID } from "../services/videoStorage";
 import {
   isCryptomusConfigured,
@@ -814,7 +814,7 @@ router.post("/tv/capsule/:slotId/render", async (req, res): Promise<void> => {
   }
 
   const renderLog = req.log.child({ slotId, citizenId: citizenId.data });
-  renderLog.info({ mode: capsule.mode }, "Render triggered (async)");
+  renderLog.info({ mode: capsule.mode }, "Render enqueued");
 
   // Mark pending immediately so client can see the status change
   await db
@@ -822,47 +822,17 @@ router.post("/tv/capsule/:slotId/render", async (req, res): Promise<void> => {
     .set({ status: "pending_render", renderProgress: "generating_prompt", updatedAt: new Date() })
     .where(eq(tvCapsulesTable.slotId, slotId));
 
-  // Return 202 immediately — client will poll GET /api/tv/capsule/:slotId for progress
-  res.status(202).json({ ok: true, status: "pending_render", slotId });
-
-  // Background render (fire-and-forget, errors are logged not thrown)
-  setImmediate(() => {
-    void (async () => {
-      try {
-        const result = await renderCapsule(slotId);
-
-        // Auto-publish: link capsule to Chronos Grid as "broadcast" once media is ready
-        if (result.mediaUrl) {
-          await db
-            .update(tvSlotsTable)
-            .set({ status: "broadcast" })
-            .where(eq(tvSlotsTable.id, slotId));
-          await db
-            .update(tvCapsulesTable)
-            .set({ status: "broadcast", renderProgress: "done", updatedAt: new Date() })
-            .where(eq(tvCapsulesTable.slotId, slotId));
-          renderLog.info("Capsule auto-published to broadcast");
-        }
-
-        // Telegram notification — non-blocking
-        const tgMessage =
-          `📡 *Капсула готова к эфиру!*\n\n` +
-          `Слот #${slotId} отрендерен.\n` +
-          (result.mediaUrl ? `🎬 Видео доступно в приложении TimeNation TV.` : `⚠️ Видео не сгенерировано.`);
-        sendTransactionNotification(capsule.citizenId, tgMessage).catch((err) => {
-          renderLog.warn({ err }, "Telegram notification failed after render");
-        });
-      } catch (err) {
-        renderLog.error({ err }, "Background render failed");
-        // Roll back to draft so citizen can retry
-        await db
-          .update(tvCapsulesTable)
-          .set({ status: "draft", renderProgress: null, updatedAt: new Date() })
-          .where(eq(tvCapsulesTable.slotId, slotId))
-          .catch(() => { /* ignore secondary failure */ });
-      }
-    })();
+  // Enqueue into bounded render queue (max MAX_CONCURRENT_RENDERS simultaneous HF calls).
+  // Returns immediately with a jobId — client polls GET /api/tv/capsule/:slotId for progress.
+  const jobId = enqueueRender({
+    jobId: `${slotId}-${Date.now()}`,
+    slotId,
+    citizenId: citizenId.data,
+    capsuleSeedText: capsule.seedText ?? null,
   });
+
+  renderLog.info({ jobId }, "Render job enqueued");
+  res.status(202).json({ ok: true, status: "pending_render", slotId, jobId });
 });
 
 // ─── POST /api/tv/capsule/:id/report  (DMCA / takedown) ───────────────────────
@@ -1078,6 +1048,24 @@ router.get("/tv/schedule", async (req, res): Promise<void> => {
     freeSlots: slots.length - bookedSlots.length,
     schedule,
   });
+});
+
+// ─── GET /api/tv/render/queue ─────────────────────────────────────────────────
+// Returns current render queue depth and active count (for health checks / admin).
+router.get("/tv/render/queue", (_req, res): void => {
+  res.json(getRenderQueueStats());
+});
+
+// ─── GET /api/tv/render/jobs/:jobId ──────────────────────────────────────────
+// Poll render job status by the jobId returned from POST …/render.
+router.get("/tv/render/jobs/:jobId", (req, res): void => {
+  const jobId = req.params["jobId"] ?? "";
+  const status = getRenderJobStatus(jobId);
+  if (!status) {
+    res.status(404).json({ error: "Job не найден или уже истёк" });
+    return;
+  }
+  res.json({ jobId, ...status });
 });
 
 // ─── GET /api/tv/media/:filename ───────────────────────────────────────────────
