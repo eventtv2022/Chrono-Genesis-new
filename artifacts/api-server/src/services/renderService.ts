@@ -8,6 +8,8 @@ import { tvCapsulesTable, citizensTable, tvSlotsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { uploadToCatcast } from "./catcastService";
 import { generateManifesto } from "./geminiService";
+import { generateCinematicPrompt, type VisualStyle as CinematicVisualStyle } from "./cinematicPromptService";
+import { generateAIBackground } from "./freeVideoApiService";
 import { buildStorageRecord } from "./videoStorage";
 import { logger } from "../lib/logger";
 
@@ -376,20 +378,170 @@ function runFFmpeg(args: string[]): Promise<void> {
   });
 }
 
-// ── HEAVY render stub (Queue for external Video API: Kling / Luma / Runway) ───
-// When a real Video API key is added, replace this stub with the actual call.
-async function renderHeavyVideo(
+// ── AI Background Render ───────────────────────────────────────────────────────
+// Renders a video using an AI-generated background (HuggingFace or Pollinations),
+// overlaying the text manifesto and TTS audio on top.
+// Falls back to solid-color renderLightVideo if AI video unavailable.
+async function renderWithAIBackground(
+  audioBuffer: Buffer | null,
   manifestoText: string,
   slotId: number,
-  visualStyle?: string | null
-): Promise<{ mediaUrl: null; status: "pending_heavy_render" }> {
-  logger.warn(
-    { slotId, visualStyle, words: manifestoText.split(" ").length },
-    "HEAVY_RENDER queued — awaiting external Video API (Kling/Luma/Runway). Returning pending status."
-  );
-  // TODO: send to video generation queue (Kling / Luma / Runway)
-  // When implemented, write generated video URL to capsule.mediaUrl and set status = "rendered"
-  return { mediaUrl: null, status: "pending_heavy_render" };
+  visualStyle?: string | null,
+  seedText?: string | null,
+  citizenId?: number | null
+): Promise<string> {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `tn-ai-${slotId}-`));
+  const outputPath = path.join(MEDIA_DIR, `slot_${slotId}.mp4`);
+
+  try {
+    // Step 1: Generate cinematic prompt via Gemini
+    const style = (visualStyle && visualStyle in VISUAL_STYLE_THEMES
+      ? visualStyle
+      : "space") as CinematicVisualStyle;
+
+    const cinematicPrompt = await generateCinematicPrompt(
+      seedText ?? manifestoText.slice(0, 400),
+      style
+    );
+
+    // Step 1b: Load citizen name and rank for overlay
+    let citizenName = "Гражданин TimeNation";
+    let citizenRank = "Странник";
+    if (citizenId) {
+      try {
+        const [citizen] = await db
+          .select({ name: citizensTable.name, rank: citizensTable.rank })
+          .from(citizensTable)
+          .where(eq(citizensTable.id, citizenId))
+          .limit(1);
+        if (citizen) {
+          citizenName = citizen.name ?? citizenName;
+          citizenRank = citizen.rank ?? citizenRank;
+        }
+      } catch (err) {
+        logger.warn({ err, citizenId }, "Could not load citizen data for overlay");
+      }
+    }
+
+    // Step 2: Fetch AI background video (HuggingFace → Pollinations → null)
+    const { videoPath: aiVideoPath } = await generateAIBackground(
+      cinematicPrompt,
+      tmpDir
+    );
+
+    if (!aiVideoPath) {
+      // Total failure — fall back to solid-color light render
+      logger.info({ slotId, style }, "AI background unavailable — falling back to solid-color render");
+      return renderLightVideo(audioBuffer, manifestoText, slotId, visualStyle);
+    }
+
+    // Step 3: Build overlay filters (manifesto text + citizen rank/name)
+    const theme = VISUAL_STYLE_THEMES[style];
+    const segCount = Math.ceil(VIDEO_DURATION_SEC / SEGMENT_DURATION_SEC);
+    const segments = splitSegments(manifestoText, segCount);
+
+    const titleFilter =
+      `drawtext=text='TIMENATION TV':fontsize=18:fontcolor=${theme.title}:` +
+      `x=(w-text_w)/2:y=48:alpha=0.8`;
+
+    const slotFilter =
+      `drawtext=text='SLOT ${slotId}':fontsize=14:fontcolor=${theme.accent}@0.6:` +
+      `x=(w-text_w)/2:y=78`;
+
+    // Citizen rank (bottom-left, always visible)
+    const rankFilter =
+      `drawtext=text='${esc(citizenRank)}':fontsize=15:fontcolor=${theme.accent}@0.9:` +
+      `x=12:y=h-th-34:shadowcolor=black@0.6:shadowx=1:shadowy=1`;
+
+    // Citizen name (bottom-left below rank, always visible)
+    const nameFilter =
+      `drawtext=text='${esc(citizenName)}':fontsize=17:fontcolor=${theme.text}:` +
+      `x=12:y=h-th-12:shadowcolor=black@0.6:shadowx=1:shadowy=1`;
+
+    const segFilters: string[] = [];
+    segments.forEach((seg, i) => {
+      const t0 = i * SEGMENT_DURATION_SEC;
+      const t1 = t0 + SEGMENT_DURATION_SEC;
+      const lines = wrapLine(seg, 52).slice(0, 4);
+      const totalH = lines.length * 42;
+      const baseY = Math.round((720 - totalH) / 2);
+      lines.forEach((line, li) => {
+        segFilters.push(
+          `drawtext=text='${esc(line)}':fontsize=28:fontcolor=${theme.text}:` +
+          `x=(w-text_w)/2:y=${baseY + li * 42}:` +
+          `enable='between(t\\,${t0}\\,${t1})'`
+        );
+      });
+    });
+
+    const watermarkFilter =
+      `drawtext=text='TimeNation AI':fontsize=14:fontcolor=white@0.75:` +
+      `x=w-tw-10:y=h-th-10:shadowcolor=black@0.5:shadowx=1:shadowy=1`;
+
+    // Semi-transparent dark overlay to ensure text readability over any background
+    const darkenFilter = `colorchannelmixer=aa=0.55`;
+
+    const vf = [
+      // Scale AI video to 1280×720, then darken slightly for readability
+      `scale=1280:720:force_original_aspect_ratio=decrease`,
+      `pad=1280:720:(ow-iw)/2:(oh-ih)/2`,
+      `setsar=1`,
+      darkenFilter,
+      titleFilter,
+      slotFilter,
+      rankFilter,
+      nameFilter,
+      ...segFilters,
+      watermarkFilter,
+    ].join(",");
+
+    const metadataArgs = [
+      "-metadata", `title=TimeNation-TV — Slot ${slotId}`,
+      "-metadata", "comment=Author: TimeNation AI, Type: Synthesized Media",
+      "-metadata", "artist=TimeNation",
+      "-metadata", `description=AI Generated / Сгенерировано ИИ / AI cinematic background. Visual style: ${style}. Prompt: ${cinematicPrompt.slice(0, 120)}.`,
+    ];
+
+    if (audioBuffer) {
+      const audioPath = path.join(tmpDir, "audio.mp3");
+      fs.writeFileSync(audioPath, audioBuffer);
+
+      await runFFmpeg([
+        "-stream_loop", "-1", "-i", aiVideoPath,
+        "-i", audioPath,
+        "-vf", vf,
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+        "-c:a", "aac", "-b:a", "128k",
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-t", String(VIDEO_DURATION_SEC),
+        "-shortest",
+        ...metadataArgs,
+        "-y", outputPath,
+      ]);
+    } else {
+      await runFFmpeg([
+        "-stream_loop", "-1", "-i", aiVideoPath,
+        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+        "-vf", vf,
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+        "-c:a", "aac",
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-t", String(VIDEO_DURATION_SEC),
+        ...metadataArgs,
+        "-y", outputPath,
+      ]);
+    }
+
+    logger.info({ slotId, style, cinematicPrompt: cinematicPrompt.slice(0, 80) }, "AI background render complete");
+    return `/api/tv/media/slot_${slotId}.mp4`;
+  } catch (err) {
+    logger.error({ err, slotId }, "renderWithAIBackground failed — falling back to solid-color");
+    return renderLightVideo(audioBuffer, manifestoText, slotId, visualStyle);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 }
 
 // ── Main Orchestrator ──────────────────────────────────────────────────────────
@@ -452,31 +604,53 @@ export async function renderCapsule(slotId: number): Promise<{
   let mediaUrl: string | null = null;
   let finalStatus = "draft";
 
+  // Generate TTS audio once (shared by both paths)
+  const audioBuffer = manifestoText ? await generateTTSBuffer(manifestoText) : null;
+
   if (capsule.renderPath === "heavy") {
-    // Premium slot: queue for full AI video generation
-    const ttsBuffer = manifestoText ? await generateTTSBuffer(manifestoText) : null;
-    const heavyResult = await renderHeavyVideo(manifestoText, slotId, capsule.visualStyle);
-    mediaUrl = heavyResult.mediaUrl;
-    finalStatus = heavyResult.status;
-    // Still run LIGHT render as fallback preview while heavy is queued
-    if (!mediaUrl) {
+    // Premium slot: full AI cinematic video (HuggingFace → Pollinations → solid-color)
+    try {
+      mediaUrl = await renderWithAIBackground(
+        audioBuffer,
+        manifestoText,
+        slotId,
+        capsule.visualStyle,
+        capsule.seedText,
+        capsule.citizenId
+      );
+      finalStatus = "rendered";
+      logger.info({ slotId }, "HEAVY slot rendered with AI background");
+    } catch (err) {
+      logger.error({ err, slotId }, "renderWithAIBackground failed for HEAVY slot — falling back to LIGHT");
       try {
-        mediaUrl = await renderLightVideo(ttsBuffer, manifestoText, slotId, capsule.visualStyle);
-        finalStatus = "pending_heavy_render"; // override: heavy is still queued
-        logger.info({ slotId }, "HEAVY slot got LIGHT preview while awaiting Video API");
-      } catch (err) {
-        logger.error({ err, slotId }, "LIGHT fallback for HEAVY slot also failed");
+        mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle);
+        finalStatus = "rendered";
+      } catch (lightErr) {
+        logger.error({ lightErr, slotId }, "LIGHT fallback for HEAVY slot also failed");
+        finalStatus = "draft";
       }
     }
   } else {
-    // LIGHT path: ElevenLabs TTS + FFmpeg (Citizen slots)
-    const audioBuffer = manifestoText ? await generateTTSBuffer(manifestoText) : null;
+    // LIGHT path: Citizen slots also get AI background (with graceful fallback)
     try {
-      mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle);
+      mediaUrl = await renderWithAIBackground(
+        audioBuffer,
+        manifestoText,
+        slotId,
+        capsule.visualStyle,
+        capsule.seedText,
+        capsule.citizenId
+      );
       finalStatus = "rendered";
     } catch (err) {
-      logger.error({ err, slotId }, "renderLightVideo failed");
-      finalStatus = "draft";
+      logger.error({ err, slotId }, "renderWithAIBackground failed for LIGHT slot — falling back to solid-color");
+      try {
+        mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle);
+        finalStatus = "rendered";
+      } catch (lightErr) {
+        logger.error({ lightErr, slotId }, "renderLightVideo also failed");
+        finalStatus = "draft";
+      }
     }
   }
 

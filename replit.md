@@ -90,3 +90,4 @@
 - Все секреты: DATABASE_URL, SESSION_SECRET, TELEGRAM_BOT_TOKEN, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
 - Опциональные секреты (уже добавлены): GOOGLE_SHEETS_ID, GOOGLE_SERVICE_ACCOUNT_JSON
 - Опциональный секрет: ADMIN_TELEGRAM_ID (числовой ID для /migratedata команды)
+- Опциональный секрет: HF_TOKEN — HuggingFace API token (повышенные лимиты для text-to-video). Без него работает на free-tier лимитах.
