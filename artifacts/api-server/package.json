@@ -22,6 +22,7 @@
     "multer": "^2.1.1",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
+    "sharp": "^0.35.1",
     "stripe": "^22.2.0",
     "telegraf": "^4.16.3",
     "zod": "catalog:"
@@ -32,6 +33,7 @@
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
     "@types/node": "catalog:",
+    "@types/sharp": "^0.32.0",
     "esbuild": "0.27.3",
     "esbuild-plugin-pino": "^2.3.3",
     "pino-pretty": "^13.1.3",

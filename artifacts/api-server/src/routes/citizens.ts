@@ -14,6 +14,7 @@ import { MEDIA_DIR } from "../services/renderService";
 import { generateIdCardSvg, loadPhotoAsDataUri } from "../services/idCardService";
 import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
 import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
+import { cropSignature, normalizePassportPhoto } from "../services/imageService";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
 export const VAULT_DIR = path.join(process.cwd(), "secure_vault");
@@ -335,11 +336,20 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
   const citizenNumber = await generateNextCitizenNumber();
   const availableAt = new Date(Date.now() + 60 * 60 * 1000); // +1 hour
 
-  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted, signatureBase64 } = parsed.data;
+  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted, signatureBase64: rawSignature } = parsed.data;
 
-  // Photo saved to secure_vault — store internal vault reference, not a web URL
-  const vaultPhotoRef = req.file
-    ? `vault:photos/${req.file.filename}`
+  // ── 1. Normalise passport photo (resize to 400×514 px JPEG) ─────────────────
+  let vaultPhotoRef: string | null = null;
+  if (req.file) {
+    const normPath = await normalizePassportPhoto(req.file.path);
+    // normPath may have changed extension (e.g. .png → .jpg)
+    const normFilename = path.basename(normPath);
+    vaultPhotoRef = `vault:photos/${normFilename}`;
+  }
+
+  // ── 2. Crop signature to bounding box ────────────────────────────────────────
+  const signatureBase64 = rawSignature
+    ? await cropSignature(rawSignature)
     : null;
 
   const privacyAccepted = privacyAgreementAccepted === "true";
@@ -361,7 +371,7 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
       email: encryptNullable(email || null),           // PII — encrypted
       privacyAgreementAccepted: privacyAccepted ? 1 : 0,
       privacyAgreementDate: privacyAccepted ? new Date() : null,
-      signatureBase64: signatureBase64 || null,
+      signatureBase64,
     })
     .returning();
 

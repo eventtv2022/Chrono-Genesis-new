@@ -1,0 +1,45 @@
+YPESCRIPT/DRIZZLE PIPELINE FOR ID GENERATION & SIGNATURE
+1. CONTEXT & ENVIRONMENT
+ORM: Drizzle ORM (TypeScript) -> Source of Truth: lib/db/src/schema/citizens.ts (30 columns synced via db push).
+
+Database: Internal Replit PostgreSQL (heliumdb).
+
+Encryption: Symmetric AES-256-GCM for PII (surname, given_names, email) using ENCRYPTION_KEY from Replit Secrets. Format: v1:....
+
+2. REPLIT AGENT TASK: BUSINESS LOGIC IMPLEMENTATION
+A. Signature Pad Handler (Frontend + Backend)
+Frontend: Интегрируй signature_pad (JS/TS) на форму регистрации. При сабмите формы кодируй рисунок в Base64 PNG и передавай в поле signature_base64.
+
+Backend Node.js: При обработке регистрации вытащи signature_base64. Перед генерацией документов используй библиотеку sharp (или jimp), чтобы обрезать пустые края подписи (get bounding box) и масштабировать её для наложения.
+
+B. AI Photo Converter Fix (Sharp / Canvas)
+Пайплайн генерации официального фото из любого пользовательского селфи не работает. Исправь его:
+
+Используй интеграцию с API (remove.bg) или локальный Node.js модуль удаления фона.
+
+С помощью библиотеки sharp наложи вырезанный силуэт человека на строго нейтральный серый фон (RGB 200, 200, 200).
+
+Сделай центрированный кроп под официальный паспортный формат и сохрани путь в photo_url.
+
+C. ID & Passport Graphic Layering (image_25.png)
+Реализуй функцию финальной сборки ID-карты на базе макета image_25.png:
+
+Логотип TimeNation (assets/logos/logo_main.png) -> наложить в левый верхний угол (координаты x=24, y=24).
+
+Эмблема Государства (assets/logos/emblem_state.png) -> наложить в правый верхний угол (координаты x=618, y=24).
+
+Обработанное фото на сером фоне -> вставить в рамку справа (x=618, y=223).
+
+Прозрачная подпись пользователя -> наложить под текстовый блок данных (x=372, y=590).
+
+Данные гражданина: Достань дешифрованные значения surname, given_names и email (используя ENCRYPTION_KEY) и нанеси текст на бланк шрифтом синего цвета.
+
+D. Persistence & Status Update
+После успешного рендеринга ID-карты и Паспорта:
+
+Сохрани файлы в локальное хранилище/папку public.
+
+Обнови запись в Drizzle ORM: установи registration_status = 'issued' и запиши прямые ссылки на файлы в id_card_url и passport_pdf_url.
+
+3. INSTRUCTION FOR REPLIT AGENT
+"Схема Drizzle ORM в lib/db/src/schema/citizens.ts уже содержит все 30 полей и полностью синхронизирована с PostgreSQL. Ничего в базе менять не нужно. Напиши логику на TypeScript: добавь обработку холста подписи signature_base64, почини модуль вырезания фона с фото с помощью библиотеки sharp (наложение на серый фон), и реализуй финальный рендеринг ID-карты image_25.png с наложением логотипа, эмблемы, фото, подписи и дешифрованных текстовых данных (surname, given_names) по указанным координатам."
