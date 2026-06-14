@@ -423,7 +423,7 @@ async function renderWithAIBackground(
 
     // Step 1b: Load citizen name and rank for overlay
     let citizenName = "Гражданин TimeNation";
-    let citizenRank = "Странник";
+    let citizenRank = "Гражданин";
     if (citizenId) {
       try {
         const [citizen] = await db

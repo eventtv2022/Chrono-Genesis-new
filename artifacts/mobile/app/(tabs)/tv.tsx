@@ -440,7 +440,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
           hasSovereignLink,
           visualStyle,
           mode: "a",
-          renderPath: "light",
+          renderPath: slot.slotType === "citizen" ? "light" : "heavy",
           contentState: "filled",
         }),
       });
