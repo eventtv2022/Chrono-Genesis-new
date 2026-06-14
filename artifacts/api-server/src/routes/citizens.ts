@@ -154,6 +154,7 @@ function generatePassportSvg(c: {
   meritScore: number;
   createdAt: Date | string;
   photoUri?: string | null;
+  signatureBase64?: string | null;
 }): string {
   const surnameVal = (c.surname ?? c.name.split(" ")[0] ?? c.name).toUpperCase();
   const givenVal = (c.givenNames ?? (c.name.split(" ").slice(1).join(" ") || c.name)).toUpperCase();
@@ -275,6 +276,7 @@ function generatePassportSvg(c: {
   <ellipse cx="521" cy="278" rx="34" ry="22" fill="#b8cee4"/>
 
   <!-- Signature line -->
+  ${c.signatureBase64 ? `<image href="${esc(c.signatureBase64)}" x="472" y="263" width="98" height="30" preserveAspectRatio="xMinYMid meet" opacity="0.92"/>` : ""}
   <line x1="472" y1="296" x2="570" y2="296" stroke="#8ab0d4" stroke-width="0.8"/>
   <text x="488" y="308" font-family="Georgia,serif" font-size="9" fill="#4a6a9a" font-style="italic">signature</text>
 
@@ -309,6 +311,7 @@ const RegisterCitizenBody = z.object({
   telegramId: z.string().optional(),
   email: z.string().email("Неверный формат email").optional().or(z.literal("")).optional(),
   privacyAgreementAccepted: z.string().optional(), // "true" from FormData
+  signatureBase64: z.string().optional(),
 });
 
 router.post("/citizens", upload.single("passport_photo"), async (req, res): Promise<void> => {
@@ -332,7 +335,7 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
   const citizenNumber = await generateNextCitizenNumber();
   const availableAt = new Date(Date.now() + 60 * 60 * 1000); // +1 hour
 
-  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted } = parsed.data;
+  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted, signatureBase64 } = parsed.data;
 
   // Photo saved to secure_vault — store internal vault reference, not a web URL
   const vaultPhotoRef = req.file
@@ -358,6 +361,7 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
       email: encryptNullable(email || null),           // PII — encrypted
       privacyAgreementAccepted: privacyAccepted ? 1 : 0,
       privacyAgreementDate: privacyAccepted ? new Date() : null,
+      signatureBase64: signatureBase64 || null,
     })
     .returning();
 
@@ -477,6 +481,7 @@ router.get("/citizens/number/:num/passport", async (req, res): Promise<void> => 
     meritScore: citizen.meritScore,
     createdAt: citizen.createdAt,
     photoUri,
+    signatureBase64: citizen.signatureBase64 ?? null,
   });
 
   res.setHeader("Content-Type", "image/svg+xml");
@@ -512,6 +517,7 @@ router.get("/citizens/number/:num/id-card", async (req, res): Promise<void> => {
     meritScore: citizen.meritScore,
     createdAt: citizen.createdAt,
     photoUrl: citizen.photoUrl,
+    signatureBase64: citizen.signatureBase64 ?? null,
   }, photoUri);
 
   res.setHeader("Content-Type", "image/svg+xml");

@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { UserPlus, Clock, CheckCircle2, AlertCircle, Shield, Award, ExternalLink, Upload, Camera, Lock, BookOpen } from "lucide-react";
+import { UserPlus, Clock, CheckCircle2, AlertCircle, Shield, Award, ExternalLink, Upload, Camera, Lock, BookOpen, PenLine } from "lucide-react";
+import { SignaturePad } from "@/components/SignaturePad";
 
 const BASE_WEB = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 const MANIFESTO_URL = "https://issuu.com/timenation2025/docs/_timenatio";
@@ -26,6 +27,7 @@ export function Register() {
   const [email, setEmail] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [signatureBase64, setSignatureBase64] = useState<string | null>(null);
 
   const [manifestoAccepted, setManifestoAccepted] = useState(false);
   const [tosAccepted, setTosAccepted] = useState(false);
@@ -68,7 +70,7 @@ export function Register() {
     setPhotoPreview(file ? URL.createObjectURL(file) : null);
   }
 
-  const canSubmit = tosAccepted && privacyAccepted && manifestoAccepted;
+  const canSubmit = tosAccepted && privacyAccepted && manifestoAccepted && !!signatureBase64;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -86,6 +88,7 @@ export function Register() {
       if (email.trim()) formData.append("email", email.trim());
       formData.append("privacyAgreementAccepted", "true");
       if (photo) formData.append("passport_photo", photo);
+      if (signatureBase64) formData.append("signatureBase64", signatureBase64);
 
       const res = await fetch("/api/citizens", { method: "POST", body: formData });
       const data = await res.json() as { id?: number; name?: string; citizenNumber?: string; availableAt?: string; error?: string; };
@@ -286,6 +289,18 @@ export function Register() {
                 </label>
               </div>
 
+              {/* ── Signature pad ────────────────────────────────────────── */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <PenLine className="w-3.5 h-3.5" />
+                  Подпись гражданина *
+                </Label>
+                <SignaturePad onChange={setSignatureBase64} />
+                <p className="text-xs text-muted-foreground font-mono">
+                  {signatureBase64 ? "✓ Подпись поставлена" : "Распишитесь мышью или пальцем на планшете"}
+                </p>
+              </div>
+
               {/* ── Three compliance checkboxes ───────────────────────────── */}
               <div className="space-y-3 pt-2 border-t border-border/50">
 
@@ -364,7 +379,7 @@ export function Register() {
 
               {!canSubmit && (
                 <p className="text-center text-xs text-muted-foreground font-mono">
-                  Отметьте все три пункта, чтобы продолжить
+                  {!signatureBase64 ? "Поставьте подпись, затем отметьте все три пункта" : "Отметьте все три пункта, чтобы продолжить"}
                 </p>
               )}
 

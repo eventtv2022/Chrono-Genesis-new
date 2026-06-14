@@ -126,6 +126,7 @@ export interface IdCardCitizen {
   meritScore: number;
   createdAt: Date | string;
   photoUrl?: string | null;
+  signatureBase64?: string | null;
 }
 
 export function generateIdCardSvg(c: IdCardCitizen, photoDataUri?: string | null): string {
@@ -247,8 +248,9 @@ export function generateIdCardSvg(c: IdCardCitizen, photoDataUri?: string | null
   <text x="240" y="378" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#080f20">${esc(c.rank)}  ·  ${c.meritScore.toFixed(1)}</text>
 
   <!-- ── Signature line ──────────────────────────────────────── -->
-  <line x1="${DATA_X}" y1="418" x2="320" y2="418" stroke="#7090b8" stroke-width="0.9"/>
-  <text x="${DATA_X + 4}" y="432" font-family="Georgia,serif" font-size="10" fill="#4a6a9a" font-style="italic">signature</text>
+  ${c.signatureBase64 ? `<image href="${esc(c.signatureBase64)}" x="${DATA_X}" y="388" width="222" height="30" preserveAspectRatio="xMinYMid meet" opacity="0.92"/>` : ""}
+  <line x1="${DATA_X}" y1="424" x2="322" y2="424" stroke="#7090b8" stroke-width="0.9"/>
+  <text x="${DATA_X + 4}" y="436" font-family="Georgia,serif" font-size="10" fill="#4a6a9a" font-style="italic">SIGNATURE OF HOLDER</text>
 
   <!-- ── MRZ Zone ─────────────────────────────────────────────── -->
   <rect x="0" y="${MRZ_Y}" width="${W}" height="${H - MRZ_Y}" fill="url(#mrzBg)" clip-path="url(#card)"/>

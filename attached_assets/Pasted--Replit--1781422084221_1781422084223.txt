@@ -1,0 +1,138 @@
+Вот готовый технический промт для Replit-агента, который добавляет на форму регистрации поле для подписи (с возможностью рисовать пальцем или мышкой) и автоматически накладывает эту подпись на бланки ID-карты и паспорта.
+
+Для этого фронтенд будет использовать легковесную библиотеку **Signature Pad**, а бэкенд (Pillow) обработает полученный рисунок: инвертирует цвет в официальный синий/черный и вставит по координатам.
+
+---
+
+# REPLIT ACTUATOR: SIGNATURE PAD INTEGRATION FOR ID & PASSPORT GENERATION
+
+## 1. OBJECTIVE
+
+Реализовать функционал цифровой подписи («Подписать») на этапе регистрации гражданина. Фронтенд должен позволять пользователю расписаться на экране (мышкой или пальцем), преобразовывать подпись в прозрачный PNG и отправлять на бэкенд. Бэкенд должен накладывать эту подпись на макет ID-карты (`image_25.png`) и бланк паспорта.
+
+---
+
+## 2. FRONTEND: SIGNATURE PAD INTEGRATION (HTML/JS)
+
+Добавь блок для рисования подписи в форму регистрации (например, перед кнопкой отправки формы). Используем официальный CDN-скрипт `signature_pad`.
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+
+<div class="mb-6">
+    <label class="block text-gray-400 text-sm font-bold mb-2">ПОДПИСЬ ГРАЖДАНЫНА *</label>
+    <div class="relative bg-zinc-900 border-2 border-zinc-700 rounded-lg overflow-hidden" style="width: 100%; max-width: 400px; height: 150px;">
+        <canvas id="signature-canvas" style="width: 100%; height: 100%; cursor: crosshair;"></canvas>
+        <button type="button" id="clear-signature" class="absolute bottom-2 right-2 bg-zinc-800 text-gray-400 hover:text-white px-2 py-1 text-xs rounded border border-zinc-700">
+            Очистить
+        </button>
+    </div>
+    <input type="hidden" id="signature_base64" name="signature_base64" required>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const canvas = document.getElementById('signature-canvas');
+        
+        # Настройка четкости подписи под high-DPI экраны
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = canvas.offsetWidth * ratio;
+        canvas.height = canvas.offsetHeight * ratio;
+        canvas.getContext("2d").scale(ratio, ratio);
+
+        # Инициализация доски для рисования. Цвет чернил — темно-синий/черный паспортный
+        const signaturePad = new SignaturePad(canvas, {
+            penColor: "rgb(10, 30, 80)",
+            minWidth: 1,
+            maxWidth: 3
+        });
+
+        const clearButton = document.getElementById('clear-signature');
+        clearButton.addEventListener('click', function () {
+            signaturePad.clear();
+            document.getElementById('signature_base64').value = "";
+        });
+
+        # Перед отправкой формы переводим рисунок в Base64 PNG с прозрачным фоном
+        const form = canvas.closest('form');
+        form.addEventListener('submit', function (e) {
+            if (signaturePad.isEmpty()) {
+                alert("Пожалуйста, поставьте свою подпись.");
+                e.preventDefault();
+                return;
+            }
+            const dataURL = signaturePad.toDataURL("image/png");
+            document.getElementById('signature_base64').value = dataURL;
+        });
+    });
+</script>
+
+```
+
+---
+
+## 3. BACKEND: PROCESSING AND LAYERING SIGNATURE (FastAPI + PIL)
+
+На бэкенде принимаем строку Base64, декодируем её в PNG-изображение и накладываем на документы.
+
+**Координаты подписи (Примерные для ID `image_25.png`):**
+
+* Подпись обычно располагается под основными данными или рядом с фото.
+* Предположим, зона подписи (Specimen Signature): **x=372, y=600**. Масштаб подгоняем до ширины ~200px.
+
+```python
+import base64
+import io
+from PIL import Image
+
+def decode_and_process_signature(base64_string: str, output_height=80) -> Image:
+    """
+    Декодирует Base64 подпись от фронтенда, обрезает лишние пустые поля 
+    и готовит её как прозрачный PNG-слой.
+    """
+    # Удаляем префикс 'data:image/png;base64,' если он есть
+    if "base64," in base64_string:
+        base64_string = base64_string.split("base64,")[1]
+        
+    image_data = base64.b64decode(base64_string)
+    sig_image = Image.open(io.BytesIO(image_data)).convert("RGBA")
+    
+    # Автоматический кроп пустых полей вокруг подписи (чтобы не накладывать пустой холст)
+    bbox = sig_image.getbbox()
+    if bbox:
+        sig_image = sig_image.crop(bbox)
+        
+    # Масштабируем до красивого паспортного размера с сохранением пропорций
+    aspect_ratio = sig_image.width / sig_image.height
+    new_width = int(output_height * aspect_ratio)
+    sig_image = sig_image.resize((new_width, output_height), Image.Resampling.LANCZOS)
+    
+    return sig_image
+
+# ИСПОЛЬЗОВАНИЕ В МОДУЛЕ ГЕНЕРАЦИИ ID КАРТЫ:
+# (Встраивается внутрь функции, где формируется image_25.png)
+
+base_id = Image.open("assets/id_template.png").convert("RGBA") # Твой макет
+signature_str = form_data.get("signature_base64") # Получаем строку из запроса
+
+if signature_str:
+    processed_sig = decode_and_process_signature(signature_str, output_height=60)
+    
+    # Накладываем подпись на ID-карту (например, x=372, y=590 — область под данными)
+    # Третий параметр processed_sig обязателен — он работает как маска прозрачности (альфа-канал)
+    base_id.paste(processed_sig, (372, 590), processed_sig)
+    
+    # Накладываем ту же самую подпись на бланк ПАСПОРТА ICAO (задай его координаты, напр. x=150, y=450)
+    # base_passport.paste(processed_sig, (150, 450), processed_sig)
+
+```
+
+---
+
+## 4. INSTRUCTION FOR REPLIT AGENT
+
+> *"Интегрируй библиотеку `signature_pad` на фронтенд-форму регистрации гражданина. Добавь HTML-холст `<canvas>` для рисования подписи мышкой или пальцем. Настрой скрипт так, чтобы при отправке формы подпись конвертировалась в прозрачный PNG в формате Base64 и передавалась в скрытое поле `signature_base64`. В бэкенде обработай эту строку через `PIL`: декодируй, сделай автоматический кроп пустых краев подписи и наложи её в качестве официальной подписи гражданина (Specimen Signature) на бланк ID-карты (`image_25.png`) и бланк паспорта по координатам под текстовым блоком данных. Убедись, что подпись накладывается с сохранением прозрачности фона."*
+
+---
+
+Этот промт добавит финальный штрих легитимности документам — теперь у каждого гражданина в ID-карте и паспорте будет стоять его реальная личная подпись. Отправляем агенту?

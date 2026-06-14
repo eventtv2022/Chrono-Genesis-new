@@ -11,6 +11,7 @@ import {
   ScrollView,
   Linking,
 } from "react-native";
+import SignatureCanvas from "react-native-signature-canvas";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -56,6 +57,7 @@ export default function RegisterScreen() {
   const [dateOfBirth, setDateOfBirth] = useState(""); // YYYY-MM-DD
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
+  const [signatureBase64, setSignatureBase64] = useState<string | null>(null);
 
   // Login
   const [loginPhone, setLoginPhone] = useState("");
@@ -123,6 +125,7 @@ export default function RegisterScreen() {
       if (surname.trim()) body["surname"] = surname.trim();
       if (givenNames.trim()) body["givenNames"] = givenNames.trim();
       if (dateOfBirth.trim().match(/^\d{4}-\d{2}-\d{2}$/)) body["dateOfBirth"] = dateOfBirth.trim();
+      if (signatureBase64) body["signatureBase64"] = signatureBase64;
 
       const res = await fetch(`${BASE_URL}/api/citizens`, {
         method: "POST",
@@ -249,6 +252,24 @@ export default function RegisterScreen() {
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ТЕЛЕФОН *</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={phone} onChangeText={setPhone} placeholder="+7..." placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" />
+
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ПОДПИСЬ *</Text>
+          <View style={[styles.signatureContainer, { borderColor: colors.border }]}>
+            <SignatureCanvas
+              onOK={(sig: string) => setSignatureBase64(sig)}
+              onEmpty={() => setSignatureBase64(null)}
+              penColor="rgb(10, 30, 80)"
+              backgroundColor="rgba(255,255,255,0.04)"
+              descriptionText=""
+              clearText="Очистить"
+              confirmText="Сохранить"
+              webStyle={`.m-signature-pad{box-shadow:none;border:none;height:100%}.m-signature-pad--body{border:none;background:transparent}.m-signature-pad--footer{background:#111;padding:4px}.m-signature-pad--footer .button{background:#222;border:1px solid #333;color:#aaa;font-size:13px;border-radius:6px;padding:4px 12px}`}
+              style={{ height: 150 }}
+            />
+          </View>
+          {signatureBase64 && (
+            <Text style={[styles.signatureStatus, { color: "#22c55e" }]}>✓ Подпись сохранена</Text>
+          )}
 
           <View style={[styles.infoBox, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "40" }]}>
             <Feather name="clock" size={14} color={colors.primary} />
@@ -391,5 +412,7 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     idName: { fontSize: 16, fontFamily: "Inter_500Medium" },
     idNote: { fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 16 },
     issuedHeader: { alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 16, padding: 24, marginBottom: 16 },
+    signatureContainer: { borderWidth: 1, borderRadius: 12, overflow: "hidden", height: 150, marginTop: 4 },
+    signatureStatus: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 4 },
   });
 }
