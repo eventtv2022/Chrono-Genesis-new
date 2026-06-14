@@ -12,6 +12,7 @@ import {
   Modal,
   ScrollView,
   Linking,
+  Image,
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -80,6 +81,53 @@ const VISUAL_STYLES: { value: VisualStyle; label: string; desc: string; preview:
   { value: "nature",    label: "Природа",   desc: "Тёмно-зелёный, мята",    preview: "#0F1B0F" },
   { value: "minimal",   label: "Минимал",   desc: "Чёрный, белый",          preview: "#111111" },
 ];
+
+// ── StylePreviewImage ─────────────────────────────────────────────────────────
+// Fetches an AI-generated thumbnail from GET /api/tv/styles/preview.
+// Falls back to the solid fallback color while loading or on error.
+
+interface StylePreviewImageProps {
+  styleValue: VisualStyle;
+  seed: string;
+  fallbackColor: string;
+  tileStyle: object;
+}
+
+function StylePreviewImage({ styleValue, seed, fallbackColor, tileStyle }: StylePreviewImageProps) {
+  const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
+
+  const uri =
+    `${BASE_URL}/api/tv/styles/preview` +
+    `?style=${styleValue}&seed=${encodeURIComponent(seed.slice(0, 100))}`;
+
+  // Reset load state when the URI changes (seed or style changed)
+  const prevUri = useRef(uri);
+  if (prevUri.current !== uri) {
+    prevUri.current = uri;
+    // Synchronously reset so the new image starts fresh
+  }
+
+  return (
+    <View style={[tileStyle, { overflow: "hidden", backgroundColor: fallbackColor }]}>
+      {!errored && (
+        <Image
+          source={{ uri }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+          onLoad={() => { setLoaded(true); setErrored(false); }}
+          onError={() => setErrored(true)}
+          key={uri}
+        />
+      )}
+      {!loaded && !errored && (
+        <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]}>
+          <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
+        </View>
+      )}
+    </View>
+  );
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -378,6 +426,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
   const styles = getStyles(colors);
 
   const [seedText, setSeedText] = useState("");
+  const [debouncedSeed, setDebouncedSeed] = useState("");
   const [broadcastPolicy, setBroadcastPolicy] = useState<"echo" | "noise" | "private">("noise");
   const [hasSovereignLink, setHasSovereignLink] = useState(false);
   const [visualStyle, setVisualStyle] = useState<VisualStyle>("space");
@@ -385,6 +434,12 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
   const [legalConsent, setLegalConsent] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
   const prevStatusRef = useRef<string | null>(null);
+
+  // Debounce seedText so preview images only refresh 600ms after the user stops typing
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSeed(seedText), 600);
+    return () => clearTimeout(t);
+  }, [seedText]);
 
   // Load existing capsule — auto-polls every 3s while render is in progress
   const { data: capsule, isLoading: capsuleLoading } = useQuery<TvCapsule>({
@@ -671,7 +726,12 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                     onPress={() => setVisualStyle(s.value)}
                     activeOpacity={0.75}
                   >
-                    <View style={[styles.stylePreview, { backgroundColor: s.preview }]} />
+                    <StylePreviewImage
+                      styleValue={s.value}
+                      seed={debouncedSeed}
+                      fallbackColor={s.preview}
+                      tileStyle={styles.stylePreview}
+                    />
                     <Text style={[styles.styleLabel, { color: visualStyle === s.value ? colors.primary : colors.foreground }]}>
                       {s.label}
                     </Text>
