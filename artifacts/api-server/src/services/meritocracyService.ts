@@ -4,25 +4,38 @@ import { eq, lt, or, isNull } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { sendTransactionNotification } from "./telegramService";
 
+// ── Single Source of Truth for ranks ─────────────────────────────────────────
+
 export const RANKS = [
-  { name: "Странник", minScore: 0 },
-  { name: "Созидатель", minScore: 51 },
-  { name: "Хранитель Времени", minScore: 201 },
-  { name: "Вершитель Эпох", minScore: 501 },
-  { name: "Архитектор Таймлайна", minScore: 1000 },
+  { threshold: 0,    name: "Гражданин" },
+  { threshold: 100,  name: "Оператор времени" },
+  { threshold: 500,  name: "Хранитель времени" },
+  { threshold: 1000, name: "Архитектор потока" },
+  { threshold: 2500, name: "Мастер хронологии" },
+  { threshold: 5000, name: "Синхронизатор вечности" },
 ] as const;
 
-export function getUserRank(score: number): string {
-  if (score >= 1000) return "Архитектор Таймлайна";
-  if (score >= 501) return "Вершитель Эпох";
-  if (score >= 201) return "Хранитель Времени";
-  if (score >= 51) return "Созидатель";
-  return "Странник";
+export type RankName = (typeof RANKS)[number]["name"];
+
+/**
+ * Calculates the rank for a given merit score.
+ * Iterates from highest threshold downward and returns the first match.
+ */
+export function calculateRank(meritScore: number): RankName {
+  for (let i = RANKS.length - 1; i >= 0; i--) {
+    if (meritScore >= RANKS[i]!.threshold) return RANKS[i]!.name;
+  }
+  return RANKS[0]!.name;
 }
+
+/** @deprecated Use calculateRank() */
+export const getUserRank = calculateRank;
 
 export function getRankIndex(rankName: string): number {
   return RANKS.findIndex((r) => r.name === rankName);
 }
+
+// ── Merit gain formula ────────────────────────────────────────────────────────
 
 interface MeritGainParams {
   minutesTransferred: number;
@@ -42,6 +55,8 @@ export function calculateMeritGain(params: MeritGainParams): number {
   return Math.round(merit * 100) / 100;
 }
 
+// ── Apply merit after a TiMETR session ────────────────────────────────────────
+
 export async function applyMeritAfterSession(
   citizenId: number,
   minutesTransferred: number
@@ -59,25 +74,30 @@ export async function applyMeritAfterSession(
     (now.getTime() - citizen.createdAt.getTime()) / (1000 * 60 * 60 * 24)
   );
 
-  const dailyMinutesTotal = citizen.totalGiven;
-
   const meritGained = calculateMeritGain({
     minutesTransferred,
-    dailyMinutesTotal,
+    dailyMinutesTotal: citizen.totalGiven,
     daysSinceRegistration,
   });
 
   const oldRank = citizen.rank;
   const newScore = Math.round((citizen.meritScore + meritGained) * 100) / 100;
-  const newRank = getUserRank(newScore);
+  const newRank = calculateRank(newScore);
 
   await db
     .update(citizensTable)
     .set({ meritScore: newScore, rank: newRank, lastActivity: now })
     .where(eq(citizensTable.id, citizenId));
 
+  logger.info(
+    { citizenId, oldRank, newRank, meritGained, newScore },
+    "Merit applied after session"
+  );
+
   return { oldRank, newRank, meritGained, newScore };
 }
+
+// ── Weekly entropy (−0.5 merit for inactive citizens) ─────────────────────────
 
 export async function applyEntropy(): Promise<void> {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -99,7 +119,7 @@ export async function applyEntropy(): Promise<void> {
 
     const oldRank = citizen.rank;
     const newScore = Math.max(0, Math.round((citizen.meritScore - 0.5) * 100) / 100);
-    const newRank = getUserRank(newScore);
+    const newRank = calculateRank(newScore);
 
     await db
       .update(citizensTable)

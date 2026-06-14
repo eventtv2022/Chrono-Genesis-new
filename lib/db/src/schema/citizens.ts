@@ -15,7 +15,7 @@ export const citizensTable = pgTable("citizens", {
   totalReceived: integer("total_received").notNull().default(0),
   status: text("status").notNull().default("active"),
   meritScore: real("merit_score").notNull().default(0),
-  rank: text("rank").notNull().default("Странник"),
+  rank: text("rank").notNull().default("Гражданин"),
   lastActivity: timestamp("last_activity", { withTimezone: true }),
   tosAcceptedAt: timestamp("tos_accepted_at", { withTimezone: true }),
   ageVerified: integer("age_verified").notNull().default(0),
