@@ -1,0 +1,1076 @@
+import React, { useRef, useState, useCallback, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  TextInput,
+  ActivityIndicator,
+  Modal,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Pressable,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import WebView, { type WebViewMessageEvent } from "react-native-webview";
+import { useColors } from "@/hooks/useColors";
+import { useCitizen } from "@/context/CitizenContext";
+import { LogoBrand } from "@/components/LogoBrand";
+
+const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface ChronopediaSlot {
+  id: number;
+  timeMarker: string;
+  placeId: string;
+  geoLat: number;
+  geoLng: number;
+  locationName: string;
+  createdAt: string;
+  eventCount: number;
+  hasMyEvent: boolean;
+}
+
+interface ChronopediaEvent {
+  id: number;
+  slotId: number;
+  authorId: number;
+  authorName: string | null;
+  authorRank: string | null;
+  title: string;
+  description: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface FeedEvent extends ChronopediaEvent {
+  locationName: string;
+  timeMarker: string;
+  geoLat: number;
+  geoLng: number;
+}
+
+interface PlaceResult {
+  placeId: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+}
+
+// ── Leaflet HTML ──────────────────────────────────────────────────────────────
+
+const LEAFLET_HTML = `<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body,#map{width:100%;height:100%;background:#0f172a;}
+.leaflet-control-attribution,.leaflet-control-zoom{display:none;}
+.tn-tip{background:#1e293b!important;color:#f1f5f9!important;border:1px solid #334155!important;font-size:12px!important;padding:6px 10px!important;border-radius:8px!important;white-space:nowrap!important;box-shadow:0 4px 16px rgba(0,0,0,0.6)!important;}
+.tn-tip::before{display:none!important;}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+var map=L.map('map',{center:[20,10],zoom:2,zoomControl:false,attributionControl:false});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+var markers={};
+function send(d){if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify(d));}
+function makeIcon(count,isMine,isSelected){
+  var bg=isSelected?'#f59e0b':isMine?'#00ff87':'#60a5fa';
+  var label=count>1?String(count):'●';
+  return L.divIcon({
+    className:'',
+    html:'<div style="width:36px;height:36px;background:'+bg+';border:2.5px solid rgba(255,255,255,0.9);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#111;box-shadow:0 3px 12px rgba(0,0,0,0.7);cursor:pointer;transition:transform 0.1s;">'+label+'</div>',
+    iconSize:[36,36],iconAnchor:[18,18],
+  });
+}
+var selectedSlotId=null;
+function updateMarkers(slots,myId){
+  Object.values(markers).forEach(function(m){m.remove();});
+  markers={};
+  (slots||[]).forEach(function(s){
+    var isMine=!!s.hasMyEvent;
+    var isSel=s.id===selectedSlotId;
+    var m=L.marker([s.geoLat,s.geoLng],{icon:makeIcon(s.eventCount||0,isMine,isSel)}).addTo(map);
+    m.bindTooltip('<b>'+escHtml(s.locationName)+'</b><br><small>'+escHtml(s.timeMarker)+'</small><br>'+(s.eventCount||0)+' мнени'+(s.eventCount===1?'е':'й'),{className:'tn-tip',direction:'top'});
+    m.on('click',function(){
+      selectedSlotId=s.id;
+      updateMarkers(slots,myId);
+      send({type:'slotClick',slotId:s.id});
+    });
+    markers[s.id]=m;
+  });
+}
+function centerOn(lat,lng,z){map.setView([lat,lng],z||12,{animate:true});}
+function selectSlot(id){
+  selectedSlotId=id;
+  var m=markers[id];
+  if(m){map.setView(m.getLatLng(),13,{animate:true});m.openTooltip();}
+}
+function clearSelection(){selectedSlotId=null;}
+function escHtml(s){return String(s||'').replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]||c;});}
+map.on('click',function(e){send({type:'mapClick',lat:parseFloat(e.latlng.lat.toFixed(6)),lng:parseFloat(e.latlng.lng.toFixed(6))});});
+window.updateMarkers=updateMarkers;
+window.centerOn=centerOn;
+window.selectSlot=selectSlot;
+window.clearSelection=clearSelection;
+setTimeout(function(){send({type:'ready'});},400);
+</script>
+</body>
+</html>`;
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function EventCard({
+  event,
+  myId,
+  onDelete,
+  colors,
+}: {
+  event: ChronopediaEvent;
+  myId: number | undefined;
+  onDelete?: (id: number) => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const st = getStyles(colors);
+  const isOwn = event.authorId === myId;
+  const statusColor = event.status === "disputed" ? "#f59e0b" : colors.mutedForeground;
+
+  return (
+    <View style={[st.eventCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={st.eventCardHeader}>
+        <View style={st.authorRow}>
+          <View style={[st.authorAvatar, { backgroundColor: isOwn ? colors.primary + "33" : colors.muted }]}>
+            <Feather name="user" size={13} color={isOwn ? colors.primary : colors.mutedForeground} />
+          </View>
+          <View>
+            <Text style={[st.authorName, { color: colors.foreground }]}>
+              {event.authorName ?? "Гражданин"}
+            </Text>
+            <Text style={[st.authorRank, { color: colors.mutedForeground }]}>
+              {event.authorRank ?? "Гражданин"}
+            </Text>
+          </View>
+        </View>
+        <View style={st.eventCardActions}>
+          {event.status !== "approved" && (
+            <Text style={[st.statusBadge, { color: statusColor }]}>{event.status}</Text>
+          )}
+          {isOwn && onDelete && (
+            <TouchableOpacity onPress={() => onDelete(event.id)} hitSlop={8}>
+              <Feather name="trash-2" size={15} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      <Text style={[st.eventTitle, { color: colors.foreground }]}>{event.title}</Text>
+      <Text style={[st.eventDesc, { color: colors.mutedForeground }]}>{event.description}</Text>
+      <Text style={[st.eventDate, { color: colors.mutedForeground }]}>
+        {new Date(event.createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" })}
+      </Text>
+    </View>
+  );
+}
+
+function FeedEventCard({
+  event,
+  onPress,
+  colors,
+}: {
+  event: FeedEvent;
+  onPress: () => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const st = getStyles(colors);
+  return (
+    <TouchableOpacity
+      style={[st.feedCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <View style={st.feedCardTop}>
+        <View style={st.feedLocation}>
+          <Feather name="map-pin" size={12} color={colors.primary} />
+          <Text style={[st.feedLocationText, { color: colors.primary }]} numberOfLines={1}>
+            {event.locationName}
+          </Text>
+          <Text style={[st.feedTime, { color: colors.mutedForeground }]}>· {event.timeMarker}</Text>
+        </View>
+        <Text style={[st.feedAuthorRank, { color: colors.mutedForeground }]}>
+          {event.authorRank ?? "Гражданин"}
+        </Text>
+      </View>
+      <Text style={[st.feedTitle, { color: colors.foreground }]} numberOfLines={1}>{event.title}</Text>
+      <Text style={[st.feedDesc, { color: colors.mutedForeground }]} numberOfLines={2}>{event.description}</Text>
+    </TouchableOpacity>
+  );
+}
+
+// ── Add / Edit Modal ──────────────────────────────────────────────────────────
+
+interface AddModalProps {
+  visible: boolean;
+  mode: "slot" | "event";
+  slotInfo?: { locationName: string; timeMarker: string } | null;
+  pendingLat?: number | null;
+  pendingLng?: number | null;
+  onClose: () => void;
+  onSubmit: (data: {
+    locationName?: string;
+    timeMarker?: string;
+    placeId?: string;
+    title: string;
+    description: string;
+  }) => void;
+  saving: boolean;
+  colors: ReturnType<typeof useColors>;
+  placeSearch: {
+    query: string;
+    setQuery: (q: string) => void;
+    results: PlaceResult[];
+    loading: boolean;
+    selected: PlaceResult | null;
+    setSelected: (p: PlaceResult | null) => void;
+  };
+}
+
+function AddModal({
+  visible, mode, slotInfo, pendingLat, pendingLng,
+  onClose, onSubmit, saving, colors, placeSearch,
+}: AddModalProps) {
+  const st = getStyles(colors);
+  const [locationName, setLocationName] = useState("");
+  const [timeMarker, setTimeMarker] = useState(
+    () => new Date().toISOString().slice(0, 10)
+  );
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+
+  useEffect(() => {
+    if (visible) {
+      setTitle("");
+      setDescription("");
+      if (mode === "slot") {
+        setLocationName(placeSearch.selected?.name ?? "");
+        setTimeMarker(new Date().toISOString().slice(0, 10));
+      }
+    }
+  }, [visible, mode]);
+
+  useEffect(() => {
+    if (placeSearch.selected) {
+      setLocationName(placeSearch.selected.name);
+    }
+  }, [placeSearch.selected]);
+
+  const handleSubmit = () => {
+    if (!title.trim()) { Alert.alert("Ошибка", "Введите заголовок"); return; }
+    if (!description.trim()) { Alert.alert("Ошибка", "Введите описание"); return; }
+    if (mode === "slot" && !locationName.trim()) { Alert.alert("Ошибка", "Введите название места"); return; }
+    if (mode === "slot" && !timeMarker.trim()) { Alert.alert("Ошибка", "Введите дату/время"); return; }
+
+    onSubmit({
+      locationName: mode === "slot" ? locationName.trim() : undefined,
+      timeMarker: mode === "slot" ? timeMarker.trim() : undefined,
+      placeId: placeSearch.selected?.placeId,
+      title: title.trim(),
+      description: description.trim(),
+    });
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={[st.modalOverlay]}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <TouchableOpacity style={st.modalBackdrop} activeOpacity={1} onPress={onClose} />
+        <View style={[st.modalSheet, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <View style={st.modalHandle} />
+          <View style={st.modalHeader}>
+            <Text style={[st.modalTitle, { color: colors.foreground }]}>
+              {mode === "slot" ? "📍 Новая точка" : "💬 Добавить мнение"}
+            </Text>
+            <TouchableOpacity onPress={onClose} hitSlop={8}>
+              <Feather name="x" size={22} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {mode === "event" && slotInfo && (
+              <View style={[st.slotInfoBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Feather name="map-pin" size={13} color={colors.primary} />
+                <Text style={[st.slotInfoText, { color: colors.foreground }]}>
+                  {slotInfo.locationName} · {slotInfo.timeMarker}
+                </Text>
+              </View>
+            )}
+
+            {mode === "slot" && (
+              <>
+                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Поиск места</Text>
+                <View style={[st.searchRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Feather name="search" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={[st.searchInput, { color: colors.foreground }]}
+                    placeholder="Поиск по Google Places…"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={placeSearch.query}
+                    onChangeText={placeSearch.setQuery}
+                    returnKeyType="search"
+                  />
+                  {placeSearch.loading && <ActivityIndicator size="small" color={colors.mutedForeground} />}
+                </View>
+                {placeSearch.results.length > 0 && !placeSearch.selected && (
+                  <View style={[st.placeResultsList, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    {placeSearch.results.map((p) => (
+                      <TouchableOpacity
+                        key={p.placeId}
+                        style={[st.placeResult, { borderBottomColor: colors.border }]}
+                        onPress={() => {
+                          placeSearch.setSelected(p);
+                          placeSearch.setQuery(p.name);
+                          setLocationName(p.name);
+                        }}
+                      >
+                        <Text style={[st.placeResultName, { color: colors.foreground }]}>{p.name}</Text>
+                        <Text style={[st.placeResultAddr, { color: colors.mutedForeground }]} numberOfLines={1}>
+                          {p.address}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Название места</Text>
+                <TextInput
+                  style={[st.field, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
+                  placeholder="Москва, Красная площадь…"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={locationName}
+                  onChangeText={setLocationName}
+                />
+                {pendingLat != null && (
+                  <Text style={[st.coordHint, { color: colors.mutedForeground }]}>
+                    📍 {pendingLat.toFixed(4)}, {pendingLng?.toFixed(4)}
+                  </Text>
+                )}
+
+                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Дата / время события</Text>
+                <TextInput
+                  style={[st.field, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
+                  placeholder="2026-06-14 или «22 июня 1941»"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={timeMarker}
+                  onChangeText={setTimeMarker}
+                />
+              </>
+            )}
+
+            <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Заголовок мнения</Text>
+            <TextInput
+              style={[st.field, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
+              placeholder="Кратко — в чём суть?"
+              placeholderTextColor={colors.mutedForeground}
+              value={title}
+              onChangeText={setTitle}
+              maxLength={200}
+            />
+
+            <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Ваше мнение / описание</Text>
+            <TextInput
+              style={[st.field, st.fieldMulti, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
+              placeholder="Что произошло по вашему мнению?"
+              placeholderTextColor={colors.mutedForeground}
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              maxLength={2000}
+              textAlignVertical="top"
+            />
+
+            <TouchableOpacity
+              style={[st.submitBtn, { backgroundColor: colors.primary, opacity: saving ? 0.6 : 1 }]}
+              onPress={handleSubmit}
+              disabled={saving}
+            >
+              {saving
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={st.submitBtnText}>
+                    {mode === "slot" ? "Создать точку" : "Добавить мнение"}
+                  </Text>
+              }
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ── Main screen ───────────────────────────────────────────────────────────────
+
+export default function ChronopediaScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { citizen } = useCitizen();
+  const qc = useQueryClient();
+  const st = getStyles(colors);
+
+  const webViewRef = useRef<WebView>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [viewMode, setViewMode] = useState<"map" | "feed">("map");
+  const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
+  const [pendingLat, setPendingLat] = useState<number | null>(null);
+  const [pendingLng, setPendingLng] = useState<number | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addMode, setAddMode] = useState<"slot" | "event">("slot");
+
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeResults, setPlaceResults] = useState<PlaceResult[]>([]);
+  const [placeLoading, setPlaceLoading] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
+
+  // Google Places search with debounce
+  useEffect(() => {
+    if (!placeQuery.trim() || selectedPlace) return;
+    const t = setTimeout(async () => {
+      setPlaceLoading(true);
+      try {
+        const res = await fetch(`${BASE_URL}/api/chronopedia/places/search?q=${encodeURIComponent(placeQuery)}`);
+        if (res.ok) {
+          const data = await res.json() as { places: PlaceResult[] };
+          setPlaceResults(data.places);
+        }
+      } finally {
+        setPlaceLoading(false);
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [placeQuery, selectedPlace]);
+
+  // ── Queries ────────────────────────────────────────────────────────────────
+
+  const { data: slotsData, isLoading: slotsLoading } = useQuery<{ slots: ChronopediaSlot[] }>({
+    queryKey: ["chronopediaSlots", citizen?.id],
+    queryFn: async () => {
+      const res = await fetch(
+        `${BASE_URL}/api/chronopedia/slots${citizen ? `?citizenId=${citizen.id}` : ""}`
+      );
+      if (!res.ok) throw new Error("Ошибка загрузки точек");
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+  const slots = slotsData?.slots ?? [];
+
+  const { data: slotDetail, isLoading: detailLoading } = useQuery<{
+    slot: ChronopediaSlot;
+    events: ChronopediaEvent[];
+  }>({
+    queryKey: ["chronopediaSlot", selectedSlotId],
+    queryFn: async () => {
+      const res = await fetch(`${BASE_URL}/api/chronopedia/slots/${selectedSlotId}`);
+      if (!res.ok) throw new Error("Ошибка загрузки слота");
+      return res.json();
+    },
+    enabled: selectedSlotId !== null,
+  });
+
+  const { data: feedData, isLoading: feedLoading } = useQuery<{ events: FeedEvent[] }>({
+    queryKey: ["chronopediaFeed"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE_URL}/api/chronopedia/feed?limit=50`);
+      if (!res.ok) throw new Error("Ошибка ленты");
+      return res.json();
+    },
+    enabled: viewMode === "feed",
+    refetchInterval: 30000,
+  });
+
+  // ── Update map markers when slots data or selection changes ────────────────
+  useEffect(() => {
+    if (!mapReady || slots.length === 0) return;
+    const js = `updateMarkers(${JSON.stringify(slots)}, ${citizen?.id ?? 0}); true;`;
+    webViewRef.current?.injectJavaScript(js);
+  }, [mapReady, slots, citizen?.id]);
+
+  useEffect(() => {
+    if (!mapReady || selectedSlotId === null) return;
+    webViewRef.current?.injectJavaScript(`selectSlot(${selectedSlotId}); true;`);
+  }, [mapReady, selectedSlotId]);
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+
+  const createSlotMutation = useMutation({
+    mutationFn: async (data: {
+      locationName: string;
+      timeMarker: string;
+      placeId?: string;
+      title: string;
+      description: string;
+    }) => {
+      const lat = selectedPlace?.lat ?? pendingLat ?? 0;
+      const lng = selectedPlace?.lng ?? pendingLng ?? 0;
+      const res = await fetch(`${BASE_URL}/api/chronopedia/slots`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          citizenId: citizen!.id,
+          geoLat: lat,
+          geoLng: lng,
+          locationName: data.locationName,
+          placeId: data.placeId,
+          timeMarker: data.timeMarker,
+          title: data.title,
+          description: data.description,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Ошибка создания");
+      }
+      return res.json() as Promise<{ ok: boolean; slotId: number; eventId: number }>;
+    },
+    onSuccess: (data) => {
+      setShowAddModal(false);
+      setSelectedSlotId(data.slotId);
+      setPendingLat(null);
+      setPendingLng(null);
+      setSelectedPlace(null);
+      setPlaceQuery("");
+      setPlaceResults([]);
+      qc.invalidateQueries({ queryKey: ["chronopediaSlots"] });
+      qc.invalidateQueries({ queryKey: ["chronopediaFeed"] });
+    },
+    onError: (e: Error) => Alert.alert("Ошибка", e.message),
+  });
+
+  const addEventMutation = useMutation({
+    mutationFn: async (data: { title: string; description: string }) => {
+      const res = await fetch(`${BASE_URL}/api/chronopedia/slots/${selectedSlotId}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ citizenId: citizen!.id, ...data }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Ошибка добавления");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setShowAddModal(false);
+      qc.invalidateQueries({ queryKey: ["chronopediaSlot", selectedSlotId] });
+      qc.invalidateQueries({ queryKey: ["chronopediaSlots"] });
+      qc.invalidateQueries({ queryKey: ["chronopediaFeed"] });
+    },
+    onError: (e: Error) => Alert.alert("Ошибка", e.message),
+  });
+
+  const deleteEventMutation = useMutation({
+    mutationFn: async (eventId: number) => {
+      const res = await fetch(`${BASE_URL}/api/chronopedia/events/${eventId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ citizenId: citizen!.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Ошибка удаления");
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chronopediaSlot", selectedSlotId] });
+      qc.invalidateQueries({ queryKey: ["chronopediaSlots"] });
+      qc.invalidateQueries({ queryKey: ["chronopediaFeed"] });
+    },
+    onError: (e: Error) => Alert.alert("Ошибка", e.message),
+  });
+
+  // ── WebView message handler ────────────────────────────────────────────────
+
+  const handleMapMessage = useCallback((e: WebViewMessageEvent) => {
+    try {
+      const msg = JSON.parse(e.nativeEvent.data) as {
+        type: string;
+        slotId?: number;
+        lat?: number;
+        lng?: number;
+      };
+      if (msg.type === "ready") {
+        setMapReady(true);
+      } else if (msg.type === "slotClick") {
+        setSelectedSlotId(msg.slotId ?? null);
+        setPendingLat(null);
+        setPendingLng(null);
+      } else if (msg.type === "mapClick") {
+        setSelectedSlotId(null);
+        setPendingLat(msg.lat ?? null);
+        setPendingLng(msg.lng ?? null);
+        webViewRef.current?.injectJavaScript("clearSelection(); true;");
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+
+  const handleAddOpinion = () => {
+    if (!citizen) { Alert.alert("Войдите", "Необходим аккаунт гражданина"); return; }
+    setAddMode("event");
+    setShowAddModal(true);
+  };
+
+  const handleNewSlot = () => {
+    if (!citizen) { Alert.alert("Войдите", "Необходим аккаунт гражданина"); return; }
+    if (pendingLat === null) {
+      Alert.alert("Выберите место", "Нажмите на карту чтобы выбрать точку, затем нажмите +");
+      return;
+    }
+    setAddMode("slot");
+    setShowAddModal(true);
+  };
+
+  const handleModalSubmit = (data: {
+    locationName?: string;
+    timeMarker?: string;
+    placeId?: string;
+    title: string;
+    description: string;
+  }) => {
+    if (addMode === "event" && selectedSlotId) {
+      addEventMutation.mutate({ title: data.title, description: data.description });
+    } else if (addMode === "slot") {
+      createSlotMutation.mutate({
+        locationName: data.locationName!,
+        timeMarker: data.timeMarker!,
+        placeId: data.placeId,
+        title: data.title,
+        description: data.description,
+      });
+    }
+  };
+
+  const handleDeleteEvent = (eventId: number) => {
+    Alert.alert("Удалить мнение?", "Это действие необратимо.", [
+      { text: "Отмена", style: "cancel" },
+      { text: "Удалить", style: "destructive", onPress: () => deleteEventMutation.mutate(eventId) },
+    ]);
+  };
+
+  const handleFeedCardPress = (event: FeedEvent) => {
+    setSelectedSlotId(event.slotId);
+    setViewMode("map");
+    if (mapReady) {
+      webViewRef.current?.injectJavaScript(
+        `centerOn(${event.geoLat}, ${event.geoLng}, 13); selectSlot(${event.slotId}); true;`
+      );
+    }
+  };
+
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const isSaving = createSlotMutation.isPending || addEventMutation.isPending;
+
+  return (
+    <View style={[st.root, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[st.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <LogoBrand size={20} />
+        <Text style={[st.headerTitle, { color: colors.foreground }]}>Хронопедия</Text>
+        <View style={{ width: 44 }} />
+      </View>
+
+      {/* View mode toggle */}
+      <View style={[st.toggleRow, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        {(["map", "feed"] as const).map((mode) => (
+          <TouchableOpacity
+            key={mode}
+            style={[
+              st.toggleBtn,
+              viewMode === mode && { backgroundColor: colors.primary + "22", borderColor: colors.primary },
+            ]}
+            onPress={() => setViewMode(mode)}
+          >
+            <Feather
+              name={mode === "map" ? "map" : "list"}
+              size={15}
+              color={viewMode === mode ? colors.primary : colors.mutedForeground}
+            />
+            <Text style={[st.toggleBtnText, { color: viewMode === mode ? colors.primary : colors.mutedForeground }]}>
+              {mode === "map" ? "Карта" : "Лента"}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Main content */}
+      {viewMode === "map" ? (
+        <View style={st.mapContainer}>
+          {/* Leaflet map */}
+          <View style={st.mapWrapper}>
+            <WebView
+              ref={webViewRef}
+              source={{ html: LEAFLET_HTML }}
+              style={st.webView}
+              javaScriptEnabled
+              originWhitelist={["*"]}
+              onMessage={handleMapMessage}
+              scrollEnabled={false}
+              bounces={false}
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+            />
+            {!mapReady && (
+              <View style={st.mapLoading}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={[st.mapLoadingText, { color: colors.mutedForeground }]}>Загрузка карты…</Text>
+              </View>
+            )}
+            {slotsLoading && mapReady && (
+              <View style={[st.mapLoadingOverlay]}>
+                <ActivityIndicator color={colors.primary} size="small" />
+              </View>
+            )}
+          </View>
+
+          {/* Bottom panel */}
+          <View style={[st.panel, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+            {selectedSlotId && slotDetail ? (
+              <>
+                <View style={st.panelHeader}>
+                  <View style={st.panelTitleRow}>
+                    <Feather name="map-pin" size={14} color={colors.primary} />
+                    <Text style={[st.panelTitle, { color: colors.foreground }]} numberOfLines={1}>
+                      {slotDetail.slot.locationName}
+                    </Text>
+                  </View>
+                  <Text style={[st.panelTime, { color: colors.mutedForeground }]}>
+                    {slotDetail.slot.timeMarker} · {slotDetail.events.length} мнений
+                  </Text>
+                </View>
+
+                {detailLoading ? (
+                  <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />
+                ) : (
+                  <FlatList
+                    data={slotDetail.events}
+                    keyExtractor={(e) => String(e.id)}
+                    renderItem={({ item }) => (
+                      <EventCard
+                        event={item}
+                        myId={citizen?.id}
+                        onDelete={handleDeleteEvent}
+                        colors={colors}
+                      />
+                    )}
+                    contentContainerStyle={{ gap: 8 }}
+                    showsVerticalScrollIndicator={false}
+                    ListEmptyComponent={
+                      <Text style={[st.emptyHint, { color: colors.mutedForeground }]}>
+                        Нет мнений. Будьте первым!
+                      </Text>
+                    }
+                    style={st.eventsList}
+                  />
+                )}
+
+                <TouchableOpacity
+                  style={[st.addOpinionBtn, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "55" }]}
+                  onPress={handleAddOpinion}
+                >
+                  <Feather name="plus" size={15} color={colors.primary} />
+                  <Text style={[st.addOpinionBtnText, { color: colors.primary }]}>Добавить своё мнение</Text>
+                </TouchableOpacity>
+              </>
+            ) : selectedSlotId && detailLoading ? (
+              <ActivityIndicator color={colors.primary} style={{ flex: 1, marginTop: 20 }} />
+            ) : (
+              <View style={st.mapHint}>
+                {pendingLat !== null ? (
+                  <>
+                    <Feather name="crosshair" size={24} color={colors.primary} />
+                    <Text style={[st.mapHintTitle, { color: colors.foreground }]}>Точка выбрана</Text>
+                    <Text style={[st.mapHintSub, { color: colors.mutedForeground }]}>
+                      {pendingLat.toFixed(4)}, {pendingLng?.toFixed(4)}
+                    </Text>
+                    <TouchableOpacity
+                      style={[st.createBtn, { backgroundColor: colors.primary }]}
+                      onPress={handleNewSlot}
+                    >
+                      <Feather name="plus" size={16} color="#fff" />
+                      <Text style={st.createBtnText}>Создать точку здесь</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[st.mapHintIcon]}>🌍</Text>
+                    <Text style={[st.mapHintTitle, { color: colors.foreground }]}>Хронопедия</Text>
+                    <Text style={[st.mapHintSub, { color: colors.mutedForeground }]}>
+                      Нажмите маркер, чтобы прочитать мнения.{"\n"}Нажмите пустое место на карте, чтобы создать точку.
+                    </Text>
+                  </>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+      ) : (
+        /* Feed view */
+        feedLoading ? (
+          <ActivityIndicator color={colors.primary} style={{ flex: 1, marginTop: 40 }} />
+        ) : (
+          <FlatList
+            data={feedData?.events ?? []}
+            keyExtractor={(e) => String(e.id)}
+            renderItem={({ item }) => (
+              <FeedEventCard event={item} onPress={() => handleFeedCardPress(item)} colors={colors} />
+            )}
+            contentContainerStyle={[st.feedList, { paddingBottom: insets.bottom + 80 }]}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={st.feedEmpty}>
+                <Text style={[st.feedEmptyIcon]}>🌐</Text>
+                <Text style={[st.feedEmptyText, { color: colors.mutedForeground }]}>
+                  Нет записей. Откройте карту и добавьте первую точку!
+                </Text>
+              </View>
+            }
+          />
+        )
+      )}
+
+      {/* FAB */}
+      {viewMode === "map" && (
+        <TouchableOpacity
+          style={[
+            st.fab,
+            { backgroundColor: colors.primary, bottom: insets.bottom + 90 },
+            pendingLat === null && { opacity: 0.4 },
+          ]}
+          onPress={handleNewSlot}
+          disabled={pendingLat === null}
+        >
+          <Feather name="plus" size={24} color="#fff" />
+        </TouchableOpacity>
+      )}
+
+      {/* Add modal */}
+      <AddModal
+        visible={showAddModal}
+        mode={addMode}
+        slotInfo={
+          addMode === "event" && slotDetail
+            ? { locationName: slotDetail.slot.locationName, timeMarker: slotDetail.slot.timeMarker }
+            : null
+        }
+        pendingLat={pendingLat}
+        pendingLng={pendingLng}
+        onClose={() => setShowAddModal(false)}
+        onSubmit={handleModalSubmit}
+        saving={isSaving}
+        colors={colors}
+        placeSearch={{
+          query: placeQuery,
+          setQuery: (q) => { setPlaceQuery(q); if (!q) { setSelectedPlace(null); setPlaceResults([]); } },
+          results: placeResults,
+          loading: placeLoading,
+          selected: selectedPlace,
+          setSelected: setSelectedPlace,
+        }}
+      />
+    </View>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+function getStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    root: { flex: 1 },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingBottom: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    headerTitle: { fontSize: 17, fontWeight: "700", letterSpacing: 0.3 },
+
+    toggleRow: {
+      flexDirection: "row",
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      gap: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    toggleBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      paddingVertical: 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: "transparent",
+    },
+    toggleBtnText: { fontSize: 14, fontWeight: "600" },
+
+    mapContainer: { flex: 1, flexDirection: "column" },
+    mapWrapper: { flex: 3, position: "relative", minHeight: 200 },
+    webView: { flex: 1, backgroundColor: "#0f172a" },
+    mapLoading: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "#0f172a",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 12,
+    },
+    mapLoadingText: { fontSize: 13 },
+    mapLoadingOverlay: {
+      position: "absolute",
+      top: 12,
+      right: 12,
+      width: 36,
+      height: 36,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    panel: {
+      flex: 2,
+      borderTopWidth: 1,
+      paddingHorizontal: 14,
+      paddingTop: 12,
+      paddingBottom: 8,
+      minHeight: 160,
+    },
+    panelHeader: { marginBottom: 8 },
+    panelTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+    panelTitle: { fontSize: 15, fontWeight: "700", flex: 1 },
+    panelTime: { fontSize: 12, marginTop: 2 },
+    eventsList: { flex: 1, marginBottom: 8 },
+
+    eventCard: {
+      borderRadius: 10,
+      borderWidth: 1,
+      padding: 12,
+    },
+    eventCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
+    authorRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    authorAvatar: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+    authorName: { fontSize: 13, fontWeight: "600" },
+    authorRank: { fontSize: 11, marginTop: 1 },
+    eventCardActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+    statusBadge: { fontSize: 11 },
+    eventTitle: { fontSize: 14, fontWeight: "600", marginBottom: 4 },
+    eventDesc: { fontSize: 13, lineHeight: 19 },
+    eventDate: { fontSize: 11, marginTop: 6 },
+
+    addOpinionBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      marginTop: 4,
+    },
+    addOpinionBtnText: { fontSize: 14, fontWeight: "600" },
+
+    mapHint: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 24 },
+    mapHintIcon: { fontSize: 32, marginBottom: 4 },
+    mapHintTitle: { fontSize: 16, fontWeight: "700", textAlign: "center" },
+    mapHintSub: { fontSize: 13, textAlign: "center", lineHeight: 18 },
+    createBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, marginTop: 8 },
+    createBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+
+    emptyHint: { fontSize: 13, textAlign: "center", marginTop: 16 },
+
+    // Feed
+    feedList: { paddingHorizontal: 14, paddingTop: 12, gap: 10 },
+    feedCard: { borderRadius: 12, borderWidth: 1, padding: 14 },
+    feedCardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
+    feedLocation: { flexDirection: "row", alignItems: "center", gap: 5, flex: 1 },
+    feedLocationText: { fontSize: 12, fontWeight: "600", flexShrink: 1 },
+    feedTime: { fontSize: 12, flexShrink: 0 },
+    feedAuthorRank: { fontSize: 11, marginLeft: 8, flexShrink: 0 },
+    feedTitle: { fontSize: 14, fontWeight: "700", marginBottom: 3 },
+    feedDesc: { fontSize: 13, lineHeight: 18 },
+    feedEmpty: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 10 },
+    feedEmptyIcon: { fontSize: 40 },
+    feedEmptyText: { fontSize: 14, textAlign: "center", paddingHorizontal: 40, lineHeight: 20 },
+
+    // FAB
+    fab: {
+      position: "absolute",
+      right: 16,
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+
+    // Modal
+    modalOverlay: { flex: 1, justifyContent: "flex-end" },
+    modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)" },
+    modalSheet: {
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      borderTopWidth: 1,
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      paddingHorizontal: 16,
+      paddingBottom: 32,
+      maxHeight: "92%",
+    },
+    modalHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#555", alignSelf: "center", marginTop: 10, marginBottom: 4 },
+    modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 14 },
+    modalTitle: { fontSize: 17, fontWeight: "700" },
+
+    slotInfoBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, marginBottom: 16 },
+    slotInfoText: { fontSize: 13, fontWeight: "500", flex: 1 },
+
+    fieldLabel: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginTop: 14 },
+    field: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 11, fontSize: 15 },
+    fieldMulti: { height: 100, paddingTop: 11 },
+
+    coordHint: { fontSize: 12, marginTop: 4 },
+
+    searchRow: { flexDirection: "row", alignItems: "center", borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
+    searchInput: { flex: 1, fontSize: 15 },
+
+    placeResultsList: { borderRadius: 10, borderWidth: 1, overflow: "hidden", marginTop: 4 },
+    placeResult: { padding: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+    placeResultName: { fontSize: 14, fontWeight: "600" },
+    placeResultAddr: { fontSize: 12, marginTop: 2 },
+
+    submitBtn: { paddingVertical: 14, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 20 },
+    submitBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  });
+}

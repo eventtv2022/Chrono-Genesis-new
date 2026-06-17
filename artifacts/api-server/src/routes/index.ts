@@ -11,6 +11,7 @@ import auctionsRouter from "./auctions";
 import emissionRouter from "./emission";
 import tvRouter from "./tv";
 import dealsRouter from "./deals";
+import chronopediaRouter from "./chronopedia";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(auctionsRouter);
 router.use(emissionRouter);
 router.use(tvRouter);
 router.use(dealsRouter);
+router.use(chronopediaRouter);
 
 export default router;
