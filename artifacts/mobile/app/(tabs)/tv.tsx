@@ -13,6 +13,7 @@ import {
   ScrollView,
   Linking,
   Image,
+  Animated,
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -62,6 +63,22 @@ const RENDER_PROGRESS_LABELS: Record<string, string> = {
   fetching_video: "Загрузка AI-фона…",
   encoding: "Сборка MP4…",
   done: "Готово!",
+};
+
+const RENDER_PROGRESS_STAGES = [
+  "generating_prompt",
+  "generating_tts",
+  "fetching_video",
+  "encoding",
+  "done",
+] as const;
+
+const PROGRESS_PCT: Record<string, number> = {
+  generating_prompt: 15,
+  generating_tts: 40,
+  fetching_video: 65,
+  encoding: 85,
+  done: 100,
 };
 
 interface RenderResult {
@@ -433,7 +450,9 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
   const [legalConsent, setLegalConsent] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
   const prevStatusRef = useRef<string | null>(null);
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
   // Debounce seedText so preview images only refresh 600ms after the user stops typing
   useEffect(() => {
@@ -461,6 +480,44 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
       return (isPolling || data?.status === "pending_render") ? 3000 : false;
     },
   });
+
+  // Poll queue stats while rendering
+  const { data: queueStats } = useQuery<{ active: number; queued: number; maxConcurrent: number }>({
+    queryKey: ["tvRenderQueue"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE_URL}/api/tv/render/queue`);
+      if (!res.ok) throw new Error("queue error");
+      return res.json() as Promise<{ active: number; queued: number; maxConcurrent: number }>;
+    },
+    enabled: isPolling,
+    refetchInterval: isPolling ? 5000 : false,
+  });
+
+  // Poll job status by jobId (queued vs running)
+  const { data: jobStatusData } = useQuery<{ jobId: string; slotId: number; status: "queued" | "running" | "done" | "failed" } | null>({
+    queryKey: ["tvRenderJob", jobId],
+    queryFn: async () => {
+      if (!jobId) return null;
+      const res = await fetch(`${BASE_URL}/api/tv/render/jobs/${jobId}`);
+      if (res.status === 404) return null;
+      if (!res.ok) return null;
+      return res.json() as Promise<{ jobId: string; slotId: number; status: "queued" | "running" | "done" | "failed" }>;
+    },
+    enabled: !!jobId && isPolling,
+    refetchInterval: !!jobId && isPolling ? 3000 : false,
+  });
+
+  // Animate progress bar
+  useEffect(() => {
+    const isQueued = jobStatusData?.status === "queued";
+    const stage = capsule?.renderProgress;
+    const target = isQueued ? 0 : (stage ? (PROGRESS_PCT[stage] ?? 5) : 5);
+    Animated.timing(progressAnim, {
+      toValue: target,
+      duration: 700,
+      useNativeDriver: false,
+    }).start();
+  }, [capsule?.renderProgress, jobStatusData?.status, progressAnim]);
 
   // When capsule transitions out of pending_render → stop polling, show result
   useEffect(() => {
@@ -573,9 +630,13 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
         }
         throw new Error(err.error ?? "Ошибка рендера");
       }
-      return res.json() as Promise<{ ok: boolean; status: string; slotId: number }>;
+      return res.json() as Promise<{ ok: boolean; status: string; slotId: number; jobId?: string }>;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Store jobId for queue position polling
+      if (data.jobId) setJobId(data.jobId);
+      // Reset progress bar to 0 for fresh start
+      progressAnim.setValue(0);
       // Render is running in background — start polling capsule for progress
       setIsPolling(true);
       prevStatusRef.current = "pending_render";
@@ -831,45 +892,77 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                   {/* ── Render progress indicator ── */}
                   {isPendingRender && (
                     <View style={[styles.renderProgressCard, { backgroundColor: colors.card, borderColor: colors.primary + "44" }]}>
+                      {/* Header row: spinner + label */}
                       <View style={styles.renderProgressRow}>
                         <ActivityIndicator color={colors.primary} size="small" />
                         <Text style={[styles.renderProgressText, { color: colors.primary }]}>
-                          {capsule?.renderProgress
-                            ? (RENDER_PROGRESS_LABELS[capsule.renderProgress] ?? "Рендер…")
-                            : "Инициализация рендера…"}
+                          {jobStatusData?.status === "queued"
+                            ? "Ожидание в очереди…"
+                            : capsule?.renderProgress
+                              ? (RENDER_PROGRESS_LABELS[capsule.renderProgress] ?? "Рендер…")
+                              : "Инициализация рендера…"}
                         </Text>
                       </View>
-                      {capsule?.renderProgress && (
-                        <View style={styles.renderProgressSteps}>
-                          {(["generating_prompt", "generating_tts", "fetching_video", "encoding"] as const).map((step) => {
-                            const stages = ["generating_prompt", "generating_tts", "fetching_video", "encoding", "done"];
-                            const currentIdx = stages.indexOf(capsule.renderProgress ?? "");
-                            const stepIdx = stages.indexOf(step);
-                            const isDone = currentIdx > stepIdx;
-                            const isCurrent = currentIdx === stepIdx;
-                            return (
-                              <View key={step} style={styles.renderProgressStep}>
-                                <View style={[
-                                  styles.renderProgressDot,
-                                  {
-                                    backgroundColor: isDone
-                                      ? colors.primary
-                                      : isCurrent
-                                        ? colors.primary + "88"
-                                        : colors.muted,
-                                  },
-                                ]} />
-                                <Text style={[
-                                  styles.renderProgressStepLabel,
-                                  { color: isDone || isCurrent ? colors.foreground : colors.mutedForeground },
-                                ]}>
-                                  {RENDER_PROGRESS_LABELS[step]?.replace("…", "") ?? step}
-                                </Text>
-                              </View>
-                            );
-                          })}
+
+                      {/* Queue position badge */}
+                      {jobStatusData?.status === "queued" && queueStats && (
+                        <View style={[styles.queueBadge, { backgroundColor: colors.muted }]}>
+                          <Feather name="clock" size={12} color={colors.mutedForeground} />
+                          <Text style={[styles.queueBadgeText, { color: colors.mutedForeground }]}>
+                            {`Ваш рендер в очереди · ожидает ${queueStats.queued} ${queueStats.queued === 1 ? "задание" : "заданий"} перед ним`}
+                          </Text>
                         </View>
                       )}
+
+                      {/* Animated progress bar */}
+                      <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
+                        <Animated.View
+                          style={[
+                            styles.progressFill,
+                            {
+                              backgroundColor: colors.primary,
+                              width: progressAnim.interpolate({
+                                inputRange: [0, 100],
+                                outputRange: ["0%", "100%"],
+                                extrapolate: "clamp",
+                              }),
+                            },
+                          ]}
+                        />
+                      </View>
+
+                      {/* Stage steps */}
+                      <View style={styles.renderProgressSteps}>
+                        {RENDER_PROGRESS_STAGES.slice(0, -1).map((step) => {
+                          const currentIdx = RENDER_PROGRESS_STAGES.indexOf(
+                            (capsule?.renderProgress ?? "") as typeof RENDER_PROGRESS_STAGES[number]
+                          );
+                          const stepIdx = RENDER_PROGRESS_STAGES.indexOf(step);
+                          const isDone = jobStatusData?.status !== "queued" && currentIdx > stepIdx;
+                          const isCurrent = jobStatusData?.status !== "queued" && currentIdx === stepIdx;
+                          return (
+                            <View key={step} style={styles.renderProgressStep}>
+                              <View style={[
+                                styles.renderProgressDot,
+                                {
+                                  backgroundColor: isDone
+                                    ? colors.primary
+                                    : isCurrent
+                                      ? colors.primary + "88"
+                                      : colors.muted,
+                                },
+                              ]} />
+                              <Text style={[
+                                styles.renderProgressStepLabel,
+                                { color: isDone || isCurrent ? colors.foreground : colors.mutedForeground },
+                              ]}>
+                                {RENDER_PROGRESS_LABELS[step]?.replace("…", "") ?? step}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+
                       <Text style={[styles.renderProgressHint, { color: colors.mutedForeground }]}>
                         AI-рендер занимает 30–120 сек. Не закрывайте экран.
                       </Text>
@@ -1401,6 +1494,27 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     renderProgressText: {
       fontSize: 14,
       fontWeight: "600",
+      flex: 1,
+    },
+    progressTrack: {
+      height: 6,
+      borderRadius: 3,
+      overflow: "hidden",
+    },
+    progressFill: {
+      height: "100%",
+      borderRadius: 3,
+    },
+    queueBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 6,
+    },
+    queueBadgeText: {
+      fontSize: 12,
       flex: 1,
     },
     renderProgressSteps: {
