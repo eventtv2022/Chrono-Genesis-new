@@ -454,6 +454,9 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
   const [isPolling, setIsPolling] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [renderTimeoutMs, setRenderTimeoutMs] = useState<number | null>(null);
+  const [renderStartedAt, setRenderStartedAt] = useState<number | null>(null);
+  const [countdownSec, setCountdownSec] = useState<number | null>(null);
+  const [renderTimedOut, setRenderTimedOut] = useState(false);
   const prevStatusRef = useRef<string | null>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
 
@@ -522,6 +525,24 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
     }).start();
   }, [capsule?.renderProgress, jobStatusData?.status, progressAnim]);
 
+  // Live countdown: tick every second while render is pending
+  useEffect(() => {
+    if (!renderStartedAt || !renderTimeoutMs) return;
+    const tick = () => {
+      const elapsed = Date.now() - renderStartedAt;
+      const remaining = Math.ceil((renderTimeoutMs - elapsed) / 1000);
+      if (remaining <= 0) {
+        setCountdownSec(0);
+        setRenderTimedOut(true);
+      } else {
+        setCountdownSec(remaining);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [renderStartedAt, renderTimeoutMs]);
+
   // When capsule transitions out of pending_render → stop polling, show result
   useEffect(() => {
     const prev = prevStatusRef.current;
@@ -530,6 +551,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
 
     if (isPolling && current && current !== "pending_render" && prev === "pending_render") {
       setIsPolling(false);
+      setRenderStartedAt(null);
       if (capsule?.mediaUrl) {
         setRenderResult({
           ok: true,
@@ -642,6 +664,10 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
       if (data.timeoutMs) setRenderTimeoutMs(data.timeoutMs);
       // Reset progress bar to 0 for fresh start
       progressAnim.setValue(0);
+      // Start countdown from this moment
+      setRenderStartedAt(Date.now());
+      setRenderTimedOut(false);
+      setCountdownSec(data.timeoutMs ? Math.ceil(data.timeoutMs / 1000) : null);
       // Render is running in background — start polling capsule for progress
       setIsPolling(true);
       prevStatusRef.current = "pending_render";
@@ -970,11 +996,27 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                         })}
                       </View>
 
-                      <Text style={[styles.renderProgressHint, { color: colors.mutedForeground }]}>
-                        {renderTimeoutMs && renderTimeoutMs >= 300_000
-                          ? `До ${Math.round(renderTimeoutMs / 60_000)} минут для вашего премиум-слота. Не закрывайте экран.`
-                          : `AI-рендер занимает до ${renderTimeoutMs ? Math.round(renderTimeoutMs / 60_000) : 2} мин. Не закрывайте экран.`}
-                      </Text>
+                      {renderTimedOut ? (
+                        <View style={[styles.timedOutBadge, { backgroundColor: colors.muted }]}>
+                          <Feather name="alert-circle" size={13} color={colors.mutedForeground} />
+                          <Text style={[styles.timedOutText, { color: colors.mutedForeground }]}>
+                            Рендер затянулся — ждём финального результата…
+                          </Text>
+                        </View>
+                      ) : countdownSec !== null ? (
+                        <View style={styles.countdownRow}>
+                          <Feather name="clock" size={13} color={colors.primary} />
+                          <Text style={[styles.countdownText, { color: colors.primary }]}>
+                            {`${Math.floor(countdownSec / 60)}:${String(countdownSec % 60).padStart(2, "0")} осталось`}
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text style={[styles.renderProgressHint, { color: colors.mutedForeground }]}>
+                          {renderTimeoutMs && renderTimeoutMs >= 300_000
+                            ? `До ${Math.round(renderTimeoutMs / 60_000)} минут для вашего премиум-слота. Не закрывайте экран.`
+                            : `AI-рендер занимает до ${renderTimeoutMs ? Math.round(renderTimeoutMs / 60_000) : 2} мин. Не закрывайте экран.`}
+                        </Text>
+                      )}
                     </View>
                   )}
 
@@ -1571,6 +1613,30 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     renderProgressHint: {
       fontSize: 11,
       lineHeight: 16,
+    },
+    countdownRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      marginTop: 2,
+    },
+    countdownText: {
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    timedOutBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      borderRadius: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      marginTop: 2,
+    },
+    timedOutText: {
+      fontSize: 11,
+      lineHeight: 16,
+      flex: 1,
     },
     legalRow: {
       flexDirection: "row",
