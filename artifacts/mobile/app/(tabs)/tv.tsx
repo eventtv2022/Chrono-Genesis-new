@@ -1090,6 +1090,164 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
   );
 }
 
+// ── BookSlotModal ─────────────────────────────────────────────────────────────
+
+interface BookSlotModalProps {
+  visible: boolean;
+  onClose: () => void;
+  slots: TvSlot[];
+  citizen: { id: number; balanceMinutes: number; name: string };
+  date: string;
+  colors: ReturnType<typeof useColors>;
+  onBooked: () => void;
+}
+
+const SLOT_COSTS: Record<string, number> = { citizen: 1, quarter: 10, half: 25, apex: 50 };
+
+function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooked }: BookSlotModalProps) {
+  const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
+
+  const freeSlots = slots
+    .filter((s) => s.status === "free" && !s.isRetro)
+    .slice(0, 50);
+
+  const selected = freeSlots.find((s) => s.id === selectedSlotId) ?? null;
+  const totalCost = selected ? (selected.timeltrBurnCost + Math.ceil(selected.timeltrBurnCost * 0.1)) : 0;
+  const transferable = citizen.balanceMinutes - 1;
+  const canAfford = transferable >= totalCost;
+
+  const bookMutation = useMutation({
+    mutationFn: async () => {
+      if (!selected) throw new Error("Выберите слот");
+      const res = await fetch(`${BASE_URL}/api/tv/slots/book`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slotId: selected.id, citizenId: citizen.id, paymentType: "timeltr" }),
+      });
+      const json = await res.json() as { error?: string; ok?: boolean };
+      if (!res.ok) throw new Error(json.error ?? "Ошибка бронирования");
+      return json;
+    },
+    onSuccess: () => {
+      Alert.alert("✅ Слот забронирован", "Вернитесь в список и настройте капсулу.");
+      setSelectedSlotId(null);
+      onBooked();
+      onClose();
+    },
+    onError: (e: Error) => Alert.alert("Отказ", e.message),
+  });
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" }}>
+        <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "80%" }}>
+          {/* Header */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }}>Выбрать слот · {date}</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Feather name="x" size={22} color={colors.foreground} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Balance row */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.muted }}>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Баланс:</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground }}>{transferable} Д доступно</Text>
+          </View>
+
+          {freeSlots.length === 0 ? (
+            <View style={{ padding: 40, alignItems: "center" }}>
+              <Feather name="tv" size={40} color={colors.mutedForeground} />
+              <Text style={{ color: colors.mutedForeground, marginTop: 12, textAlign: "center" }}>
+                Нет свободных слотов на {date}
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ padding: 12, gap: 6 }}>
+              {freeSlots.map((s) => {
+                const isSelected = s.id === selectedSlotId;
+                const cost = s.timeltrBurnCost + Math.ceil(s.timeltrBurnCost * 0.1);
+                const affordable = transferable >= cost;
+                return (
+                  <TouchableOpacity
+                    key={s.id}
+                    onPress={() => setSelectedSlotId(isSelected ? null : s.id)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: 12,
+                      borderRadius: 10,
+                      borderWidth: isSelected ? 1.5 : StyleSheet.hairlineWidth,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                      backgroundColor: isSelected ? colors.primary + "18" : colors.card,
+                      opacity: affordable ? 1 : 0.4,
+                    }}
+                    disabled={!affordable}
+                  >
+                    <View>
+                      <Text style={{ fontSize: 15, fontWeight: "700", color: isSelected ? colors.primary : colors.foreground, fontVariant: ["tabular-nums"] }}>
+                        {s.hourLabel}:{s.minLabel}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2 }}>
+                        {SLOT_TYPE_LABELS[s.slotType] ?? s.slotType}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: isSelected ? colors.primary : colors.foreground }}>
+                        {cost} Д
+                      </Text>
+                      {!affordable && (
+                        <Text style={{ fontSize: 10, color: colors.destructive, marginTop: 2 }}>нехватка</Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          {/* Footer */}
+          <View style={{ padding: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 8 }}>
+            {selected && (
+              <View style={{ flexDirection: "row", justifyContent: "space-between", paddingBottom: 8 }}>
+                <Text style={{ fontSize: 13, color: colors.mutedForeground }}>
+                  Слот {selected.hourLabel}:{selected.minLabel} · {SLOT_TYPE_LABELS[selected.slotType]}
+                </Text>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: canAfford ? colors.foreground : colors.destructive }}>
+                  −{totalCost} Д
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={{
+                backgroundColor: selected && canAfford ? colors.primary : colors.muted,
+                height: 48,
+                borderRadius: 12,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onPress={() => bookMutation.mutate()}
+              disabled={!selected || !canAfford || bookMutation.isPending}
+            >
+              {bookMutation.isPending ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ color: selected && canAfford ? "#fff" : colors.mutedForeground, fontWeight: "700", fontSize: 15 }}>
+                  {selected ? `Забронировать за ${totalCost} Д` : "Выберите слот"}
+                </Text>
+              )}
+            </TouchableOpacity>
+            <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center" }}>
+              Стоимость включает 10% казначейский налог. Родовая минута защищена.
+            </Text>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function TvScreen() {
@@ -1100,6 +1258,7 @@ export default function TvScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<TvSlot | null>(null);
   const [showAgeGate, setShowAgeGate] = useState(false);
+  const [showBookModal, setShowBookModal] = useState(false);
   const [citizenAgeVerified, setCitizenAgeVerified] = useState(
     () => !!(citizen?.ageVerified ?? 0)
   );
@@ -1241,7 +1400,7 @@ export default function TvScreen() {
             <TouchableOpacity
               style={[styles.bookSlotBtn, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "55" }]}
               onPress={() => tvGuide.trigger(() => {
-                Linking.openURL(`${BASE_URL}/tv`).catch(() => {});
+                setShowBookModal(true);
               })}
               activeOpacity={0.75}
             >
@@ -1334,6 +1493,19 @@ export default function TvScreen() {
           onSelect={setDate}
           onClose={() => setShowDatePicker(false)}
           colors={colors}
+        />
+      )}
+
+      {/* Book slot modal */}
+      {showBookModal && citizen && (
+        <BookSlotModal
+          visible={showBookModal}
+          onClose={() => setShowBookModal(false)}
+          slots={data?.slots ?? []}
+          citizen={citizen}
+          date={date}
+          colors={colors}
+          onBooked={() => { void refetch(); }}
         />
       )}
 
