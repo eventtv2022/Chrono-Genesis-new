@@ -90,7 +90,7 @@ html,body,#map{width:100%;height:100%;background:#0f172a;}
 var map=L.map('map',{center:[20,10],zoom:2,zoomControl:false,attributionControl:false});
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
 var markers={};
-function send(d){if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify(d));}
+function send(d){var m=JSON.stringify(d);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(m);}else{try{window.parent.postMessage(m,'*');}catch(e){}}}
 function makeIcon(count,isMine,isSelected){
   var bg=isSelected?'#f59e0b':isMine?'#00ff87':'#60a5fa';
   var label=count>1?String(count):'●';
@@ -793,11 +793,15 @@ export default function ChronopediaScreen() {
               domStorageEnabled
               allowUniversalAccessFromFileURLs
               onMessage={handleMapMessage}
+              onLoadEnd={() => {
+                // Fallback for web/iframe env where ReactNativeWebView is not injected
+                setTimeout(() => setMapReady((v) => (v ? v : true)), 1500);
+              }}
               scrollEnabled={false}
               bounces={false}
               showsHorizontalScrollIndicator={false}
               showsVerticalScrollIndicator={false}
-              onError={() => console.warn("Chronopedia WebView failed to load")}
+              onError={() => { console.warn("Chronopedia WebView failed to load"); setMapReady(true); }}
             />
             {!mapReady && (
               <View style={st.mapLoading}>
