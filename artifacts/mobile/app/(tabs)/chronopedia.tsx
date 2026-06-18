@@ -1,4 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
+import { ContextualGuideModal } from "@/components/ContextualGuideModal";
+import { useContextualGuide } from "@/hooks/useContextualGuide";
 import {
   View,
   Text,
@@ -479,6 +481,7 @@ export default function ChronopediaScreen() {
   const { citizen } = useCitizen();
   const qc = useQueryClient();
   const st = getStyles(colors);
+  const chronoGuide = useContextualGuide("chronopedia");
 
   const webViewRef = useRef<WebView>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -689,8 +692,10 @@ export default function ChronopediaScreen() {
 
   const handleNewSlot = () => {
     if (!citizen) { Alert.alert("Войдите", "Необходим аккаунт гражданина"); return; }
-    setAddMode("slot");
-    setShowAddModal(true);
+    chronoGuide.trigger(() => {
+      setAddMode("slot");
+      setShowAddModal(true);
+    });
   };
 
   const handleModalSubmit = (data: {
@@ -953,6 +958,16 @@ export default function ChronopediaScreen() {
           selected: selectedPlace,
           setSelected: setSelectedPlace,
         }}
+      />
+
+      <ContextualGuideModal
+        visible={chronoGuide.visible}
+        onClose={chronoGuide.close}
+        onConfirm={chronoGuide.confirm}
+        icon="🗺️"
+        title="Добавить веху в Chronopedia"
+        explanation={"Chronopedia — социальный проект Государства. Ввод смыслов и привязка к карте всегда бесплатны.\n\nТвоя веха уйдёт на Вики-модерацию экспертам. За подтверждённый факт ты получишь Darmin, за спам — потеряешь Мериты!"}
+        ctaLabel="Выбрать геолокацию и зафиксировать время"
       />
     </View>
   );

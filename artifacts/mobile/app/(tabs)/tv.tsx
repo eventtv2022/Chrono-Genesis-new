@@ -22,6 +22,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
+import { ContextualGuideModal } from "@/components/ContextualGuideModal";
+import { useContextualGuide } from "@/hooks/useContextualGuide";
 
 const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
@@ -1054,6 +1056,7 @@ export default function TvScreen() {
   );
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const styles = getStyles(colors);
+  const tvGuide = useContextualGuide("tv");
 
   const { data, isLoading, refetch, isRefetching } = useQuery<{ date: string; count: number; slots: TvSlot[] }>({
     queryKey: ["tvSlots", date],
@@ -1185,13 +1188,25 @@ export default function TvScreen() {
             <Text style={{ color: colors.foreground, fontWeight: "600" }}>{mySlots.length}</Text> мои ·{" "}
             <Text style={{ color: colors.foreground, fontWeight: "600" }}>{freeCount}</Text> свободных из 1440
           </Text>
-          <TouchableOpacity onPress={() => refetch()} disabled={isRefetching}>
-            <Feather
-              name="refresh-cw"
-              size={15}
-              color={isRefetching ? colors.mutedForeground : colors.primary}
-            />
-          </TouchableOpacity>
+          <View style={styles.summaryActions}>
+            <TouchableOpacity
+              style={[styles.bookSlotBtn, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "55" }]}
+              onPress={() => tvGuide.trigger(() => {
+                Linking.openURL(`${BASE_URL}/tv`).catch(() => {});
+              })}
+              activeOpacity={0.75}
+            >
+              <Feather name="tv" size={12} color={colors.primary} />
+              <Text style={[styles.bookSlotBtnText, { color: colors.primary }]}>Забронировать</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => refetch()} disabled={isRefetching}>
+              <Feather
+                name="refresh-cw"
+                size={15}
+                color={isRefetching ? colors.mutedForeground : colors.primary}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -1272,6 +1287,16 @@ export default function TvScreen() {
           colors={colors}
         />
       )}
+
+      <ContextualGuideModal
+        visible={tvGuide.visible}
+        onClose={tvGuide.close}
+        onConfirm={tvGuide.confirm}
+        icon="📺"
+        title="Забронировать TV-слот"
+        explanation={"Ты покупаешь эфирное время TimeNation TV. Система возьмёт твой текст, Gemini превратит его в кино-промт, а бесплатный ИИ-генератор создаст полноценное видео под выбранный стиль.\n\nДоступны слоты :00, :15, :30, :45 каждого часа."}
+        ctaLabel="Написать смысл и запустить трансляцию"
+      />
     </View>
   );
 }
@@ -1298,7 +1323,10 @@ function getStyles(colors: ReturnType<typeof useColors>) {
       paddingVertical: 8,
       borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    summaryText: { fontSize: 13 },
+    summaryText: { fontSize: 13, flex: 1 },
+    summaryActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+    bookSlotBtn: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
+    bookSlotBtnText: { fontSize: 12, fontWeight: "600" },
     listContent: { paddingHorizontal: 16, paddingTop: 12 },
     listHeader: { fontSize: 12, marginBottom: 10 },
     slotCard: {

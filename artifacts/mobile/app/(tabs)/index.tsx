@@ -18,6 +18,8 @@ import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
 import { AnimatedHourglass } from "@/components/AnimatedHourglass";
+import { ContextualGuideModal } from "@/components/ContextualGuideModal";
+import { useContextualGuide } from "@/hooks/useContextualGuide";
 
 const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
@@ -70,6 +72,7 @@ export default function TimerScreen() {
   const { citizen, refreshCitizen } = useCitizen();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const walletGuide = useContextualGuide("wallet");
 
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -181,7 +184,7 @@ export default function TimerScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.walletBtn, citizen.walletVerified === 1 && styles.walletBtnVerified]}
-              onPress={() => router.push("/wallet")}
+              onPress={() => walletGuide.trigger(() => router.push("/wallet"))}
               activeOpacity={0.75}
             >
               {citizen.walletVerified === 1 ? (
@@ -314,6 +317,16 @@ export default function TimerScreen() {
           contentContainerStyle={{ paddingBottom: botPad + 90 }}
         />
       </View>
+
+      <ContextualGuideModal
+        visible={walletGuide.visible}
+        onClose={walletGuide.close}
+        onConfirm={walletGuide.confirm}
+        icon="💰"
+        title="Баланс Darmin / Кошелёк"
+        explanation="Валюта Darmin — это кровь экономики Государства. Она не покупается за фиат, а зарабатывается исключительно за полезные действия: модерацию истории, создание ИИ-кино и признание от других граждан."
+        ctaLabel="Посмотреть историю транзакций"
+      />
     </View>
   );
 }
