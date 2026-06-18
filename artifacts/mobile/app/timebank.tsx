@@ -126,14 +126,7 @@ export default function TimeBankScreen() {
       Alert.alert("Ошибка", "Введите корректную сумму");
       return;
     }
-    Alert.alert(
-      "Подтверждение",
-      `Взять ${amt} Д в кредит у Банка Времени?`,
-      [
-        { text: "Отмена", style: "cancel" },
-        { text: "Взять", onPress: () => borrowMutation.mutate({ amount: amt }) },
-      ]
-    );
+    borrowMutation.mutate({ amount: amt });
   }
 
   function handleRepay(loanId: number) {
@@ -142,14 +135,7 @@ export default function TimeBankScreen() {
       Alert.alert("Ошибка", "Введите корректную сумму погашения");
       return;
     }
-    Alert.alert(
-      "Погашение долга",
-      `Погасить ${amt} Д по кредиту?`,
-      [
-        { text: "Отмена", style: "cancel" },
-        { text: "Погасить", onPress: () => repayMutation.mutate({ loanId, amount: amt }) },
-      ]
-    );
+    repayMutation.mutate({ loanId, amount: amt });
   }
 
   const activeLoan = data?.loans.find((l) => l.status === "active") ?? null;
