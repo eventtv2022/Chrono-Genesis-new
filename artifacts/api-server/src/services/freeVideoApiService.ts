@@ -44,7 +44,8 @@ async function fetchWithTimeout(
 // ── Provider 1: HuggingFace text-to-video ─────────────────────────────────────
 async function generateViaHuggingFace(
   prompt: string,
-  tmpDir: string
+  tmpDir: string,
+  signal?: AbortSignal
 ): Promise<string | null> {
   const hfToken = process.env["HF_TOKEN"];
   const headers: Record<string, string> = {
@@ -68,7 +69,8 @@ async function generateViaHuggingFace(
         headers,
         body: JSON.stringify({ inputs: prompt }),
       },
-      HF_TIMEOUT_MS
+      HF_TIMEOUT_MS,
+      signal
     );
   } catch (err: unknown) {
     const isAbort =
@@ -243,7 +245,7 @@ export async function generateAIBackground(
   const ownsTmpDir = !tmpDir;
 
   // Try HuggingFace first
-  const hfPath = await generateViaHuggingFace(prompt, dir);
+  const hfPath = await generateViaHuggingFace(prompt, dir, signal);
   if (hfPath) {
     return { videoPath: hfPath, ownsTmpDir, tmpDir: dir };
   }
