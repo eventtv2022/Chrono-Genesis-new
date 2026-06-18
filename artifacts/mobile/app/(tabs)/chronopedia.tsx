@@ -190,10 +190,12 @@ function EventCard({
 function FeedEventCard({
   event,
   onPress,
+  onAddOpinion,
   colors,
 }: {
   event: FeedEvent;
   onPress: () => void;
+  onAddOpinion?: (slotId: number) => void;
   colors: ReturnType<typeof useColors>;
 }) {
   const st = getStyles(colors);
@@ -217,6 +219,16 @@ function FeedEventCard({
       </View>
       <Text style={[st.feedTitle, { color: colors.foreground }]} numberOfLines={1}>{event.title}</Text>
       <Text style={[st.feedDesc, { color: colors.mutedForeground }]} numberOfLines={2}>{event.description}</Text>
+      {onAddOpinion && (
+        <TouchableOpacity
+          style={[st.feedAddBtn, { borderColor: colors.primary + "55" }]}
+          onPress={(e) => { e.stopPropagation?.(); onAddOpinion(event.slotId); }}
+          hitSlop={4}
+        >
+          <Feather name="plus" size={12} color={colors.primary} />
+          <Text style={[st.feedAddBtnText, { color: colors.primary }]}>Добавить мнение</Text>
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   );
 }
@@ -234,6 +246,8 @@ interface AddModalProps {
     locationName?: string;
     timeMarker?: string;
     placeId?: string;
+    lat?: number;
+    lng?: number;
     title: string;
     description: string;
   }) => void;
@@ -258,6 +272,8 @@ function AddModal({
   const [timeMarker, setTimeMarker] = useState(
     () => new Date().toISOString().slice(0, 10)
   );
+  const [manualLat, setManualLat] = useState("");
+  const [manualLng, setManualLng] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
 
@@ -268,6 +284,8 @@ function AddModal({
       if (mode === "slot") {
         setLocationName(placeSearch.selected?.name ?? "");
         setTimeMarker(new Date().toISOString().slice(0, 10));
+        setManualLat(pendingLat != null ? String(pendingLat) : "");
+        setManualLng(pendingLng != null ? String(pendingLng) : "");
       }
     }
   }, [visible, mode]);
@@ -275,6 +293,8 @@ function AddModal({
   useEffect(() => {
     if (placeSearch.selected) {
       setLocationName(placeSearch.selected.name);
+      setManualLat(String(placeSearch.selected.lat));
+      setManualLng(String(placeSearch.selected.lng));
     }
   }, [placeSearch.selected]);
 
@@ -283,11 +303,19 @@ function AddModal({
     if (!description.trim()) { Alert.alert("Ошибка", "Введите описание"); return; }
     if (mode === "slot" && !locationName.trim()) { Alert.alert("Ошибка", "Введите название места"); return; }
     if (mode === "slot" && !timeMarker.trim()) { Alert.alert("Ошибка", "Введите дату/время"); return; }
+    const lat = parseFloat(manualLat);
+    const lng = parseFloat(manualLng);
+    if (mode === "slot" && (isNaN(lat) || isNaN(lng))) {
+      Alert.alert("Ошибка", "Укажите координаты вручную или найдите место через поиск");
+      return;
+    }
 
     onSubmit({
       locationName: mode === "slot" ? locationName.trim() : undefined,
       timeMarker: mode === "slot" ? timeMarker.trim() : undefined,
       placeId: placeSearch.selected?.placeId,
+      lat: mode === "slot" ? lat : undefined,
+      lng: mode === "slot" ? lng : undefined,
       title: title.trim(),
       description: description.trim(),
     });
@@ -365,11 +393,26 @@ function AddModal({
                   value={locationName}
                   onChangeText={setLocationName}
                 />
-                {pendingLat != null && (
-                  <Text style={[st.coordHint, { color: colors.mutedForeground }]}>
-                    📍 {pendingLat.toFixed(4)}, {pendingLng?.toFixed(4)}
-                  </Text>
-                )}
+
+                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Координаты (широта, долгота)</Text>
+                <View style={st.coordRow}>
+                  <TextInput
+                    style={[st.field, st.coordField, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
+                    placeholder="55.7558"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={manualLat}
+                    onChangeText={setManualLat}
+                    keyboardType="numeric"
+                  />
+                  <TextInput
+                    style={[st.field, st.coordField, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
+                    placeholder="37.6173"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={manualLng}
+                    onChangeText={setManualLng}
+                    keyboardType="numeric"
+                  />
+                </View>
 
                 <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Дата / время события</Text>
                 <TextInput
@@ -440,6 +483,7 @@ export default function ChronopediaScreen() {
   const [pendingLng, setPendingLng] = useState<number | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addMode, setAddMode] = useState<"slot" | "event">("slot");
+  const [feedSlotInfo, setFeedSlotInfo] = useState<{ locationName: string; timeMarker: string } | null>(null);
 
   const [placeQuery, setPlaceQuery] = useState("");
   const [placeResults, setPlaceResults] = useState<PlaceResult[]>([]);
@@ -522,11 +566,13 @@ export default function ChronopediaScreen() {
       locationName: string;
       timeMarker: string;
       placeId?: string;
+      lat?: number;
+      lng?: number;
       title: string;
       description: string;
     }) => {
-      const lat = selectedPlace?.lat ?? pendingLat ?? 0;
-      const lng = selectedPlace?.lng ?? pendingLng ?? 0;
+      const lat = data.lat ?? selectedPlace?.lat ?? pendingLat ?? 0;
+      const lng = data.lng ?? selectedPlace?.lng ?? pendingLng ?? 0;
       const res = await fetch(`${BASE_URL}/api/chronopedia/slots`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -638,10 +684,6 @@ export default function ChronopediaScreen() {
 
   const handleNewSlot = () => {
     if (!citizen) { Alert.alert("Войдите", "Необходим аккаунт гражданина"); return; }
-    if (pendingLat === null) {
-      Alert.alert("Выберите место", "Нажмите на карту чтобы выбрать точку, затем нажмите +");
-      return;
-    }
     setAddMode("slot");
     setShowAddModal(true);
   };
@@ -675,6 +717,7 @@ export default function ChronopediaScreen() {
 
   const handleFeedCardPress = (event: FeedEvent) => {
     setSelectedSlotId(event.slotId);
+    setFeedSlotInfo({ locationName: event.locationName, timeMarker: event.timeMarker });
     setViewMode("map");
     if (mapReady) {
       webViewRef.current?.injectJavaScript(
@@ -682,6 +725,14 @@ export default function ChronopediaScreen() {
       );
     }
   };
+
+  const handleFeedAddOpinion = useCallback((slotId: number, locationName: string, timeMarker: string) => {
+    if (!citizen) { Alert.alert("Войдите", "Необходим аккаунт гражданина"); return; }
+    setSelectedSlotId(slotId);
+    setFeedSlotInfo({ locationName, timeMarker });
+    setAddMode("event");
+    setShowAddModal(true);
+  }, [citizen]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const isSaving = createSlotMutation.isPending || addEventMutation.isPending;
@@ -725,15 +776,18 @@ export default function ChronopediaScreen() {
           <View style={st.mapWrapper}>
             <WebView
               ref={webViewRef}
-              source={{ html: LEAFLET_HTML }}
+              source={{ html: LEAFLET_HTML, baseUrl: "https://unpkg.com" }}
               style={st.webView}
               javaScriptEnabled
               originWhitelist={["*"]}
+              domStorageEnabled
+              allowUniversalAccessFromFileURLs
               onMessage={handleMapMessage}
               scrollEnabled={false}
               bounces={false}
               showsHorizontalScrollIndicator={false}
               showsVerticalScrollIndicator={false}
+              onError={() => console.warn("Chronopedia WebView failed to load")}
             />
             {!mapReady && (
               <View style={st.mapLoading}>
@@ -838,7 +892,12 @@ export default function ChronopediaScreen() {
             data={feedData?.events ?? []}
             keyExtractor={(e) => String(e.id)}
             renderItem={({ item }) => (
-              <FeedEventCard event={item} onPress={() => handleFeedCardPress(item)} colors={colors} />
+              <FeedEventCard
+                event={item}
+                onPress={() => handleFeedCardPress(item)}
+                onAddOpinion={(slotId) => handleFeedAddOpinion(slotId, item.locationName, item.timeMarker)}
+                colors={colors}
+              />
             )}
             contentContainerStyle={[st.feedList, { paddingBottom: insets.bottom + 80 }]}
             showsVerticalScrollIndicator={false}
@@ -857,13 +916,8 @@ export default function ChronopediaScreen() {
       {/* FAB */}
       {viewMode === "map" && (
         <TouchableOpacity
-          style={[
-            st.fab,
-            { backgroundColor: colors.primary, bottom: insets.bottom + 90 },
-            pendingLat === null && { opacity: 0.4 },
-          ]}
+          style={[st.fab, { backgroundColor: colors.primary, bottom: insets.bottom + 90 }]}
           onPress={handleNewSlot}
-          disabled={pendingLat === null}
         >
           <Feather name="plus" size={24} color="#fff" />
         </TouchableOpacity>
@@ -874,8 +928,10 @@ export default function ChronopediaScreen() {
         visible={showAddModal}
         mode={addMode}
         slotInfo={
-          addMode === "event" && slotDetail
-            ? { locationName: slotDetail.slot.locationName, timeMarker: slotDetail.slot.timeMarker }
+          addMode === "event"
+            ? (slotDetail
+                ? { locationName: slotDetail.slot.locationName, timeMarker: slotDetail.slot.timeMarker }
+                : feedSlotInfo)
             : null
         }
         pendingLat={pendingLat}
@@ -1019,6 +1075,22 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     feedEmpty: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 10 },
     feedEmptyIcon: { fontSize: 40 },
     feedEmptyText: { fontSize: 14, textAlign: "center", paddingHorizontal: 40, lineHeight: 20 },
+    feedAddBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      marginTop: 10,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      alignSelf: "flex-start",
+    },
+    feedAddBtnText: { fontSize: 12, fontWeight: "600" },
+
+    coordRow: { flexDirection: "row", gap: 10 },
+    coordField: { flex: 1 },
+    coordHint: { fontSize: 12, marginTop: 4 },
 
     // FAB
     fab: {
@@ -1059,8 +1131,6 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     fieldLabel: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginTop: 14 },
     field: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 11, fontSize: 15 },
     fieldMulti: { height: 100, paddingTop: 11 },
-
-    coordHint: { fontSize: 12, marginTop: 4 },
 
     searchRow: { flexDirection: "row", alignItems: "center", borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
     searchInput: { flex: 1, fontSize: 15 },
