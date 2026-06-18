@@ -298,17 +298,22 @@ function AddModal({
     }
   }, [placeSearch.selected]);
 
+  // Auto-sync location name from search query when no place is selected
+  useEffect(() => {
+    if (!placeSearch.selected && mode === "slot") {
+      setLocationName(placeSearch.query.trim());
+    }
+  }, [placeSearch.query, placeSearch.selected, mode]);
+
   const handleSubmit = () => {
     if (!title.trim()) { Alert.alert("Ошибка", "Введите заголовок"); return; }
     if (!description.trim()) { Alert.alert("Ошибка", "Введите описание"); return; }
     if (mode === "slot" && !locationName.trim()) { Alert.alert("Ошибка", "Введите название места"); return; }
     if (mode === "slot" && !timeMarker.trim()) { Alert.alert("Ошибка", "Введите дату/время"); return; }
-    const lat = parseFloat(manualLat);
-    const lng = parseFloat(manualLng);
-    if (mode === "slot" && (isNaN(lat) || isNaN(lng))) {
-      Alert.alert("Ошибка", "Укажите координаты вручную или найдите место через поиск");
-      return;
-    }
+
+    // Use entered coordinates or fall back to 0,0 (point will appear at map origin)
+    const lat = parseFloat(manualLat) || 0;
+    const lng = parseFloat(manualLng) || 0;
 
     onSubmit({
       locationName: mode === "slot" ? locationName.trim() : undefined,
