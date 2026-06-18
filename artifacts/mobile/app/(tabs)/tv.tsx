@@ -453,6 +453,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
   const [legalConsent, setLegalConsent] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [renderTimeoutMs, setRenderTimeoutMs] = useState<number | null>(null);
   const prevStatusRef = useRef<string | null>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
 
@@ -632,11 +633,13 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
         }
         throw new Error(err.error ?? "Ошибка рендера");
       }
-      return res.json() as Promise<{ ok: boolean; status: string; slotId: number; jobId?: string }>;
+      return res.json() as Promise<{ ok: boolean; status: string; slotId: number; jobId?: string; timeoutMs?: number }>;
     },
     onSuccess: (data) => {
       // Store jobId for queue position polling
       if (data.jobId) setJobId(data.jobId);
+      // Store the timeout budget so the progress hint is accurate
+      if (data.timeoutMs) setRenderTimeoutMs(data.timeoutMs);
       // Reset progress bar to 0 for fresh start
       progressAnim.setValue(0);
       // Render is running in background — start polling capsule for progress
@@ -667,9 +670,11 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
       onNeedAgeVerify();
       return;
     }
+    const isHeavySlot = slot.slotType !== "citizen";
+    const estimatedTime = isHeavySlot ? "до 5 минут" : "до 2 минут";
     Alert.alert(
       "Рендер капсулы",
-      `Тема: ${VISUAL_STYLES.find(s => s.value === visualStyle)?.label ?? visualStyle}\n\nЗапустить AI-рендер? Прогресс будет показан прямо здесь (~30–120 сек). Вы получите уведомление в Telegram когда видео будет готово.`,
+      `Тема: ${VISUAL_STYLES.find(s => s.value === visualStyle)?.label ?? visualStyle}\n\nЗапустить AI-рендер? Прогресс будет показан прямо здесь (${estimatedTime}). Вы получите уведомление в Telegram когда видео будет готово.`,
       [
         { text: "Отмена", style: "cancel" },
         { text: "Рендерить", onPress: () => renderMutation.mutate() },
@@ -966,7 +971,9 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                       </View>
 
                       <Text style={[styles.renderProgressHint, { color: colors.mutedForeground }]}>
-                        AI-рендер занимает 30–120 сек. Не закрывайте экран.
+                        {renderTimeoutMs && renderTimeoutMs >= 300_000
+                          ? `До ${Math.round(renderTimeoutMs / 60_000)} минут для вашего премиум-слота. Не закрывайте экран.`
+                          : `AI-рендер занимает до ${renderTimeoutMs ? Math.round(renderTimeoutMs / 60_000) : 2} мин. Не закрывайте экран.`}
                       </Text>
                     </View>
                   )}

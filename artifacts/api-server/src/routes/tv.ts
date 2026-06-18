@@ -846,7 +846,7 @@ router.post("/tv/capsule/:slotId/render", async (req, res): Promise<void> => {
   });
 
   renderLog.info({ jobId }, "Render job enqueued");
-  res.status(202).json({ ok: true, status: "pending_render", slotId, jobId });
+  res.status(202).json({ ok: true, status: "pending_render", slotId, jobId, timeoutMs: renderTimeoutMs });
 });
 
 // ─── POST /api/tv/capsule/:id/report  (DMCA / takedown) ───────────────────────
