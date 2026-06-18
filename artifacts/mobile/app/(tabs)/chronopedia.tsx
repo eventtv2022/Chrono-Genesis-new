@@ -19,7 +19,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import WebView, { type WebViewMessageEvent } from "react-native-webview";
+import ChronopediaMap, { type ChronopediaMapHandle } from "@/components/ChronopediaMap";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { LogoBrand } from "@/components/LogoBrand";
@@ -67,73 +67,6 @@ interface PlaceResult {
   lat: number;
   lng: number;
 }
-
-// ── Leaflet HTML ──────────────────────────────────────────────────────────────
-
-const LEAFLET_HTML = `<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;}
-html,body,#map{width:100%;height:100%;background:#0f172a;}
-.leaflet-control-attribution,.leaflet-control-zoom{display:none;}
-.tn-tip{background:#1e293b!important;color:#f1f5f9!important;border:1px solid #334155!important;font-size:12px!important;padding:6px 10px!important;border-radius:8px!important;white-space:nowrap!important;box-shadow:0 4px 16px rgba(0,0,0,0.6)!important;}
-.tn-tip::before{display:none!important;}
-</style>
-</head>
-<body>
-<div id="map"></div>
-<script>
-var map=L.map('map',{center:[20,10],zoom:2,zoomControl:false,attributionControl:false});
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
-var markers={};
-function send(d){var m=JSON.stringify(d);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(m);}else{try{window.parent.postMessage(m,'*');}catch(e){}}}
-function makeIcon(count,isMine,isSelected){
-  var bg=isSelected?'#f59e0b':isMine?'#00ff87':'#60a5fa';
-  var label=count>1?String(count):'●';
-  return L.divIcon({
-    className:'',
-    html:'<div style="width:36px;height:36px;background:'+bg+';border:2.5px solid rgba(255,255,255,0.9);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#111;box-shadow:0 3px 12px rgba(0,0,0,0.7);cursor:pointer;transition:transform 0.1s;">'+label+'</div>',
-    iconSize:[36,36],iconAnchor:[18,18],
-  });
-}
-var selectedSlotId=null;
-function updateMarkers(slots,myId){
-  Object.values(markers).forEach(function(m){m.remove();});
-  markers={};
-  (slots||[]).forEach(function(s){
-    var isMine=!!s.hasMyEvent;
-    var isSel=s.id===selectedSlotId;
-    var m=L.marker([s.geoLat,s.geoLng],{icon:makeIcon(s.eventCount||0,isMine,isSel)}).addTo(map);
-    m.bindTooltip('<b>'+escHtml(s.locationName)+'</b><br><small>'+escHtml(s.timeMarker)+'</small><br>'+(s.eventCount||0)+' мнени'+(s.eventCount===1?'е':'й'),{className:'tn-tip',direction:'top'});
-    m.on('click',function(){
-      selectedSlotId=s.id;
-      updateMarkers(slots,myId);
-      send({type:'slotClick',slotId:s.id});
-    });
-    markers[s.id]=m;
-  });
-}
-function centerOn(lat,lng,z){map.setView([lat,lng],z||12,{animate:true});}
-function selectSlot(id){
-  selectedSlotId=id;
-  var m=markers[id];
-  if(m){map.setView(m.getLatLng(),13,{animate:true});m.openTooltip();}
-}
-function clearSelection(){selectedSlotId=null;}
-function escHtml(s){return String(s||'').replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]||c;});}
-map.on('click',function(e){send({type:'mapClick',lat:parseFloat(e.latlng.lat.toFixed(6)),lng:parseFloat(e.latlng.lng.toFixed(6))});});
-window.updateMarkers=updateMarkers;
-window.centerOn=centerOn;
-window.selectSlot=selectSlot;
-window.clearSelection=clearSelection;
-setTimeout(function(){send({type:'ready'});},400);
-</script>
-</body>
-</html>`;
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -483,7 +416,7 @@ export default function ChronopediaScreen() {
   const st = getStyles(colors);
   const chronoGuide = useContextualGuide("chronopedia");
 
-  const webViewRef = useRef<WebView>(null);
+  const mapRef = useRef<ChronopediaMapHandle>(null);
   const [mapReady, setMapReady] = useState(false);
   const [viewMode, setViewMode] = useState<"map" | "feed">("map");
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
@@ -497,41 +430,6 @@ export default function ChronopediaScreen() {
   const [placeResults, setPlaceResults] = useState<PlaceResult[]>([]);
   const [placeLoading, setPlaceLoading] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
-
-  // Web platform: ReactNativeWebView is not injected into iframes in browser mode.
-  // Listen for postMessage from the Leaflet iframe directly via window.addEventListener.
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    // Safety timer — set mapReady even if the ready message never arrives
-    const t = setTimeout(() => setMapReady(true), 700);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handler = (e: any) => {
-      try {
-        const msg = JSON.parse(String(e.data ?? "{}")) as {
-          type: string; slotId?: number; lat?: number; lng?: number;
-        };
-        if (msg.type === "ready") {
-          clearTimeout(t);
-          setMapReady(true);
-        } else if (msg.type === "slotClick") {
-          setSelectedSlotId(msg.slotId ?? null);
-          setPendingLat(null);
-          setPendingLng(null);
-        } else if (msg.type === "mapClick") {
-          setSelectedSlotId(null);
-          setPendingLat(msg.lat ?? null);
-          setPendingLng(msg.lng ?? null);
-        }
-      } catch { /* ignore */ }
-    };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).addEventListener?.("message", handler);
-    return () => {
-      clearTimeout(t);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).removeEventListener?.("message", handler);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Google Places search with debounce
   useEffect(() => {
@@ -589,18 +487,6 @@ export default function ChronopediaScreen() {
     enabled: viewMode === "feed",
     refetchInterval: 30000,
   });
-
-  // ── Update map markers when slots data or selection changes ────────────────
-  useEffect(() => {
-    if (!mapReady || slots.length === 0) return;
-    const js = `updateMarkers(${JSON.stringify(slots)}, ${citizen?.id ?? 0}); true;`;
-    webViewRef.current?.injectJavaScript(js);
-  }, [mapReady, slots, citizen?.id]);
-
-  useEffect(() => {
-    if (!mapReady || selectedSlotId === null) return;
-    webViewRef.current?.injectJavaScript(`selectSlot(${selectedSlotId}); true;`);
-  }, [mapReady, selectedSlotId]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
@@ -692,31 +578,6 @@ export default function ChronopediaScreen() {
     onError: (e: Error) => Alert.alert("Ошибка", e.message),
   });
 
-  // ── WebView message handler ────────────────────────────────────────────────
-
-  const handleMapMessage = useCallback((e: WebViewMessageEvent) => {
-    try {
-      const msg = JSON.parse(e.nativeEvent.data) as {
-        type: string;
-        slotId?: number;
-        lat?: number;
-        lng?: number;
-      };
-      if (msg.type === "ready") {
-        setMapReady(true);
-      } else if (msg.type === "slotClick") {
-        setSelectedSlotId(msg.slotId ?? null);
-        setPendingLat(null);
-        setPendingLng(null);
-      } else if (msg.type === "mapClick") {
-        setSelectedSlotId(null);
-        setPendingLat(msg.lat ?? null);
-        setPendingLng(msg.lng ?? null);
-        webViewRef.current?.injectJavaScript("clearSelection(); true;");
-      }
-    } catch { /* ignore */ }
-  }, []);
-
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleAddOpinion = () => {
@@ -765,9 +626,7 @@ export default function ChronopediaScreen() {
     setFeedSlotInfo({ locationName: event.locationName, timeMarker: event.timeMarker });
     setViewMode("map");
     if (mapReady) {
-      webViewRef.current?.injectJavaScript(
-        `centerOn(${event.geoLat}, ${event.geoLng}, 13); selectSlot(${event.slotId}); true;`
-      );
+      mapRef.current?.centerOn(event.geoLat, event.geoLng, 13);
     }
   };
 
@@ -819,31 +678,24 @@ export default function ChronopediaScreen() {
         <View style={st.mapContainer}>
           {/* Leaflet map */}
           <View style={st.mapWrapper}>
-            <WebView
-              ref={webViewRef}
-              source={{ html: LEAFLET_HTML, baseUrl: "https://unpkg.com" }}
-              style={st.webView}
-              javaScriptEnabled
-              originWhitelist={["*"]}
-              domStorageEnabled
-              allowUniversalAccessFromFileURLs
-              onMessage={handleMapMessage}
-              onLoadEnd={() => {
-                // Fallback for web/iframe env where ReactNativeWebView is not injected
-                setTimeout(() => setMapReady((v) => (v ? v : true)), 1500);
+            <ChronopediaMap
+              ref={mapRef}
+              slots={slots}
+              myId={citizen?.id}
+              selectedSlotId={selectedSlotId}
+              onReady={() => setMapReady(true)}
+              onSlotClick={(slotId) => {
+                setSelectedSlotId(slotId);
+                setPendingLat(null);
+                setPendingLng(null);
               }}
-              scrollEnabled={false}
-              bounces={false}
-              showsHorizontalScrollIndicator={false}
-              showsVerticalScrollIndicator={false}
-              onError={() => { console.warn("Chronopedia WebView failed to load"); setMapReady(true); }}
+              onMapClick={(lat, lng) => {
+                setSelectedSlotId(null);
+                setPendingLat(lat);
+                setPendingLng(lng);
+              }}
+              style={st.webView}
             />
-            {!mapReady && (
-              <View style={st.mapLoading}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={[st.mapLoadingText, { color: colors.mutedForeground }]}>Загрузка карты…</Text>
-              </View>
-            )}
             {slotsLoading && mapReady && (
               <View style={[st.mapLoadingOverlay]}>
                 <ActivityIndicator color={colors.primary} size="small" />

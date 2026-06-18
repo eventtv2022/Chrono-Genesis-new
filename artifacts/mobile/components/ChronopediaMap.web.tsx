@@ -1,0 +1,181 @@
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
+import { View } from "react-native";
+import L from "leaflet";
+
+// ── Shared types (must mirror ChronopediaMap.native.tsx) ──────────────────────
+
+export interface SlotMarker {
+  id: number;
+  geoLat: number;
+  geoLng: number;
+  locationName: string;
+  timeMarker: string;
+  eventCount: number;
+  hasMyEvent: boolean;
+}
+
+export interface ChronopediaMapHandle {
+  centerOn: (lat: number, lng: number, zoom?: number) => void;
+}
+
+export interface ChronopediaMapProps {
+  slots: SlotMarker[];
+  myId?: number;
+  selectedSlotId: number | null;
+  onSlotClick: (slotId: number) => void;
+  onMapClick: (lat: number, lng: number) => void;
+  onReady: () => void;
+  style?: object;
+}
+
+// ── CSS injection (once per page) ─────────────────────────────────────────────
+
+let cssInjected = false;
+function ensureLeafletCSS() {
+  if (cssInjected) return;
+  cssInjected = true;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+  document.head.appendChild(link);
+  const style = document.createElement("style");
+  style.textContent = `
+    .leaflet-control-attribution,.leaflet-control-zoom{display:none!important;}
+    .tn-tip.leaflet-tooltip{background:#1e293b;color:#f1f5f9;border:1px solid #334155;
+      font-size:12px;padding:6px 10px;border-radius:8px;white-space:nowrap;
+      box-shadow:0 4px 16px rgba(0,0,0,0.6);}
+    .tn-tip.leaflet-tooltip::before{display:none;}
+  `;
+  document.head.appendChild(style);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function makeIcon(count: number, isMine: boolean, isSelected: boolean): L.DivIcon {
+  const bg = isSelected ? "#f59e0b" : isMine ? "#00ff87" : "#60a5fa";
+  const label = count > 1 ? String(count) : "●";
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:36px;height:36px;background:${bg};border:2.5px solid rgba(255,255,255,0.9);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#111;box-shadow:0 3px 12px rgba(0,0,0,0.7);cursor:pointer;">${label}</div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+}
+
+function escHtml(s: string): string {
+  return String(s || "").replace(
+    /[&<>"]/g,
+    (c) => (({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" } as Record<string, string>)[c] ?? c)
+  );
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
+  (props, ref) => {
+    // React Native Web: View ref gives us the underlying DOM element on web
+    const containerRef = useRef<View>(null);
+    const mapRef = useRef<L.Map | null>(null);
+    const markersRef = useRef<Record<number, L.Marker>>({});
+
+    // Stable refs for callbacks (avoid stale closures)
+    const onSlotClickRef = useRef(props.onSlotClick);
+    const onMapClickRef = useRef(props.onMapClick);
+    useEffect(() => { onSlotClickRef.current = props.onSlotClick; }, [props.onSlotClick]);
+    useEffect(() => { onMapClickRef.current = props.onMapClick; }, [props.onMapClick]);
+
+    useImperativeHandle(ref, () => ({
+      centerOn: (lat, lng, zoom = 12) => {
+        mapRef.current?.setView([lat, lng], zoom, { animate: true });
+      },
+    }));
+
+    // Initialize Leaflet map
+    useEffect(() => {
+      ensureLeafletCSS();
+      // React Native Web gives the DOM node via the View ref
+      const el = containerRef.current as unknown as HTMLElement;
+      if (!el || mapRef.current) return;
+
+      const map = L.map(el, {
+        center: [20, 10],
+        zoom: 2,
+        zoomControl: false,
+        attributionControl: false,
+      });
+
+      L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        { maxZoom: 19 }
+      ).addTo(map);
+
+      map.on("click", (e) => {
+        onMapClickRef.current(
+          parseFloat(e.latlng.lat.toFixed(6)),
+          parseFloat(e.latlng.lng.toFixed(6))
+        );
+      });
+
+      mapRef.current = map;
+      props.onReady();
+
+      return () => {
+        map.remove();
+        mapRef.current = null;
+        markersRef.current = {};
+      };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Sync markers whenever slots or selection changes
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map) return;
+
+      // Remove old markers
+      Object.values(markersRef.current).forEach((m) => m.remove());
+      markersRef.current = {};
+
+      (props.slots || []).forEach((slot) => {
+        const isMine = !!slot.hasMyEvent;
+        const isSel = slot.id === props.selectedSlotId;
+
+        const marker = L.marker([slot.geoLat, slot.geoLng], {
+          icon: makeIcon(slot.eventCount || 0, isMine, isSel),
+        }).addTo(map);
+
+        marker.bindTooltip(
+          `<b>${escHtml(slot.locationName)}</b><br><small>${escHtml(slot.timeMarker)}</small><br>${slot.eventCount || 0} мнени${slot.eventCount === 1 ? "е" : "й"}`,
+          { className: "tn-tip", direction: "top" }
+        );
+
+        marker.on("click", (e) => {
+          L.DomEvent.stopPropagation(e);
+          onSlotClickRef.current(slot.id);
+        });
+
+        markersRef.current[slot.id] = marker;
+
+        if (isSel) {
+          map.setView([slot.geoLat, slot.geoLng], 13, { animate: true });
+          setTimeout(() => marker.openTooltip(), 200);
+        }
+      });
+    }, [props.slots, props.selectedSlotId, props.myId]);
+
+    return (
+      <View
+        ref={containerRef}
+        style={[{ flex: 1, minHeight: 200 }, props.style as object]}
+      />
+    );
+  }
+);
+
+ChronopediaMap.displayName = "ChronopediaMap";
+
+export default ChronopediaMap;
