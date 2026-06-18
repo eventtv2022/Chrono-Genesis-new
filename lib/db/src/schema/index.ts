@@ -11,3 +11,4 @@ export * from "./deals";
 export * from "./timelineCapsules";
 export * from "./chronopediaSlots";
 export * from "./chronopediaEvents";
+export * from "./timeBankLoans";

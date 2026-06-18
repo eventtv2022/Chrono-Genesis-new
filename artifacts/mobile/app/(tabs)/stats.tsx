@@ -106,16 +106,28 @@ export default function StatsScreen() {
           <LogoBrand size={28} />
           <Text style={styles.headerTitle}>КАЗНАЧЕЙСТВО</Text>
         </View>
-        {citizen && (
-          <TouchableOpacity
-            style={styles.topupBtn}
-            onPress={() => router.push("/shop")}
-            activeOpacity={0.8}
-          >
-            <Feather name="plus" size={13} color={colors.primaryForeground} />
-            <Text style={styles.topupBtnText}>Пополнить</Text>
-          </TouchableOpacity>
-        )}
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {citizen && (
+            <TouchableOpacity
+              style={[styles.topupBtn, { backgroundColor: colors.muted }]}
+              onPress={() => router.push("/timebank")}
+              activeOpacity={0.8}
+            >
+              <Feather name="clock" size={13} color={colors.primary} />
+              <Text style={[styles.topupBtnText, { color: colors.primary }]}>Банк</Text>
+            </TouchableOpacity>
+          )}
+          {citizen && (
+            <TouchableOpacity
+              style={styles.topupBtn}
+              onPress={() => router.push("/shop")}
+              activeOpacity={0.8}
+            >
+              <Feather name="plus" size={13} color={colors.primaryForeground} />
+              <Text style={styles.topupBtnText}>Пополнить</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={styles.metricsGrid}>
