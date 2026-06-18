@@ -22,10 +22,28 @@ const MAX_CONCURRENT_RENDERS = parseInt(
 /**
  * Per-job wall-clock timeout. If a render job exceeds this, it is abandoned
  * and an immediate solid-color fallback is produced so the queue keeps moving.
- * Default: 180 s. Override with RENDER_JOB_TIMEOUT_MS env var.
+ * Default: 180 s. Override with RENDER_JOB_TIMEOUT_MS env var (generic fallback).
  */
 const RENDER_JOB_TIMEOUT_MS = parseInt(
   process.env["RENDER_JOB_TIMEOUT_MS"] ?? "180000",
+  10
+);
+
+/**
+ * Timeout for light-path renders (citizen 1-minute slots).
+ * Default: 120 s. Override with RENDER_JOB_TIMEOUT_LIGHT_MS env var.
+ */
+export const RENDER_JOB_TIMEOUT_LIGHT_MS = parseInt(
+  process.env["RENDER_JOB_TIMEOUT_LIGHT_MS"] ?? "120000",
+  10
+);
+
+/**
+ * Timeout for heavy-path renders (Quarter / Half / Apex premium slots).
+ * Default: 300 s. Override with RENDER_JOB_TIMEOUT_HEAVY_MS env var.
+ */
+export const RENDER_JOB_TIMEOUT_HEAVY_MS = parseInt(
+  process.env["RENDER_JOB_TIMEOUT_HEAVY_MS"] ?? "300000",
   10
 );
 
@@ -44,6 +62,8 @@ interface RenderJob {
   slotId: number;
   citizenId: number;
   capsuleSeedText: string | null;
+  /** Per-job timeout override in ms. Defaults to RENDER_JOB_TIMEOUT_MS when omitted. */
+  timeoutMs?: number;
 }
 
 let activeCount = 0;
@@ -68,6 +88,7 @@ function drainQueue(): void {
  */
 export function enqueueRender(job: RenderJob): string {
   const { jobId, slotId, citizenId, capsuleSeedText } = job;
+  const effectiveTimeoutMs = job.timeoutMs ?? RENDER_JOB_TIMEOUT_MS;
 
   jobStatus.set(jobId, { slotId, status: "queued" });
 
@@ -77,18 +98,18 @@ export function enqueueRender(job: RenderJob): string {
     if (entry) entry.status = "running";
 
     const renderLog = logger.child({ slotId, citizenId, jobId });
-    renderLog.info({ queueDepth: queue.length, active: activeCount }, "Render job started");
+    renderLog.info({ queueDepth: queue.length, active: activeCount, timeoutMs: effectiveTimeoutMs }, "Render job started");
 
     void (async () => {
       const startTime = Date.now();
 
-      // Build a deadline promise that rejects once RENDER_JOB_TIMEOUT_MS elapses
+      // Build a deadline promise that rejects once effectiveTimeoutMs elapses
       let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
       const deadline = new Promise<never>((_, reject) => {
         deadlineTimer = setTimeout(() => {
           const elapsed = Date.now() - startTime;
           reject(new RenderTimeoutError(slotId, elapsed));
-        }, RENDER_JOB_TIMEOUT_MS);
+        }, effectiveTimeoutMs);
       });
 
       try {
@@ -127,7 +148,7 @@ export function enqueueRender(job: RenderJob): string {
           // ── Timeout path: solid-color immediate fallback ──────────────────
           const elapsed = err.elapsed;
           renderLog.warn(
-            { slotId, jobId, elapsed, timeoutMs: RENDER_JOB_TIMEOUT_MS },
+            { slotId, jobId, elapsed, timeoutMs: effectiveTimeoutMs },
             "Render job exceeded wall-clock timeout — falling back to solid-color render"
           );
 
@@ -257,6 +278,7 @@ export async function rehydrateRenderQueue(): Promise<void> {
       slotId: tvCapsulesTable.slotId,
       citizenId: tvCapsulesTable.citizenId,
       seedText: tvCapsulesTable.seedText,
+      renderPath: tvCapsulesTable.renderPath,
     })
     .from(tvCapsulesTable)
     .where(eq(tvCapsulesTable.status, "pending_render"));
@@ -273,11 +295,16 @@ export async function rehydrateRenderQueue(): Promise<void> {
 
   for (const capsule of stuck) {
     const jobId = randomUUID();
+    const timeoutMs =
+      capsule.renderPath === "heavy"
+        ? RENDER_JOB_TIMEOUT_HEAVY_MS
+        : RENDER_JOB_TIMEOUT_LIGHT_MS;
     enqueueRender({
       jobId,
       slotId: capsule.slotId,
       citizenId: capsule.citizenId,
       capsuleSeedText: capsule.seedText,
+      timeoutMs,
     });
   }
 }

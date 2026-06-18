@@ -14,7 +14,13 @@ import {
   type SlotType,
 } from "../services/tvService";
 import { MEDIA_DIR } from "../services/renderService";
-import { enqueueRender, getRenderJobStatus, getRenderQueueStats } from "../services/renderQueue";
+import {
+  enqueueRender,
+  getRenderJobStatus,
+  getRenderQueueStats,
+  RENDER_JOB_TIMEOUT_LIGHT_MS,
+  RENDER_JOB_TIMEOUT_HEAVY_MS,
+} from "../services/renderQueue";
 import { calcTreasuryTax, TREASURY_CITIZEN_ID } from "../services/videoStorage";
 import {
   isCryptomusConfigured,
@@ -824,11 +830,19 @@ router.post("/tv/capsule/:slotId/render", async (req, res): Promise<void> => {
 
   // Enqueue into bounded render queue (max MAX_CONCURRENT_RENDERS simultaneous HF calls).
   // Returns immediately with a jobId — client polls GET /api/tv/capsule/:slotId for progress.
+  // Heavy-path (Quarter/Half/Apex) slots get more wall-clock time; light-path (citizen) slots
+  // are capped aggressively so the queue stays responsive for free-tier bookings.
+  const renderTimeoutMs =
+    capsule.renderPath === "heavy"
+      ? RENDER_JOB_TIMEOUT_HEAVY_MS
+      : RENDER_JOB_TIMEOUT_LIGHT_MS;
+
   const jobId = enqueueRender({
     jobId: `${slotId}-${Date.now()}`,
     slotId,
     citizenId: citizenId.data,
     capsuleSeedText: capsule.seedText ?? null,
+    timeoutMs: renderTimeoutMs,
   });
 
   renderLog.info({ jobId }, "Render job enqueued");

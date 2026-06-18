@@ -91,3 +91,6 @@
 - Опциональные секреты (уже добавлены): GOOGLE_SHEETS_ID, GOOGLE_SERVICE_ACCOUNT_JSON
 - Опциональный секрет: ADMIN_TELEGRAM_ID (числовой ID для /migratedata команды)
 - Опциональный секрет: HF_TOKEN — HuggingFace API token (повышенные лимиты для text-to-video). Без него работает на free-tier лимитах.
+- Опциональная переменная: RENDER_JOB_TIMEOUT_LIGHT_MS — таймаут рендера для light-path слотов (citizen, 1 мин). По умолчанию 120 000 мс (2 мин). Агрессивный лимит, чтобы очередь не зависала.
+- Опциональная переменная: RENDER_JOB_TIMEOUT_HEAVY_MS — таймаут рендера для heavy-path слотов (Quarter / Half / Apex). По умолчанию 300 000 мс (5 мин). Больше времени для HuggingFace/AI-генерации.
+- Опциональная переменная: RENDER_JOB_TIMEOUT_MS — общий fallback-таймаут (если timeoutMs не передан явно). По умолчанию 180 000 мс (3 мин).
