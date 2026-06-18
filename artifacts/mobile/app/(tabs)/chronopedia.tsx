@@ -498,6 +498,41 @@ export default function ChronopediaScreen() {
   const [placeLoading, setPlaceLoading] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
 
+  // Web platform: ReactNativeWebView is not injected into iframes in browser mode.
+  // Listen for postMessage from the Leaflet iframe directly via window.addEventListener.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    // Safety timer — set mapReady even if the ready message never arrives
+    const t = setTimeout(() => setMapReady(true), 700);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handler = (e: any) => {
+      try {
+        const msg = JSON.parse(String(e.data ?? "{}")) as {
+          type: string; slotId?: number; lat?: number; lng?: number;
+        };
+        if (msg.type === "ready") {
+          clearTimeout(t);
+          setMapReady(true);
+        } else if (msg.type === "slotClick") {
+          setSelectedSlotId(msg.slotId ?? null);
+          setPendingLat(null);
+          setPendingLng(null);
+        } else if (msg.type === "mapClick") {
+          setSelectedSlotId(null);
+          setPendingLat(msg.lat ?? null);
+          setPendingLng(msg.lng ?? null);
+        }
+      } catch { /* ignore */ }
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).addEventListener?.("message", handler);
+    return () => {
+      clearTimeout(t);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).removeEventListener?.("message", handler);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Google Places search with debounce
   useEffect(() => {
     if (!placeQuery.trim() || selectedPlace) return;
