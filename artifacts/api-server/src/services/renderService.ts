@@ -405,7 +405,8 @@ async function renderWithAIBackground(
   visualStyle?: string | null,
   seedText?: string | null,
   citizenId?: number | null,
-  onProgress?: ProgressReporter
+  onProgress?: ProgressReporter,
+  signal?: AbortSignal
 ): Promise<string> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `tn-ai-${slotId}-`));
   const outputPath = path.join(MEDIA_DIR, `slot_${slotId}.mp4`);
@@ -444,7 +445,8 @@ async function renderWithAIBackground(
     await onProgress?.("fetching_video");
     const { videoPath: aiVideoPath } = await generateAIBackground(
       cinematicPrompt,
-      tmpDir
+      tmpDir,
+      signal
     );
 
     if (!aiVideoPath) {
@@ -564,7 +566,7 @@ async function renderWithAIBackground(
 }
 
 // ── Main Orchestrator ──────────────────────────────────────────────────────────
-export async function renderCapsule(slotId: number): Promise<{
+export async function renderCapsule(slotId: number, signal?: AbortSignal): Promise<{
   manifestoText: string;
   mediaUrl: string | null;
   catcastUrl: string | null;
@@ -639,7 +641,8 @@ export async function renderCapsule(slotId: number): Promise<{
         capsule.visualStyle,
         capsule.seedText,
         capsule.citizenId,
-        reportProgress
+        reportProgress,
+        signal
       );
       finalStatus = "rendered";
       logger.info({ slotId }, "HEAVY slot rendered with AI background");
@@ -663,7 +666,8 @@ export async function renderCapsule(slotId: number): Promise<{
         capsule.visualStyle,
         capsule.seedText,
         capsule.citizenId,
-        reportProgress
+        reportProgress,
+        signal
       );
       finalStatus = "rendered";
     } catch (err) {

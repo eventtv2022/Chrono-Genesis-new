@@ -103,17 +103,21 @@ export function enqueueRender(job: RenderJob): string {
     void (async () => {
       const startTime = Date.now();
 
+      // AbortController shared with the render job — aborted when the deadline fires
+      const abortController = new AbortController();
+
       // Build a deadline promise that rejects once effectiveTimeoutMs elapses
       let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
       const deadline = new Promise<never>((_, reject) => {
         deadlineTimer = setTimeout(() => {
           const elapsed = Date.now() - startTime;
+          abortController.abort();
           reject(new RenderTimeoutError(slotId, elapsed));
         }, effectiveTimeoutMs);
       });
 
       try {
-        const result = await Promise.race([renderCapsule(slotId), deadline]);
+        const result = await Promise.race([renderCapsule(slotId, abortController.signal), deadline]);
 
         clearTimeout(deadlineTimer);
 

@@ -26,12 +26,16 @@ const PER_IMG_SEC = (TARGET_VIDEO_DURATION_SEC + CROSSFADE_DURATION_SEC * (POLLI
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
-  timeoutMs: number
+  timeoutMs: number,
+  externalSignal?: AbortSignal
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutController = new AbortController();
+  const timer = setTimeout(() => timeoutController.abort(), timeoutMs);
+  const signal = externalSignal
+    ? AbortSignal.any([timeoutController.signal, externalSignal])
+    : timeoutController.signal;
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await fetch(url, { ...init, signal });
   } finally {
     clearTimeout(timer);
   }
@@ -115,7 +119,8 @@ async function generateViaHuggingFace(
 // ── Provider 2: Pollinations AI slideshow ─────────────────────────────────────
 async function generateViaPollinationsSlideshow(
   prompt: string,
-  tmpDir: string
+  tmpDir: string,
+  signal?: AbortSignal
 ): Promise<string | null> {
   logger.info(
     { prompt: prompt.slice(0, 80), count: POLLINATIONS_IMAGES },
@@ -131,7 +136,7 @@ async function generateViaPollinationsSlideshow(
         `https://image.pollinations.ai/prompt/${encodedPrompt}` +
         `?width=1280&height=720&nologo=true&seed=${i * 7 + 42}`;
       try {
-        const res = await fetchWithTimeout(url, {}, 30_000);
+        const res = await fetchWithTimeout(url, {}, 30_000, signal);
         if (!res.ok) {
           logger.warn({ status: res.status, i }, "Pollinations image fetch failed");
           return null;
@@ -176,7 +181,7 @@ async function generateViaPollinationsSlideshow(
         "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=25",
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
         "-an", "-y", outputPath,
-      ]);
+      ], signal);
     } else {
       // Build -loop 1 -t {perImg} -i {img} inputs for each image
       const inputArgs: string[] = [];
@@ -212,7 +217,7 @@ async function generateViaPollinationsSlideshow(
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
         "-t", String(TARGET_VIDEO_DURATION_SEC),
         "-an", "-y", outputPath,
-      ]);
+      ], signal);
     }
 
     logger.info({ outputPath, images: N, perImgSec: perImg.toFixed(2) }, "Pollinations crossfade slideshow created");
@@ -231,7 +236,8 @@ async function generateViaPollinationsSlideshow(
  */
 export async function generateAIBackground(
   prompt: string,
-  tmpDir?: string
+  tmpDir?: string,
+  signal?: AbortSignal
 ): Promise<{ videoPath: string | null; ownsTmpDir: boolean; tmpDir: string }> {
   const dir = tmpDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "tn-aibg-"));
   const ownsTmpDir = !tmpDir;
@@ -243,7 +249,7 @@ export async function generateAIBackground(
   }
 
   // Fallback: Pollinations slideshow
-  const slidePath = await generateViaPollinationsSlideshow(prompt, dir);
+  const slidePath = await generateViaPollinationsSlideshow(prompt, dir, signal);
   if (slidePath) {
     return { videoPath: slidePath, ownsTmpDir, tmpDir: dir };
   }
@@ -254,7 +260,7 @@ export async function generateAIBackground(
 }
 
 // ── FFmpeg helper ─────────────────────────────────────────────────────────────
-function runFFmpeg(args: string[]): Promise<void> {
+function runFFmpeg(args: string[], signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
@@ -264,5 +270,8 @@ function runFFmpeg(args: string[]): Promise<void> {
       else reject(new Error(`FFmpeg exited ${code}: ${stderr.slice(-800)}`));
     });
     proc.on("error", (err) => reject(err));
+    if (signal) {
+      signal.addEventListener("abort", () => { proc.kill("SIGTERM"); }, { once: true });
+    }
   });
 }
