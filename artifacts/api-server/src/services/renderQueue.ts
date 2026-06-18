@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { db } from "@workspace/db";
 import { tvSlotsTable, tvCapsulesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { renderCapsule } from "./renderService";
+import { renderCapsule, renderLightVideo } from "./renderService";
 import { sendTransactionNotification } from "./telegramService";
 import { logger } from "../lib/logger";
 
@@ -18,6 +18,26 @@ const MAX_CONCURRENT_RENDERS = parseInt(
   process.env["MAX_CONCURRENT_RENDERS"] ?? "2",
   10
 );
+
+/**
+ * Per-job wall-clock timeout. If a render job exceeds this, it is abandoned
+ * and an immediate solid-color fallback is produced so the queue keeps moving.
+ * Default: 180 s. Override with RENDER_JOB_TIMEOUT_MS env var.
+ */
+const RENDER_JOB_TIMEOUT_MS = parseInt(
+  process.env["RENDER_JOB_TIMEOUT_MS"] ?? "180000",
+  10
+);
+
+/** Sentinel error thrown by the per-job deadline race. */
+class RenderTimeoutError extends Error {
+  readonly elapsed: number;
+  constructor(slotId: number, elapsed: number) {
+    super(`Render timed out after ${elapsed}ms for slotId=${slotId}`);
+    this.name = "RenderTimeoutError";
+    this.elapsed = elapsed;
+  }
+}
 
 interface RenderJob {
   jobId: string;
@@ -60,8 +80,21 @@ export function enqueueRender(job: RenderJob): string {
     renderLog.info({ queueDepth: queue.length, active: activeCount }, "Render job started");
 
     void (async () => {
+      const startTime = Date.now();
+
+      // Build a deadline promise that rejects once RENDER_JOB_TIMEOUT_MS elapses
+      let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+      const deadline = new Promise<never>((_, reject) => {
+        deadlineTimer = setTimeout(() => {
+          const elapsed = Date.now() - startTime;
+          reject(new RenderTimeoutError(slotId, elapsed));
+        }, RENDER_JOB_TIMEOUT_MS);
+      });
+
       try {
-        const result = await renderCapsule(slotId);
+        const result = await Promise.race([renderCapsule(slotId), deadline]);
+
+        clearTimeout(deadlineTimer);
 
         if (result.mediaUrl) {
           await db
@@ -88,16 +121,87 @@ export function enqueueRender(job: RenderJob): string {
           renderLog.warn({ err }, "Telegram notification failed after render");
         });
       } catch (err) {
-        renderLog.error({ err }, "Render job failed");
+        clearTimeout(deadlineTimer);
 
-        const entry3 = jobStatus.get(jobId);
-        if (entry3) entry3.status = "failed";
+        if (err instanceof RenderTimeoutError) {
+          // ── Timeout path: solid-color immediate fallback ──────────────────
+          const elapsed = err.elapsed;
+          renderLog.warn(
+            { slotId, jobId, elapsed, timeoutMs: RENDER_JOB_TIMEOUT_MS },
+            "Render job exceeded wall-clock timeout — falling back to solid-color render"
+          );
 
-        await db
-          .update(tvCapsulesTable)
-          .set({ status: "draft", renderProgress: null, updatedAt: new Date() })
-          .where(eq(tvCapsulesTable.slotId, slotId))
-          .catch(() => {});
+          try {
+            const [capsule] = await db
+              .select({
+                seedText: tvCapsulesTable.seedText,
+                visualStyle: tvCapsulesTable.visualStyle,
+              })
+              .from(tvCapsulesTable)
+              .where(eq(tvCapsulesTable.slotId, slotId))
+              .limit(1);
+
+            const manifestoText =
+              capsule?.seedText ?? "TimeNation — суверенное государство времени.";
+
+            const mediaUrl = await renderLightVideo(
+              null,
+              manifestoText,
+              slotId,
+              capsule?.visualStyle ?? null
+            );
+
+            await db
+              .update(tvCapsulesTable)
+              .set({ status: "rendered", renderProgress: "done", updatedAt: new Date() })
+              .where(eq(tvCapsulesTable.slotId, slotId));
+            await db
+              .update(tvSlotsTable)
+              .set({ status: "broadcast" })
+              .where(eq(tvSlotsTable.id, slotId));
+
+            renderLog.info(
+              { slotId, jobId, elapsed, mediaUrl },
+              "Solid-color fallback render complete after timeout"
+            );
+
+            const entry3 = jobStatus.get(jobId);
+            if (entry3) entry3.status = "done";
+
+            sendTransactionNotification(
+              citizenId,
+              `⏱ *Слот #${slotId} отрендерен* (упрощённый режим — AI-генерация превысила лимит времени)`
+            ).catch((tgErr) => {
+              renderLog.warn({ tgErr }, "Telegram notification failed after timeout fallback");
+            });
+          } catch (fallbackErr) {
+            renderLog.error(
+              { fallbackErr, slotId, jobId, elapsed },
+              "Solid-color fallback render also failed after timeout"
+            );
+
+            const entry4 = jobStatus.get(jobId);
+            if (entry4) entry4.status = "failed";
+
+            await db
+              .update(tvCapsulesTable)
+              .set({ status: "draft", renderProgress: null, updatedAt: new Date() })
+              .where(eq(tvCapsulesTable.slotId, slotId))
+              .catch(() => {});
+          }
+        } else {
+          // ── Normal error path ─────────────────────────────────────────────
+          renderLog.error({ err }, "Render job failed");
+
+          const entry5 = jobStatus.get(jobId);
+          if (entry5) entry5.status = "failed";
+
+          await db
+            .update(tvCapsulesTable)
+            .set({ status: "draft", renderProgress: null, updatedAt: new Date() })
+            .where(eq(tvCapsulesTable.slotId, slotId))
+            .catch(() => {});
+        }
       } finally {
         activeCount--;
         renderLog.info(
