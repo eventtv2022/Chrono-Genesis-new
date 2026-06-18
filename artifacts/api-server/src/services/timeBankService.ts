@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
-import { timeBankLoansTable, citizensTable, transactionsTable } from "@workspace/db";
-import { eq, sum, count, and } from "drizzle-orm";
+import { timeBankLoansTable, timeBankLedgerTable, citizensTable, transactionsTable } from "@workspace/db";
+import { eq, sum, count, and, asc } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 export const MAX_DEBT_CAP_MINUTES = 480; // 8 часов — абсолютный потолок
@@ -84,6 +84,12 @@ export async function getTimeBankStatus(citizenId: number) {
     .from(timeBankLoansTable)
     .where(eq(timeBankLoansTable.citizenId, citizenId));
 
+  const ledger = await db
+    .select()
+    .from(timeBankLedgerTable)
+    .where(eq(timeBankLedgerTable.citizenId, citizenId))
+    .orderBy(asc(timeBankLedgerTable.createdAt));
+
   return {
     citizenId,
     creditLimit,
@@ -101,6 +107,10 @@ export async function getTimeBankStatus(citizenId: number) {
       ...l,
       createdAt: l.createdAt.toISOString(),
       repaidAt: l.repaidAt?.toISOString() ?? null,
+    })),
+    ledger: ledger.map((e) => ({
+      ...e,
+      createdAt: e.createdAt.toISOString(),
     })),
   };
 }
@@ -140,12 +150,21 @@ export async function borrowFromBank(citizenId: number, amount: number): Promise
   }
 
   await db.transaction(async (tx) => {
-    await tx.insert(timeBankLoansTable).values({
+    const [loan] = await tx.insert(timeBankLoansTable).values({
       citizenId,
       amount,
       remainingDebt: amount,
       status: "active",
+    }).returning();
+
+    await tx.insert(timeBankLedgerTable).values({
+      citizenId,
+      loanId: loan!.id,
+      type: "loan_issued",
+      amount,
+      note: `Выдан кредит ${amount} Д`,
     });
+
     await tx
       .update(citizensTable)
       .set({ balanceMinutes: citizen.balanceMinutes + amount })
@@ -155,10 +174,152 @@ export async function borrowFromBank(citizenId: number, amount: number): Promise
   logger.info({ citizenId, amount, creditLimit }, "Банк Времени: выдан кредит");
 }
 
-/** Погасить долг */
-export async function repayLoan(citizenId: number, loanId: number, amount: number): Promise<void> {
+/**
+ * Ручное погашение долга (FIFO по активным займам).
+ * Списывает с баланса, создаёт ledger-записи, освобождает залог при обнулении долга.
+ */
+export async function repayFromBalance(citizenId: number, amount: number): Promise<void> {
   if (amount <= 0) throw new Error("Сумма погашения должна быть положительной");
 
+  const [citizen] = await db
+    .select()
+    .from(citizensTable)
+    .where(eq(citizensTable.id, citizenId))
+    .limit(1);
+
+  if (!citizen) throw new Error("Гражданин не найден");
+
+  const transferable = citizen.balanceMinutes - 1; // родовая минута неприкосновенна
+  if (transferable < amount) {
+    throw new Error(`Недостаточно Дарминов для погашения. Доступно: ${transferable} Д`);
+  }
+
+  const activeLoans = await db
+    .select()
+    .from(timeBankLoansTable)
+    .where(and(eq(timeBankLoansTable.citizenId, citizenId), eq(timeBankLoansTable.status, "active")))
+    .orderBy(asc(timeBankLoansTable.createdAt));
+
+  if (activeLoans.length === 0) throw new Error("Нет активных займов для погашения");
+
+  await db.transaction(async (tx) => {
+    let remaining = amount;
+
+    for (const loan of activeLoans) {
+      if (remaining <= 0) break;
+      const toDeduct = Math.min(remaining, loan.remainingDebt);
+      const newRemaining = loan.remainingDebt - toDeduct;
+      const fullyRepaid = newRemaining === 0;
+
+      await tx
+        .update(timeBankLoansTable)
+        .set({
+          remainingDebt: newRemaining,
+          status: fullyRepaid ? "repaid" : "active",
+          repaidAt: fullyRepaid ? new Date() : undefined,
+        })
+        .where(eq(timeBankLoansTable.id, loan.id));
+
+      await tx.insert(timeBankLedgerTable).values({
+        citizenId,
+        loanId: loan.id,
+        type: "manual_repayment",
+        amount: toDeduct,
+        note: `Ручное погашение ${toDeduct} Д`,
+      });
+
+      if (fullyRepaid) {
+        await tx.insert(timeBankLedgerTable).values({
+          citizenId,
+          loanId: loan.id,
+          type: "collateral_released",
+          amount: loan.amount,
+          note: `Залог освобождён: ${loan.amount} Д`,
+        });
+      }
+
+      remaining -= toDeduct;
+    }
+
+    await tx
+      .update(citizensTable)
+      .set({ balanceMinutes: citizen.balanceMinutes - amount })
+      .where(eq(citizensTable.id, citizenId));
+  });
+
+  logger.info({ citizenId, amount }, "Банк Времени: ручное погашение");
+}
+
+/**
+ * Автоматическое погашение долга из заработанных минут (вызывается при завершении TiMETR-сессии).
+ * НЕ обновляет citizens.balance_minutes — это делает вызывающий код.
+ * Возвращает сумму, направленную на погашение долга (вычитается из зачисляемых минут).
+ */
+export async function autoRepayFromService(
+  citizenId: number,
+  earnedMinutes: number
+): Promise<number> {
+  if (earnedMinutes <= 0) return 0;
+
+  const activeLoans = await db
+    .select()
+    .from(timeBankLoansTable)
+    .where(and(eq(timeBankLoansTable.citizenId, citizenId), eq(timeBankLoansTable.status, "active")))
+    .orderBy(asc(timeBankLoansTable.createdAt));
+
+  if (activeLoans.length === 0) return 0;
+
+  let totalAutoRepaid = 0;
+  let remaining = earnedMinutes;
+
+  await db.transaction(async (tx) => {
+    for (const loan of activeLoans) {
+      if (remaining <= 0) break;
+      const toDeduct = Math.min(remaining, loan.remainingDebt);
+      const newRemaining = loan.remainingDebt - toDeduct;
+      const fullyRepaid = newRemaining === 0;
+
+      await tx
+        .update(timeBankLoansTable)
+        .set({
+          remainingDebt: newRemaining,
+          status: fullyRepaid ? "repaid" : "active",
+          repaidAt: fullyRepaid ? new Date() : undefined,
+        })
+        .where(eq(timeBankLoansTable.id, loan.id));
+
+      await tx.insert(timeBankLedgerTable).values({
+        citizenId,
+        loanId: loan.id,
+        type: "auto_repayment",
+        amount: toDeduct,
+        note: `Автопогашение из TiMETR: ${toDeduct} Д`,
+      });
+
+      if (fullyRepaid) {
+        await tx.insert(timeBankLedgerTable).values({
+          citizenId,
+          loanId: loan.id,
+          type: "collateral_released",
+          amount: loan.amount,
+          note: `Залог освобождён: ${loan.amount} Д`,
+        });
+      }
+
+      totalAutoRepaid += toDeduct;
+      remaining -= toDeduct;
+    }
+  });
+
+  if (totalAutoRepaid > 0) {
+    logger.info({ citizenId, earnedMinutes, totalAutoRepaid }, "Банк Времени: автопогашение из TiMETR");
+  }
+
+  return totalAutoRepaid;
+}
+
+/** @deprecated Используй repayFromBalance (FIFO, без loanId) */
+export async function repayLoan(citizenId: number, loanId: number, amount: number): Promise<void> {
   const [loan] = await db
     .select()
     .from(timeBankLoansTable)
@@ -183,21 +344,41 @@ export async function repayLoan(citizenId: number, loanId: number, amount: numbe
 
   if (!citizen) throw new Error("Гражданин не найден");
 
-  const transferable = citizen.balanceMinutes - 1; // родовая минута не трогается
+  const transferable = citizen.balanceMinutes - 1;
   if (transferable < repayAmount) {
     throw new Error(`Недостаточно Дарминов для погашения. Доступно: ${transferable} Д`);
   }
 
   await db.transaction(async (tx) => {
     const newRemaining = loan.remainingDebt - repayAmount;
+    const fullyRepaid = newRemaining === 0;
+
     await tx
       .update(timeBankLoansTable)
       .set({
         remainingDebt: newRemaining,
-        status: newRemaining === 0 ? "repaid" : "active",
-        repaidAt: newRemaining === 0 ? new Date() : undefined,
+        status: fullyRepaid ? "repaid" : "active",
+        repaidAt: fullyRepaid ? new Date() : undefined,
       })
       .where(eq(timeBankLoansTable.id, loanId));
+
+    await tx.insert(timeBankLedgerTable).values({
+      citizenId,
+      loanId,
+      type: "manual_repayment",
+      amount: repayAmount,
+      note: `Ручное погашение ${repayAmount} Д`,
+    });
+
+    if (fullyRepaid) {
+      await tx.insert(timeBankLedgerTable).values({
+        citizenId,
+        loanId,
+        type: "collateral_released",
+        amount: loan.amount,
+        note: `Залог освобождён: ${loan.amount} Д`,
+      });
+    }
 
     await tx
       .update(citizensTable)

@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 import {
   getTimeBankStatus,
   borrowFromBank,
+  repayFromBalance,
   repayLoan,
 } from "../services/timeBankService";
 
@@ -45,12 +46,13 @@ router.post("/timebank/borrow", async (req, res): Promise<void> => {
   }
 });
 
-// POST /api/timebank/repay  { citizenId, loanId, amount }
+// POST /api/timebank/repay  { citizenId, amount, loanId? }
+// FIFO-погашение по всем активным займам. loanId опционален (для обратной совместимости).
 router.post("/timebank/repay", async (req, res): Promise<void> => {
   const schema = z.object({
     citizenId: z.number().int().positive(),
-    loanId: z.number().int().positive(),
     amount: z.number().int().min(1),
+    loanId: z.number().int().positive().optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
@@ -58,7 +60,11 @@ router.post("/timebank/repay", async (req, res): Promise<void> => {
     return;
   }
   try {
-    await repayLoan(parsed.data.citizenId, parsed.data.loanId, parsed.data.amount);
+    if (parsed.data.loanId !== undefined) {
+      await repayLoan(parsed.data.citizenId, parsed.data.loanId, parsed.data.amount);
+    } else {
+      await repayFromBalance(parsed.data.citizenId, parsed.data.amount);
+    }
     const status = await getTimeBankStatus(parsed.data.citizenId);
     res.json({ ok: true, ...status });
   } catch (e) {

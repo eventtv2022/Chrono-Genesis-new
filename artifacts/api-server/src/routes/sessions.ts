@@ -7,6 +7,7 @@ import { logTransactionToSheets } from "../lib/googleSheets";
 import { sendTransactionNotification } from "../services/telegramService";
 import { applyMeritAfterSession } from "../services/meritocracyService";
 import { calcTreasuryTax, TREASURY_CITIZEN_ID } from "../services/videoStorage";
+import { autoRepayFromService } from "../services/timeBankService";
 
 const router: IRouter = Router();
 
@@ -160,11 +161,16 @@ router.post("/sessions/:id/stop", async (req, res): Promise<void> => {
     })
     .where(eq(citizensTable.id, session.fromCitizenId));
 
+  // Автопогашение долга в Банке Времени: если у получателя есть активный долг,
+  // направляем заработанные минуты на погашение (остаток идёт на личный баланс).
+  const autoRepaid = await autoRepayFromService(session.toCitizenId, toReceives).catch(() => 0);
+  const netToReceives = toReceives - autoRepaid;
+
   await db
     .update(citizensTable)
     .set({
-      balanceMinutes: toCitizen.balanceMinutes + toReceives,
-      totalReceived: toCitizen.totalReceived + toReceives,
+      balanceMinutes: toCitizen.balanceMinutes + netToReceives,
+      totalReceived: toCitizen.totalReceived + toReceives, // totalReceived = полная сумма, без вычета долга
     })
     .where(eq(citizensTable.id, session.toCitizenId));
 

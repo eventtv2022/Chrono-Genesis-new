@@ -31,6 +31,16 @@ interface Loan {
   repaidAt: string | null;
 }
 
+interface LedgerEntry {
+  id: number;
+  citizenId: number;
+  loanId: number | null;
+  type: "loan_issued" | "manual_repayment" | "auto_repayment" | "collateral_released";
+  amount: number;
+  note: string | null;
+  createdAt: string;
+}
+
 interface NextLevel {
   label: string;
   currentMinutes: number;
@@ -49,7 +59,15 @@ interface TimeBankStatus {
   nextLevel: NextLevel | null;
   statusLabel: string;
   loans: Loan[];
+  ledger: LedgerEntry[];
 }
+
+const LEDGER_ICONS: Record<string, { icon: string; color: string; label: string }> = {
+  loan_issued:         { icon: "download",   color: "#3b82f6", label: "Выдан кредит" },
+  manual_repayment:    { icon: "upload",     color: "#10b981", label: "Ручное погашение" },
+  auto_repayment:      { icon: "zap",        color: "#8b5cf6", label: "Автопогашение" },
+  collateral_released: { icon: "unlock",     color: "#f59e0b", label: "Залог освобождён" },
+};
 
 export default function TimeBankScreen() {
   const colors = useColors();
@@ -61,7 +79,6 @@ export default function TimeBankScreen() {
 
   const [borrowAmount, setBorrowAmount] = useState("");
   const [repayAmount, setRepayAmount] = useState("");
-  const [selectedLoan, setSelectedLoan] = useState<number | null>(null);
 
   const st = getStyles(colors, topPad);
 
@@ -99,11 +116,11 @@ export default function TimeBankScreen() {
   });
 
   const repayMutation = useMutation({
-    mutationFn: async ({ loanId, amount }: { loanId: number; amount: number }) => {
+    mutationFn: async ({ amount }: { amount: number }) => {
       const res = await fetch(`${BASE_URL}/api/timebank/repay`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ citizenId: citizen!.id, loanId, amount }),
+        body: JSON.stringify({ citizenId: citizen!.id, amount }),
       });
       const json = await res.json() as { error?: string };
       if (!res.ok) throw new Error(json.error ?? "Ошибка");
@@ -112,7 +129,6 @@ export default function TimeBankScreen() {
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setRepayAmount("");
-      setSelectedLoan(null);
       queryClient.invalidateQueries({ queryKey: ["timebank"] });
       refreshCitizen();
       Alert.alert("✅ Долг погашен", "Спасибо за исполнение обязательств");
@@ -129,13 +145,13 @@ export default function TimeBankScreen() {
     borrowMutation.mutate({ amount: amt });
   }
 
-  function handleRepay(loanId: number) {
+  function handleRepay() {
     const amt = parseInt(repayAmount, 10);
     if (isNaN(amt) || amt <= 0) {
       Alert.alert("Ошибка", "Введите корректную сумму погашения");
       return;
     }
-    repayMutation.mutate({ loanId, amount: amt });
+    repayMutation.mutate({ amount: amt });
   }
 
   const activeLoan = data?.loans.find((l) => l.status === "active") ?? null;
@@ -181,33 +197,29 @@ export default function TimeBankScreen() {
                 Кредитный статус
               </Text>
             </View>
-            <Text
-              style={[
-                st.statusLabel,
-                { color: data?.atCap ? colors.destructive : colors.primary },
-              ]}
-            >
+            <Text style={[st.statusLabel, { color: data?.atCap ? colors.destructive : colors.primary }]}>
               {data?.statusLabel}
             </Text>
 
             <View style={st.metaRow}>
-              <MetaItem
-                label="Лимит"
-                value={`${data?.creditLimit ?? 0} мин`}
-                colors={colors}
-              />
+              <MetaItem label="Лимит" value={`${data?.creditLimit ?? 0} мин`} colors={colors} />
               <MetaItem
                 label="Активный долг"
                 value={`${data?.activeDebt ?? 0} мин`}
                 colors={colors}
                 highlight={Boolean((data?.activeDebt ?? 0) > 0)}
               />
-              <MetaItem
-                label="Доступно"
-                value={`${data?.availableCredit ?? 0} мин`}
+              <MetaItem label="Доступно" value={`${data?.availableCredit ?? 0} мин`} colors={colors} />
+            </View>
+
+            {/* Debt progress bar */}
+            {(data?.activeDebt ?? 0) > 0 && (
+              <DebtBar
+                activeDebt={data!.activeDebt}
+                creditLimit={data!.creditLimit}
                 colors={colors}
               />
-            </View>
+            )}
 
             {/* Credit limit progress bar */}
             <CreditBar
@@ -222,9 +234,7 @@ export default function TimeBankScreen() {
             <View style={[st.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={st.cardHeader}>
                 <Feather name="trending-up" size={18} color={colors.primary} />
-                <Text style={[st.cardTitle, { color: colors.foreground }]}>
-                  Следующий уровень
-                </Text>
+                <Text style={[st.cardTitle, { color: colors.foreground }]}>Следующий уровень</Text>
               </View>
 
               {data.nextLevel.targetMinutes > 0 ? (
@@ -238,12 +248,7 @@ export default function TimeBankScreen() {
                         st.barFill,
                         {
                           backgroundColor: colors.primary,
-                          width: `${Math.min(
-                            100,
-                            Math.round(
-                              (data.nextLevel.currentMinutes / data.nextLevel.targetMinutes) * 100
-                            )
-                          )}%`,
+                          width: `${Math.min(100, Math.round((data.nextLevel.currentMinutes / data.nextLevel.targetMinutes) * 100))}%`,
                         },
                       ]}
                     />
@@ -258,9 +263,7 @@ export default function TimeBankScreen() {
                 </Text>
               )}
 
-              <View
-                style={[st.servicesBadge, { backgroundColor: colors.muted }]}
-              >
+              <View style={[st.servicesBadge, { backgroundColor: colors.muted }]}>
                 <Feather name="check-circle" size={14} color={colors.primary} />
                 <Text style={[st.servicesText, { color: colors.foreground }]}>
                   Выполнено услуг: {data.completedServicesCount}
@@ -277,19 +280,14 @@ export default function TimeBankScreen() {
             <View style={[st.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={st.cardHeader}>
                 <Feather name="download" size={18} color={colors.primary} />
-                <Text style={[st.cardTitle, { color: colors.foreground }]}>
-                  Взять кредит
-                </Text>
+                <Text style={[st.cardTitle, { color: colors.foreground }]}>Взять кредит</Text>
               </View>
               <Text style={[st.hint, { color: colors.mutedForeground }]}>
                 Доступно: {data?.availableCredit} мин · Лимит: {data?.creditLimit} мин
               </Text>
               <View style={st.inputRow}>
                 <TextInput
-                  style={[
-                    st.input,
-                    { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted },
-                  ]}
+                  style={[st.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
                   placeholder="Количество Д"
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="numeric"
@@ -316,24 +314,51 @@ export default function TimeBankScreen() {
             <View style={[st.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={st.cardHeader}>
                 <Feather name="upload" size={18} color="#f59e0b" />
-                <Text style={[st.cardTitle, { color: colors.foreground }]}>
-                  Погасить долг
+                <Text style={[st.cardTitle, { color: colors.foreground }]}>Погасить кредит</Text>
+              </View>
+
+              {/* Debt progress */}
+              <View style={[st.debtSummary, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 22, fontWeight: "800", color: "#f59e0b" }}>
+                    {activeLoan.remainingDebt} Д
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2 }}>
+                    остаток долга · взято {activeLoan.amount} Д · {new Date(activeLoan.createdAt).toLocaleDateString("ru-RU")}
+                  </Text>
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground }}>баланс</Text>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>
+                    {(citizen.balanceMinutes - 1)} Д
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ marginVertical: 10 }}>
+                <View style={[st.barBg, { backgroundColor: colors.muted }]}>
+                  <View
+                    style={[
+                      st.barFill,
+                      {
+                        backgroundColor: "#f59e0b",
+                        width: `${Math.round((activeLoan.remainingDebt / activeLoan.amount) * 100)}%`,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center", marginTop: 4 }}>
+                  Погашено {activeLoan.amount - activeLoan.remainingDebt} из {activeLoan.amount} Д
                 </Text>
               </View>
-              <View style={[st.loanRow, { borderColor: colors.border }]}>
-                <Text style={[st.loanMeta, { color: colors.mutedForeground }]}>
-                  Взято: {activeLoan.amount} Д · Остаток: {activeLoan.remainingDebt} Д
-                </Text>
-                <Text style={[st.loanDate, { color: colors.mutedForeground }]}>
-                  {new Date(activeLoan.createdAt).toLocaleDateString("ru-RU")}
-                </Text>
-              </View>
+
+              <Text style={[st.hint, { color: colors.mutedForeground, marginBottom: 4 }]}>
+                💡 Зарабатывая минуты в TiMETR, система автоматически направляет их на погашение долга.
+              </Text>
+
               <View style={st.inputRow}>
                 <TextInput
-                  style={[
-                    st.input,
-                    { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted },
-                  ]}
+                  style={[st.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
                   placeholder={`До ${activeLoan.remainingDebt} Д`}
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="numeric"
@@ -342,7 +367,7 @@ export default function TimeBankScreen() {
                 />
                 <TouchableOpacity
                   style={[st.actionBtn, { backgroundColor: "#f59e0b" }]}
-                  onPress={() => handleRepay(activeLoan.id)}
+                  onPress={handleRepay}
                   disabled={repayMutation.isPending}
                 >
                   {repayMutation.isPending ? (
@@ -352,13 +377,9 @@ export default function TimeBankScreen() {
                   )}
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                onPress={() => {
-                  setRepayAmount(String(activeLoan.remainingDebt));
-                }}
-              >
+              <TouchableOpacity onPress={() => setRepayAmount(String(activeLoan.remainingDebt))}>
                 <Text style={[st.fullRepay, { color: colors.primary }]}>
-                  Погасить полностью ({activeLoan.remainingDebt} Д)
+                  Погасить полностью ({activeLoan.remainingDebt} Д) →
                 </Text>
               </TouchableOpacity>
             </View>
@@ -375,31 +396,42 @@ export default function TimeBankScreen() {
             </View>
           )}
 
-          {/* History */}
-          {(data?.loans.filter((l) => l.status === "repaid") ?? []).length > 0 && (
+          {/* Ledger history */}
+          {(data?.ledger?.length ?? 0) > 0 && (
             <View style={[st.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={st.cardHeader}>
                 <Feather name="list" size={16} color={colors.mutedForeground} />
-                <Text style={[st.cardTitle, { color: colors.foreground }]}>
-                  История погашений
-                </Text>
+                <Text style={[st.cardTitle, { color: colors.foreground }]}>История операций</Text>
               </View>
-              {data!.loans
-                .filter((l) => l.status === "repaid")
-                .slice(0, 5)
-                .map((l) => (
-                  <View
-                    key={l.id}
-                    style={[st.historyRow, { borderBottomColor: colors.border }]}
-                  >
-                    <Text style={[st.historyAmt, { color: colors.foreground }]}>
-                      +{l.amount} Д погашено
-                    </Text>
-                    <Text style={[st.historyDate, { color: colors.mutedForeground }]}>
-                      {new Date(l.repaidAt ?? l.createdAt).toLocaleDateString("ru-RU")}
-                    </Text>
+              {[...(data!.ledger)].reverse().slice(0, 20).map((entry) => {
+                const meta = LEDGER_ICONS[entry.type] ?? { icon: "circle", color: colors.mutedForeground, label: entry.type };
+                const sign = entry.type === "loan_issued" ? "+" : entry.type === "collateral_released" ? "🔓" : "−";
+                return (
+                  <View key={entry.id} style={[st.historyRow, { borderBottomColor: colors.border }]}>
+                    <View style={[st.historyIcon, { backgroundColor: meta.color + "22" }]}>
+                      <Feather name={meta.icon as any} size={14} color={meta.color} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
+                        {meta.label}
+                      </Text>
+                      {entry.note && (
+                        <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>
+                          {entry.note}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: meta.color }}>
+                        {typeof sign === "string" && sign !== "🔓" ? `${sign}${entry.amount}` : `${sign} ${entry.amount}`} Д
+                      </Text>
+                      <Text style={{ fontSize: 10, color: colors.mutedForeground, marginTop: 2 }}>
+                        {new Date(entry.createdAt).toLocaleDateString("ru-RU")}
+                      </Text>
+                    </View>
                   </View>
-                ))}
+                );
+              })}
             </View>
           )}
 
@@ -433,6 +465,29 @@ function MetaItem({
   );
 }
 
+function DebtBar({
+  activeDebt,
+  creditLimit,
+  colors,
+}: {
+  activeDebt: number;
+  creditLimit: number;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const pct = Math.min(100, Math.round((activeDebt / creditLimit) * 100));
+  return (
+    <View style={{ marginTop: 12, marginBottom: 4 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
+        <Text style={{ fontSize: 11, color: "#f59e0b", fontWeight: "600" }}>Долг: {activeDebt} Д</Text>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{pct}% от лимита</Text>
+      </View>
+      <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.muted, overflow: "hidden" }}>
+        <View style={{ height: "100%", borderRadius: 3, backgroundColor: "#f59e0b", width: `${pct}%` }} />
+      </View>
+    </View>
+  );
+}
+
 function CreditBar({
   creditLimit,
   maxCap,
@@ -450,14 +505,7 @@ function CreditBar({
         <Text style={{ fontSize: 11, color: colors.mutedForeground }}>480 мин (потолок)</Text>
       </View>
       <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.muted, overflow: "hidden" }}>
-        <View
-          style={{
-            height: "100%",
-            borderRadius: 4,
-            backgroundColor: colors.primary,
-            width: `${pct}%`,
-          }}
-        />
+        <View style={{ height: "100%", borderRadius: 4, backgroundColor: colors.primary, width: `${pct}%` }} />
       </View>
       <Text style={{ fontSize: 11, color: colors.mutedForeground, textAlign: "center", marginTop: 4 }}>
         Текущий лимит: {creditLimit} мин ({pct}% от потолка)
@@ -477,49 +525,23 @@ const LADDER = [
   { step: 8, label: "Потолок", limit: 480, req: "7 ч отработано" },
 ];
 
-function LadderCard({
-  colors,
-  current,
-}: {
-  colors: ReturnType<typeof useColors>;
-  current: number;
-}) {
+function LadderCard({ colors, current }: { colors: ReturnType<typeof useColors>; current: number }) {
   return (
     <View style={[{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 12, padding: 16, marginBottom: 12 }]}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <Feather name="layers" size={16} color={colors.primary} />
-        <Text style={{ fontSize: 14, fontWeight: "600", color: colors.foreground }}>
-          Лестница доверия
-        </Text>
+        <Text style={{ fontSize: 14, fontWeight: "600", color: colors.foreground }}>Лестница доверия</Text>
       </View>
       {LADDER.map((rung) => {
         const active = current === rung.limit;
         const passed = current > rung.limit;
         return (
-          <View
-            key={rung.step}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              paddingVertical: 6,
-              opacity: passed ? 0.4 : 1,
-            }}
-          >
-            <View
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 14,
-                backgroundColor: active
-                  ? colors.primary
-                  : passed
-                  ? colors.muted
-                  : colors.muted,
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: 10,
-              }}
-            >
+          <View key={rung.step} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 6, opacity: passed ? 0.4 : 1 }}>
+            <View style={{
+              width: 28, height: 28, borderRadius: 14,
+              backgroundColor: active ? colors.primary : colors.muted,
+              alignItems: "center", justifyContent: "center", marginRight: 10,
+            }}>
               {passed ? (
                 <Feather name="check" size={14} color={colors.primary} />
               ) : (
@@ -536,9 +558,7 @@ function LadderCard({
             </View>
             {active && (
               <View style={{ backgroundColor: colors.primary + "22", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 }}>
-                <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>
-                  ТЕКУЩИЙ
-                </Text>
+                <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>ТЕКУЩИЙ</Text>
               </View>
             )}
           </View>
@@ -554,25 +574,15 @@ function getStyles(colors: ReturnType<typeof useColors>, topPad: number) {
   return StyleSheet.create({
     root: { flex: 1 },
     header: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingTop: topPad,
-      paddingHorizontal: 16,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      paddingTop: topPad, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1,
     },
     backBtn: { padding: 8 },
     title: { fontSize: 17, fontWeight: "700" },
     scroll: { padding: 16 },
     center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
     emptyText: { fontSize: 14 },
-    card: {
-      borderWidth: 1,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12,
-    },
+    card: { borderWidth: 1, borderRadius: 12, padding: 16, marginBottom: 12 },
     cardHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
     cardTitle: { fontSize: 14, fontWeight: "600" },
     statusLabel: { fontSize: 13, fontWeight: "600", marginBottom: 12 },
@@ -582,55 +592,30 @@ function getStyles(colors: ReturnType<typeof useColors>, topPad: number) {
     nextLabel: { fontSize: 12, marginBottom: 6 },
     nextHint: { fontSize: 12, marginTop: 6 },
     servicesBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 8,
-      alignSelf: "flex-start",
-      marginTop: 10,
+      flexDirection: "row", alignItems: "center", gap: 6,
+      paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
+      alignSelf: "flex-start", marginTop: 10,
     },
     servicesText: { fontSize: 12, fontWeight: "600" },
     hint: { fontSize: 12, marginBottom: 10 },
     inputRow: { flexDirection: "row", gap: 8 },
-    input: {
-      flex: 1,
-      height: 42,
-      borderWidth: 1,
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      fontSize: 15,
-    },
-    actionBtn: {
-      height: 42,
-      paddingHorizontal: 18,
-      borderRadius: 8,
-      alignItems: "center",
-      justifyContent: "center",
-    },
+    input: { flex: 1, height: 42, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, fontSize: 15 },
+    actionBtn: { height: 42, paddingHorizontal: 18, borderRadius: 8, alignItems: "center", justifyContent: "center" },
     actionBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
-    fullRepay: { textAlign: "center", fontSize: 13, marginTop: 10, textDecorationLine: "underline" },
-    loanRow: { paddingVertical: 8, borderBottomWidth: 1, marginBottom: 10 },
-    loanMeta: { fontSize: 13 },
-    loanDate: { fontSize: 11, marginTop: 2 },
+    fullRepay: { fontSize: 13, marginTop: 10, textAlign: "center" },
     capNotice: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: 10,
-      padding: 14,
-      borderRadius: 10,
-      borderWidth: 1,
-      marginBottom: 12,
+      flexDirection: "row", alignItems: "flex-start", gap: 8,
+      borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 12,
     },
-    capText: { fontSize: 13, flex: 1, lineHeight: 18 },
+    capText: { flex: 1, fontSize: 12, lineHeight: 18 },
     historyRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      paddingVertical: 8,
-      borderBottomWidth: StyleSheet.hairlineWidth,
+      flexDirection: "row", alignItems: "center",
+      paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    historyAmt: { fontSize: 13, fontWeight: "600" },
-    historyDate: { fontSize: 12 },
+    historyIcon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+    debtSummary: {
+      flexDirection: "row", alignItems: "center",
+      borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 10,
+    },
   });
 }
