@@ -4,6 +4,7 @@ import { applyEntropy } from "./services/meritocracyService";
 import { drainEmissionQueue } from "./services/emissionService";
 import { airDueSlots } from "./services/tvService";
 import { initBot } from "./services/telegramService";
+import { rehydrateRenderQueue } from "./services/renderQueue";
 
 const rawPort = process.env["PORT"];
 
@@ -55,8 +56,6 @@ function scheduleDailyEntropy() {
   );
 }
 
-scheduleDailyEntropy();
-
 function scheduleMidnightUTCEmissionDrain() {
   const now = new Date();
   const nextMidnight = new Date(now);
@@ -74,9 +73,6 @@ function scheduleMidnightUTCEmissionDrain() {
   logger.info({ nextRunMs: msUntilFirst }, "Emission drain cron scheduled (00:00 UTC)");
 }
 
-scheduleMidnightUTCEmissionDrain();
-
-// ── Minute tick: air due TV slots ─────────────────────────────────────────────
 function scheduleMinuteTick() {
   const now = new Date();
   const msToNextMinute =
@@ -93,13 +89,38 @@ function scheduleMinuteTick() {
   logger.info({ msToNextMinute }, "Minute tick cron scheduled (TV slot airing)");
 }
 
-scheduleMinuteTick();
+// ── Async bootstrap — rehydrate render queue BEFORE accepting connections ──────
+async function bootstrap(): Promise<void> {
+  scheduleDailyEntropy();
+  scheduleMidnightUTCEmissionDrain();
+  scheduleMinuteTick();
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
+  // ── Render queue rehydration ─────────────────────────────────────────────────
+  // Re-queue capsules stuck in `pending_render` from before the last restart.
+  // Awaited so the queue is fully loaded before the server starts accepting
+  // new render requests — satisfying the "drain from DB before new jobs" guarantee.
+  try {
+    await rehydrateRenderQueue();
+  } catch (err) {
+    // Log and continue: a rehydration failure must not prevent the server from
+    // starting. The stuck capsules will be visible in the next restart attempt.
+    logger.error({ err }, "Render queue rehydration failed — server will start anyway");
   }
 
-  logger.info({ port }, "TimeNation API Server listening");
+  await new Promise<void>((resolve, reject) => {
+    app.listen(port, (err?: Error) => {
+      if (err) {
+        logger.error({ err }, "Error listening on port");
+        reject(err);
+        return;
+      }
+      logger.info({ port }, "TimeNation API Server listening");
+      resolve();
+    });
+  });
+}
+
+bootstrap().catch((err) => {
+  logger.error({ err }, "Fatal bootstrap error — exiting");
+  process.exit(1);
 });

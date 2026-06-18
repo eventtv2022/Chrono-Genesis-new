@@ -141,3 +141,39 @@ export function getRenderJobStatus(jobId: string): {
 } | null {
   return jobStatus.get(jobId) ?? null;
 }
+
+/**
+ * On server startup, re-queue any capsules stuck in `pending_render`.
+ * These are jobs that were lost when the server crashed or was restarted.
+ * The tvCapsulesTable.status column is the durable source of truth.
+ */
+export async function rehydrateRenderQueue(): Promise<void> {
+  const stuck = await db
+    .select({
+      slotId: tvCapsulesTable.slotId,
+      citizenId: tvCapsulesTable.citizenId,
+      seedText: tvCapsulesTable.seedText,
+    })
+    .from(tvCapsulesTable)
+    .where(eq(tvCapsulesTable.status, "pending_render"));
+
+  if (stuck.length === 0) {
+    logger.info("Render queue rehydration: no stuck jobs found");
+    return;
+  }
+
+  logger.info(
+    { count: stuck.length },
+    "Render queue rehydration: re-queuing capsules stuck in pending_render"
+  );
+
+  for (const capsule of stuck) {
+    const jobId = randomUUID();
+    enqueueRender({
+      jobId,
+      slotId: capsule.slotId,
+      citizenId: capsule.citizenId,
+      capsuleSeedText: capsule.seedText,
+    });
+  }
+}
