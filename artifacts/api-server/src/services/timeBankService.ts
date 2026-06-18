@@ -191,7 +191,7 @@ export async function repayFromBalance(citizenId: number, amount: number): Promi
 
   const transferable = citizen.balanceMinutes - 1; // родовая минута неприкосновенна
   if (transferable < amount) {
-    throw new Error(`Недостаточно Дарминов для погашения. Доступно: ${transferable} Д`);
+    throw new Error(`Недостаточно минут на балансе. Доступно для погашения: ${transferable} Д`);
   }
 
   const activeLoans = await db
@@ -241,9 +241,12 @@ export async function repayFromBalance(citizenId: number, amount: number): Promi
       remaining -= toDeduct;
     }
 
+    // Списываем только фактически погашенное (amount - remaining),
+    // а не весь запрошенный amount — защита от переплаты если долг меньше суммы.
+    const actualRepaid = amount - remaining;
     await tx
       .update(citizensTable)
-      .set({ balanceMinutes: citizen.balanceMinutes - amount })
+      .set({ balanceMinutes: citizen.balanceMinutes - actualRepaid })
       .where(eq(citizensTable.id, citizenId));
   });
 
