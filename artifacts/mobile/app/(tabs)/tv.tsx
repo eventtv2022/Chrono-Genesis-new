@@ -1112,7 +1112,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
     .slice(0, 50);
 
   const selected = freeSlots.find((s) => s.id === selectedSlotId) ?? null;
-  const totalCost = selected ? (selected.timeltrBurnCost + Math.ceil(selected.timeltrBurnCost * 0.1)) : 0;
+  const totalCost = selected ? (selected.timeltrBurnCost + Math.ceil(selected.timeltrBurnCost * 0.02)) : 0;
   const transferable = citizen.balanceMinutes - 1;
   const canAfford = transferable >= totalCost;
 
@@ -1166,7 +1166,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
             <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ padding: 12, gap: 6 }}>
               {freeSlots.map((s) => {
                 const isSelected = s.id === selectedSlotId;
-                const cost = s.timeltrBurnCost + Math.ceil(s.timeltrBurnCost * 0.1);
+                const cost = s.timeltrBurnCost + Math.ceil(s.timeltrBurnCost * 0.02);
                 const affordable = transferable >= cost;
                 return (
                   <TouchableOpacity
@@ -1239,7 +1239,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
               )}
             </TouchableOpacity>
             <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center" }}>
-              Стоимость включает 10% казначейский налог. Родовая минута защищена.
+              Стоимость включает 2% государственную пошлину. Родовая минута защищена.
             </Text>
           </View>
         </View>

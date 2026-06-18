@@ -260,7 +260,7 @@ router.post("/tv/slots/book", async (req, res): Promise<void> => {
     const transferable = citizen.balanceMinutes - 1; // Родовая минута неприкосновенна
     if (totalCost > transferable) {
       res.status(400).json({
-        error: `Недостаточно Дарминов. Нужно ${totalCost} Д (слот ${burnCost} Д + налог ${treasuryTax} Д), доступно ${transferable} Д`,
+        error: `Недостаточно Дарминов. Нужно ${totalCost} Д (слот ${burnCost} Д + государственная пошлина ${treasuryTax} Д), доступно ${transferable} Д`,
       });
       return;
     }
