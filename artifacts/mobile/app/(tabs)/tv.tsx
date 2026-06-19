@@ -698,16 +698,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
       onNeedAgeVerify();
       return;
     }
-    const isHeavySlot = slot.slotType !== "citizen";
-    const estimatedTime = isHeavySlot ? "до 5 минут" : "до 2 минут";
-    Alert.alert(
-      "Рендер капсулы",
-      `Тема: ${VISUAL_STYLES.find(s => s.value === visualStyle)?.label ?? visualStyle}\n\nЗапустить AI-рендер? Прогресс будет показан прямо здесь (${estimatedTime}). Вы получите уведомление в Telegram когда видео будет готово.`,
-      [
-        { text: "Отмена", style: "cancel" },
-        { text: "Рендерить", onPress: () => renderMutation.mutate() },
-      ]
-    );
+    renderMutation.mutate();
   };
 
   const openVideo = () => {
