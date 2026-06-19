@@ -1103,16 +1103,32 @@ interface BookSlotModalProps {
   onBooked: () => void;
 }
 
-const SLOT_COSTS: Record<string, number> = { citizen: 1, quarter: 10, half: 25, apex: 50 };
+const SLOT_TYPE_KEYS = ["all", "citizen", "quarter", "half", "apex"] as const;
+type SlotTypeFilter = typeof SLOT_TYPE_KEYS[number];
+
+const FILTER_LABELS: Record<SlotTypeFilter, string> = {
+  all: "Все",
+  citizen: "1 Д",
+  quarter: "10 Д",
+  half: "25 Д",
+  apex: "50 Д",
+};
 
 function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooked }: BookSlotModalProps) {
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
+  const [typeFilter, setTypeFilter] = useState<SlotTypeFilter>("all");
 
-  const freeSlots = slots
-    .filter((s) => s.status === "free" && !s.isRetro)
-    .slice(0, 50);
+  const allFreeSlots = slots.filter((s) => s.status === "free" && !s.isRetro);
 
-  const selected = freeSlots.find((s) => s.id === selectedSlotId) ?? null;
+  const countByType = (type: SlotTypeFilter) =>
+    type === "all" ? allFreeSlots.length : allFreeSlots.filter((s) => s.slotType === type).length;
+
+  const freeSlots =
+    typeFilter === "all"
+      ? allFreeSlots.slice(0, 120) // первые 2 часа для "Все"
+      : allFreeSlots.filter((s) => s.slotType === typeFilter);
+
+  const selected = allFreeSlots.find((s) => s.id === selectedSlotId) ?? null;
   const totalCost = selected ? (selected.timeltrBurnCost + Math.ceil(selected.timeltrBurnCost * 0.02)) : 0;
   const transferable = citizen.balanceMinutes - 1;
   const canAfford = transferable >= totalCost;
@@ -1138,10 +1154,56 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
     onError: (e: Error) => Alert.alert("Отказ", e.message),
   });
 
+  const renderSlotItem = ({ item: s }: { item: TvSlot }) => {
+    const isSelected = s.id === selectedSlotId;
+    const cost = s.timeltrBurnCost + Math.ceil(s.timeltrBurnCost * 0.02);
+    const affordable = transferable >= cost;
+    return (
+      <Pressable
+        onPress={() => affordable && setSelectedSlotId(isSelected ? null : s.id)}
+        style={({ pressed }) => ({
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingHorizontal: 14,
+          paddingVertical: 11,
+          borderRadius: 10,
+          borderWidth: isSelected ? 1.5 : StyleSheet.hairlineWidth,
+          borderColor: isSelected ? colors.primary : colors.border,
+          backgroundColor: pressed
+            ? colors.primary + "30"
+            : isSelected
+            ? colors.primary + "18"
+            : colors.card,
+          opacity: affordable ? 1 : 0.4,
+          marginHorizontal: 12,
+          marginBottom: 6,
+        })}
+      >
+        <View>
+          <Text style={{ fontSize: 15, fontWeight: "700", color: isSelected ? colors.primary : colors.foreground, fontVariant: ["tabular-nums"] }}>
+            {s.hourLabel}:{s.minLabel}
+          </Text>
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>
+            {typeFilter === "all" ? (SLOT_TYPE_LABELS[s.slotType] ?? s.slotType) : "UTC"}
+          </Text>
+        </View>
+        <View style={{ alignItems: "flex-end" }}>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: isSelected ? colors.primary : colors.foreground }}>
+            {cost} Д
+          </Text>
+          {!affordable && (
+            <Text style={{ fontSize: 10, color: colors.destructive, marginTop: 2 }}>нехватка</Text>
+          )}
+        </View>
+      </Pressable>
+    );
+  };
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" }} onPress={onClose}>
-        <Pressable style={{ backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "80%" }} onPress={(e) => e.stopPropagation?.()}>
+        <Pressable style={{ backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%" }} onPress={(e) => e.stopPropagation?.()}>
 
           {/* Header */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
@@ -1157,60 +1219,66 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
             <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground }}>{transferable} Д доступно</Text>
           </View>
 
+          {/* Type filter tabs */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+            contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, gap: 6 }}
+          >
+            {SLOT_TYPE_KEYS.map((t) => {
+              const cnt = countByType(t);
+              const active = typeFilter === t;
+              return (
+                <Pressable
+                  key={t}
+                  onPress={() => { setTypeFilter(t); setSelectedSlotId(null); }}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 20,
+                    backgroundColor: active ? colors.primary : colors.muted,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: active ? "#fff" : colors.foreground }}>
+                    {FILTER_LABELS[t]}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: active ? "#ffffffaa" : colors.mutedForeground }}>
+                    {cnt}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
           {freeSlots.length === 0 ? (
             <View style={{ padding: 40, alignItems: "center" }}>
               <Feather name="tv" size={40} color={colors.mutedForeground} />
               <Text style={{ color: colors.mutedForeground, marginTop: 12, textAlign: "center" }}>
-                Нет свободных слотов на {date}
+                {allFreeSlots.length === 0
+                  ? `Нет свободных слотов на ${date}`
+                  : "Нет слотов этого типа"}
               </Text>
             </View>
           ) : (
-            <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ padding: 12, gap: 6 }}>
-              {freeSlots.map((s) => {
-                const isSelected = s.id === selectedSlotId;
-                const cost = s.timeltrBurnCost + Math.ceil(s.timeltrBurnCost * 0.02);
-                const affordable = transferable >= cost;
-                return (
-                  <Pressable
-                    key={s.id}
-                    onPress={() => affordable && setSelectedSlotId(isSelected ? null : s.id)}
-                    style={({ pressed }) => ({
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: 12,
-                      borderRadius: 10,
-                      borderWidth: isSelected ? 1.5 : StyleSheet.hairlineWidth,
-                      borderColor: isSelected ? colors.primary : colors.border,
-                      backgroundColor: pressed
-                        ? colors.primary + "30"
-                        : isSelected
-                        ? colors.primary + "18"
-                        : colors.card,
-                      opacity: affordable ? 1 : 0.4,
-                      marginBottom: 6,
-                    })}
-                  >
-                    <View>
-                      <Text style={{ fontSize: 15, fontWeight: "700", color: isSelected ? colors.primary : colors.foreground, fontVariant: ["tabular-nums"] }}>
-                        {s.hourLabel}:{s.minLabel}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2 }}>
-                        {SLOT_TYPE_LABELS[s.slotType] ?? s.slotType}
-                      </Text>
-                    </View>
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Text style={{ fontSize: 13, fontWeight: "600", color: isSelected ? colors.primary : colors.foreground }}>
-                        {cost} Д
-                      </Text>
-                      {!affordable && (
-                        <Text style={{ fontSize: 10, color: colors.destructive, marginTop: 2 }}>нехватка</Text>
-                      )}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <FlatList
+              data={freeSlots}
+              keyExtractor={(s) => String(s.id)}
+              renderItem={renderSlotItem}
+              style={{ maxHeight: 340 }}
+              contentContainerStyle={{ paddingTop: 8, paddingBottom: 8 }}
+              showsVerticalScrollIndicator={true}
+              ListFooterComponent={
+                typeFilter === "all" && allFreeSlots.length > 120 ? (
+                  <Text style={{ textAlign: "center", fontSize: 11, color: colors.mutedForeground, paddingVertical: 8 }}>
+                    Показаны ближайшие 2 ч · Выберите тип слота для полного списка
+                  </Text>
+                ) : null
+              }
+            />
           )}
 
           {/* Footer */}
@@ -1225,14 +1293,14 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
                 </Text>
               </View>
             )}
-            <TouchableOpacity
-              style={{
-                backgroundColor: selected && canAfford ? colors.primary : colors.muted,
+            <Pressable
+              style={({ pressed }) => ({
+                backgroundColor: selected && canAfford ? (pressed ? colors.primary + "cc" : colors.primary) : colors.muted,
                 height: 48,
                 borderRadius: 12,
                 alignItems: "center",
                 justifyContent: "center",
-              }}
+              })}
               onPress={() => bookMutation.mutate()}
               disabled={!selected || !canAfford || bookMutation.isPending}
             >
@@ -1243,7 +1311,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
                   {selected ? `Забронировать за ${totalCost} Д` : "Выберите слот"}
                 </Text>
               )}
-            </TouchableOpacity>
+            </Pressable>
             <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center" }}>
               Стоимость включает 2% государственную пошлину. Родовая минута защищена.
             </Text>
