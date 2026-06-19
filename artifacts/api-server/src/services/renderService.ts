@@ -8,7 +8,13 @@ import { tvCapsulesTable, citizensTable, tvSlotsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { uploadToCatcast } from "./catcastService";
 import { generateManifesto } from "./geminiService";
-import { generateCinematicPrompt, type VisualStyle as CinematicVisualStyle } from "./cinematicPromptService";
+import {
+  generateCinematicPromptTiered,
+  generateMultiScenePrompts,
+  type VisualStyle as CinematicVisualStyle,
+  type RenderTier,
+} from "./cinematicPromptService";
+import { getSlotType } from "./tvService";
 import { generateAIBackground } from "./freeVideoApiService";
 import { buildStorageRecord } from "./videoStorage";
 import { logger } from "../lib/logger";
@@ -406,7 +412,8 @@ async function renderWithAIBackground(
   seedText?: string | null,
   citizenId?: number | null,
   onProgress?: ProgressReporter,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  tier: RenderTier = "citizen"
 ): Promise<string> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `tn-ai-${slotId}-`));
   const outputPath = path.join(MEDIA_DIR, `slot_${slotId}.mp4`);
@@ -417,9 +424,10 @@ async function renderWithAIBackground(
       ? visualStyle
       : "space") as CinematicVisualStyle;
 
-    const cinematicPrompt = await generateCinematicPrompt(
+    const cinematicPrompt = await generateCinematicPromptTiered(
       seedText ?? manifestoText.slice(0, 400),
-      style
+      style,
+      tier
     );
 
     // Step 1b: Load citizen name and rank for overlay
@@ -565,6 +573,206 @@ async function renderWithAIBackground(
   }
 }
 
+// ── Prime Time Render (:00 — multi-scene 3-part montage with xfade) ─────────────
+async function renderPrimeVideo(
+  audioBuffer: Buffer | null,
+  manifestoText: string,
+  slotId: number,
+  visualStyle?: string | null,
+  seedText?: string | null,
+  citizenId?: number | null,
+  onProgress?: ProgressReporter,
+  signal?: AbortSignal
+): Promise<string> {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `tn-prime-${slotId}-`));
+  const outputPath = path.join(MEDIA_DIR, `slot_${slotId}.mp4`);
+
+  try {
+    const style = (visualStyle && visualStyle in VISUAL_STYLE_THEMES
+      ? visualStyle
+      : "space") as CinematicVisualStyle;
+    const theme = VISUAL_STYLE_THEMES[style];
+
+    // Load citizen identity for overlay
+    let citizenName = "Гражданин TimeNation";
+    let citizenRank = "Гражданин";
+    if (citizenId) {
+      try {
+        const [citizen] = await db
+          .select({ name: citizensTable.name, rank: citizensTable.rank })
+          .from(citizensTable)
+          .where(eq(citizensTable.id, citizenId))
+          .limit(1);
+        if (citizen) {
+          citizenName = citizen.name ?? citizenName;
+          citizenRank = citizen.rank ?? citizenRank;
+        }
+      } catch (err) {
+        logger.warn({ err, citizenId }, "Could not load citizen data for PRIME overlay");
+      }
+    }
+
+    // Step 1 — Generate 3 unique scene prompts via Gemini
+    await onProgress?.("generating_scenes");
+    const scenePrompts = await generateMultiScenePrompts(
+      seedText ?? manifestoText.slice(0, 400),
+      manifestoText,
+      style
+    );
+    logger.info(
+      { slotId, s1: scenePrompts.scene1.slice(0, 50) },
+      "PRIME: 3 scene prompts generated"
+    );
+
+    // Step 2 — AI background per scene (sequential, per-scene solid-color fallback)
+    await onProgress?.("fetching_scenes");
+    const sceneVideoFiles: string[] = [];
+
+    for (let i = 0; i < 3; i++) {
+      const prompt = [scenePrompts.scene1, scenePrompts.scene2, scenePrompts.scene3][i]!;
+      const sceneDir = path.join(tmpDir, `scene${i + 1}`);
+      fs.mkdirSync(sceneDir, { recursive: true });
+
+      try {
+        const { videoPath } = await generateAIBackground(prompt, sceneDir, signal);
+        if (!videoPath) throw new Error("generateAIBackground returned null");
+        sceneVideoFiles.push(videoPath);
+        logger.info({ slotId, scene: i + 1 }, `PRIME scene ${i + 1} AI background ready`);
+      } catch (err) {
+        // Per-scene fallback: solid-color 22s clip
+        const fallbackPath = path.join(sceneDir, "fallback.mp4");
+        await runFFmpeg([
+          "-f", "lavfi", "-i", `color=c=${theme.bg}:s=1280x720:r=25`,
+          "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+          "-t", "22", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+          "-c:a", "aac", "-y", fallbackPath,
+        ]);
+        sceneVideoFiles.push(fallbackPath);
+        logger.warn({ slotId, scene: i + 1, err }, `PRIME scene ${i + 1} AI failed — solid-color fallback used`);
+      }
+    }
+
+    // Step 3 — Xfade montage: 3×22s clips → ~62s composite, trimmed to 60s
+    //   offset=18: scene1 full 18s → 2s dissolve into scene2 (starts at t=18, ends t=20)
+    //   offset=36: scene2 full from t=20-36 → 2s dissolve into scene3 (ends t=38)
+    //   scene3 visible from t=38 to t=60
+    await onProgress?.("compositing");
+    const compositePath = path.join(tmpDir, "composite.mp4");
+
+    await runFFmpeg([
+      "-stream_loop", "-1", "-t", "22", "-i", sceneVideoFiles[0]!,
+      "-stream_loop", "-1", "-t", "22", "-i", sceneVideoFiles[1]!,
+      "-stream_loop", "-1", "-t", "22", "-i", sceneVideoFiles[2]!,
+      "-filter_complex",
+        "[0:v]scale=1280:720:force_original_aspect_ratio=decrease," +
+        "pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1[sv0];" +
+        "[1:v]scale=1280:720:force_original_aspect_ratio=decrease," +
+        "pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1[sv1];" +
+        "[2:v]scale=1280:720:force_original_aspect_ratio=decrease," +
+        "pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1[sv2];" +
+        "[sv0][sv1]xfade=transition=dissolve:duration=2:offset=18[v01];" +
+        "[v01][sv2]xfade=transition=dissolve:duration=2:offset=36[vout]",
+      "-map", "[vout]",
+      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
+      "-t", "60", "-y", compositePath,
+    ]);
+    logger.info({ slotId }, "PRIME xfade composite assembled");
+
+    // Step 4 — Text overlay + audio over the composite
+    await onProgress?.("encoding");
+
+    // 3 text segments: each shown only during its scene's "clear" window
+    const segments = splitSegments(manifestoText, 3);
+    const sceneTimes = [
+      { t0: 0,  t1: 18 },  // scene 1: fully visible 0-18s
+      { t0: 20, t1: 38 },  // scene 2: fully visible 20-38s
+      { t0: 40, t1: 60 },  // scene 3: fully visible 40-60s
+    ] as const;
+
+    const titleFilter =
+      `drawtext=text='TIMENATION PRIME':fontsize=20:fontcolor=${theme.title}:` +
+      `x=(w-text_w)/2:y=44:alpha=0.9`;
+    const slotFilter =
+      `drawtext=text='SLOT ${slotId} — ПРАЙМ ТАЙМ':fontsize=14:fontcolor=${theme.accent}@0.85:` +
+      `x=(w-text_w)/2:y=72`;
+    const rankFilter =
+      `drawtext=text='${esc(citizenRank)}':fontsize=15:fontcolor=${theme.accent}@0.9:` +
+      `x=12:y=h-th-34:shadowcolor=black@0.6:shadowx=1:shadowy=1`;
+    const nameFilter =
+      `drawtext=text='${esc(citizenName)}':fontsize=17:fontcolor=${theme.text}:` +
+      `x=12:y=h-th-12:shadowcolor=black@0.6:shadowx=1:shadowy=1`;
+
+    const segFilters: string[] = [];
+    segments.forEach((seg, i) => {
+      const { t0, t1 } = sceneTimes[i]!;
+      const lines = wrapLine(seg, 52).slice(0, 4);
+      const totalH = lines.length * 42;
+      const baseY = Math.round((720 - totalH) / 2);
+      lines.forEach((line, li) => {
+        segFilters.push(
+          `drawtext=text='${esc(line)}':fontsize=28:fontcolor=${theme.text}:` +
+          `x=(w-text_w)/2:y=${baseY + li * 42}:` +
+          `enable='between(t\\,${t0}\\,${t1})'`
+        );
+      });
+    });
+
+    const watermarkFilter =
+      `drawtext=text='TimeNation AI — PRIME':fontsize=14:fontcolor=white@0.75:` +
+      `x=w-tw-10:y=h-th-10:shadowcolor=black@0.5:shadowx=1:shadowy=1`;
+    const darkenFilter = `colorchannelmixer=aa=0.55`;
+
+    const vf = [darkenFilter, titleFilter, slotFilter, rankFilter, nameFilter, ...segFilters, watermarkFilter].join(",");
+
+    const metadataArgs = [
+      "-metadata", `title=TimeNation-TV — Slot ${slotId} — PRIME TIME`,
+      "-metadata", "comment=Author: TimeNation AI, Type: Synthesized Media — 3-Scene Prime Montage",
+      "-metadata", "artist=TimeNation",
+      "-metadata", `description=AI Prime Montage / 3 scenes: ${scenePrompts.scene1.slice(0, 40)} | ${scenePrompts.scene2.slice(0, 40)} | ${scenePrompts.scene3.slice(0, 40)}.`,
+    ];
+
+    if (audioBuffer) {
+      const audioPath = path.join(tmpDir, "audio.mp3");
+      fs.writeFileSync(audioPath, audioBuffer);
+      await runFFmpeg([
+        "-i", compositePath,
+        "-i", audioPath,
+        "-vf", vf,
+        "-c:v", "libx264", "-preset", "fast", "-crf", "24",
+        "-c:a", "aac", "-b:a", "192k",
+        "-map", "0:v:0", "-map", "1:a:0",
+        "-t", String(VIDEO_DURATION_SEC), "-shortest",
+        ...metadataArgs, "-y", outputPath,
+      ]);
+    } else {
+      await runFFmpeg([
+        "-i", compositePath,
+        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+        "-vf", vf,
+        "-c:v", "libx264", "-preset", "fast", "-crf", "24",
+        "-c:a", "aac",
+        "-map", "0:v:0", "-map", "1:a:0",
+        "-t", String(VIDEO_DURATION_SEC),
+        ...metadataArgs, "-y", outputPath,
+      ]);
+    }
+
+    logger.info(
+      { slotId, style, s1: scenePrompts.scene1.slice(0, 40), s2: scenePrompts.scene2.slice(0, 40), s3: scenePrompts.scene3.slice(0, 40) },
+      "PRIME TIME 3-scene montage render complete"
+    );
+    return `/api/tv/media/slot_${slotId}.mp4`;
+
+  } catch (err) {
+    logger.error({ err, slotId }, "renderPrimeVideo failed — falling back to apex AI background");
+    return renderWithAIBackground(
+      audioBuffer, manifestoText, slotId, visualStyle, seedText, citizenId, onProgress, signal, "apex"
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
 // ── Main Orchestrator ──────────────────────────────────────────────────────────
 export async function renderCapsule(slotId: number, signal?: AbortSignal): Promise<{
   manifestoText: string;
@@ -621,57 +829,63 @@ export async function renderCapsule(slotId: number, signal?: AbortSignal): Promi
     }
   }
 
-  // 2. Route by render path ─────────────────────────────────────────────────
-  //    LIGHT → ElevenLabs TTS + FFmpeg (instant)
-  //    HEAVY → external Video API stub (Quarter / Half / Apex slots)
+  // 2. Three-tier render routing by slot type ──────────────────────────────
+  //    apex (:00)    → renderPrimeVideo   (3-scene Gemini + FFmpeg xfade montage)
+  //    half (:30)    → renderWithAIBackground tier=half  (premium quality prompt)
+  //    quarter (:15/:45) → renderWithAIBackground tier=quarter (high quality prompt)
+  //    citizen       → renderWithAIBackground tier=citizen (standard quality)
+  const slotType = slot ? getSlotType(slot.minuteIndex) : "citizen";
+  const tier: RenderTier = slotType;
+
   let mediaUrl: string | null = null;
   let finalStatus = "draft";
 
-  // Generate TTS audio once (shared by both paths)
+  // Generate TTS audio once (shared by all paths)
   await reportProgress("generating_tts");
   const audioBuffer = manifestoText ? await generateTTSBuffer(manifestoText) : null;
 
-  if (capsule.renderPath === "heavy") {
-    // Premium slot: full AI cinematic video (HuggingFace → Pollinations → solid-color)
+  if (slotType === "apex") {
+    // PRIME TIME (:00) — 3-scene multi-montage (Gemini splits text → 3 AI frames → xfade)
     try {
-      mediaUrl = await renderWithAIBackground(
-        audioBuffer,
-        manifestoText,
-        slotId,
-        capsule.visualStyle,
-        capsule.seedText,
-        capsule.citizenId,
-        reportProgress,
-        signal
+      mediaUrl = await renderPrimeVideo(
+        audioBuffer, manifestoText, slotId,
+        capsule.visualStyle, capsule.seedText, capsule.citizenId,
+        reportProgress, signal
       );
       finalStatus = "rendered";
-      logger.info({ slotId }, "HEAVY slot rendered with AI background");
+      logger.info({ slotId }, "PRIME TIME render complete");
     } catch (err) {
-      logger.error({ err, slotId }, "renderWithAIBackground failed for HEAVY slot — falling back to LIGHT");
+      logger.error({ err, slotId }, "renderPrimeVideo failed — falling back to apex AI background");
       try {
-        mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle, reportProgress);
+        mediaUrl = await renderWithAIBackground(
+          audioBuffer, manifestoText, slotId,
+          capsule.visualStyle, capsule.seedText, capsule.citizenId,
+          reportProgress, signal, "apex"
+        );
         finalStatus = "rendered";
-      } catch (lightErr) {
-        logger.error({ lightErr, slotId }, "LIGHT fallback for HEAVY slot also failed");
-        finalStatus = "draft";
+      } catch (bgErr) {
+        logger.error({ bgErr, slotId }, "APEX AI background also failed — solid-color fallback");
+        try {
+          mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle, reportProgress);
+          finalStatus = "rendered";
+        } catch (lightErr) {
+          logger.error({ lightErr, slotId }, "renderLightVideo fallback also failed");
+          finalStatus = "draft";
+        }
       }
     }
   } else {
-    // LIGHT path: Citizen slots also get AI background (with graceful fallback)
+    // HALF / QUARTER / CITIZEN — AI background with tier-specific prompt quality
     try {
       mediaUrl = await renderWithAIBackground(
-        audioBuffer,
-        manifestoText,
-        slotId,
-        capsule.visualStyle,
-        capsule.seedText,
-        capsule.citizenId,
-        reportProgress,
-        signal
+        audioBuffer, manifestoText, slotId,
+        capsule.visualStyle, capsule.seedText, capsule.citizenId,
+        reportProgress, signal, tier
       );
       finalStatus = "rendered";
+      logger.info({ slotId, tier }, `${tier.toUpperCase()} slot rendered with AI background`);
     } catch (err) {
-      logger.error({ err, slotId }, "renderWithAIBackground failed for LIGHT slot — falling back to solid-color");
+      logger.error({ err, slotId, tier }, `${tier.toUpperCase()} renderWithAIBackground failed — solid-color fallback`);
       try {
         mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle, reportProgress);
         finalStatus = "rendered";

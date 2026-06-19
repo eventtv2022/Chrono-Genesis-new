@@ -17,7 +17,7 @@ UI-аббревиатура: «Д» (не «мин»). В БД поле по-п�
 Таблица `national_embassies`. При регистрации посольства — ранг гражданина повышается до «Посол» (если был ≤ Созидатель). NFT-сертификат = JSON в поле `nft_metadata`. Один гражданин = одно посольство (уникальность по citizenId).
 
 ## P2P-аукционы (Phase 4)
-Таблицы `auctions` + `auction_logs`. При создании лота — Дармины продавца немедленно блокируются (списываются с баланса). Комиссия 2% = `Math.ceil(finalPrice * 0.02)`. Родовая минута (1 Д) не блокируется: `amountDarmins <= balanceMinutes - 1`.
+Таблицы `auctions` + `auction_logs`. При создании лота — Дармины продавца немедленно блокируются (списываются с баланса). Комиссия 2% = `finalPrice * 0.02` (exact fraction, no rounding). Родовая минута (1 Д) не блокируется: `amountDarmins <= balanceMinutes - 1`.
 
 ## Compliance Shield (Phase 5)
 - `citizens.tos_accepted_at` — поле для фиксации принятия ToS.
