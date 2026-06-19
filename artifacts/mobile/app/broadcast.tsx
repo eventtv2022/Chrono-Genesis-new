@@ -33,7 +33,11 @@ const SLOT_TYPE_COLORS: Record<string, string> = {
   apex: "#ef4444",
 };
 
-const VIDEO_HTML = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#000;overflow:hidden;}video{width:100%;height:100vh;display:block;object-fit:contain;}</style></head><body><video id="v" autoplay playsinline controls loop></video><script>window.setVideoSrc=function(src){var v=document.getElementById('v');if(src){if(v.src!==src){v.src=src;v.load();}v.play().catch(function(){});}else{v.pause();v.removeAttribute('src');v.load();}};true;</script></body></html>`;
+// muted enables autoplay on Chrome/Safari without requiring a user gesture.
+// The native <controls> bar lets the user unmute at any time.
+// A hidden <video id="p"> silently buffers the next slot starting at second 55
+// so the transition at :00 is instant (browser serves from cache).
+const VIDEO_HTML = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#000;overflow:hidden;}#v{width:100%;height:100vh;display:block;object-fit:contain;}#p{display:none;width:0;height:0;}</style></head><body><video id="v" autoplay playsinline muted controls loop></video><video id="p" preload="auto"></video><script>function gv(id){return document.getElementById(id);}window.setVideoSrc=function(src){var v=gv('v');if(src){if(v.src!==src){v.src=src;v.load();}v.play().catch(function(){});}else{v.pause();v.removeAttribute('src');v.load();}};window.preloadNext=function(src){var p=gv('p');if(src&&p.src!==src){p.src=src;p.load();}};true;</script></body></html>`;
 
 interface LiveSlotInfo {
   minuteIndex: number;
@@ -156,6 +160,13 @@ export default function BroadcastScreen() {
         if (!prefetchRef.current || prefetchRef.current.minute !== next) {
           void fetchLiveSlot(d, next).then((data) => {
             prefetchRef.current = { minute: next, data };
+            // Preload video bytes so the switch at :00 is instant
+            if (data?.videoUrl) {
+              const absUrl = makeAbsoluteUrl(data.videoUrl);
+              videoWebViewRef.current?.injectJavaScript(
+                `window.preloadNext(${JSON.stringify(absUrl)});true;`
+              );
+            }
           });
         }
       }
