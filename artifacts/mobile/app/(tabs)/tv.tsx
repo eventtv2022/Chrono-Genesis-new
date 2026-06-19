@@ -1156,13 +1156,13 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
           cancelUrl: `${BASE_URL}/tv`,
         }),
       });
-      const json = await res.json() as { error?: string; ok?: boolean; checkoutUrl?: string };
+      const json = await res.json() as { error?: string; ok?: boolean; url?: string };
       if (!res.ok) throw new Error(json.error ?? "Ошибка бронирования");
       return json;
     },
     onSuccess: async (data) => {
-      if (paymentType === "fiat" && data.checkoutUrl) {
-        await WebBrowser.openBrowserAsync(data.checkoutUrl, { toolbarColor: "#0D1B2A" });
+      if (paymentType === "fiat" && data.url) {
+        await WebBrowser.openBrowserAsync(data.url, { toolbarColor: "#0D1B2A" });
         setSelectedSlotId(null);
         onBooked();
         onClose();
@@ -1508,34 +1508,37 @@ interface CalendarBookingSheetProps {
   onClose: () => void;
   citizen: { id: number; balanceMinutes: number };
   initialDate: string;
+  initialSlot?: TvSlot | null;
   colors: ReturnType<typeof useColors>;
   onBooked: () => void;
 }
 
 type BookStep = "date" | "grid";
 
-function CalendarBookingSheet({ visible, onClose, citizen, initialDate, colors, onBooked }: CalendarBookingSheetProps) {
+function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialSlot, colors, onBooked }: CalendarBookingSheetProps) {
   const qc = useQueryClient();
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState<BookStep>("date");
-  const [bookDate, setBookDate] = useState(initialDate);
-  const [viewYear, setViewYear] = useState(() => isoToYM(initialDate).year);
-  const [viewMonth, setViewMonth] = useState(() => isoToYM(initialDate).month);
-  const [selectedSlot, setSelectedSlot] = useState<TvSlot | null>(null);
+  // If we have a pre-selected slot, start on "grid"; otherwise start on "date"
+  const [step, setStep] = useState<BookStep>(initialSlot ? "grid" : "date");
+  const [bookDate, setBookDate] = useState(initialSlot?.date ?? initialDate);
+  const [viewYear, setViewYear] = useState(() => isoToYM(initialSlot?.date ?? initialDate).year);
+  const [viewMonth, setViewMonth] = useState(() => isoToYM(initialSlot?.date ?? initialDate).month);
+  const [selectedSlot, setSelectedSlot] = useState<TvSlot | null>(initialSlot ?? null);
   const [paymentType, setPaymentType] = useState<"timeltr" | "fiat">("timeltr");
   const today = todayISO();
 
   useEffect(() => {
     if (visible) {
-      setStep("date");
-      setBookDate(initialDate);
-      const ym = isoToYM(initialDate);
+      const slotDate = initialSlot?.date ?? initialDate;
+      setStep(initialSlot ? "grid" : "date");
+      setBookDate(slotDate);
+      const ym = isoToYM(slotDate);
       setViewYear(ym.year);
       setViewMonth(ym.month);
-      setSelectedSlot(null);
+      setSelectedSlot(initialSlot ?? null);
       setPaymentType("timeltr");
     }
-  }, [visible, initialDate]);
+  }, [visible, initialDate, initialSlot]);
 
   const { data: slotsData, isLoading: slotsLoading } = useQuery<{ slots: TvSlot[] }>({
     queryKey: ["tvSlots", bookDate],
@@ -1569,13 +1572,13 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, colors, 
           cancelUrl: `${BASE_URL}/tv`,
         }),
       });
-      const json = await res.json() as { error?: string; ok?: boolean; checkoutUrl?: string };
+      const json = await res.json() as { error?: string; ok?: boolean; url?: string };
       if (!res.ok) throw new Error(json.error ?? "Ошибка");
       return json;
     },
     onSuccess: async (data) => {
-      if (paymentType === "fiat" && data.checkoutUrl) {
-        await WebBrowser.openBrowserAsync(data.checkoutUrl, { toolbarColor: "#0D1B2A" });
+      if (paymentType === "fiat" && data.url) {
+        await WebBrowser.openBrowserAsync(data.url, { toolbarColor: "#0D1B2A" });
       } else {
         Alert.alert("✅ Забронировано", `${selectedSlot?.hourLabel}:${selectedSlot?.minLabel} · ${bookDate}`);
       }
@@ -1953,6 +1956,7 @@ export default function TvScreen() {
   const [showAgeGate, setShowAgeGate] = useState(false);
   const [showBookModal, setShowBookModal] = useState(false);
   const [showCalBooking, setShowCalBooking] = useState(false);
+  const [gridTappedSlot, setGridTappedSlot] = useState<TvSlot | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [citizenAgeVerified, setCitizenAgeVerified] = useState(
     () => !!(citizen?.ageVerified ?? 0)
@@ -2121,7 +2125,7 @@ export default function TvScreen() {
           <View style={styles.summaryActions}>
             <TouchableOpacity
               style={[styles.bookSlotBtn, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "55" }]}
-              onPress={() => tvGuide.trigger(() => { setShowCalBooking(true); })}
+              onPress={() => { setGridTappedSlot(null); tvGuide.trigger(() => { setShowCalBooking(true); }); }}
               activeOpacity={0.75}
             >
               <Feather name="calendar" size={12} color={colors.primary} />
@@ -2195,6 +2199,7 @@ export default function TvScreen() {
           colors={colors}
           onTapSlot={(slot) => {
             if (slot && slot.status === "free" && !slot.isRetro) {
+              setGridTappedSlot(slot);
               tvGuide.trigger(() => { setShowCalBooking(true); });
             } else if (slot && slot.ownerId === citizen.id) {
               setSelectedSlot(slot);
@@ -2254,11 +2259,12 @@ export default function TvScreen() {
       {showCalBooking && citizen && (
         <CalendarBookingSheet
           visible={showCalBooking}
-          onClose={() => setShowCalBooking(false)}
+          onClose={() => { setShowCalBooking(false); setGridTappedSlot(null); }}
           citizen={citizen}
-          initialDate={date}
+          initialDate={gridTappedSlot?.date ?? date}
+          initialSlot={gridTappedSlot}
           colors={colors}
-          onBooked={() => { void refetch(); }}
+          onBooked={() => { setGridTappedSlot(null); void refetch(); }}
         />
       )}
 
