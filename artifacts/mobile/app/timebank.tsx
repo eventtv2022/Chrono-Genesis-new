@@ -79,6 +79,10 @@ export default function TimeBankScreen() {
 
   const [borrowAmount, setBorrowAmount] = useState("");
   const [repayAmount, setRepayAmount] = useState("");
+  const [borrowError, setBorrowError] = useState<string | null>(null);
+  const [borrowSuccess, setBorrowSuccess] = useState(false);
+  const [repayError, setRepayError] = useState<string | null>(null);
+  const [repaySuccess, setRepaySuccess] = useState(false);
 
   const st = getStyles(colors, topPad);
 
@@ -108,11 +112,16 @@ export default function TimeBankScreen() {
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setBorrowAmount("");
+      setBorrowError(null);
+      setBorrowSuccess(true);
+      setTimeout(() => setBorrowSuccess(false), 3000);
       queryClient.invalidateQueries({ queryKey: ["timebank"] });
       refreshCitizen();
-      Alert.alert("✅ Кредит выдан", "Дармины зачислены на баланс");
     },
-    onError: (e: Error) => Alert.alert("Отказ", e.message),
+    onError: (e: Error) => {
+      setBorrowSuccess(false);
+      setBorrowError(e.message);
+    },
   });
 
   const repayMutation = useMutation({
@@ -129,28 +138,35 @@ export default function TimeBankScreen() {
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setRepayAmount("");
+      setRepayError(null);
+      setRepaySuccess(true);
+      setTimeout(() => setRepaySuccess(false), 3000);
       queryClient.invalidateQueries({ queryKey: ["timebank"] });
       refreshCitizen();
-      Alert.alert("✅ Долг погашен", "Спасибо за исполнение обязательств");
     },
-    onError: (e: Error) => Alert.alert("Отказ", e.message),
+    onError: (e: Error) => {
+      setRepaySuccess(false);
+      setRepayError(e.message);
+    },
   });
 
   function handleBorrow() {
     const amt = parseInt(borrowAmount, 10);
     if (isNaN(amt) || amt <= 0) {
-      Alert.alert("Ошибка", "Введите корректную сумму");
+      setBorrowError("Введите корректную сумму");
       return;
     }
+    setBorrowError(null);
     borrowMutation.mutate({ amount: amt });
   }
 
   function handleRepay() {
     const amt = parseInt(repayAmount, 10);
     if (isNaN(amt) || amt <= 0) {
-      Alert.alert("Ошибка", "Введите корректную сумму погашения");
+      setRepayError("Введите корректную сумму погашения");
       return;
     }
+    setRepayError(null);
     repayMutation.mutate({ amount: amt });
   }
 
@@ -276,7 +292,7 @@ export default function TimeBankScreen() {
           <LadderCard colors={colors} current={data?.creditLimit ?? 60} />
 
           {/* Borrow section */}
-          {!activeLoan && (data?.availableCredit ?? 0) > 0 && (
+          {(data?.availableCredit ?? 0) > 0 && (
             <View style={[st.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={st.cardHeader}>
                 <Feather name="download" size={18} color={colors.primary} />
@@ -287,12 +303,12 @@ export default function TimeBankScreen() {
               </Text>
               <View style={st.inputRow}>
                 <TextInput
-                  style={[st.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                  style={[st.input, { color: colors.foreground, borderColor: borrowError ? colors.destructive : colors.border, backgroundColor: colors.muted }]}
                   placeholder="Количество Д"
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="numeric"
                   value={borrowAmount}
-                  onChangeText={setBorrowAmount}
+                  onChangeText={(v) => { setBorrowAmount(v); setBorrowError(null); }}
                 />
                 <TouchableOpacity
                   style={[st.actionBtn, { backgroundColor: colors.primary }]}
@@ -306,6 +322,18 @@ export default function TimeBankScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+              {borrowError && (
+                <View style={[st.inlineBanner, { backgroundColor: colors.destructive + "18", borderColor: colors.destructive + "55" }]}>
+                  <Feather name="alert-circle" size={13} color={colors.destructive} />
+                  <Text style={[st.inlineBannerText, { color: colors.destructive }]}>{borrowError}</Text>
+                </View>
+              )}
+              {borrowSuccess && (
+                <View style={[st.inlineBanner, { backgroundColor: "#10b98118", borderColor: "#10b98155" }]}>
+                  <Feather name="check-circle" size={13} color="#10b981" />
+                  <Text style={[st.inlineBannerText, { color: "#10b981" }]}>Кредит выдан — Дармины зачислены на баланс</Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -358,12 +386,12 @@ export default function TimeBankScreen() {
 
               <View style={st.inputRow}>
                 <TextInput
-                  style={[st.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                  style={[st.input, { color: colors.foreground, borderColor: repayError ? colors.destructive : colors.border, backgroundColor: colors.muted }]}
                   placeholder={`До ${activeLoan.remainingDebt} Д`}
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="numeric"
                   value={repayAmount}
-                  onChangeText={setRepayAmount}
+                  onChangeText={(v) => { setRepayAmount(v); setRepayError(null); }}
                 />
                 <TouchableOpacity
                   style={[st.actionBtn, { backgroundColor: "#f59e0b" }]}
@@ -382,6 +410,18 @@ export default function TimeBankScreen() {
                   Погасить полностью ({activeLoan.remainingDebt} Д) →
                 </Text>
               </TouchableOpacity>
+              {repayError && (
+                <View style={[st.inlineBanner, { backgroundColor: colors.destructive + "18", borderColor: colors.destructive + "55" }]}>
+                  <Feather name="alert-circle" size={13} color={colors.destructive} />
+                  <Text style={[st.inlineBannerText, { color: colors.destructive }]}>{repayError}</Text>
+                </View>
+              )}
+              {repaySuccess && (
+                <View style={[st.inlineBanner, { backgroundColor: "#10b98118", borderColor: "#10b98155" }]}>
+                  <Feather name="check-circle" size={13} color="#10b981" />
+                  <Text style={[st.inlineBannerText, { color: "#10b981" }]}>Долг погашен — спасибо за исполнение обязательств</Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -617,5 +657,10 @@ function getStyles(colors: ReturnType<typeof useColors>, topPad: number) {
       flexDirection: "row", alignItems: "center",
       borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 10,
     },
+    inlineBanner: {
+      flexDirection: "row", alignItems: "center", gap: 7,
+      borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 8,
+    },
+    inlineBannerText: { flex: 1, fontSize: 12, lineHeight: 17 },
   });
 }
