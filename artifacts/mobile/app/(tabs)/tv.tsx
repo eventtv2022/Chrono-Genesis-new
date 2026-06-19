@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   Linking,
   Image,
   Animated,
+  useWindowDimensions,
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1393,6 +1394,430 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
   );
 }
 
+// ── ChronosGrid ───────────────────────────────────────────────────────────────
+
+function ChronosGrid({
+  slots,
+  citizenId,
+  date,
+  colors,
+  onTapSlot,
+}: {
+  slots: TvSlot[];
+  citizenId: number | null;
+  date: string;
+  colors: ReturnType<typeof useColors>;
+  onTapSlot: (slot: TvSlot | null, minuteIndex: number) => void;
+}) {
+  const { width: sw } = useWindowDimensions();
+  const LABEL_W = 28;
+  const CELL_W = Math.max(4, Math.floor((sw - LABEL_W - 36) / 60));
+  const CELL_H = 13;
+  const today = todayISO();
+  const isToday = date === today;
+  const [curMin, setCurMin] = useState(() => {
+    const n = new Date();
+    return n.getUTCHours() * 60 + n.getUTCMinutes();
+  });
+  const prevMinRef = useRef(-1);
+  useEffect(() => {
+    const t = setInterval(() => {
+      const n = new Date();
+      const m = n.getUTCHours() * 60 + n.getUTCMinutes();
+      if (m !== prevMinRef.current) { prevMinRef.current = m; setCurMin(m); }
+    }, 4000);
+    return () => clearInterval(t);
+  }, []);
+
+  const cellMap = useMemo(() => {
+    const m: Record<number, TvSlot> = {};
+    for (const s of slots) m[s.minuteIndex] = s;
+    return m;
+  }, [slots]);
+
+  const cellBg = (s: TvSlot | undefined, idx: number): string => {
+    if (isToday && idx === curMin) return "#ffffff";
+    if (!s) return colors.border + "70";
+    if (s.status === "broadcast") return s.isRetro ? "#f9731699" : "#f97316";
+    if (s.ownerId === citizenId) return s.isRetro ? colors.primary + "80" : colors.primary;
+    if (s.status === "booked") return colors.mutedForeground + "45";
+    return s.isRetro ? colors.muted + "50" : colors.border + "70";
+  };
+
+  return (
+    <ScrollView
+      style={{ flex: 1 }}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 }}
+    >
+      {/* Legend */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
+        {([
+          [colors.primary, "Мой"],
+          ["#f97316", "Эфир"],
+          [colors.mutedForeground + "45", "Занят"],
+          [colors.border + "70", "Свободен"],
+          ["#ffffff", "Сейчас"],
+        ] as [string, string][]).map(([col, lbl]) => (
+          <View key={lbl} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+            <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: col }} />
+            <Text style={{ fontSize: 9, color: colors.mutedForeground }}>{lbl}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Rows */}
+      {Array.from({ length: 24 }, (_, hour) => (
+        <View key={hour} style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
+          <Text style={{
+            width: LABEL_W, fontSize: 9, color: colors.mutedForeground,
+            textAlign: "right", paddingRight: 5, fontVariant: ["tabular-nums"],
+          }}>
+            {String(hour).padStart(2, "0")}
+          </Text>
+          <View style={{ flexDirection: "row" }}>
+            {Array.from({ length: 60 }, (_, min) => {
+              const idx = hour * 60 + min;
+              const s = cellMap[idx];
+              const isCur = isToday && idx === curMin;
+              return (
+                <Pressable
+                  key={min}
+                  style={({ pressed }) => ({
+                    width: CELL_W,
+                    height: CELL_H,
+                    backgroundColor: pressed ? colors.primary + "cc" : cellBg(s, idx),
+                    borderWidth: isCur ? 1 : 0,
+                    borderColor: "#fff",
+                  })}
+                  onPress={() => onTapSlot(s ?? null, idx)}
+                />
+              );
+            })}
+          </View>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+// ── CalendarBookingSheet ──────────────────────────────────────────────────────
+
+interface CalendarBookingSheetProps {
+  visible: boolean;
+  onClose: () => void;
+  citizen: { id: number; balanceMinutes: number };
+  initialDate: string;
+  colors: ReturnType<typeof useColors>;
+  onBooked: () => void;
+}
+
+type BookStep = "date" | "grid";
+
+function CalendarBookingSheet({ visible, onClose, citizen, initialDate, colors, onBooked }: CalendarBookingSheetProps) {
+  const qc = useQueryClient();
+  const insets = useSafeAreaInsets();
+  const [step, setStep] = useState<BookStep>("date");
+  const [bookDate, setBookDate] = useState(initialDate);
+  const [viewYear, setViewYear] = useState(() => isoToYM(initialDate).year);
+  const [viewMonth, setViewMonth] = useState(() => isoToYM(initialDate).month);
+  const [selectedSlot, setSelectedSlot] = useState<TvSlot | null>(null);
+  const [paymentType, setPaymentType] = useState<"timeltr" | "fiat">("timeltr");
+  const today = todayISO();
+
+  useEffect(() => {
+    if (visible) {
+      setStep("date");
+      setBookDate(initialDate);
+      const ym = isoToYM(initialDate);
+      setViewYear(ym.year);
+      setViewMonth(ym.month);
+      setSelectedSlot(null);
+      setPaymentType("timeltr");
+    }
+  }, [visible, initialDate]);
+
+  const { data: slotsData, isLoading: slotsLoading } = useQuery<{ slots: TvSlot[] }>({
+    queryKey: ["tvSlots", bookDate],
+    queryFn: async () => {
+      const res = await fetch(`${BASE_URL}/api/tv/slots?date=${bookDate}`);
+      if (!res.ok) throw new Error("Ошибка загрузки");
+      return res.json();
+    },
+    enabled: step === "grid",
+    staleTime: 30_000,
+  });
+
+  const slots = slotsData?.slots ?? [];
+  const freeSlots = slots.filter((s) => s.status === "free" && !s.isRetro);
+  const totalCost = selectedSlot
+    ? selectedSlot.timeltrBurnCost + Math.ceil(selectedSlot.timeltrBurnCost * 0.02)
+    : 0;
+  const canAfford = citizen.balanceMinutes - 1 >= totalCost;
+
+  const bookMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedSlot) throw new Error("Слот не выбран");
+      const res = await fetch(`${BASE_URL}/api/tv/slots/book`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slotId: selectedSlot.id,
+          citizenId: citizen.id,
+          paymentType,
+          successUrl: `${BASE_URL}/tv?booked=1`,
+          cancelUrl: `${BASE_URL}/tv`,
+        }),
+      });
+      const json = await res.json() as { error?: string; ok?: boolean; checkoutUrl?: string };
+      if (!res.ok) throw new Error(json.error ?? "Ошибка");
+      return json;
+    },
+    onSuccess: async (data) => {
+      if (paymentType === "fiat" && data.checkoutUrl) {
+        await WebBrowser.openBrowserAsync(data.checkoutUrl, { toolbarColor: "#0D1B2A" });
+      } else {
+        Alert.alert("✅ Забронировано", `${selectedSlot?.hourLabel}:${selectedSlot?.minLabel} · ${bookDate}`);
+      }
+      void qc.invalidateQueries({ queryKey: ["tvSlots"] });
+      onBooked();
+      onClose();
+    },
+    onError: (e: Error) => Alert.alert("Отказ", e.message),
+  });
+
+  // Calendar data
+  const totalDays = daysInMonth(viewYear, viewMonth);
+  const firstOffset = firstDayOfMonth(viewYear, viewMonth);
+  const calCells: (number | null)[] = [
+    ...Array(firstOffset).fill(null),
+    ...Array.from({ length: totalDays }, (_, i) => i + 1),
+  ];
+  while (calCells.length % 7 !== 0) calCells.push(null);
+
+  const prevMonth = () => {
+    if (viewMonth === 1) { setViewYear(y => y - 1); setViewMonth(12); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 12) { setViewYear(y => y + 1); setViewMonth(1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  const pickDate = (day: number) => {
+    const iso = `${viewYear}-${String(viewMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    setBookDate(iso);
+    setSelectedSlot(null);
+    setStep("grid");
+  };
+
+  const handleTapSlot = (slot: TvSlot | null, _minuteIndex: number) => {
+    if (!slot || slot.status !== "free" || slot.isRetro) return;
+    setSelectedSlot(s => (s?.id === slot.id ? null : slot));
+  };
+
+  const topPad = Platform.OS === "web" ? 67 : insets.top + 8;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: topPad }}>
+
+        {/* Header */}
+        <View style={{
+          flexDirection: "row", alignItems: "center",
+          paddingHorizontal: 12, paddingVertical: 12,
+          borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
+        }}>
+          <Pressable
+            onPress={step === "grid" ? () => { setStep("date"); setSelectedSlot(null); } : onClose}
+            style={{ padding: 8, marginRight: 6 }}
+          >
+            <Feather name={step === "grid" ? "arrow-left" : "x"} size={20} color={colors.foreground} />
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>
+              {step === "date" ? "СЕТКА ЭФИРА · выберите дату" : `СЕТКА ЭФИРА · ${bookDate}`}
+            </Text>
+            {step === "grid" && (
+              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>
+                {slotsLoading ? "Загрузка…" : `${freeSlots.length} свободных из 1440`}
+              </Text>
+            )}
+          </View>
+          {step === "grid" && (
+            <Pressable onPress={() => { setStep("date"); setSelectedSlot(null); }} style={{ padding: 8 }}>
+              <Feather name="calendar" size={18} color={colors.primary} />
+            </Pressable>
+          )}
+        </View>
+
+        {/* ── Step: pick date ── */}
+        {step === "date" && (
+          <ScrollView contentContainerStyle={{ padding: 16 }}>
+            {/* Month nav */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <TouchableOpacity onPress={prevMonth} style={{ padding: 8 }}>
+                <Feather name="chevron-left" size={22} color={colors.foreground} />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>
+                {RU_MONTHS[viewMonth - 1]} {viewYear}
+              </Text>
+              <TouchableOpacity onPress={nextMonth} style={{ padding: 8 }}>
+                <Feather name="chevron-right" size={22} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            {/* DOW row */}
+            <View style={{ flexDirection: "row", marginBottom: 6 }}>
+              {RU_DOW.map(d => (
+                <Text key={d} style={{ flex: 1, textAlign: "center", fontSize: 12, fontWeight: "600", color: colors.mutedForeground }}>
+                  {d}
+                </Text>
+              ))}
+            </View>
+            {/* Days */}
+            <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+              {calCells.map((day, idx) => {
+                if (day === null) return <View key={`e-${idx}`} style={{ width: "14.28%", height: 46 }} />;
+                const iso = `${viewYear}-${String(viewMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                const isSel = iso === bookDate;
+                const isToday2 = iso === today;
+                const isPast = iso < today;
+                return (
+                  <TouchableOpacity
+                    key={iso}
+                    style={{ width: "14.28%", height: 46, alignItems: "center", justifyContent: "center" }}
+                    onPress={() => !isPast && pickDate(day)}
+                    activeOpacity={isPast ? 1 : 0.7}
+                  >
+                    <View style={{
+                      width: 38, height: 38, borderRadius: 19,
+                      alignItems: "center", justifyContent: "center",
+                      backgroundColor: isSel ? colors.primary : "transparent",
+                      borderWidth: isToday2 && !isSel ? 1.5 : 0,
+                      borderColor: colors.primary,
+                    }}>
+                      <Text style={{
+                        fontSize: 15, fontWeight: isSel || isToday2 ? "700" : "400",
+                        color: isSel ? "#fff" : isPast ? colors.mutedForeground + "55" : isToday2 ? colors.primary : colors.foreground,
+                      }}>
+                        {day}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {/* Hint */}
+            <View style={{ marginTop: 20, padding: 14, backgroundColor: colors.card, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}>
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, lineHeight: 18 }}>
+                Выберите любую будущую дату — вы увидите сетку всех 1440 слотов. Нажмите на свободный слот, чтобы забронировать.
+              </Text>
+            </View>
+          </ScrollView>
+        )}
+
+        {/* ── Step: grid ── */}
+        {step === "grid" && (
+          <>
+            {slotsLoading ? (
+              <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 12 }}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>Загрузка сетки…</Text>
+              </View>
+            ) : (
+              <ChronosGrid
+                slots={slots}
+                citizenId={citizen.id}
+                date={bookDate}
+                colors={colors}
+                onTapSlot={handleTapSlot}
+              />
+            )}
+
+            {/* Booking confirmation bar */}
+            {selectedSlot && (
+              <View style={{
+                borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,
+                backgroundColor: colors.card, padding: 14, gap: 10,
+              }}>
+                {/* Slot info row */}
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View>
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>
+                      {selectedSlot.hourLabel}:{selectedSlot.minLabel} · {bookDate}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
+                      {SLOT_TYPE_LABELS[selectedSlot.slotType]}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setSelectedSlot(null)} style={{ padding: 8 }}>
+                    <Feather name="x" size={18} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
+
+                {/* Payment toggle */}
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <Pressable
+                    onPress={() => setPaymentType("timeltr")}
+                    style={({ pressed }) => ({
+                      flex: 1, padding: 10, borderRadius: 10, borderWidth: 1.5,
+                      borderColor: paymentType === "timeltr" ? colors.primary : colors.border,
+                      backgroundColor: pressed ? colors.primary + "22" : paymentType === "timeltr" ? colors.primary + "18" : colors.background,
+                      alignItems: "center", gap: 2,
+                    })}
+                  >
+                    <Feather name="clock" size={14} color={paymentType === "timeltr" ? colors.primary : colors.mutedForeground} />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: paymentType === "timeltr" ? colors.primary : colors.mutedForeground }}>TiMETR</Text>
+                    <Text style={{ fontSize: 10, color: paymentType === "timeltr" ? colors.primary : colors.mutedForeground }}>{totalCost} Д</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setPaymentType("fiat")}
+                    style={({ pressed }) => ({
+                      flex: 1, padding: 10, borderRadius: 10, borderWidth: 1.5,
+                      borderColor: paymentType === "fiat" ? "#22c55e" : colors.border,
+                      backgroundColor: pressed ? "#22c55e22" : paymentType === "fiat" ? "#22c55e18" : colors.background,
+                      alignItems: "center", gap: 2,
+                    })}
+                  >
+                    <Feather name="credit-card" size={14} color={paymentType === "fiat" ? "#22c55e" : colors.mutedForeground} />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: paymentType === "fiat" ? "#22c55e" : colors.mutedForeground }}>FIAT</Text>
+                    <Text style={{ fontSize: 10, color: paymentType === "fiat" ? "#22c55e" : colors.mutedForeground }}>{FIAT_PRICES[selectedSlot.slotType] ?? "?"}</Text>
+                  </Pressable>
+                </View>
+
+                {/* Book button */}
+                <Pressable
+                  style={({ pressed }) => {
+                    const active = paymentType === "fiat" || canAfford;
+                    return {
+                      backgroundColor: active ? (pressed ? colors.primary + "cc" : colors.primary) : colors.muted,
+                      height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center",
+                    };
+                  }}
+                  onPress={() => bookMutation.mutate()}
+                  disabled={bookMutation.isPending || (paymentType === "timeltr" && !canAfford)}
+                >
+                  {bookMutation.isPending ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15, fontFamily: "Inter_700Bold" }}>
+                      {paymentType === "fiat"
+                        ? `Оплатить ${FIAT_PRICES[selectedSlot.slotType] ?? ""} через Stripe`
+                        : canAfford
+                        ? `Забронировать за ${totalCost} Д`
+                        : "Недостаточно Дарминов"}
+                    </Text>
+                  )}
+                </Pressable>
+              </View>
+            )}
+          </>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
 // ── ChronosLivePulse ─────────────────────────────────────────────────────────
 
 interface LiveSlotInfo {
@@ -1527,6 +1952,8 @@ export default function TvScreen() {
   const [selectedSlot, setSelectedSlot] = useState<TvSlot | null>(null);
   const [showAgeGate, setShowAgeGate] = useState(false);
   const [showBookModal, setShowBookModal] = useState(false);
+  const [showCalBooking, setShowCalBooking] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [citizenAgeVerified, setCitizenAgeVerified] = useState(
     () => !!(citizen?.ageVerified ?? 0)
   );
@@ -1663,19 +2090,41 @@ export default function TvScreen() {
       {/* Summary row */}
       {data && (
         <View style={[styles.summaryRow, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.summaryText, { color: colors.mutedForeground }]}>
-            <Text style={{ color: colors.foreground, fontWeight: "600" }}>{mySlots.length}</Text> мои ·{" "}
-            <Text style={{ color: colors.foreground, fontWeight: "600" }}>{freeCount}</Text> свободных из 1440
-          </Text>
+          {/* View toggle: LIST | GRID */}
+          <View style={{ flexDirection: "row", gap: 4 }}>
+            <TouchableOpacity
+              style={{
+                paddingHorizontal: 10, paddingVertical: 4, borderRadius: 7,
+                backgroundColor: viewMode === "list" ? colors.primary + "22" : "transparent",
+                borderWidth: 1, borderColor: viewMode === "list" ? colors.primary + "66" : colors.border,
+              }}
+              onPress={() => setViewMode("list")}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "600", color: viewMode === "list" ? colors.primary : colors.mutedForeground }}>
+                Список
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{
+                paddingHorizontal: 10, paddingVertical: 4, borderRadius: 7,
+                backgroundColor: viewMode === "grid" ? colors.primary + "22" : "transparent",
+                borderWidth: 1, borderColor: viewMode === "grid" ? colors.primary + "66" : colors.border,
+              }}
+              onPress={() => setViewMode("grid")}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "600", color: viewMode === "grid" ? colors.primary : colors.mutedForeground }}>
+                Сетка
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.summaryActions}>
             <TouchableOpacity
               style={[styles.bookSlotBtn, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "55" }]}
-              onPress={() => tvGuide.trigger(() => {
-                setShowBookModal(true);
-              })}
+              onPress={() => tvGuide.trigger(() => { setShowCalBooking(true); })}
               activeOpacity={0.75}
             >
-              <Feather name="tv" size={12} color={colors.primary} />
+              <Feather name="calendar" size={12} color={colors.primary} />
               <Text style={[styles.bookSlotBtnText, { color: colors.primary }]}>Забронировать</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => refetch()} disabled={isRefetching}>
@@ -1705,19 +2154,23 @@ export default function TvScreen() {
         </View>
       )}
 
-      {/* Empty — no booked slots */}
-      {!isLoading && citizen && mySlots.length === 0 && (
+      {/* List mode: my booked slots */}
+      {!isLoading && viewMode === "list" && citizen && mySlots.length === 0 && (
         <View style={styles.emptyState}>
           <Feather name="tv" size={44} color={colors.mutedForeground} />
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Нет забронированных слотов</Text>
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-            Забронируйте слоты через веб-интерфейс TimeNation-TV, чтобы управлять капсулами здесь
-          </Text>
+          <TouchableOpacity
+            onPress={() => tvGuide.trigger(() => { setShowCalBooking(true); })}
+            style={{ marginTop: 8, backgroundColor: colors.primary + "22", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: colors.primary + "55" }}
+          >
+            <Text style={{ color: colors.primary, fontWeight: "600", textAlign: "center" }}>
+              Открыть календарь бронирования
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* Slot list */}
-      {!isLoading && mySlots.length > 0 && (
+      {!isLoading && viewMode === "list" && mySlots.length > 0 && (
         <FlatList
           data={mySlots}
           keyExtractor={(s) => String(s.id)}
@@ -1730,6 +2183,23 @@ export default function TvScreen() {
               Нажмите на слот чтобы управлять капсулой
             </Text>
           }
+        />
+      )}
+
+      {/* Grid mode: ChronosGrid — all 1440 slots */}
+      {!isLoading && viewMode === "grid" && citizen && (
+        <ChronosGrid
+          slots={data?.slots ?? []}
+          citizenId={citizen.id}
+          date={date}
+          colors={colors}
+          onTapSlot={(slot) => {
+            if (slot && slot.status === "free" && !slot.isRetro) {
+              tvGuide.trigger(() => { setShowCalBooking(true); });
+            } else if (slot && slot.ownerId === citizen.id) {
+              setSelectedSlot(slot);
+            }
+          }}
         />
       )}
 
@@ -1767,7 +2237,7 @@ export default function TvScreen() {
         />
       )}
 
-      {/* Book slot modal */}
+      {/* Book slot modal (legacy, kept for direct access) */}
       {showBookModal && citizen && (
         <BookSlotModal
           visible={showBookModal}
@@ -1775,6 +2245,18 @@ export default function TvScreen() {
           slots={data?.slots ?? []}
           citizen={citizen}
           date={date}
+          colors={colors}
+          onBooked={() => { void refetch(); }}
+        />
+      )}
+
+      {/* Calendar booking sheet */}
+      {showCalBooking && citizen && (
+        <CalendarBookingSheet
+          visible={showCalBooking}
+          onClose={() => setShowCalBooking(false)}
+          citizen={citizen}
+          initialDate={date}
           colors={colors}
           onBooked={() => { void refetch(); }}
         />
