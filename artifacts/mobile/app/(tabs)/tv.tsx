@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   FlatList,
   ActivityIndicator,
   Alert,
@@ -1139,8 +1140,9 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" }}>
-        <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "80%" }}>
+      <Pressable style={{ flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" }} onPress={onClose}>
+        <Pressable style={{ backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "80%" }} onPress={(e) => e.stopPropagation?.()}>
+
           {/* Header */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
             <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }}>Выбрать слот · {date}</Text>
@@ -1169,10 +1171,10 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
                 const cost = s.timeltrBurnCost + Math.ceil(s.timeltrBurnCost * 0.02);
                 const affordable = transferable >= cost;
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={s.id}
-                    onPress={() => setSelectedSlotId(isSelected ? null : s.id)}
-                    style={{
+                    onPress={() => affordable && setSelectedSlotId(isSelected ? null : s.id)}
+                    style={({ pressed }) => ({
                       flexDirection: "row",
                       alignItems: "center",
                       justifyContent: "space-between",
@@ -1180,10 +1182,14 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
                       borderRadius: 10,
                       borderWidth: isSelected ? 1.5 : StyleSheet.hairlineWidth,
                       borderColor: isSelected ? colors.primary : colors.border,
-                      backgroundColor: isSelected ? colors.primary + "18" : colors.card,
+                      backgroundColor: pressed
+                        ? colors.primary + "30"
+                        : isSelected
+                        ? colors.primary + "18"
+                        : colors.card,
                       opacity: affordable ? 1 : 0.4,
-                    }}
-                    disabled={!affordable}
+                      marginBottom: 6,
+                    })}
                   >
                     <View>
                       <Text style={{ fontSize: 15, fontWeight: "700", color: isSelected ? colors.primary : colors.foreground, fontVariant: ["tabular-nums"] }}>
@@ -1201,7 +1207,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
                         <Text style={{ fontSize: 10, color: colors.destructive, marginTop: 2 }}>нехватка</Text>
                       )}
                     </View>
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })}
             </ScrollView>
@@ -1242,8 +1248,8 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
               Стоимость включает 2% государственную пошлину. Родовая минута защищена.
             </Text>
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
