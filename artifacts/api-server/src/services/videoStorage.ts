@@ -96,13 +96,13 @@ export function buildStorageRecord(
 }
 
 // ── Treasury tax calculator ───────────────────────────────────────────────────
-// Казначейский налог: 2% на все Дармин-транзакции, Math.ceil.
+// Казначейский налог: 2% на все Дармин-транзакции. Точная дробь, без округления.
 // Применяется к: TiMETR-сессиям, TV-бронированию (timeltr), аукционам.
 // Fiat/crypto платежи: налог включён в EUR-цену (BURN_MATRIX).
 export const TREASURY_TAX_RATE = 0.02;
 
 export function calcTreasuryTax(timeltrBurnCost: number): number {
-  return Math.round(timeltrBurnCost * TREASURY_TAX_RATE);
+  return timeltrBurnCost * TREASURY_TAX_RATE;
 }
 
 // ID казначейского аккаунта (гражданин с id=1 — системный кошелёк)

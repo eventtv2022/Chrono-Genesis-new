@@ -138,7 +138,7 @@ router.post("/sessions/:id/stop", async (req, res): Promise<void> => {
   }
 
   const actualMinutes = Math.min(minutesTransferred, fromCitizen.balanceMinutes - 1);
-  // 2% казначейский налог (Math.ceil). Минимум 0 для защиты от переполнения.
+  // 2% казначейский налог. Точная дробь (например 1 Д → 0.02 Д).
   const treasuryTax = actualMinutes > 0 ? calcTreasuryTax(actualMinutes) : 0;
   const toReceives = Math.max(0, actualMinutes - treasuryTax);
 
@@ -222,17 +222,17 @@ router.post("/sessions/:id/stop", async (req, res): Promise<void> => {
     ? "✅ Закреплено в Казначействе"
     : "⚠️ Реестр временно недоступен";
 
-  const taxNote = treasuryTax > 0 ? `\n🏦 Налог Казначейства: *${treasuryTax} Д* (2%)` : "";
+  const taxNote = treasuryTax > 0 ? `\n🏦 Налог Казначейства: *${treasuryTax.toFixed(2)} Д* (2%)` : "";
 
   const notifyFrom =
     `🏛 *Казначейство TimeNation*\n\n` +
-    `Транзакция завершена: *${actualMinutes} Д* → *${toCitizen.name}*.${taxNote}\n\n` +
+    `Транзакция завершена: *${actualMinutes.toFixed(2)} Д* → *${toCitizen.name}*.${taxNote}\n\n` +
     `${registryStatus}`;
 
   const notifyTo =
     `🏛 *Казначейство TimeNation*\n\n` +
-    `Получено *${toReceives} Д* от *${fromCitizen.name}*.${taxNote}\n\n` +
-    `💰 Ваш новый баланс: *${toCitizen.balanceMinutes + toReceives} Д*\n\n` +
+    `Получено *${toReceives.toFixed(2)} Д* от *${fromCitizen.name}*.${taxNote}\n\n` +
+    `💰 Ваш новый баланс: *${(toCitizen.balanceMinutes + toReceives).toFixed(2)} Д*\n\n` +
     `${registryStatus}`;
 
   const meritResult = await applyMeritAfterSession(session.fromCitizenId, actualMinutes).catch((err) => {

@@ -90,7 +90,7 @@ export function Shop() {
             <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
             <div className="min-w-0">
               <span className="text-sm font-mono text-primary font-bold">{citizen.name}</span>
-              <span className="text-xs text-muted-foreground font-mono ml-3">Баланс: {citizen.balanceMinutes} Д</span>
+              <span className="text-xs text-muted-foreground font-mono ml-3">Баланс: {(citizen.balanceMinutes as number).toFixed(2)} Д</span>
             </div>
           </div>
         ) : (

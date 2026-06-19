@@ -129,8 +129,8 @@ router.post("/auctions/:id/finalize", async (req, res): Promise<void> => {
   if (new Date() < auction.endsAt) { res.status(400).json({ error: "Аукцион ещё не завершён" }); return; }
 
   const finalPrice = auction.currentBid ?? auction.startingPrice;
-  // 2% комиссия, округление вверх (Казначейство удерживает)
-  const tax = Math.ceil(finalPrice * 0.02);
+  // 2% комиссия. Точная дробь, без округления.
+  const tax = finalPrice * 0.02;
 
   await db.update(auctionsTable).set({ status: "completed" }).where(eq(auctionsTable.id, id));
 

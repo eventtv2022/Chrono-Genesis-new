@@ -54,7 +54,7 @@ export function Home() {
                         <div className="text-sm font-medium">{tx.fromCitizenName} → {tx.toCitizenName}</div>
                         <div className="text-xs text-muted-foreground font-mono mt-1">{new Date(tx.createdAt).toLocaleString()}</div>
                       </div>
-                      <div className="text-primary font-mono font-bold">+{tx.minutesTransferred} Д</div>
+                      <div className="text-primary font-mono font-bold">+{(tx.minutesTransferred as number).toFixed(2)} Д</div>
                     </div>
                   ))}
                   {stats.recentTransactions.length === 0 && (
@@ -79,7 +79,7 @@ export function Home() {
                           <span className="text-muted-foreground font-mono text-xs w-4">{i + 1}.</span>
                           <span className="font-medium">{citizen.name}</span>
                         </div>
-                        <span className="text-sm font-mono text-muted-foreground">{citizen.totalGiven} Д</span>
+                        <span className="text-sm font-mono text-muted-foreground">{(citizen.totalGiven as number).toFixed(2)} Д</span>
                       </div>
                     ))}
                   </div>
@@ -100,7 +100,7 @@ export function Home() {
                           <span className="text-muted-foreground font-mono text-xs w-4">{i + 1}.</span>
                           <span className="font-medium">{citizen.name}</span>
                         </div>
-                        <span className="text-sm font-mono text-muted-foreground">{citizen.totalReceived} Д</span>
+                        <span className="text-sm font-mono text-muted-foreground">{(citizen.totalReceived as number).toFixed(2)} Д</span>
                       </div>
                     ))}
                   </div>

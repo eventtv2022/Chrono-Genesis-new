@@ -358,7 +358,7 @@ export default function TimeBankScreen() {
                 <View style={{ alignItems: "flex-end" }}>
                   <Text style={{ fontSize: 11, color: colors.mutedForeground }}>баланс</Text>
                   <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>
-                    {(citizen.balanceMinutes - 1)} Д
+                    {(citizen.balanceMinutes - 1).toFixed(2)} Д
                   </Text>
                 </View>
               </View>

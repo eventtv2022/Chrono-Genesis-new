@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -9,7 +9,7 @@ export const sessionsTable = pgTable("sessions", {
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   stoppedAt: timestamp("stopped_at", { withTimezone: true }),
   durationSeconds: integer("duration_seconds"),
-  minutesTransferred: integer("minutes_transferred"),
+  minutesTransferred: real("minutes_transferred"),
   status: text("status").notNull().default("active"),
 });
 

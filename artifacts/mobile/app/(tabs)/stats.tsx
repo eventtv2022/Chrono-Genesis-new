@@ -161,7 +161,7 @@ export default function StatsScreen() {
               <Text style={styles.rankNum}>#{i + 1}</Text>
               <View style={styles.rankAvatar}><Text style={styles.rankAvatarText}>{c.name.charAt(0)}</Text></View>
               <Text style={styles.rankName}>{c.name}</Text>
-              <View style={styles.rankBadge}><Text style={styles.rankBadgeText}>+{c.totalGiven} Д</Text></View>
+              <View style={styles.rankBadge}><Text style={styles.rankBadgeText}>+{c.totalGiven.toFixed(2)} Д</Text></View>
             </View>
           ))}
         </View>
@@ -177,7 +177,7 @@ export default function StatsScreen() {
                 <Text style={styles.txTime}>{formatDuration(t.durationSeconds)} · {timeAgo(t.createdAt)}</Text>
               </View>
               <View style={styles.txAmount}>
-                <Text style={styles.txAmountText}>+{t.minutesTransferred}</Text>
+                <Text style={styles.txAmountText}>+{t.minutesTransferred.toFixed(2)}</Text>
                 <Text style={styles.txAmountUnit}>Д</Text>
               </View>
             </View>

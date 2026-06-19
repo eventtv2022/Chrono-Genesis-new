@@ -39,7 +39,7 @@ function CitizenWidget() {
         <div className="flex items-center justify-between">
           <div className="min-w-0">
             <p className="text-xs font-bold text-foreground truncate">{citizen.name}</p>
-            <p className="text-[10px] text-primary font-mono">{citizen.balanceMinutes} Д · #{citizen.id}</p>
+            <p className="text-[10px] text-primary font-mono">{(citizen.balanceMinutes as number).toFixed(2)} Д · #{citizen.id}</p>
           </div>
           <div className="flex gap-1 shrink-0">
             <button

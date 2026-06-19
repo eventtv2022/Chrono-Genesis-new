@@ -29,7 +29,7 @@ router.get("/timebank/status", async (req, res): Promise<void> => {
 router.post("/timebank/borrow", async (req, res): Promise<void> => {
   const schema = z.object({
     citizenId: z.number().int().positive(),
-    amount: z.number().int().min(1).max(480),
+    amount: z.number().positive().max(480),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
@@ -51,7 +51,7 @@ router.post("/timebank/borrow", async (req, res): Promise<void> => {
 router.post("/timebank/repay", async (req, res): Promise<void> => {
   const schema = z.object({
     citizenId: z.number().int().positive(),
-    amount: z.number().int().min(1),
+    amount: z.number().positive(),
     loanId: z.number().int().positive().optional(),
   });
   const parsed = schema.safeParse(req.body);

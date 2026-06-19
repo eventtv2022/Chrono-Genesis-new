@@ -630,7 +630,7 @@ export function Tv() {
                 {citizen && (
                   <div className="flex items-center gap-2 p-2 bg-primary/10 border border-primary/20 rounded-sm">
                     <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-                    <p className="text-xs text-primary font-mono truncate">{citizen.name} · {citizen.balanceMinutes} Д</p>
+                    <p className="text-xs text-primary font-mono truncate">{citizen.name} · {(citizen.balanceMinutes as number).toFixed(2)} Д</p>
                   </div>
                 )}
 

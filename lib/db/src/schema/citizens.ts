@@ -1,4 +1,5 @@
 import { pgTable, text, serial, integer, timestamp, real } from "drizzle-orm/pg-core";
+// balance_minutes, total_given, total_received are `real` to support fractional Darmins (tax 2% = 0.02 Д on 1 Д)
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -10,9 +11,9 @@ export const citizensTable = pgTable("citizens", {
   walletAddress: text("wallet_address").unique(),
   walletNonce: text("wallet_nonce"),
   walletVerified: integer("wallet_verified").notNull().default(0),
-  balanceMinutes: integer("balance_minutes").notNull().default(1), // 1 родовая минута
-  totalGiven: integer("total_given").notNull().default(0),
-  totalReceived: integer("total_received").notNull().default(0),
+  balanceMinutes: real("balance_minutes").notNull().default(1), // 1 родовая минута
+  totalGiven: real("total_given").notNull().default(0),
+  totalReceived: real("total_received").notNull().default(0),
   status: text("status").notNull().default("active"),
   meritScore: real("merit_score").notNull().default(0),
   rank: text("rank").notNull().default("Гражданин"),

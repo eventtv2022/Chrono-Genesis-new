@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, timestamp, text } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, timestamp, text, real } from "drizzle-orm/pg-core";
 import { citizensTable } from "./citizens";
 import { timeBankLoansTable } from "./timeBankLoans";
 
@@ -7,7 +7,7 @@ export const timeBankLedgerTable = pgTable("time_bank_ledger", {
   citizenId: integer("citizen_id").notNull().references(() => citizensTable.id),
   loanId: integer("loan_id").references(() => timeBankLoansTable.id),
   type: text("type").notNull(), // loan_issued | manual_repayment | auto_repayment | collateral_released
-  amount: integer("amount").notNull(),
+  amount: real("amount").notNull(),
   note: text("note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

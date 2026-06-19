@@ -1,2 +1,3 @@
 - [TimeNation stack & secrets](timenation-stack.md) — проект Chrono-Genesis: API + Expo mobile + Stripe + Telegram bot
 - [TimeNation roadmap phases](timenation-roadmap.md) — Дармин=Минута, EmissionGatekeeper, Посольства, Аукционы, Compliance — реализованы
+- [Decimal Darmins migration](decimal-darmins.md) — все балансы/суммы переведены на real (дробные), налог exact * 0.02

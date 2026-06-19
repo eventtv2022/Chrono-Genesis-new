@@ -211,7 +211,7 @@ export default function TimerScreen() {
           <Feather name="star" size={11} color={colors.primary} />
           <Text style={styles.meritText}>Merit: {(citizen.meritScore ?? 0).toFixed(2)}</Text>
           <Text style={styles.meritSep}>·</Text>
-          <Text style={styles.meritText}>Отдано: {citizen.totalGiven} Д</Text>
+          <Text style={styles.meritText}>Отдано: {citizen.totalGiven.toFixed(2)} Д</Text>
         </View>
       )}
 

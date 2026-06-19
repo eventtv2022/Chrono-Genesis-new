@@ -102,13 +102,13 @@ export function Citizens() {
                       {citizen.meritScore ?? 0}
                     </div>
                     <div className="w-24 text-right font-mono text-sm">
-                      {citizen.balanceMinutes} Д
+                      {(citizen.balanceMinutes as number).toFixed(2)} Д
                     </div>
                     <div className="w-20 text-right font-mono text-xs text-muted-foreground">
-                      {citizen.totalGiven} Д
+                      {(citizen.totalGiven as number).toFixed(2)} Д
                     </div>
                     <div className="w-20 text-right font-mono text-xs text-muted-foreground">
-                      {citizen.totalReceived} Д
+                      {(citizen.totalReceived as number).toFixed(2)} Д
                     </div>
                   </div>
                 ))}
