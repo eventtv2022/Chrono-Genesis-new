@@ -18,6 +18,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
+import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -1927,22 +1928,14 @@ function ChronosLivePulse({ date, colors }: { date: string; colors: ReturnType<t
           </Text>
         )}
       </View>
-      <View style={{ alignItems: "flex-end", gap: 0 }}>
-        {slot?.videoUrl ? (
-          <TouchableOpacity
-            onPress={openLive}
-            style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}
-            activeOpacity={0.8}
-          >
-            <Feather name="play" size={11} color="#fff" />
-            <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#fff" }}>Смотреть</Text>
-          </TouchableOpacity>
-        ) : (
-          <Text style={{ fontSize: 9, fontFamily: "Inter_400Regular", color: colors.mutedForeground + "88", fontVariant: ["tabular-nums"] }}>
-            {utcClock}
-          </Text>
-        )}
-      </View>
+      <TouchableOpacity
+        onPress={() => router.push("/broadcast")}
+        style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#f97316", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}
+        activeOpacity={0.8}
+      >
+        <Feather name="radio" size={11} color="#fff" />
+        <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#fff" }}>Эфир</Text>
+      </TouchableOpacity>
     </View>
   );
 }
