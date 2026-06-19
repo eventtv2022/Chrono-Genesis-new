@@ -15,6 +15,7 @@ import {
   Platform,
   ScrollView,
   Pressable,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -642,6 +643,14 @@ export default function ChronopediaScreen() {
     setShowAddModal(true);
   }, [citizen]);
 
+  const openInGoogleMaps = useCallback((slot: ChronopediaSlot) => {
+    const isReal = slot.placeId && !slot.placeId.startsWith("syn_");
+    const url = isReal
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(slot.locationName)}&query_place_id=${slot.placeId}`
+      : `https://www.google.com/maps/search/?api=1&query=${slot.geoLat},${slot.geoLng}`;
+    Linking.openURL(url).catch(() => Alert.alert("Ошибка", "Не удалось открыть Google Maps"));
+  }, []);
+
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const isSaving = createSlotMutation.isPending || addEventMutation.isPending;
 
@@ -750,13 +759,21 @@ export default function ChronopediaScreen() {
                   />
                 )}
 
-                <TouchableOpacity
-                  style={[st.addOpinionBtn, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "55" }]}
-                  onPress={handleAddOpinion}
-                >
-                  <Feather name="plus" size={15} color={colors.primary} />
-                  <Text style={[st.addOpinionBtnText, { color: colors.primary }]}>Добавить своё мнение</Text>
-                </TouchableOpacity>
+                <View style={st.panelActions}>
+                  <TouchableOpacity
+                    style={[st.addOpinionBtn, { flex: 1, backgroundColor: colors.primary + "18", borderColor: colors.primary + "55" }]}
+                    onPress={handleAddOpinion}
+                  >
+                    <Feather name="plus" size={15} color={colors.primary} />
+                    <Text style={[st.addOpinionBtnText, { color: colors.primary }]}>Добавить мнение</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[st.mapsBtn, { borderColor: colors.border }]}
+                    onPress={() => openInGoogleMaps(slotDetail.slot)}
+                  >
+                    <Feather name="map" size={15} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                </View>
               </>
             ) : selectedSlotId && detailLoading ? (
               <ActivityIndicator color={colors.primary} style={{ flex: 1, marginTop: 20 }} />
@@ -958,6 +975,12 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     eventDesc: { fontSize: 13, lineHeight: 19 },
     eventDate: { fontSize: 11, marginTop: 6 },
 
+    panelActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginTop: 4,
+    },
     addOpinionBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -966,9 +989,16 @@ function getStyles(colors: ReturnType<typeof useColors>) {
       paddingVertical: 10,
       borderRadius: 10,
       borderWidth: 1,
-      marginTop: 4,
     },
     addOpinionBtnText: { fontSize: 14, fontWeight: "600" },
+    mapsBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: 10,
+      borderWidth: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
 
     mapHint: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 24 },
     mapHintIcon: { fontSize: 32, marginBottom: 4 },
