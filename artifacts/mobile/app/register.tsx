@@ -225,6 +225,14 @@ export default function RegisterScreen() {
             <Feather name="log-in" size={18} color={colors.foreground} />
             <Text style={[styles.secondaryBtnText, { color: colors.foreground }]}>Войти по телефону</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.secondaryBtn, { backgroundColor: "transparent", borderColor: colors.border }]}
+            onPress={() => router.push("/passport-lookup")}
+            activeOpacity={0.8}
+          >
+            <Feather name="file-text" size={18} color={colors.mutedForeground} />
+            <Text style={[styles.secondaryBtnText, { color: colors.mutedForeground }]}>Найти мой паспорт</Text>
+          </TouchableOpacity>
         </View>
       )}
 

@@ -107,6 +107,14 @@ export default function StatsScreen() {
           <Text style={styles.headerTitle}>КАЗНАЧЕЙСТВО</Text>
         </View>
         <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            style={[styles.topupBtn, { backgroundColor: colors.muted }]}
+            onPress={() => router.push("/citizens")}
+            activeOpacity={0.8}
+          >
+            <Feather name="users" size={13} color={colors.foreground} />
+            <Text style={[styles.topupBtnText, { color: colors.foreground }]}>Реестр</Text>
+          </TouchableOpacity>
           {citizen && (
             <TouchableOpacity
               style={[styles.topupBtn, { backgroundColor: colors.muted }]}

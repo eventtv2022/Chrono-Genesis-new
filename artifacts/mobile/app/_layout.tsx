@@ -28,6 +28,8 @@ function RootLayoutNav() {
       <Stack.Screen name="register" options={{ headerShown: false, presentation: "modal" }} />
       <Stack.Screen name="wallet" options={{ headerShown: false, presentation: "modal" }} />
       <Stack.Screen name="shop" options={{ headerShown: false, presentation: "modal" }} />
+      <Stack.Screen name="citizens" options={{ headerShown: false }} />
+      <Stack.Screen name="passport-lookup" options={{ headerShown: false }} />
     </Stack>
   );
 }

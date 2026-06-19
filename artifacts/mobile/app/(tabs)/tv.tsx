@@ -1114,9 +1114,17 @@ const FILTER_LABELS: Record<SlotTypeFilter, string> = {
   apex: "50 Д",
 };
 
+const FIAT_PRICES: Record<string, string> = {
+  citizen: "4.99€",
+  quarter: "9.99€",
+  half: "24.99€",
+  apex: "49.99€",
+};
+
 function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooked }: BookSlotModalProps) {
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
   const [typeFilter, setTypeFilter] = useState<SlotTypeFilter>("all");
+  const [paymentType, setPaymentType] = useState<"timeltr" | "fiat">("timeltr");
 
   const allFreeSlots = slots.filter((s) => s.status === "free" && !s.isRetro);
 
@@ -1139,13 +1147,26 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
       const res = await fetch(`${BASE_URL}/api/tv/slots/book`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slotId: selected.id, citizenId: citizen.id, paymentType: "timeltr" }),
+        body: JSON.stringify({
+          slotId: selected.id,
+          citizenId: citizen.id,
+          paymentType,
+          successUrl: `${BASE_URL}/tv?booked=1`,
+          cancelUrl: `${BASE_URL}/tv`,
+        }),
       });
-      const json = await res.json() as { error?: string; ok?: boolean };
+      const json = await res.json() as { error?: string; ok?: boolean; checkoutUrl?: string };
       if (!res.ok) throw new Error(json.error ?? "Ошибка бронирования");
       return json;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
+      if (paymentType === "fiat" && data.checkoutUrl) {
+        await WebBrowser.openBrowserAsync(data.checkoutUrl, { toolbarColor: "#0D1B2A" });
+        setSelectedSlotId(null);
+        onBooked();
+        onClose();
+        return;
+      }
       Alert.alert("✅ Слот забронирован", "Вернитесь в список и настройте капсулу.");
       setSelectedSlotId(null);
       onBooked();
@@ -1283,42 +1304,215 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
 
           {/* Footer */}
           <View style={{ padding: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 8 }}>
+
+            {/* Payment selector */}
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable
+                onPress={() => setPaymentType("timeltr")}
+                style={({ pressed }) => ({
+                  flex: 1, padding: 10, borderRadius: 10, borderWidth: 1.5,
+                  borderColor: paymentType === "timeltr" ? colors.primary : colors.border,
+                  backgroundColor: pressed ? colors.primary + "22" : paymentType === "timeltr" ? colors.primary + "18" : colors.card,
+                  alignItems: "center", gap: 2,
+                })}
+              >
+                <Feather name="clock" size={15} color={paymentType === "timeltr" ? colors.primary : colors.mutedForeground} />
+                <Text style={{ fontSize: 11, fontWeight: "700", color: paymentType === "timeltr" ? colors.primary : colors.mutedForeground }}>TiMETR</Text>
+                {selected && <Text style={{ fontSize: 10, color: paymentType === "timeltr" ? colors.primary : colors.mutedForeground }}>{totalCost} Д</Text>}
+              </Pressable>
+              <Pressable
+                onPress={() => setPaymentType("fiat")}
+                style={({ pressed }) => ({
+                  flex: 1, padding: 10, borderRadius: 10, borderWidth: 1.5,
+                  borderColor: paymentType === "fiat" ? "#22c55e" : colors.border,
+                  backgroundColor: pressed ? "#22c55e22" : paymentType === "fiat" ? "#22c55e18" : colors.card,
+                  alignItems: "center", gap: 2,
+                })}
+              >
+                <Feather name="credit-card" size={15} color={paymentType === "fiat" ? "#22c55e" : colors.mutedForeground} />
+                <Text style={{ fontSize: 11, fontWeight: "700", color: paymentType === "fiat" ? "#22c55e" : colors.mutedForeground }}>FIAT</Text>
+                {selected && <Text style={{ fontSize: 10, color: paymentType === "fiat" ? "#22c55e" : colors.mutedForeground }}>{FIAT_PRICES[selected.slotType] ?? "?"}</Text>}
+              </Pressable>
+            </View>
+
             {selected && (
-              <View style={{ flexDirection: "row", justifyContent: "space-between", paddingBottom: 8 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", paddingTop: 4 }}>
                 <Text style={{ fontSize: 13, color: colors.mutedForeground }}>
                   Слот {selected.hourLabel}:{selected.minLabel} · {SLOT_TYPE_LABELS[selected.slotType]}
                 </Text>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: canAfford ? colors.foreground : colors.destructive }}>
-                  −{totalCost} Д
-                </Text>
+                {paymentType === "timeltr" ? (
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: canAfford ? colors.foreground : colors.destructive }}>
+                    −{totalCost} Д
+                  </Text>
+                ) : (
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#22c55e" }}>
+                    {FIAT_PRICES[selected.slotType] ?? "?"}
+                  </Text>
+                )}
               </View>
             )}
+
             <Pressable
-              style={({ pressed }) => ({
-                backgroundColor: selected && canAfford ? (pressed ? colors.primary + "cc" : colors.primary) : colors.muted,
-                height: 48,
-                borderRadius: 12,
-                alignItems: "center",
-                justifyContent: "center",
-              })}
+              style={({ pressed }) => {
+                const active = selected && (paymentType === "fiat" || canAfford);
+                return {
+                  backgroundColor: active ? (pressed ? colors.primary + "cc" : colors.primary) : colors.muted,
+                  height: 48,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                };
+              }}
               onPress={() => bookMutation.mutate()}
-              disabled={!selected || !canAfford || bookMutation.isPending}
+              disabled={!selected || (paymentType === "timeltr" && !canAfford) || bookMutation.isPending}
             >
               {bookMutation.isPending ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={{ color: selected && canAfford ? "#fff" : colors.mutedForeground, fontWeight: "700", fontSize: 15 }}>
-                  {selected ? `Забронировать за ${totalCost} Д` : "Выберите слот"}
+                <Text style={{ color: selected ? "#fff" : colors.mutedForeground, fontWeight: "700", fontSize: 15 }}>
+                  {!selected
+                    ? "Выберите слот"
+                    : paymentType === "fiat"
+                    ? `Оплатить ${FIAT_PRICES[selected.slotType] ?? ""} через Stripe`
+                    : canAfford
+                    ? `Забронировать за ${totalCost} Д`
+                    : "Недостаточно Дарминов"
+                  }
                 </Text>
               )}
             </Pressable>
             <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center" }}>
-              Стоимость включает 2% государственную пошлину. Родовая минута защищена.
+              {paymentType === "timeltr"
+                ? "Стоимость включает 2% государственную пошлину. Родовая минута защищена."
+                : "Stripe · безопасный платёж. Дармины зачислятся автоматически."}
             </Text>
           </View>
         </Pressable>
       </Pressable>
     </Modal>
+  );
+}
+
+// ── ChronosLivePulse ─────────────────────────────────────────────────────────
+
+interface LiveSlotInfo {
+  minuteIndex: number;
+  videoUrl: string | null;
+  hasContent: boolean;
+  ownerName: string | null;
+  slotType: string | null;
+  slotId: number | null;
+}
+
+function ChronosLivePulse({ date, colors }: { date: string; colors: ReturnType<typeof useColors> }) {
+  const [currentMinute, setCurrentMinute] = useState(() => {
+    const n = new Date();
+    return n.getUTCHours() * 60 + n.getUTCMinutes();
+  });
+  const [utcClock, setUtcClock] = useState("");
+  const [slot, setSlot] = useState<LiveSlotInfo | null>(null);
+  const prevMinute = useRef(-1);
+
+  const fetchSlot = useCallback(async (minute: number) => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/tv/live-slot?date=${date}&minute=${minute}`);
+      if (!res.ok) return null;
+      return (await res.json()) as LiveSlotInfo;
+    } catch { return null; }
+  }, [date]);
+
+  useEffect(() => {
+    const n = new Date();
+    const m = n.getUTCHours() * 60 + n.getUTCMinutes();
+    setCurrentMinute(m);
+    void fetchSlot(m).then((d) => { if (d) setSlot(d); });
+  }, [fetchSlot]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const n = new Date();
+      const h = n.getUTCHours(), m = n.getUTCMinutes(), s = n.getUTCSeconds();
+      const minute = h * 60 + m;
+      const p = (x: number) => String(x).padStart(2, "0");
+      setUtcClock(`${p(h)}:${p(m)}:${p(s)} UTC`);
+      if (minute !== prevMinute.current) {
+        prevMinute.current = minute;
+        setCurrentMinute(minute);
+        void fetchSlot(minute).then((d) => { if (d) setSlot(d); });
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [fetchSlot]);
+
+  const hh = String(Math.floor(currentMinute / 60)).padStart(2, "0");
+  const mm2 = String(currentMinute % 60).padStart(2, "0");
+
+  const openLive = async () => {
+    if (!slot?.videoUrl) return;
+    const url = slot.videoUrl.startsWith("http") ? slot.videoUrl : `${BASE_URL}${slot.videoUrl}`;
+    await WebBrowser.openBrowserAsync(url, { toolbarColor: "#0D1B2A" });
+  };
+
+  return (
+    <View style={{
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      backgroundColor: colors.card,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      gap: 8,
+    }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+        <View style={{
+          width: 7, height: 7, borderRadius: 4,
+          backgroundColor: "#f97316",
+          shadowColor: "#f97316",
+          shadowRadius: 4,
+          shadowOpacity: 0.8,
+          shadowOffset: { width: 0, height: 0 },
+        }} />
+        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#f97316", letterSpacing: 1.5 }}>В ЭФИРЕ</Text>
+      </View>
+      <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.primary, fontVariant: ["tabular-nums"] }}>
+        {hh}:{mm2}
+      </Text>
+      <View style={{ flex: 1 }}>
+        {slot?.hasContent ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            {slot.slotType && (
+              <View style={{ backgroundColor: colors.primary + "22", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>
+                <Text style={{ fontSize: 9, fontFamily: "Inter_600SemiBold", color: colors.primary }}>{SLOT_TYPE_LABELS[slot.slotType] ?? slot.slotType}</Text>
+              </View>
+            )}
+            <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_500Medium" }} numberOfLines={1}>
+              {slot.ownerName}
+            </Text>
+          </View>
+        ) : (
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+            Эфир ожидает · слот {hh}:{mm2}
+          </Text>
+        )}
+      </View>
+      <View style={{ alignItems: "flex-end", gap: 0 }}>
+        {slot?.videoUrl ? (
+          <TouchableOpacity
+            onPress={openLive}
+            style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}
+            activeOpacity={0.8}
+          >
+            <Feather name="play" size={11} color="#fff" />
+            <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#fff" }}>Смотреть</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={{ fontSize: 9, fontFamily: "Inter_400Regular", color: colors.mutedForeground + "88", fontVariant: ["tabular-nums"] }}>
+            {utcClock}
+          </Text>
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -1444,6 +1638,9 @@ export default function TvScreen() {
           <Text style={[styles.clockValueSmall, { color: colors.mutedForeground }]}>{utcTime}</Text>
         </View>
       </View>
+
+      {/* ── Chronos Live Pulse ─────────────────────────────────────────────── */}
+      <ChronosLivePulse date={date} colors={colors} />
 
       {/* Date nav */}
       <View style={[styles.dateNav, { borderBottomColor: colors.border }]}>
