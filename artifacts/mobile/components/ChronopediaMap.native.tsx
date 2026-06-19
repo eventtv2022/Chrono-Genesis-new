@@ -29,6 +29,8 @@ export interface ChronopediaMapProps {
   slots: SlotMarker[];
   myId?: number;
   selectedSlotId: number | null;
+  pendingLat?: number | null;
+  pendingLng?: number | null;
   onSlotClick: (slotId: number) => void;
   onMapClick: (lat: number, lng: number) => void;
   onReady: () => void;
@@ -58,7 +60,11 @@ var map=L.map('map',{center:[20,10],zoom:2,zoomControl:false,attributionControl:
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
 var markers={};
 var selectedSlotId=null;
+var pendingMarker=null;
 function send(d){var m=JSON.stringify(d);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(m);}else{try{window.parent.postMessage(m,'*');}catch(e){}}}
+function makePendingIcon(){
+  return L.divIcon({className:'',html:'<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;"><div style="width:22px;height:22px;background:#f59e0b;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(245,158,11,0.35),0 3px 14px rgba(0,0,0,0.7);"></div></div>',iconSize:[44,44],iconAnchor:[22,22]});
+}
 function makeIcon(count,isMine,isSelected){
   var bg=isSelected?'#f59e0b':isMine?'#00ff87':'#60a5fa';
   var label=count>1?String(count):'●';
@@ -79,10 +85,18 @@ function updateMarkers(slots,myId,selId){
     if(isSel){map.setView([s.geoLat,s.geoLng],13,{animate:true});setTimeout(function(){m.openTooltip();},300);}
   });
 }
+function setPending(lat,lng){
+  if(pendingMarker){pendingMarker.remove();pendingMarker=null;}
+  if(lat==null||lng==null){return;}
+  pendingMarker=L.marker([lat,lng],{icon:makePendingIcon(),zIndexOffset:1000}).addTo(map);
+  var z=map.getZoom();
+  map.setView([lat,lng],z<8?8:z,{animate:true});
+}
 function centerOn(lat,lng,z){map.setView([lat,lng],z||12,{animate:true});}
 function clearSelection(){selectedSlotId=null;}
 map.on('click',function(e){send({type:'mapClick',lat:parseFloat(e.latlng.lat.toFixed(6)),lng:parseFloat(e.latlng.lng.toFixed(6))});});
 window.updateMarkers=updateMarkers;
+window.setPending=setPending;
 window.centerOn=centerOn;
 window.clearSelection=clearSelection;
 setTimeout(function(){send({type:'ready'});},400);
@@ -94,7 +108,7 @@ setTimeout(function(){send({type:'ready'});},400);
 
 const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
   (props, ref) => {
-    const { slots, myId, selectedSlotId, onSlotClick, onMapClick, onReady, style } = props;
+    const { slots, myId, selectedSlotId, pendingLat, pendingLng, onSlotClick, onMapClick, onReady, style } = props;
 
     const webViewRef = useRef<WebView>(null);
     const [mapReady, setMapReady] = useState(false);
@@ -112,6 +126,14 @@ const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
       const js = `updateMarkers(${JSON.stringify(slots)}, ${myId ?? 0}, ${selId}); true;`;
       webViewRef.current?.injectJavaScript(js);
     }, [mapReady, slots, myId, selectedSlotId]);
+
+    // Show/hide pending drop marker
+    useEffect(() => {
+      if (!mapReady) return;
+      const lat = pendingLat ?? "null";
+      const lng = pendingLng ?? "null";
+      webViewRef.current?.injectJavaScript(`setPending(${lat},${lng}); true;`);
+    }, [mapReady, pendingLat, pendingLng]);
 
     const handleMessage = useCallback(
       (e: WebViewMessageEvent) => {

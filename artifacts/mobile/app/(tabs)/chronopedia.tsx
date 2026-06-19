@@ -598,6 +598,8 @@ export default function ChronopediaScreen() {
     locationName?: string;
     timeMarker?: string;
     placeId?: string;
+    lat?: number;
+    lng?: number;
     title: string;
     description: string;
   }) => {
@@ -608,6 +610,8 @@ export default function ChronopediaScreen() {
         locationName: data.locationName!,
         timeMarker: data.timeMarker!,
         placeId: data.placeId,
+        lat: data.lat,
+        lng: data.lng,
         title: data.title,
         description: data.description,
       });
@@ -683,6 +687,8 @@ export default function ChronopediaScreen() {
               slots={slots}
               myId={citizen?.id}
               selectedSlotId={selectedSlotId}
+              pendingLat={pendingLat}
+              pendingLng={pendingLng}
               onReady={() => setMapReady(true)}
               onSlotClick={(slotId) => {
                 setSelectedSlotId(slotId);

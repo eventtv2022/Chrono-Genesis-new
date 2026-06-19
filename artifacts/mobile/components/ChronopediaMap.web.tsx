@@ -27,6 +27,8 @@ export interface ChronopediaMapProps {
   slots: SlotMarker[];
   myId?: number;
   selectedSlotId: number | null;
+  pendingLat?: number | null;
+  pendingLng?: number | null;
   onSlotClick: (slotId: number) => void;
   onMapClick: (lat: number, lng: number) => void;
   onReady: () => void;
@@ -67,6 +69,15 @@ function makeIcon(count: number, isMine: boolean, isSelected: boolean): L.DivIco
   });
 }
 
+function makePendingIcon(): L.DivIcon {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;"><div style="width:22px;height:22px;background:#f59e0b;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(245,158,11,0.35),0 3px 14px rgba(0,0,0,0.7);"></div></div>`,
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+  });
+}
+
 function escHtml(s: string): string {
   return String(s || "").replace(
     /[&<>"]/g,
@@ -82,6 +93,7 @@ const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
     const containerRef = useRef<View>(null);
     const mapRef = useRef<L.Map | null>(null);
     const markersRef = useRef<Record<number, L.Marker>>({});
+    const pendingMarkerRef = useRef<L.Marker | null>(null);
 
     // Stable refs for callbacks (avoid stale closures)
     const onSlotClickRef = useRef(props.onSlotClick);
@@ -122,16 +134,21 @@ const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
       });
 
       mapRef.current = map;
+
+      // Ensure tiles render even if container size resolved after mount
+      setTimeout(() => map.invalidateSize(), 100);
+
       props.onReady();
 
       return () => {
         map.remove();
         mapRef.current = null;
         markersRef.current = {};
+        pendingMarkerRef.current = null;
       };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Sync markers whenever slots or selection changes
+    // Sync slot markers whenever slots or selection changes
     useEffect(() => {
       const map = mapRef.current;
       if (!map) return;
@@ -166,6 +183,27 @@ const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
         }
       });
     }, [props.slots, props.selectedSlotId, props.myId]);
+
+    // Show/hide pending drop marker when user taps empty map area
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map) return;
+
+      if (pendingMarkerRef.current) {
+        pendingMarkerRef.current.remove();
+        pendingMarkerRef.current = null;
+      }
+
+      if (props.pendingLat != null && props.pendingLng != null) {
+        const marker = L.marker([props.pendingLat, props.pendingLng], {
+          icon: makePendingIcon(),
+          zIndexOffset: 1000,
+        }).addTo(map);
+        pendingMarkerRef.current = marker;
+        const z = map.getZoom();
+        map.setView([props.pendingLat, props.pendingLng], z < 8 ? 8 : z, { animate: true });
+      }
+    }, [props.pendingLat, props.pendingLng]);
 
     return (
       <View
