@@ -1401,12 +1401,14 @@ function ChronosGrid({
   citizenId,
   date,
   colors,
+  selectedSlotId,
   onTapSlot,
 }: {
   slots: TvSlot[];
   citizenId: number | null;
   date: string;
   colors: ReturnType<typeof useColors>;
+  selectedSlotId?: number | null;
   onTapSlot: (slot: TvSlot | null, minuteIndex: number) => void;
 }) {
   const { width: sw } = useWindowDimensions();
@@ -1438,6 +1440,7 @@ function ChronosGrid({
   const cellBg = (s: TvSlot | undefined, idx: number): string => {
     if (isToday && idx === curMin) return "#ffffff";
     if (!s) return colors.border + "70";
+    if (selectedSlotId != null && s.id === selectedSlotId) return "#22c55e";
     if (s.status === "broadcast") return s.isRetro ? "#f9731699" : "#f97316";
     if (s.ownerId === citizenId) return s.isRetro ? colors.primary + "80" : colors.primary;
     if (s.status === "booked") return colors.mutedForeground + "45";
@@ -1733,6 +1736,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
                 citizenId={citizen.id}
                 date={bookDate}
                 colors={colors}
+                selectedSlotId={selectedSlot?.id ?? null}
                 onTapSlot={handleTapSlot}
               />
             )}
@@ -2197,6 +2201,7 @@ export default function TvScreen() {
           citizenId={citizen.id}
           date={date}
           colors={colors}
+          selectedSlotId={gridTappedSlot?.id ?? null}
           onTapSlot={(slot) => {
             if (slot && slot.status === "free" && !slot.isRetro) {
               setGridTappedSlot(slot);
