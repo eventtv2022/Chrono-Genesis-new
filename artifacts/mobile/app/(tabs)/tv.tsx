@@ -1519,6 +1519,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
   const [viewMonth, setViewMonth] = useState(() => isoToYM(initialSlot?.date ?? initialDate).month);
   const [selectedSlot, setSelectedSlot] = useState<TvSlot | null>(initialSlot ?? null);
   const [paymentType, setPaymentType] = useState<"timeltr" | "fiat">("timeltr");
+  const [bookError, setBookError] = useState<string | null>(null);
   const today = todayISO();
 
   useEffect(() => {
@@ -1531,6 +1532,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
       setViewMonth(ym.month);
       setSelectedSlot(initialSlot ?? null);
       setPaymentType("timeltr");
+      setBookError(null);
     }
   }, [visible, initialDate, initialSlot]);
 
@@ -1573,14 +1575,12 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
     onSuccess: async (data) => {
       if (paymentType === "fiat" && data.url) {
         await WebBrowser.openBrowserAsync(data.url, { toolbarColor: "#0D1B2A" });
-      } else {
-        Alert.alert("✅ Забронировано", `${selectedSlot?.hourLabel}:${selectedSlot?.minLabel} · ${bookDate}`);
       }
       void qc.invalidateQueries({ queryKey: ["tvSlots"] });
       onBooked();
       onClose();
     },
-    onError: (e: Error) => Alert.alert("Отказ", e.message),
+    onError: (e: Error) => setBookError(e.message),
   });
 
   // Calendar data
@@ -1611,6 +1611,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
   const handleTapSlot = (slot: TvSlot | null, _minuteIndex: number) => {
     if (!slot || slot.status !== "free" || slot.isRetro) return;
     setSelectedSlot(s => (s?.id === slot.id ? null : slot));
+    setBookError(null);
   };
 
   const topPad = Platform.OS === "web" ? 67 : insets.top + 8;
@@ -1792,7 +1793,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
                       height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center",
                     };
                   }}
-                  onPress={() => bookMutation.mutate()}
+                  onPress={() => { setBookError(null); bookMutation.mutate(); }}
                   disabled={bookMutation.isPending || (paymentType === "timeltr" && !canAfford)}
                 >
                   {bookMutation.isPending ? (
@@ -1807,6 +1808,13 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
                     </Text>
                   )}
                 </Pressable>
+
+                {/* Inline error — visible on all platforms (replaces Alert.alert) */}
+                {bookError && (
+                  <View style={{ backgroundColor: "#7f1d1d22", borderWidth: 1, borderColor: "#ef444455", borderRadius: 8, padding: 10 }}>
+                    <Text style={{ color: "#ef4444", fontSize: 12, textAlign: "center" }}>{bookError}</Text>
+                  </View>
+                )}
               </View>
             )}
           </>
