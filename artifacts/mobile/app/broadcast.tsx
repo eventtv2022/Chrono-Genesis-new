@@ -7,10 +7,12 @@ import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
+import { WebView } from "react-native-webview";
 import { useQuery } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+const DOMAIN_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN ?? ""}`;
 
 function todayUTC(): string {
   const d = new Date();
@@ -30,6 +32,8 @@ const SLOT_TYPE_COLORS: Record<string, string> = {
   half: "#8b5cf6",
   apex: "#ef4444",
 };
+
+const VIDEO_HTML = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#000;overflow:hidden;}video{width:100%;height:100vh;display:block;object-fit:contain;}</style></head><body><video id="v" autoplay playsinline controls loop></video><script>window.setVideoSrc=function(src){var v=document.getElementById('v');if(src){if(v.src!==src){v.src=src;v.load();}v.play().catch(function(){});}else{v.pause();v.removeAttribute('src');v.load();}};true;</script></body></html>`;
 
 interface LiveSlotInfo {
   minuteIndex: number;
@@ -61,6 +65,10 @@ interface ScheduleResponse {
   schedule: ScheduleEntry[];
 }
 
+function makeAbsoluteUrl(url: string): string {
+  return url.startsWith("http") ? url : `${DOMAIN_BASE}${url}`;
+}
+
 export default function BroadcastScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -74,8 +82,12 @@ export default function BroadcastScreen() {
   const [currentSecond, setCurrentSecond] = useState(0);
   const [date, setDate] = useState(todayUTC);
   const prevMinuteRef = useRef(-1);
+  const prefetchRef = useRef<{ minute: number; data: LiveSlotInfo | null } | null>(null);
   const [liveSlot, setLiveSlot] = useState<LiveSlotInfo | null>(null);
   const [scheduleTab, setScheduleTab] = useState<"upcoming" | "past">("upcoming");
+
+  const videoWebViewRef = useRef<WebView>(null);
+  const currentVideoUrlRef = useRef<string | null>(null);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -91,13 +103,18 @@ export default function BroadcastScreen() {
     return () => pulse.stop();
   }, [pulseAnim]);
 
-  const fetchLiveSlot = useCallback(async (d: string, minute: number) => {
+  const applyVideoUrl = useCallback((url: string | null) => {
+    currentVideoUrlRef.current = url;
+    const js = `window.setVideoSrc(${url ? JSON.stringify(url) : "null"});true;`;
+    videoWebViewRef.current?.injectJavaScript(js);
+  }, []);
+
+  const fetchLiveSlot = useCallback(async (d: string, minute: number): Promise<LiveSlotInfo | null> => {
     try {
       const res = await fetch(`${BASE_URL}/api/tv/live-slot?date=${d}&minute=${minute}`);
-      if (!res.ok) return;
-      const data = await res.json() as LiveSlotInfo;
-      setLiveSlot(data);
-    } catch { /* network error — keep previous data */ }
+      if (!res.ok) return null;
+      return (await res.json()) as LiveSlotInfo;
+    } catch { return null; }
   }, []);
 
   useEffect(() => {
@@ -107,8 +124,14 @@ export default function BroadcastScreen() {
     setDate(d);
     setCurrentMinute(m);
     setCurrentSecond(n.getUTCSeconds());
-    void fetchLiveSlot(d, m);
-  }, [fetchLiveSlot]);
+    void fetchLiveSlot(d, m).then((data) => {
+      if (data) {
+        setLiveSlot(data);
+        const url = data.videoUrl ? makeAbsoluteUrl(data.videoUrl) : null;
+        applyVideoUrl(url);
+      }
+    });
+  }, [fetchLiveSlot, applyVideoUrl]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -121,21 +144,49 @@ export default function BroadcastScreen() {
       setCurrentSecond(s);
       Animated.timing(progressAnim, {
         toValue: s / 59,
-        duration: 400,
+        duration: 300,
         useNativeDriver: false,
       }).start();
+
       const minute = h * 60 + m;
       const d = todayUTC();
+
+      if (s >= 55) {
+        const next = (minute + 1) % 1440;
+        if (!prefetchRef.current || prefetchRef.current.minute !== next) {
+          void fetchLiveSlot(d, next).then((data) => {
+            prefetchRef.current = { minute: next, data };
+          });
+        }
+      }
+
       if (minute !== prevMinuteRef.current) {
         prevMinuteRef.current = minute;
         setCurrentMinute(minute);
         setDate(d);
         progressAnim.setValue(0);
-        void fetchLiveSlot(d, minute);
+
+        if (prefetchRef.current?.minute === minute) {
+          const data = prefetchRef.current.data;
+          prefetchRef.current = null;
+          if (data) {
+            setLiveSlot(data);
+            const url = data.videoUrl ? makeAbsoluteUrl(data.videoUrl) : null;
+            applyVideoUrl(url);
+          }
+        } else {
+          void fetchLiveSlot(d, minute).then((data) => {
+            if (data) {
+              setLiveSlot(data);
+              const url = data.videoUrl ? makeAbsoluteUrl(data.videoUrl) : null;
+              applyVideoUrl(url);
+            }
+          });
+        }
       }
-    }, 1000);
+    }, 500);
     return () => clearInterval(timer);
-  }, [fetchLiveSlot, progressAnim]);
+  }, [fetchLiveSlot, applyVideoUrl, progressAnim]);
 
   const { data: scheduleData, isLoading: scheduleLoading, refetch: refetchSchedule } =
     useQuery<ScheduleResponse>({
@@ -166,17 +217,14 @@ export default function BroadcastScreen() {
   const listData = scheduleTab === "upcoming" ? upcoming : past;
 
   const openVideo = async (entry: ScheduleEntry) => {
-    const url = entry.catcastUrl ?? (entry.mediaUrl ? `${BASE_URL}${entry.mediaUrl}` : null);
+    const url = entry.catcastUrl ?? (entry.mediaUrl ? makeAbsoluteUrl(entry.mediaUrl) : null);
     if (!url) return;
     await WebBrowser.openBrowserAsync(url, { toolbarColor: "#0D1B2A" });
   };
 
-  const openLive = async () => {
+  const openExternal = async () => {
     if (!liveSlot?.videoUrl) return;
-    const url = liveSlot.videoUrl.startsWith("http")
-      ? liveSlot.videoUrl
-      : `${BASE_URL}${liveSlot.videoUrl}`;
-    await WebBrowser.openBrowserAsync(url, { toolbarColor: "#0D1B2A" });
+    await WebBrowser.openBrowserAsync(makeAbsoluteUrl(liveSlot.videoUrl), { toolbarColor: "#0D1B2A" });
   };
 
   return (
@@ -194,7 +242,37 @@ export default function BroadcastScreen() {
       </View>
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-        {/* NOW LIVE hero card */}
+
+        {/* ── Inline Video Player ── */}
+        <View style={styles.videoContainer}>
+          <WebView
+            ref={videoWebViewRef}
+            source={{ html: VIDEO_HTML, baseUrl: DOMAIN_BASE }}
+            style={styles.webview}
+            mediaPlaybackRequiresUserAction={false}
+            allowsInlineMediaPlayback={true}
+            allowsFullscreenVideo={true}
+            scrollEnabled={false}
+            onLoadEnd={() => {
+              if (currentVideoUrlRef.current) {
+                videoWebViewRef.current?.injectJavaScript(
+                  `window.setVideoSrc(${JSON.stringify(currentVideoUrlRef.current)});true;`
+                );
+              }
+            }}
+          />
+          {!liveSlot?.hasContent && (
+            <View style={[StyleSheet.absoluteFillObject, styles.videoIdle]}>
+              <Animated.View style={[styles.heroPulseDot, { opacity: pulseAnim, width: 32, height: 32, borderRadius: 16 }]} />
+              <Text style={styles.videoIdleTitle}>TN · TV</Text>
+              <Text style={[styles.videoIdleSubtitle, { color: colors.mutedForeground }]}>
+                Эфир ожидает · {hourLabel}:{minLabel}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* NOW LIVE info card */}
         <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: "#f9731622" }]}>
           {/* Label row */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -222,7 +300,7 @@ export default function BroadcastScreen() {
           </Text>
 
           {liveSlot?.hasContent ? (
-            <View style={{ marginTop: 16, gap: 8 }}>
+            <View style={{ marginTop: 14, gap: 8 }}>
               <Text style={[styles.heroOwner, { color: colors.foreground }]} numberOfLines={1}>
                 {liveSlot.ownerName ?? "Гражданин"}
               </Text>
@@ -240,28 +318,18 @@ export default function BroadcastScreen() {
                   </View>
                 </View>
               )}
-              {liveSlot.videoUrl ? (
+              {liveSlot.videoUrl && (
                 <Pressable
-                  style={({ pressed }) => [styles.watchBtn, {
-                    backgroundColor: pressed ? "#f97316cc" : "#f97316",
-                    marginTop: 4,
-                  }]}
-                  onPress={openLive}
+                  style={({ pressed }) => [styles.externalBtn, { borderColor: colors.border, opacity: pressed ? 0.6 : 1 }]}
+                  onPress={openExternal}
                 >
-                  <Feather name="play" size={16} color="#fff" />
-                  <Text style={styles.watchBtnText}>Смотреть видео</Text>
+                  <Feather name="external-link" size={12} color={colors.mutedForeground} />
+                  <Text style={[styles.externalBtnText, { color: colors.mutedForeground }]}>Открыть во внешнем браузере</Text>
                 </Pressable>
-              ) : (
-                <View style={[styles.noVideoHint, { borderColor: colors.border }]}>
-                  <Feather name="film" size={14} color={colors.mutedForeground} />
-                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
-                    Видео ещё не отрендерено
-                  </Text>
-                </View>
               )}
             </View>
           ) : (
-            <View style={{ marginTop: 16, alignItems: "center", gap: 6, paddingVertical: 8 }}>
+            <View style={{ marginTop: 14, alignItems: "center", gap: 6, paddingVertical: 8 }}>
               <Feather name="radio" size={28} color={colors.mutedForeground} />
               <Text style={{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_500Medium" }}>
                 Сигнал TimeNation
@@ -443,6 +511,34 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
   },
 
+  videoContainer: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    backgroundColor: "#000",
+  },
+  webview: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  videoIdle: {
+    backgroundColor: "#0D1B2A",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  videoIdleTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#1a3a5c",
+    letterSpacing: 4,
+    fontFamily: "Inter_700Bold",
+  },
+  videoIdleSubtitle: {
+    fontSize: 11,
+    letterSpacing: 1.5,
+    fontFamily: "Inter_400Regular",
+  },
+
   heroCard: {
     margin: 16,
     borderRadius: 20,
@@ -495,19 +591,20 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontFamily: "Inter_700Bold",
   },
-  watchBtn: {
+  externalBtn: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    height: 46,
-    borderRadius: 12,
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignSelf: "flex-start",
+    marginTop: 4,
   },
-  watchBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 15,
-    fontFamily: "Inter_700Bold",
+  externalBtnText: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
   },
   noVideoHint: {
     flexDirection: "row",

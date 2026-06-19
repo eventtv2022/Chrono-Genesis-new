@@ -65,6 +65,9 @@ interface TvCapsule {
 const RENDER_PROGRESS_LABELS: Record<string, string> = {
   generating_prompt: "Создание манифеста…",
   generating_tts: "Генерация озвучки…",
+  generating_scenes: "Генерация 3 сцен Prime…",
+  fetching_scenes: "Загрузка AI-фонов (3 сцены)…",
+  compositing: "Монтаж сцен xfade…",
   fetching_video: "Загрузка AI-фона…",
   encoding: "Сборка MP4…",
   done: "Готово!",
@@ -73,16 +76,22 @@ const RENDER_PROGRESS_LABELS: Record<string, string> = {
 const RENDER_PROGRESS_STAGES = [
   "generating_prompt",
   "generating_tts",
+  "generating_scenes",
+  "fetching_scenes",
+  "compositing",
   "fetching_video",
   "encoding",
   "done",
 ] as const;
 
 const PROGRESS_PCT: Record<string, number> = {
-  generating_prompt: 15,
-  generating_tts: 40,
-  fetching_video: 65,
-  encoding: 85,
+  generating_prompt: 10,
+  generating_tts: 30,
+  generating_scenes: 45,
+  fetching_scenes: 60,
+  compositing: 75,
+  fetching_video: 68,
+  encoding: 88,
   done: 100,
 };
 
@@ -1844,6 +1853,7 @@ function ChronosLivePulse({ date, colors }: { date: string; colors: ReturnType<t
   const [utcClock, setUtcClock] = useState("");
   const [slot, setSlot] = useState<LiveSlotInfo | null>(null);
   const prevMinute = useRef(-1);
+  const prefetchRef = useRef<{ minute: number; data: LiveSlotInfo | null } | null>(null);
 
   const fetchSlot = useCallback(async (minute: number) => {
     try {
@@ -1867,12 +1877,24 @@ function ChronosLivePulse({ date, colors }: { date: string; colors: ReturnType<t
       const minute = h * 60 + m;
       const p = (x: number) => String(x).padStart(2, "0");
       setUtcClock(`${p(h)}:${p(m)}:${p(s)} UTC`);
+      if (s >= 55) {
+        const next = (minute + 1) % 1440;
+        if (!prefetchRef.current || prefetchRef.current.minute !== next) {
+          void fetchSlot(next).then((d) => { prefetchRef.current = { minute: next, data: d }; });
+        }
+      }
       if (minute !== prevMinute.current) {
         prevMinute.current = minute;
         setCurrentMinute(minute);
-        void fetchSlot(minute).then((d) => { if (d) setSlot(d); });
+        if (prefetchRef.current?.minute === minute) {
+          const d = prefetchRef.current.data;
+          prefetchRef.current = null;
+          if (d) setSlot(d);
+        } else {
+          void fetchSlot(minute).then((d) => { if (d) setSlot(d); });
+        }
       }
-    }, 1000);
+    }, 500);
     return () => clearInterval(timer);
   }, [fetchSlot]);
 
