@@ -56,7 +56,7 @@ html,body,#map{width:100%;height:100%;background:#0f172a;}
 <body>
 <div id="map"></div>
 <script>
-var map=L.map('map',{center:[20,10],zoom:2,zoomControl:false,attributionControl:false});
+var map=L.map('map',{center:[20,10],zoom:2,zoomControl:false,attributionControl:false,worldCopyJump:true});
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
 var markers={};
 var selectedSlotId=null;
@@ -94,7 +94,8 @@ function setPending(lat,lng){
 }
 function centerOn(lat,lng,z){map.setView([lat,lng],z||12,{animate:true});}
 function clearSelection(){selectedSlotId=null;}
-map.on('click',function(e){send({type:'mapClick',lat:parseFloat(e.latlng.lat.toFixed(6)),lng:parseFloat(e.latlng.lng.toFixed(6))});});
+function normLng(v){return(((v%360)+540)%360)-180;}
+map.on('click',function(e){send({type:'mapClick',lat:parseFloat(e.latlng.lat.toFixed(6)),lng:parseFloat(normLng(e.latlng.lng).toFixed(6))});});
 window.updateMarkers=updateMarkers;
 window.setPending=setPending;
 window.centerOn=centerOn;

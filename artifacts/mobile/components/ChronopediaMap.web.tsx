@@ -119,6 +119,7 @@ const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
         zoom: 2,
         zoomControl: false,
         attributionControl: false,
+        worldCopyJump: true,
       });
 
       L.tileLayer(
@@ -127,10 +128,10 @@ const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
       ).addTo(map);
 
       map.on("click", (e) => {
-        onMapClickRef.current(
-          parseFloat(e.latlng.lat.toFixed(6)),
-          parseFloat(e.latlng.lng.toFixed(6))
-        );
+        const lat = parseFloat(e.latlng.lat.toFixed(6));
+        const rawLng = e.latlng.lng;
+        const lng = parseFloat((((rawLng % 360) + 540) % 360 - 180).toFixed(6));
+        onMapClickRef.current(lat, lng);
       });
 
       mapRef.current = map;

@@ -501,8 +501,10 @@ export default function ChronopediaScreen() {
       title: string;
       description: string;
     }) => {
-      const lat = data.lat ?? selectedPlace?.lat ?? pendingLat ?? 0;
-      const lng = data.lng ?? selectedPlace?.lng ?? pendingLng ?? 0;
+      const rawLat = data.lat ?? selectedPlace?.lat ?? pendingLat ?? 0;
+      const rawLng = data.lng ?? selectedPlace?.lng ?? pendingLng ?? 0;
+      const lat = Math.max(-90, Math.min(90, rawLat));
+      const lng = (((rawLng % 360) + 540) % 360) - 180;
       const res = await fetch(`${BASE_URL}/api/chronopedia/slots`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
