@@ -1129,7 +1129,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
       : allFreeSlots.filter((s) => s.slotType === typeFilter);
 
   const selected = allFreeSlots.find((s) => s.id === selectedSlotId) ?? null;
-  const totalCost = selected ? (selected.timeltrBurnCost + Math.ceil(selected.timeltrBurnCost * 0.02)) : 0;
+  const totalCost = selected ? (selected.timeltrBurnCost + Math.round(selected.timeltrBurnCost * 0.02)) : 0;
   const transferable = citizen.balanceMinutes - 1;
   const canAfford = transferable >= totalCost;
 
@@ -1169,7 +1169,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
 
   const renderSlotItem = ({ item: s }: { item: TvSlot }) => {
     const isSelected = s.id === selectedSlotId;
-    const cost = s.timeltrBurnCost + Math.ceil(s.timeltrBurnCost * 0.02);
+    const cost = s.timeltrBurnCost + Math.round(s.timeltrBurnCost * 0.02);
     const affordable = transferable >= cost;
     return (
       <Pressable
@@ -1550,7 +1550,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
   const slots = slotsData?.slots ?? [];
   const freeSlots = slots.filter((s) => s.status === "free" && !s.isRetro);
   const totalCost = selectedSlot
-    ? selectedSlot.timeltrBurnCost + Math.ceil(selectedSlot.timeltrBurnCost * 0.02)
+    ? selectedSlot.timeltrBurnCost + Math.round(selectedSlot.timeltrBurnCost * 0.02)
     : 0;
   const canAfford = citizen.balanceMinutes - 1 >= totalCost;
 

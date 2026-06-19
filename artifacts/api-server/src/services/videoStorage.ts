@@ -102,7 +102,7 @@ export function buildStorageRecord(
 export const TREASURY_TAX_RATE = 0.02;
 
 export function calcTreasuryTax(timeltrBurnCost: number): number {
-  return Math.ceil(timeltrBurnCost * TREASURY_TAX_RATE);
+  return Math.round(timeltrBurnCost * TREASURY_TAX_RATE);
 }
 
 // ID казначейского аккаунта (гражданин с id=1 — системный кошелёк)
