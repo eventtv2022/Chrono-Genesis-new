@@ -1,3 +1,4 @@
+import { getBaseUrl } from "@/lib/api";
 /**
  * Proof-of-Location QR Scanner Screen
  * Route: /embassy/verify
@@ -21,7 +22,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
 import { useColors } from "@/hooks/useColors";
 
-const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+const BASE_URL = getBaseUrl();
 
 type Phase = "scanning" | "verifying" | "success" | "error";
 

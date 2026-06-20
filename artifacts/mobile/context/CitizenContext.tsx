@@ -1,7 +1,8 @@
+import { getBaseUrl } from "@/lib/api";
 import React, { createContext, useContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+const BASE_URL = getBaseUrl();
 const STORAGE_KEY = "@timenation/citizen";
 
 export interface CitizenProfile {

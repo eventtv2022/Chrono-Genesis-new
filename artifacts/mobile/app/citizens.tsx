@@ -1,3 +1,4 @@
+import { getBaseUrl } from "@/lib/api";
 import React, { useState } from "react";
 import {
   View,
@@ -16,7 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 
-const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+const BASE_URL = getBaseUrl();
 
 interface Citizen {
   id: number;

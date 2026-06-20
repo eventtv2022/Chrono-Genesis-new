@@ -27,7 +27,14 @@ app.use(
     },
   }),
 );
-app.use(cors());
+app.use(
+  cors({
+    origin: true,       // reflect request origin (works for all Replit preview domains)
+    credentials: true,  // allow cookies/auth headers if ever needed
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  }),
+);
 // Raw body needed for Stripe webhook signature verification — must come before express.json()
 app.use("/api/payments/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());

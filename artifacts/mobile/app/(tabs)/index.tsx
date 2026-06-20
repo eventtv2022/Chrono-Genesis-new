@@ -1,3 +1,4 @@
+import { getBaseUrl } from "@/lib/api";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -21,7 +22,7 @@ import { AnimatedHourglass } from "@/components/AnimatedHourglass";
 import { ContextualGuideModal } from "@/components/ContextualGuideModal";
 import { useContextualGuide } from "@/hooks/useContextualGuide";
 
-const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+const BASE_URL = getBaseUrl();
 
 interface Citizen {
   id: number;

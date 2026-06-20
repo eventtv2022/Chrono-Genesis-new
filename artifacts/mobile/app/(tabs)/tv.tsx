@@ -1,3 +1,4 @@
+import { getBaseUrl } from "@/lib/api";
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
@@ -28,7 +29,7 @@ import { LogoBrand } from "@/components/LogoBrand";
 import { ContextualGuideModal } from "@/components/ContextualGuideModal";
 import { useContextualGuide } from "@/hooks/useContextualGuide";
 
-const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+const BASE_URL = getBaseUrl();
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

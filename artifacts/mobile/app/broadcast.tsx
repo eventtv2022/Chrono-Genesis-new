@@ -1,3 +1,4 @@
+import { getBaseUrl } from "@/lib/api";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
@@ -11,7 +12,7 @@ import { WebView } from "react-native-webview";
 import { useQuery } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+const BASE_URL = getBaseUrl();
 const DOMAIN_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN ?? ""}`;
 
 function todayUTC(): string {

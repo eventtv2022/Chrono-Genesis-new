@@ -1,3 +1,4 @@
+import { getBaseUrl } from "@/lib/api";
 import React, { useState, useMemo } from "react";
 import {
   View,
@@ -20,7 +21,7 @@ import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
 
-const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+const BASE_URL = getBaseUrl();
 
 // ── Discount engine (mirrors server + web) ─────────────────────────────────────
 

@@ -1,3 +1,4 @@
+import { getBaseUrl } from "@/lib/api";
 import React, { useState } from "react";
 import {
   View,
@@ -18,7 +19,7 @@ import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { LogoBrand } from "@/components/LogoBrand";
 
-const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+const BASE_URL = getBaseUrl();
 
 interface Transaction {
   id: number;
