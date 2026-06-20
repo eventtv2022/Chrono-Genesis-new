@@ -39,6 +39,9 @@ export const citizensTable = pgTable("citizens", {
   privacyAgreementAccepted: integer("privacy_agreement_accepted").notNull().default(0),
   privacyAgreementDate: timestamp("privacy_agreement_date", { withTimezone: true }),
   signatureBase64: text("signature_base64"),
+
+  // ── Government role ────────────────────────────────────────────────────────
+  govRole: text("gov_role").notNull().default("citizen"),
 });
 
 export const insertCitizenSchema = createInsertSchema(citizensTable).omit({
