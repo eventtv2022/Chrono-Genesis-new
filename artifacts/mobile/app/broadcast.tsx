@@ -33,11 +33,14 @@ const SLOT_TYPE_COLORS: Record<string, string> = {
   apex: "#ef4444",
 };
 
-// muted enables autoplay on Chrome/Safari without requiring a user gesture.
-// The native <controls> bar lets the user unmute at any time.
-// A hidden <video id="p"> silently buffers the next slot starting at second 55
-// so the transition at :00 is instant (browser serves from cache).
-const VIDEO_HTML = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#000;overflow:hidden;}#v{width:100%;height:100vh;display:block;object-fit:contain;}#p{display:none;width:0;height:0;}</style></head><body><video id="v" autoplay playsinline muted controls loop></video><video id="p" preload="auto"></video><script>function gv(id){return document.getElementById(id);}window.setVideoSrc=function(src){var v=gv('v');if(src){if(v.src!==src){v.src=src;v.load();}v.play().catch(function(){});}else{v.pause();v.removeAttribute('src');v.load();}};window.preloadNext=function(src){var p=gv('p');if(src&&p.src!==src){p.src=src;p.load();}};true;</script></body></html>`;
+// Double-buffer seamless player:
+//   #va = active video (visible, playing)
+//   #vb = standby video (hidden, preloading next slot)
+// At second 55 we call preloadNext(url) → loads into standby.
+// At minute :00 we call swapToNext() → shows standby, hides active, clears old.
+// unmute() removes mute on the active player after user tap.
+// setInitialSrc(url) bootstraps the active player on first load / fallback.
+const VIDEO_HTML = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#000;overflow:hidden;}#va,#vb{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;transition:opacity 0.25s;}#vb{opacity:0;pointer-events:none;}</style></head><body><video id="va" autoplay playsinline muted loop></video><video id="vb" playsinline muted preload="auto" loop></video><script>var cur='a';function ga(){return document.getElementById('v'+cur);}function gs(){return document.getElementById(cur==='a'?'vb':'va');}window.setInitialSrc=function(src){var v=ga();if(src){if(v.src!==src){v.src=src;v.load();}v.style.opacity='1';v.play().catch(function(){});}else{v.pause();v.removeAttribute('src');v.load();}};window.preloadNext=function(src){var s=gs();if(src&&s.src!==src){s.src=src;s.load();}};window.swapToNext=function(){var s=gs();var a=ga();s.style.opacity='1';s.style.pointerEvents='auto';s.play().catch(function(){});a.style.opacity='0';a.style.pointerEvents='none';setTimeout(function(){a.pause();a.removeAttribute('src');a.load();},400);cur=cur==='a'?'b':'a';};window.unmute=function(){ga().muted=false;gs().muted=false;};true;</script></body></html>`;
 
 interface LiveSlotInfo {
   minuteIndex: number;
@@ -87,11 +90,13 @@ export default function BroadcastScreen() {
   const [date, setDate] = useState(todayUTC);
   const prevMinuteRef = useRef(-1);
   const prefetchRef = useRef<{ minute: number; data: LiveSlotInfo | null } | null>(null);
-  const [liveSlot, setLiveSlot] = useState<LiveSlotInfo | null>(null);
+  const [liveSlot,    setLiveSlot]    = useState<LiveSlotInfo | null>(null);
   const [scheduleTab, setScheduleTab] = useState<"upcoming" | "past">("upcoming");
+  const [isMuted,     setIsMuted]     = useState(true);
+  const hasPrefetchedRef = useRef(false);
 
-  const videoWebViewRef = useRef<WebView>(null);
-  const currentVideoUrlRef = useRef<string | null>(null);
+  const videoWebViewRef     = useRef<WebView>(null);
+  const currentVideoUrlRef  = useRef<string | null>(null);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -107,10 +112,24 @@ export default function BroadcastScreen() {
     return () => pulse.stop();
   }, [pulseAnim]);
 
+  // Set initial video source (first load or fallback with no prefetch)
+  const applyInitialVideo = useCallback((url: string | null) => {
+    currentVideoUrlRef.current = url;
+    hasPrefetchedRef.current = false;
+    const js = `window.setInitialSrc(${url ? JSON.stringify(url) : "null"});true;`;
+    videoWebViewRef.current?.injectJavaScript(js);
+  }, []);
+
+  // At minute change: use swap if standby is preloaded, otherwise re-init
   const applyVideoUrl = useCallback((url: string | null) => {
     currentVideoUrlRef.current = url;
-    const js = `window.setVideoSrc(${url ? JSON.stringify(url) : "null"});true;`;
-    videoWebViewRef.current?.injectJavaScript(js);
+    if (hasPrefetchedRef.current) {
+      videoWebViewRef.current?.injectJavaScript(`window.swapToNext();true;`);
+      hasPrefetchedRef.current = false;
+    } else {
+      const js = `window.setInitialSrc(${url ? JSON.stringify(url) : "null"});true;`;
+      videoWebViewRef.current?.injectJavaScript(js);
+    }
   }, []);
 
   const fetchLiveSlot = useCallback(async (d: string, minute: number): Promise<LiveSlotInfo | null> => {
@@ -132,10 +151,10 @@ export default function BroadcastScreen() {
       if (data) {
         setLiveSlot(data);
         const url = data.videoUrl ? makeAbsoluteUrl(data.videoUrl) : null;
-        applyVideoUrl(url);
+        applyInitialVideo(url);
       }
     });
-  }, [fetchLiveSlot, applyVideoUrl]);
+  }, [fetchLiveSlot, applyInitialVideo]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -160,12 +179,13 @@ export default function BroadcastScreen() {
         if (!prefetchRef.current || prefetchRef.current.minute !== next) {
           void fetchLiveSlot(d, next).then((data) => {
             prefetchRef.current = { minute: next, data };
-            // Preload video bytes so the switch at :00 is instant
+            // Preload video bytes into standby buffer so swap at :00 is instant
             if (data?.videoUrl) {
               const absUrl = makeAbsoluteUrl(data.videoUrl);
               videoWebViewRef.current?.injectJavaScript(
                 `window.preloadNext(${JSON.stringify(absUrl)});true;`
               );
+              hasPrefetchedRef.current = true;
             }
           });
         }
@@ -262,16 +282,27 @@ export default function BroadcastScreen() {
             style={styles.webview}
             mediaPlaybackRequiresUserAction={false}
             allowsInlineMediaPlayback={true}
-            allowsFullscreenVideo={true}
+            allowsFullscreenVideo={false}
             scrollEnabled={false}
             onLoadEnd={() => {
               if (currentVideoUrlRef.current) {
                 videoWebViewRef.current?.injectJavaScript(
-                  `window.setVideoSrc(${JSON.stringify(currentVideoUrlRef.current)});true;`
+                  `window.setInitialSrc(${JSON.stringify(currentVideoUrlRef.current)});true;`
                 );
               }
             }}
           />
+          {/* Sound toggle overlay */}
+          <Pressable
+            style={styles.muteBtn}
+            onPress={() => {
+              videoWebViewRef.current?.injectJavaScript(`window.unmute();true;`);
+              setIsMuted(false);
+            }}
+            hitSlop={12}
+          >
+            <Feather name={isMuted ? "volume-x" : "volume-2"} size={16} color="#fff" />
+          </Pressable>
           {!liveSlot?.hasContent && (
             <View style={[StyleSheet.absoluteFillObject, styles.videoIdle]}>
               <Animated.View style={[styles.heroPulseDot, { opacity: pulseAnim, width: 32, height: 32, borderRadius: 16 }]} />
@@ -530,6 +561,18 @@ const styles = StyleSheet.create({
   webview: {
     flex: 1,
     backgroundColor: "#000",
+  },
+  muteBtn: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
   },
   videoIdle: {
     backgroundColor: "#0D1B2A",

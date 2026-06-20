@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Platform,
   TouchableOpacity,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -65,6 +66,118 @@ function timeAgo(iso: string): string {
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}ч назад`;
   return `${Math.floor(hours / 24)}д назад`;
+}
+
+// ── Discount calculator (same tiers as shop.tsx) ─────────────────────────────
+
+const RATE_EUR = 0.01; // 1 Д = 0.01 €
+
+const TIERS = [
+  { label: "1–99 Д",          discount: 0,  from: 1     },
+  { label: "100–499 Д",       discount: 5,  from: 100   },
+  { label: "500–999 Д",       discount: 6,  from: 500   },
+  { label: "1 000–4 999 Д",   discount: 7,  from: 1000  },
+  { label: "5 000–10 000 Д",  discount: 8,  from: 5000  },
+  { label: "свыше 10 000 Д",  discount: 10, from: 10001 },
+];
+
+function calcDiscount(amt: number): number {
+  const tier = [...TIERS].reverse().find(t => amt >= t.from);
+  return tier?.discount ?? 0;
+}
+
+function CalcWidget({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const [input, setInput]       = useState("100");
+  const [expanded, setExpanded] = useState(false);
+  const amount  = Math.max(0, parseInt(input.replace(/\D/g, ""), 10) || 0);
+  const disc    = calcDiscount(amount);
+  const total   = parseFloat((amount * RATE_EUR * (1 - disc / 100)).toFixed(2));
+  const saved   = parseFloat((amount * RATE_EUR - total).toFixed(2));
+
+  return (
+    <View style={{ marginHorizontal: 20, marginTop: 20, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: "hidden" }}>
+      <TouchableOpacity
+        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14 }}
+        onPress={() => setExpanded(v => !v)}
+        activeOpacity={0.8}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Feather name="shopping-cart" size={16} color={colors.primary} />
+          <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground, letterSpacing: 0.5 }}>
+            КАЛЬКУЛЯТОР ДАРМИНОВ
+          </Text>
+        </View>
+        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={{ paddingHorizontal: 14, paddingBottom: 16, gap: 12 }}>
+          {/* Quick amounts */}
+          <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+            {[100, 500, 1000, 5000].map(v => (
+              <TouchableOpacity
+                key={v}
+                style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: amount === v ? colors.primary : colors.muted, borderRadius: 20 }}
+                onPress={() => setInput(String(v))}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: amount === v ? colors.primaryForeground : colors.foreground }}>
+                  {v.toLocaleString()} Д
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Input */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <TextInput
+              style={{ flex: 1, borderWidth: 1.5, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 18, fontFamily: "Inter_700Bold", color: colors.foreground, backgroundColor: colors.background, textAlign: "center" }}
+              value={input}
+              onChangeText={t => setInput(t.replace(/\D/g, ""))}
+              keyboardType="numeric"
+              placeholder="Кол-во Д"
+              placeholderTextColor={colors.mutedForeground}
+            />
+            <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>Дарминов</Text>
+          </View>
+
+          {/* Result */}
+          <View style={{ backgroundColor: colors.background, borderRadius: 10, padding: 14, gap: 8 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>Базовая цена</Text>
+              <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{(amount * RATE_EUR).toFixed(2)} €</Text>
+            </View>
+            {disc > 0 && (
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: "#4ade80" }}>Скидка −{disc}%</Text>
+                <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#4ade80" }}>−{saved.toFixed(2)} €</Text>
+              </View>
+            )}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }}>
+              <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.foreground }}>Итого</Text>
+              <Text style={{ fontSize: 20, fontFamily: "Inter_700Bold", color: colors.primary }}>{total.toFixed(2)} €</Text>
+            </View>
+          </View>
+
+          {/* Tier table */}
+          <View style={{ gap: 4 }}>
+            <Text style={{ fontSize: 10, fontFamily: "Inter_500Medium", color: colors.mutedForeground, letterSpacing: 1, marginBottom: 4 }}>ШКАЛА СКИДОК</Text>
+            {TIERS.map((tier, i) => {
+              const active = calcDiscount(amount) === tier.discount && amount >= tier.from;
+              return (
+                <View key={i} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4, paddingHorizontal: 8, backgroundColor: active ? colors.goldGlow : "transparent", borderRadius: 6 }}>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: active ? colors.primary : colors.mutedForeground }}>{tier.label}</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: tier.discount > 0 ? (active ? colors.primary : "#4ade80") : colors.mutedForeground }}>
+                    {tier.discount > 0 ? `−${tier.discount}%` : "нет скидки"}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+    </View>
+  );
 }
 
 export default function StatsScreen() {
@@ -192,6 +305,8 @@ export default function StatsScreen() {
           <Text style={styles.emptySubtext}>Начни первую TiMETR сессию</Text>
         </View>
       )}
+
+      <CalcWidget colors={colors} />
     </ScrollView>
   );
 }

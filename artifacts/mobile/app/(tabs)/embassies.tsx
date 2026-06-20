@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Location from "expo-location";
 import { useCitizen } from "@/context/CitizenContext";
@@ -247,14 +248,26 @@ export default function EmbassiesScreen() {
             )}
           </View>
           {!myEmbassy.isHardwareVerified && (
-            <TouchableOpacity
-              style={styles.verifyBtn}
-              onPress={() => setShowVerify(myEmbassy)}
-              activeOpacity={0.8}
-            >
-              <Feather name="camera" size={14} color={colors.primaryForeground} />
-              <Text style={styles.verifyBtnText}>Верифицировать ноду (Proof of Location)</Text>
-            </TouchableOpacity>
+            <View style={{ gap: 8 }}>
+              {/* Native QR-scanner — full camera experience */}
+              <TouchableOpacity
+                style={styles.verifyBtn}
+                onPress={() => router.push('/embassy/verify')}
+                activeOpacity={0.8}
+              >
+                <Feather name="camera" size={14} color={colors.primaryForeground} />
+                <Text style={styles.verifyBtnText}>Сканировать QR ноды (камера)</Text>
+              </TouchableOpacity>
+              {/* Fallback: GPS-only (no QR camera, token from modal) */}
+              <TouchableOpacity
+                style={[styles.verifyBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}
+                onPress={() => setShowVerify(myEmbassy)}
+                activeOpacity={0.8}
+              >
+                <Feather name="navigation" size={14} color={colors.primary} />
+                <Text style={[styles.verifyBtnText, { color: colors.primary }]}>Верифицировать через GPS (без камеры)</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       )}
