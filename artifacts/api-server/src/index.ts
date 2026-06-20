@@ -5,6 +5,7 @@ import { drainEmissionQueue } from "./services/emissionService";
 import { airDueSlots } from "./services/tvService";
 import { initBot } from "./services/telegramService";
 import { rehydrateRenderQueue } from "./services/renderQueue";
+import { startNodeValidator } from "./services/nodeValidatorService";
 
 const rawPort = process.env["PORT"];
 
@@ -94,6 +95,7 @@ async function bootstrap(): Promise<void> {
   scheduleDailyEntropy();
   scheduleMidnightUTCEmissionDrain();
   scheduleMinuteTick();
+  startNodeValidator();
 
   // ── Render queue rehydration ─────────────────────────────────────────────────
   // Re-queue capsules stuck in `pending_render` from before the last restart.
