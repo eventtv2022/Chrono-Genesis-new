@@ -65,7 +65,7 @@ function calcDeviation(estimated: number, actual: number): number {
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // Verify government password (used by frontend to unlock the UI)
-router.post("/api/government/auth/verify", (req: Request, res: Response) => {
+router.post("/government/auth/verify", (req: Request, res: Response) => {
   const { password } = req.body as { password?: string };
   if (!GOV_PASSWORD) {
     res.status(503).json({ error: "GOV_ACCESS_PASSWORD не настроен на сервере" });
@@ -78,8 +78,8 @@ router.post("/api/government/auth/verify", (req: Request, res: Response) => {
   }
 });
 
-// POST /api/government/audit/task — call Gemini, save log
-router.post("/api/government/audit/task", govAuth, async (req: Request, res: Response) => {
+// POST /government/audit/task — call Gemini, save log
+router.post("/government/audit/task", govAuth, async (req: Request, res: Response) => {
   const bodySchema = z.object({
     taskDescription: z.string().min(5),
     citizenId: z.number().int().optional(),
@@ -141,8 +141,8 @@ router.post("/api/government/audit/task", govAuth, async (req: Request, res: Res
   }
 });
 
-// PATCH /api/government/audit/logs/:id — record actual time, compute deviation
-router.patch("/api/government/audit/logs/:id", govAuth, async (req: Request, res: Response) => {
+// PATCH /government/audit/logs/:id — record actual time, compute deviation
+router.patch("/government/audit/logs/:id", govAuth, async (req: Request, res: Response) => {
   const id = parseInt(String(req.params.id));
   if (!id) { res.status(400).json({ error: "Неверный ID" }); return; }
 
@@ -180,8 +180,8 @@ router.patch("/api/government/audit/logs/:id", govAuth, async (req: Request, res
   res.json({ log: updated });
 });
 
-// GET /api/government/audit/logs
-router.get("/api/government/audit/logs", govAuth, async (req: Request, res: Response) => {
+// GET /government/audit/logs
+router.get("/government/audit/logs", govAuth, async (req: Request, res: Response) => {
   const calibrationOnly = req.query.calibrationOnly === "true";
   const rows = await db
     .select()
@@ -196,14 +196,14 @@ router.get("/api/government/audit/logs", govAuth, async (req: Request, res: Resp
   res.json({ logs: rows });
 });
 
-// GET /api/government/system-prompt
-router.get("/api/government/system-prompt", govAuth, async (_req: Request, res: Response) => {
+// GET /government/system-prompt
+router.get("/government/system-prompt", govAuth, async (_req: Request, res: Response) => {
   const prompt = await getSystemPrompt();
   res.json({ promptText: prompt });
 });
 
-// PUT /api/government/system-prompt
-router.put("/api/government/system-prompt", govAuth, async (req: Request, res: Response) => {
+// PUT /government/system-prompt
+router.put("/government/system-prompt", govAuth, async (req: Request, res: Response) => {
   const bodySchema = z.object({
     promptText: z.string().min(20),
     updatedByName: z.string().optional(),
@@ -237,8 +237,8 @@ router.put("/api/government/system-prompt", govAuth, async (req: Request, res: R
   res.json({ ok: true });
 });
 
-// GET /api/government/citizens — list with govRole
-router.get("/api/government/citizens", govAuth, async (_req: Request, res: Response) => {
+// GET /government/citizens — list with govRole
+router.get("/government/citizens", govAuth, async (_req: Request, res: Response) => {
   const rows = await db
     .select({
       id: citizensTable.id,
@@ -254,8 +254,8 @@ router.get("/api/government/citizens", govAuth, async (_req: Request, res: Respo
   res.json({ citizens: rows });
 });
 
-// PATCH /api/government/citizens/:id/gov-role
-router.patch("/api/government/citizens/:id/gov-role", govAuth, async (req: Request, res: Response) => {
+// PATCH /government/citizens/:id/gov-role
+router.patch("/government/citizens/:id/gov-role", govAuth, async (req: Request, res: Response) => {
   const id = parseInt(String(req.params.id));
   if (!id) { res.status(400).json({ error: "Неверный ID" }); return; }
 

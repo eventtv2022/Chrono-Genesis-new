@@ -12,10 +12,10 @@ import {
   Brain, Users, Settings, Loader2, Lock,
 } from "lucide-react";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const API_BASE = "/api";
 
 function govFetch(path: string, password: string, opts: RequestInit = {}) {
-  return fetch(`${BASE}${path}`, {
+  return fetch(`${API_BASE}${path}`, {
     ...opts,
     headers: {
       "Content-Type": "application/json",
@@ -98,7 +98,7 @@ function PasswordGate({ onUnlock }: { onUnlock: (pw: string) => void }) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${BASE}/api/government/auth/verify`, {
+      const res = await fetch(`${API_BASE}/government/auth/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: pw }),
@@ -172,7 +172,7 @@ function AuditorTab({ password }: { password: string }) {
     setLoading(true);
     setResult(null);
     try {
-      const res = await govFetch("/api/government/audit/task", password, {
+      const res = await govFetch("/government/audit/task", password, {
         method: "POST",
         body: JSON.stringify({
           taskDescription: taskDesc,
@@ -278,7 +278,7 @@ function LogsTab({ password }: { password: string }) {
     setLoading(true);
     try {
       const res = await govFetch(
-        `/api/government/audit/logs${calibOnly ? "?calibrationOnly=true" : ""}`,
+        `/government/audit/logs${calibOnly ? "?calibrationOnly=true" : ""}`,
         password
       );
       const data = await res.json() as { logs?: AuditLog[] };
@@ -297,7 +297,7 @@ function LogsTab({ password }: { password: string }) {
     if (!val || val <= 0) { toast({ title: "Введите корректное время", variant: "destructive" }); return; }
     setSubmitting(log.id);
     try {
-      const res = await govFetch(`/api/government/audit/logs/${log.id}`, password, {
+      const res = await govFetch(`/government/audit/logs/${log.id}`, password, {
         method: "PATCH",
         body: JSON.stringify({ actualMinutes: val }),
       });
@@ -430,7 +430,7 @@ function PromptTab({ password }: { password: string }) {
   useEffect(() => {
     void (async () => {
       try {
-        const res = await govFetch("/api/government/system-prompt", password);
+        const res = await govFetch("/government/system-prompt", password);
         const data = await res.json() as { promptText?: string };
         setPromptText(data.promptText ?? "");
       } catch { /* ignore */ } finally {
@@ -442,7 +442,7 @@ function PromptTab({ password }: { password: string }) {
   async function handleSave() {
     setSaving(true);
     try {
-      const res = await govFetch("/api/government/system-prompt", password, {
+      const res = await govFetch("/government/system-prompt", password, {
         method: "PUT",
         body: JSON.stringify({ promptText }),
       });
@@ -510,7 +510,7 @@ function CitizensTab({ password }: { password: string }) {
   useEffect(() => {
     void (async () => {
       try {
-        const res = await govFetch("/api/government/citizens", password);
+        const res = await govFetch("/government/citizens", password);
         const data = await res.json() as { citizens?: GovCitizen[] };
         setCitizens(data.citizens ?? []);
       } catch { /* ignore */ } finally {
@@ -522,7 +522,7 @@ function CitizensTab({ password }: { password: string }) {
   async function setRole(citizenId: number, govRole: string) {
     setUpdating(citizenId);
     try {
-      const res = await govFetch(`/api/government/citizens/${citizenId}/gov-role`, password, {
+      const res = await govFetch(`/government/citizens/${citizenId}/gov-role`, password, {
         method: "PATCH",
         body: JSON.stringify({ govRole }),
       });
