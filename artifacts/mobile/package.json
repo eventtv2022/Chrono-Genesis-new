@@ -57,7 +57,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
-    "expo-camera": "^56.0.8",
+    "expo-camera": "^17.0.10",
     "expo-clipboard": "^56.0.3",
     "leaflet": "^1.9.4",
     "open-location-code": "^1.0.3",
