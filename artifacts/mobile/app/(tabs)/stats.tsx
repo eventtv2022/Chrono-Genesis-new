@@ -257,6 +257,16 @@ export default function StatsScreen() {
             <Feather name="cpu" size={13} color={colors.primary} />
             <Text style={[styles.topupBtnText, { color: colors.primary }]}>Аудит</Text>
           </TouchableOpacity>
+          {citizen && (
+            <TouchableOpacity
+              style={[styles.topupBtn, { backgroundColor: colors.muted }]}
+              onPress={() => router.push("/labor-profile")}
+              activeOpacity={0.8}
+            >
+              <Feather name="briefcase" size={13} color={colors.primary} />
+              <Text style={[styles.topupBtnText, { color: colors.primary }]}>Депозит</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 

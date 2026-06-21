@@ -6,6 +6,7 @@ import multer from "multer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@workspace/db";
 import { citizensTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable } from "@workspace/db";
+import { auditCitizenRate } from "../services/rateAuditorService";
 import {
   UpdateCitizenBody,
 } from "@workspace/api-zod";
@@ -772,6 +773,82 @@ router.post("/citizens/:id/age-verify", async (req, res): Promise<void> => {
 
   req.log.info({ citizenId: id }, "Age verified (18+ — COPPA/DSA)");
   res.json({ ok: true, ageVerified: true });
+});
+
+// ── POST /citizens/audit-rate — расчёт коэффициента Kq через ИИ ───────────────
+router.post("/citizens/audit-rate", async (req: Request, res: Response) => {
+  const parsed = z.object({
+    citizenId: z.number().int().positive(),
+    professionalSkills: z.string().min(20),
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Неверные данные" }); return; }
+  const { citizenId, professionalSkills } = parsed.data;
+
+  const [citizen] = await db.select().from(citizensTable).where(eq(citizensTable.id, citizenId)).limit(1);
+  if (!citizen) { res.status(404).json({ error: "Гражданин не найден" }); return; }
+
+  try {
+    const audit = await auditCitizenRate(professionalSkills);
+    const kq = Math.max(0.5, Math.min(2.5, audit.kq));
+    await db.update(citizensTable).set({
+      professionalSkills,
+      calculatedMinuteRate: kq,
+      skillsAuditedAt: new Date(),
+    }).where(eq(citizensTable.id, citizenId));
+    req.log.info({ citizenId, kq }, "Rate audited");
+    res.json({ kq, industry: audit.industry, justification: audit.justification, depositBonus: audit.depositBonus });
+  } catch (err) {
+    req.log.error({ err }, "audit-rate error");
+    res.status(500).json({ error: "Ошибка ИИ-аудитора" });
+  }
+});
+
+// ── POST /citizens/deposit-labor — депонирование потенциального труда ─────────
+router.post("/citizens/deposit-labor", async (req: Request, res: Response) => {
+  const parsed = z.object({
+    citizenId: z.number().int().positive(),
+    professionalSkills: z.string().min(20),
+    depositHours: z.number().min(0.5).max(8),
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Неверные данные" }); return; }
+  const { citizenId, professionalSkills, depositHours } = parsed.data;
+
+  const [citizen] = await db.select().from(citizensTable).where(eq(citizensTable.id, citizenId)).limit(1);
+  if (!citizen) { res.status(404).json({ error: "Гражданин не найден" }); return; }
+
+  const totalDeposited = (citizen.potentialLaborDepositedMinutes ?? 0) + depositHours * 60;
+  if (totalDeposited > 480) {
+    res.status(400).json({ error: `Превышен лимит 8 часов (480 мин). Уже задепонировано: ${citizen.potentialLaborDepositedMinutes} мин` });
+    return;
+  }
+
+  let kq = citizen.calculatedMinuteRate ?? 1.0;
+  let industry = "";
+  let justification = "";
+  let depositBonus = 0;
+
+  try {
+    const audit = await auditCitizenRate(professionalSkills);
+    kq = Math.max(0.5, Math.min(2.5, audit.kq));
+    industry = audit.industry;
+    justification = audit.justification;
+    depositBonus = Math.min(120, audit.depositBonus ?? 0);
+  } catch (err) {
+    req.log.warn({ err }, "Gemini audit failed, using existing rate");
+  }
+
+  const earnedDarmins = Math.round(depositHours * kq * 60) + depositBonus;
+
+  await db.update(citizensTable).set({
+    professionalSkills,
+    calculatedMinuteRate: kq,
+    skillsAuditedAt: new Date(),
+    potentialLaborDepositedMinutes: Math.round(totalDeposited),
+    balanceMinutes: citizen.balanceMinutes + earnedDarmins,
+  }).where(eq(citizensTable.id, citizenId));
+
+  req.log.info({ citizenId, kq, depositHours, earnedDarmins }, "Labor deposited");
+  res.json({ kq, industry, justification, depositBonus, earnedDarmins, totalDepositedMinutes: Math.round(totalDeposited) });
 });
 
 // ── POST /citizens/audit-task — гражданский ИИ-аудит (без gov-пароля) ─────────

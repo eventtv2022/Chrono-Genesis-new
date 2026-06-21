@@ -42,6 +42,13 @@ export const citizensTable = pgTable("citizens", {
 
   // ── Government role ────────────────────────────────────────────────────────
   govRole: text("gov_role").notNull().default("citizen"),
+
+  // ── Labor Deposit & Rate Auditor ───────────────────────────────────────────
+  professionalSkills: text("professional_skills"),          // free-text: skills, certs, services
+  calculatedMinuteRate: real("calculated_minute_rate").notNull().default(1.0), // Kq coefficient
+  potentialLaborDepositedMinutes: integer("potential_labor_deposited_minutes").notNull().default(0), // 0–480
+  skillsAuditedAt: timestamp("skills_audited_at", { withTimezone: true }),
+  reviewScoreCount: integer("review_score_count").notNull().default(0), // учтённых отзывов для ИИ
 });
 
 export const insertCitizenSchema = createInsertSchema(citizensTable).omit({

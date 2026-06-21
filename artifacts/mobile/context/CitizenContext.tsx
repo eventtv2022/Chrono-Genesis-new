@@ -20,6 +20,12 @@ export interface CitizenProfile {
   walletAddress: string | null;
   walletVerified: number;
   ageVerified: number;
+  // Labor Deposit & Rate Auditor
+  professionalSkills?: string | null;
+  calculatedMinuteRate?: number;
+  potentialLaborDepositedMinutes?: number;
+  skillsAuditedAt?: string | null;
+  reviewScoreCount?: number;
 }
 
 interface CitizenContextType {
