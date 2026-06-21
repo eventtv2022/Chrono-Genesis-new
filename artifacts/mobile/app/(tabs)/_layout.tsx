@@ -38,6 +38,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "globe.europe.africa", selected: "globe.europe.africa.fill" }} />
         <Label>Хронопедия</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="timeutils">
+        <Icon sf={{ default: "clock.badge", selected: "clock.badge.fill" }} />
+        <Label>Время</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -118,6 +122,13 @@ function ClassicTabLayout() {
         options={{
           title: "Хронопедия",
           tabBarIcon: ({ color }) => <Feather name="globe" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="timeutils"
+        options={{
+          title: "Время",
+          tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
         }}
       />
     </Tabs>

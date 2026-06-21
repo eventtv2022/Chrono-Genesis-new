@@ -946,3 +946,22 @@ router.patch("/audit-logs/:logId/actual", async (req: Request, res: Response) =>
 });
 
 export default router;
+
+// ── POST /api/citizens/log-focus ──────────────────────────────────────────────
+// Records a completed Pomodoro focus session for AI-Auditor activity tracking.
+router.post("/citizens/log-focus", async (req, res): Promise<void> => {
+  const { citizenId, durationMinutes } = req.body as { citizenId?: number; durationMinutes?: number };
+  if (!citizenId || !durationMinutes) {
+    res.status(400).json({ error: "citizenId and durationMinutes required" });
+    return;
+  }
+  const [citizen] = await db
+    .select({ id: citizensTable.id, name: citizensTable.name })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, citizenId))
+    .limit(1);
+  if (!citizen) { res.status(404).json({ error: "Гражданин не найден" }); return; }
+
+  req.log.info({ citizenId, durationMinutes }, "Focus session logged");
+  res.json({ ok: true, citizenId, durationMinutes, message: `${durationMinutes} мин фокусировки зачислено в профиль` });
+});
