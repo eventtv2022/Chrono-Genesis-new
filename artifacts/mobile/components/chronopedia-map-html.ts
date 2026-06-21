@@ -16,9 +16,9 @@ export const LEAFLET_HTML = `<!DOCTYPE html>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
-html,body,#map{width:100%;height:100%;background:#0f172a;}
+html,body,#map{width:100%;height:100%;background:#f5f5f5;}
 .leaflet-control-attribution,.leaflet-control-zoom{display:none;}
-.tn-tip{background:#1e293b!important;color:#f1f5f9!important;border:1px solid #334155!important;font-size:12px!important;padding:6px 10px!important;border-radius:8px!important;white-space:nowrap!important;box-shadow:0 4px 16px rgba(0,0,0,0.6)!important;}
+.tn-tip{background:#fff!important;color:#111827!important;border:1px solid #d1d5db!important;font-size:12px!important;padding:6px 10px!important;border-radius:8px!important;white-space:nowrap!important;box-shadow:0 4px 16px rgba(0,0,0,0.15)!important;}
 .tn-tip::before{display:none!important;}
 </style>
 </head>
@@ -26,7 +26,7 @@ html,body,#map{width:100%;height:100%;background:#0f172a;}
 <div id="map"></div>
 <script>
 var map=L.map('map',{center:[20,10],zoom:2,zoomControl:false,attributionControl:false,worldCopyJump:true});
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+L.tileLayer('https://mt1.google.com/vt/lyrs=m&hl=ru&x={x}&y={y}&z={z}',{maxZoom:20,attribution:'&copy; Google Maps'}).addTo(map);
 var markers={};
 var selectedSlotId=null;
 var pendingMarker=null;
@@ -35,9 +35,10 @@ function makePendingIcon(){
   return L.divIcon({className:'',html:'<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;"><div style="width:22px;height:22px;background:#f59e0b;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(245,158,11,0.35),0 3px 14px rgba(0,0,0,0.7);"></div></div>',iconSize:[44,44],iconAnchor:[22,22]});
 }
 function makeIcon(count,isMine,isSelected){
-  var bg=isSelected?'#f59e0b':isMine?'#00ff87':'#60a5fa';
+  var bg=isSelected?'#f59e0b':isMine?'#16a34a':'#2563eb';
+  var border=isSelected?'#92400e':isMine?'#14532d':'#1e3a8a';
   var label=count>1?String(count):'\u25cf';
-  return L.divIcon({className:'',html:'<div style="width:36px;height:36px;background:'+bg+';border:2.5px solid rgba(255,255,255,0.9);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#111;box-shadow:0 3px 12px rgba(0,0,0,0.7);cursor:pointer;">'+label+'</div>',iconSize:[36,36],iconAnchor:[18,18]});
+  return L.divIcon({className:'',html:'<div style="width:36px;height:36px;background:'+bg+';border:3px solid '+border+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.4);cursor:pointer;">'+label+'</div>',iconSize:[36,36],iconAnchor:[18,18]});
 }
 function escHtml(s){return String(s||'').replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]||c;});}
 function updateMarkers(slots,myId,selId){

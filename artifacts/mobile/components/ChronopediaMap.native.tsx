@@ -130,10 +130,10 @@ ChronopediaMap.displayName = "ChronopediaMap";
 
 const styles = StyleSheet.create({
   container: { flex: 1, position: "relative" },
-  webView: { flex: 1, backgroundColor: "#0f172a" },
+  webView: { flex: 1, backgroundColor: "#f5f5f5" },
   loading: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#f5f5f5",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
