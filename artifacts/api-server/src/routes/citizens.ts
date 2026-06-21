@@ -945,7 +945,35 @@ router.patch("/audit-logs/:logId/actual", async (req: Request, res: Response) =>
   res.json({ log: updated });
 });
 
-export default router;
+// ── GET /api/citizens/:id/rate ────────────────────────────────────────────────
+// Returns the AI-Auditor rate info for a citizen (used in TiMETR transfer widget).
+router.get("/citizens/:id/rate", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [citizen] = await db
+    .select({
+      id: citizensTable.id,
+      name: citizensTable.name,
+      calculatedMinuteRate: citizensTable.calculatedMinuteRate,
+      professionalSkills: citizensTable.professionalSkills,
+      reviewScoreCount: citizensTable.reviewScoreCount,
+      meritScore: citizensTable.meritScore,
+      rank: citizensTable.rank,
+      skillsAuditedAt: citizensTable.skillsAuditedAt,
+    })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, id))
+    .limit(1);
+
+  if (!citizen) { res.status(404).json({ error: "Гражданин не найден" }); return; }
+
+  res.json({
+    ...citizen,
+    calculatedHourRate: citizen.calculatedMinuteRate * 60,
+    skillsAuditedAt: citizen.skillsAuditedAt?.toISOString() ?? null,
+  });
+});
 
 // ── POST /api/citizens/log-focus ──────────────────────────────────────────────
 // Records a completed Pomodoro focus session for AI-Auditor activity tracking.
@@ -965,3 +993,5 @@ router.post("/citizens/log-focus", async (req, res): Promise<void> => {
   req.log.info({ citizenId, durationMinutes }, "Focus session logged");
   res.json({ ok: true, citizenId, durationMinutes, message: `${durationMinutes} мин фокусировки зачислено в профиль` });
 });
+
+export default router;

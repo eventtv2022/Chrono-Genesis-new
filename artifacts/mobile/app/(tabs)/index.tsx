@@ -9,11 +9,14 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  TextInput,
+  ScrollView,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
@@ -38,6 +41,33 @@ interface Citizen {
   createdAt: string;
 }
 
+interface RateInfo {
+  id: number;
+  name: string;
+  calculatedMinuteRate: number;
+  calculatedHourRate: number;
+  professionalSkills: string | null;
+  reviewScoreCount: number;
+  meritScore: number;
+  rank: string;
+  skillsAuditedAt: string | null;
+}
+
+interface Deal {
+  id: number;
+  senderId: number;
+  receiverId: number | null;
+  amount: number;
+  description: string;
+  status: string;
+  proofUrl: string | null;
+  proofText: string | null;
+  disputeClaimText: string | null;
+  aiVerdict: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface Session {
   id: number;
   fromCitizenId: number;
@@ -51,11 +81,7 @@ interface Session {
 
 interface SessionResult {
   session: Session;
-  transaction: {
-    id: number;
-    minutesTransferred: number;
-    durationSeconds: number;
-  };
+  transaction: { id: number; minutesTransferred: number; durationSeconds: number };
   sheetsLogged: boolean;
 }
 
@@ -67,6 +93,595 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  open:           { label: "Открыта",                   color: "#4CAF50" },
+  accepted:       { label: "Принята исполнителем",      color: "#2196F3" },
+  proof_submitted:{ label: "Ожидает подписания Акта",   color: "#FF9800" },
+  completed:      { label: "Завершена ✓",               color: "#C9A84C" },
+  declined:       { label: "Доказательство отклонено",  color: "#F44336" },
+  disputed:       { label: "В арбитраже Минтруда ⚖️",   color: "#9C27B0" },
+  cancelled:      { label: "Отменена",                  color: "#607D8B" },
+};
+
+// ─── AI Rate Widget ───────────────────────────────────────────────────────────
+function RateWidget({ recipient, colors }: { recipient: Citizen; colors: ReturnType<typeof useColors> }) {
+  const [rate, setRate] = useState<RateInfo | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setRate(null);
+    setLoading(true);
+    fetch(`${BASE_URL}/api/citizens/${recipient.id}/rate`)
+      .then((r) => r.json())
+      .then((data: RateInfo) => setRate(data))
+      .catch(() => {/* silently ignore */})
+      .finally(() => setLoading(false));
+  }, [recipient.id]);
+
+  if (loading) {
+    return (
+      <View style={[rateStyles.container, { borderColor: colors.border }]}>
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  }
+  if (!rate) return null;
+
+  return (
+    <View style={[rateStyles.container, { borderColor: colors.primary, backgroundColor: "rgba(201,168,76,0.07)" }]}>
+      <View style={rateStyles.header}>
+        <Feather name="shield" size={14} color={colors.primary} />
+        <Text style={[rateStyles.title, { color: colors.primary }]}>Проверка ИИ-Аудитора</Text>
+        {rate.skillsAuditedAt && (
+          <Text style={[rateStyles.badge, { color: colors.mutedForeground }]}>подтверждено</Text>
+        )}
+      </View>
+      <View style={rateStyles.row}>
+        <View style={rateStyles.stat}>
+          <Text style={[rateStyles.statVal, { color: colors.primary }]}>{rate.calculatedMinuteRate.toFixed(2)} Д</Text>
+          <Text style={[rateStyles.statLbl, { color: colors.mutedForeground }]}>за минуту</Text>
+        </View>
+        <View style={rateStyles.divider} />
+        <View style={rateStyles.stat}>
+          <Text style={[rateStyles.statVal, { color: colors.primary }]}>{rate.calculatedHourRate.toFixed(0)} Д</Text>
+          <Text style={[rateStyles.statLbl, { color: colors.mutedForeground }]}>за час работы</Text>
+        </View>
+        <View style={rateStyles.divider} />
+        <View style={rateStyles.stat}>
+          <Text style={[rateStyles.statVal, { color: colors.primary }]}>{rate.reviewScoreCount}</Text>
+          <Text style={[rateStyles.statLbl, { color: colors.mutedForeground }]}>отзывов</Text>
+        </View>
+      </View>
+      {rate.professionalSkills ? (
+        <Text style={[rateStyles.skills, { color: colors.foreground }]} numberOfLines={2}>
+          🛠 {rate.professionalSkills}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+const rateStyles = StyleSheet.create({
+  container: { marginHorizontal: 20, marginBottom: 10, borderWidth: 1, borderRadius: 12, padding: 12 },
+  header: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
+  title: { fontSize: 12, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8, flex: 1 },
+  badge: { fontSize: 10, fontFamily: "Inter_400Regular" },
+  row: { flexDirection: "row", justifyContent: "space-around", alignItems: "center" },
+  stat: { alignItems: "center", flex: 1 },
+  statVal: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  statLbl: { fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 2 },
+  divider: { width: 1, height: 32, backgroundColor: "rgba(201,168,76,0.3)" },
+  skills: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 8, lineHeight: 16 },
+});
+
+// ─── Escrow Module ────────────────────────────────────────────────────────────
+function EscrowModule({ citizen, citizens, colors }: {
+  citizen: NonNullable<ReturnType<typeof useCitizen>["citizen"]>;
+  citizens: Citizen[];
+  colors: ReturnType<typeof useColors>;
+}) {
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Create deal modal
+  const [showCreate, setShowCreate] = useState(false);
+  const [selRecipient, setSelRecipient] = useState<Citizen | null>(null);
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  // Proof modal
+  const [proofDeal, setProofDeal] = useState<Deal | null>(null);
+  const [proofText, setProofText] = useState("");
+  const [submittingProof, setSubmittingProof] = useState(false);
+
+  // Dispute modal
+  const [disputeDeal, setDisputeDeal] = useState<Deal | null>(null);
+  const [claimText, setClaimText] = useState("");
+  const [disputing, setDisputing] = useState(false);
+
+  // Verdict modal
+  const [verdictDeal, setVerdictDeal] = useState<Deal | null>(null);
+
+  const loadDeals = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${BASE_URL}/api/deals?citizenId=${citizen.id}`);
+      const data = await r.json() as { deals: Deal[] };
+      setDeals(data.deals ?? []);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [citizen.id]);
+
+  useEffect(() => { void loadDeals(); }, [loadDeals]);
+
+  const apiPost = async (path: string, body: Record<string, unknown>) => {
+    const r = await fetch(`${BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error((data as { error?: string }).error ?? "Ошибка сервера");
+    return data as Deal;
+  };
+
+  const handleCreate = async () => {
+    if (!selRecipient) { Alert.alert("Ошибка", "Выбери исполнителя"); return; }
+    const amt = parseInt(amount, 10);
+    if (isNaN(amt) || amt < 1) { Alert.alert("Ошибка", "Укажи сумму в Дарминах (минимум 1)"); return; }
+    if (description.trim().length < 5) { Alert.alert("Ошибка", "ТЗ должно быть не менее 5 символов"); return; }
+    setCreating(true);
+    try {
+      await apiPost("/api/deals", { senderId: citizen.id, receiverId: selRecipient.id, amount: amt, description: description.trim() });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowCreate(false);
+      setSelRecipient(null);
+      setAmount("");
+      setDescription("");
+      await loadDeals();
+    } catch (e: unknown) {
+      Alert.alert("Ошибка создания сделки", (e as Error).message);
+    }
+    setCreating(false);
+  };
+
+  const handleAccept = async (deal: Deal) => {
+    try {
+      await apiPost(`/api/deals/${deal.id}/accept-task`, { citizenId: citizen.id });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await loadDeals();
+    } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+  };
+
+  const handleProofSubmit = async () => {
+    if (!proofDeal) return;
+    if (proofText.trim().length < 5) { Alert.alert("Ошибка", "Опиши выполненную работу (мин. 5 символов)"); return; }
+    setSubmittingProof(true);
+    try {
+      await apiPost(`/api/deals/${proofDeal.id}/proof`, { receiverId: citizen.id, proofText: proofText.trim() });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setProofDeal(null);
+      setProofText("");
+      await loadDeals();
+    } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+    setSubmittingProof(false);
+  };
+
+  const handleComplete = async (deal: Deal) => {
+    Alert.alert(
+      "Подписать Акт выполненных работ",
+      `Подтвердить получение ${deal.amount} Д от исполнителя? Дармины будут переведены исполнителю.`,
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Подписать ✓",
+          onPress: async () => {
+            try {
+              await apiPost(`/api/deals/${deal.id}/complete`, { citizenId: citizen.id });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              await loadDeals();
+            } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDecline = async (deal: Deal) => {
+    Alert.alert(
+      "Отклонить доказательство",
+      "Доказательство не принято. Эскроу остаётся заморожен. Далее — арбитраж или отмена.",
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Отклонить",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await apiPost(`/api/deals/${deal.id}/decline`, { citizenId: citizen.id });
+              await loadDeals();
+            } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCancel = async (deal: Deal) => {
+    Alert.alert(
+      "Отменить сделку",
+      `Дармины (${deal.amount} Д) вернутся на ваш баланс.`,
+      [
+        { text: "Назад", style: "cancel" },
+        {
+          text: "Отменить сделку",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await apiPost(`/api/deals/${deal.id}/cancel`, { citizenId: citizen.id });
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              await loadDeals();
+            } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDisputeSubmit = async () => {
+    if (!disputeDeal) return;
+    if (claimText.trim().length < 10) { Alert.alert("Ошибка", "Опишите суть претензии подробнее (мин. 10 символов)"); return; }
+    setDisputing(true);
+    try {
+      const updated = await apiPost(`/api/deals/${disputeDeal.id}/dispute`, { citizenId: citizen.id, claimText: claimText.trim() });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      setDisputeDeal(null);
+      setClaimText("");
+      await loadDeals();
+      if (updated.aiVerdict) {
+        setTimeout(() => setVerdictDeal(updated), 300);
+      }
+    } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+    setDisputing(false);
+  };
+
+  const others = citizens.filter((c) => c.id !== citizen.id);
+  const s = escrowStyles(colors);
+
+  const renderDeal = ({ item: deal }: { item: Deal }) => {
+    const isSender = deal.senderId === citizen.id;
+    const info = STATUS_LABELS[deal.status] ?? { label: deal.status, color: "#888" };
+    const canAccept = !isSender && deal.status === "open" && deal.receiverId === null;
+    const canProof = !isSender && deal.status === "accepted" && deal.receiverId === citizen.id;
+    const canComplete = isSender && deal.status === "proof_submitted";
+    const canDecline = isSender && deal.status === "proof_submitted";
+    const canCancel = isSender && ["open", "declined"].includes(deal.status);
+    const canDispute = ["accepted", "proof_submitted", "declined"].includes(deal.status) &&
+      (deal.senderId === citizen.id || deal.receiverId === citizen.id) &&
+      deal.status !== "disputed";
+
+    return (
+      <View style={s.dealCard}>
+        <View style={s.dealHeader}>
+          <Text style={s.dealId}>Сделка #{deal.id}</Text>
+          <View style={[s.statusBadge, { backgroundColor: info.color + "22", borderColor: info.color }]}>
+            <Text style={[s.statusText, { color: info.color }]}>{info.label}</Text>
+          </View>
+        </View>
+        <Text style={s.dealRole}>{isSender ? "👤 Вы: Заказчик" : "🔧 Вы: Исполнитель"}</Text>
+        <Text style={s.dealAmount}>💎 {deal.amount} Дарминов заморожено</Text>
+        <Text style={s.dealDesc} numberOfLines={3}>{deal.description}</Text>
+
+        {deal.proofText ? (
+          <View style={s.proofBlock}>
+            <Text style={s.proofLabel}>Доказательство исполнителя:</Text>
+            <Text style={s.proofText}>{deal.proofText}</Text>
+          </View>
+        ) : null}
+
+        {deal.aiVerdict ? (
+          <TouchableOpacity style={s.verdictBtn} onPress={() => setVerdictDeal(deal)}>
+            <Feather name="cpu" size={12} color={colors.primary} />
+            <Text style={s.verdictBtnText}>Заключение ИИ-Арбитра</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        <View style={s.dealActions}>
+          {canAccept && (
+            <TouchableOpacity style={[s.actionBtn, s.actionBtnBlue]} onPress={() => handleAccept(deal)}>
+              <Text style={s.actionBtnText}>Принять задачу</Text>
+            </TouchableOpacity>
+          )}
+          {canProof && (
+            <TouchableOpacity style={[s.actionBtn, s.actionBtnBlue]} onPress={() => { setProofDeal(deal); setProofText(""); }}>
+              <Text style={s.actionBtnText}>Сдать работу</Text>
+            </TouchableOpacity>
+          )}
+          {canComplete && (
+            <TouchableOpacity style={[s.actionBtn, s.actionBtnGreen]} onPress={() => handleComplete(deal)}>
+              <Feather name="check-circle" size={13} color="#fff" />
+              <Text style={s.actionBtnText}>Подписать Акт</Text>
+            </TouchableOpacity>
+          )}
+          {canDecline && (
+            <TouchableOpacity style={[s.actionBtn, s.actionBtnRed]} onPress={() => handleDecline(deal)}>
+              <Text style={s.actionBtnText}>Отклонить</Text>
+            </TouchableOpacity>
+          )}
+          {canDispute && (
+            <TouchableOpacity style={[s.actionBtn, s.actionBtnPurple]} onPress={() => { setDisputeDeal(deal); setClaimText(""); }}>
+              <Feather name="alert-triangle" size={12} color="#fff" />
+              <Text style={s.actionBtnText}>Апелляция в Минтруд</Text>
+            </TouchableOpacity>
+          )}
+          {canCancel && (
+            <TouchableOpacity style={[s.actionBtn, s.actionBtnGray]} onPress={() => handleCancel(deal)}>
+              <Text style={s.actionBtnText}>Отменить</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Header */}
+      <View style={s.escrowHeader}>
+        <Text style={s.escrowTitle}>Эскроу-сделки</Text>
+        <TouchableOpacity style={s.createBtn} onPress={() => setShowCreate(true)} activeOpacity={0.8}>
+          <Feather name="plus" size={14} color={colors.primaryForeground} />
+          <Text style={s.createBtnText}>Создать сделку</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={s.escrowSub}>Дармины замораживаются. Релиз — после подписания Акта.</Text>
+
+      {loading ? (
+        <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />
+      ) : deals.length === 0 ? (
+        <View style={s.empty}>
+          <Feather name="lock" size={32} color={colors.mutedForeground} />
+          <Text style={s.emptyText}>Нет активных сделок</Text>
+          <Text style={s.emptySub}>Создай сделку — Дармины будут заморожены до подписания Акта</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={deals}
+          keyExtractor={(d) => String(d.id)}
+          renderItem={renderDeal}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+          onRefresh={loadDeals}
+          refreshing={loading}
+        />
+      )}
+
+      {/* ── Create Deal Modal ──────────────────────────────────────────────── */}
+      <Modal visible={showCreate} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCreate(false)}>
+        <ScrollView style={[s.modal, { backgroundColor: colors.background }]} keyboardShouldPersistTaps="handled">
+          <View style={s.modalHeader}>
+            <Text style={[s.modalTitle, { color: colors.foreground }]}>Новая Эскроу-сделка</Text>
+            <TouchableOpacity onPress={() => setShowCreate(false)}>
+              <Feather name="x" size={22} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+          <Text style={[s.label, { color: colors.mutedForeground }]}>ИСПОЛНИТЕЛЬ</Text>
+          {others.map((c) => (
+            <TouchableOpacity
+              key={c.id}
+              style={[s.selRow, selRecipient?.id === c.id && s.selRowActive, { borderColor: selRecipient?.id === c.id ? colors.primary : colors.border }]}
+              onPress={() => setSelRecipient(c)}
+              activeOpacity={0.8}
+            >
+              <View style={[s.avatar, { backgroundColor: colors.surface }]}>
+                <Text style={[s.avatarText, { color: colors.primary }]}>{c.name.charAt(0).toUpperCase()}</Text>
+              </View>
+              <Text style={[s.selName, { color: colors.foreground }]}>{c.name}</Text>
+              <Text style={[s.selBalance, { color: colors.mutedForeground }]}>{c.balanceMinutes} Д</Text>
+              {selRecipient?.id === c.id && <Feather name="check-circle" size={18} color={colors.primary} />}
+            </TouchableOpacity>
+          ))}
+          <Text style={[s.label, { color: colors.mutedForeground, marginTop: 16 }]}>СУММА (ДАРМИНЫ)</Text>
+          <TextInput
+            style={[s.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+            keyboardType="number-pad"
+            placeholder="Например: 60"
+            placeholderTextColor={colors.mutedForeground}
+            value={amount}
+            onChangeText={setAmount}
+          />
+          <Text style={[s.label, { color: colors.mutedForeground }]}>ТЕХНИЧЕСКОЕ ЗАДАНИЕ</Text>
+          <TextInput
+            style={[s.input, s.inputMulti, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+            placeholder="Подробно опиши, что должен сделать исполнитель..."
+            placeholderTextColor={colors.mutedForeground}
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+          <TouchableOpacity
+            style={[s.submitBtn, { backgroundColor: colors.primary, opacity: creating ? 0.6 : 1 }]}
+            onPress={handleCreate}
+            disabled={creating}
+            activeOpacity={0.8}
+          >
+            {creating ? <ActivityIndicator color={colors.primaryForeground} /> : (
+              <>
+                <Feather name="lock" size={16} color={colors.primaryForeground} />
+                <Text style={[s.submitBtnText, { color: colors.primaryForeground }]}>Заморозить Дармины и создать сделку</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </Modal>
+
+      {/* ── Proof Modal ───────────────────────────────────────────────────── */}
+      <Modal visible={!!proofDeal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setProofDeal(null)}>
+        <View style={[s.modal, { backgroundColor: colors.background }]}>
+          <View style={s.modalHeader}>
+            <Text style={[s.modalTitle, { color: colors.foreground }]}>Сдача работы</Text>
+            <TouchableOpacity onPress={() => setProofDeal(null)}>
+              <Feather name="x" size={22} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+          {proofDeal && <Text style={[s.proofDealDesc, { color: colors.mutedForeground }]}>ТЗ: {proofDeal.description}</Text>}
+          <Text style={[s.label, { color: colors.mutedForeground }]}>ОПИСАНИЕ ВЫПОЛНЕННОЙ РАБОТЫ</Text>
+          <TextInput
+            style={[s.input, s.inputMulti, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+            placeholder="Опиши, что было сделано..."
+            placeholderTextColor={colors.mutedForeground}
+            value={proofText}
+            onChangeText={setProofText}
+            multiline
+            numberOfLines={5}
+            textAlignVertical="top"
+          />
+          <TouchableOpacity
+            style={[s.submitBtn, { backgroundColor: "#2196F3", opacity: submittingProof ? 0.6 : 1 }]}
+            onPress={handleProofSubmit}
+            disabled={submittingProof}
+            activeOpacity={0.8}
+          >
+            {submittingProof ? <ActivityIndicator color="#fff" /> : (
+              <>
+                <Feather name="send" size={16} color="#fff" />
+                <Text style={[s.submitBtnText, { color: "#fff" }]}>Отправить доказательство</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* ── Dispute Modal ─────────────────────────────────────────────────── */}
+      <Modal visible={!!disputeDeal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setDisputeDeal(null)}>
+        <View style={[s.modal, { backgroundColor: colors.background }]}>
+          <View style={s.modalHeader}>
+            <Text style={[s.modalTitle, { color: colors.foreground }]}>Апелляция в Минтруд</Text>
+            <TouchableOpacity onPress={() => setDisputeDeal(null)}>
+              <Feather name="x" size={22} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+          <Text style={[s.disputeInfo, { color: colors.mutedForeground }]}>
+            ИИ-Арбитр Министерства Труда изучит ТЗ, доказательства и вашу претензию. Вердикт будет записан в дело.
+          </Text>
+          <Text style={[s.label, { color: colors.mutedForeground }]}>СУТЬ ПРЕТЕНЗИИ</Text>
+          <TextInput
+            style={[s.input, s.inputMulti, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+            placeholder="Подробно опиши, в чём нарушение со стороны другой стороны..."
+            placeholderTextColor={colors.mutedForeground}
+            value={claimText}
+            onChangeText={setClaimText}
+            multiline
+            numberOfLines={5}
+            textAlignVertical="top"
+          />
+          <TouchableOpacity
+            style={[s.submitBtn, { backgroundColor: "#9C27B0", opacity: disputing ? 0.6 : 1 }]}
+            onPress={handleDisputeSubmit}
+            disabled={disputing}
+            activeOpacity={0.8}
+          >
+            {disputing ? (
+              <>
+                <ActivityIndicator color="#fff" />
+                <Text style={[s.submitBtnText, { color: "#fff" }]}>ИИ-Арбитр анализирует…</Text>
+              </>
+            ) : (
+              <>
+                <Feather name="alert-triangle" size={16} color="#fff" />
+                <Text style={[s.submitBtnText, { color: "#fff" }]}>Подать апелляцию</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* ── AI Verdict Modal ──────────────────────────────────────────────── */}
+      <Modal visible={!!verdictDeal} animationType="fade" transparent onRequestClose={() => setVerdictDeal(null)}>
+        <View style={s.verdictOverlay}>
+          <View style={[s.verdictCard, { backgroundColor: colors.card, borderColor: colors.primary }]}>
+            <View style={s.modalHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Feather name="cpu" size={18} color={colors.primary} />
+                <Text style={[s.modalTitle, { color: colors.primary }]}>Заключение ИИ-Арбитра</Text>
+              </View>
+              <TouchableOpacity onPress={() => setVerdictDeal(null)}>
+                <Feather name="x" size={20} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+            <Text style={[s.disputeInfo, { color: colors.mutedForeground, marginBottom: 4 }]}>
+              Министерство Труда · Сделка #{verdictDeal?.id}
+            </Text>
+            <ScrollView style={{ maxHeight: 340 }}>
+              <Text style={[s.verdictText, { color: colors.foreground }]}>{verdictDeal?.aiVerdict}</Text>
+            </ScrollView>
+            <TouchableOpacity style={[s.submitBtn, { backgroundColor: colors.primary, marginTop: 16 }]} onPress={() => setVerdictDeal(null)}>
+              <Text style={[s.submitBtnText, { color: colors.primaryForeground }]}>Принято к сведению</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+function escrowStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    escrowHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12 },
+    escrowTitle: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.foreground },
+    escrowSub: { fontSize: 11, color: colors.mutedForeground, paddingHorizontal: 16, marginBottom: 12, fontFamily: "Inter_400Regular" },
+    createBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+    createBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.primaryForeground },
+    empty: { alignItems: "center", paddingTop: 50, paddingHorizontal: 32, gap: 10 },
+    emptyText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground },
+    emptySub: { fontSize: 12, fontFamily: "Inter_400Regular", color: colors.mutedForeground, textAlign: "center", lineHeight: 18 },
+    dealCard: { backgroundColor: colors.card, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border },
+    dealHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
+    dealId: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground },
+    statusBadge: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+    statusText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+    dealRole: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginBottom: 2 },
+    dealAmount: { fontSize: 15, fontFamily: "Inter_700Bold", color: colors.primary, marginBottom: 6 },
+    dealDesc: { fontSize: 13, fontFamily: "Inter_400Regular", color: colors.foreground, lineHeight: 18, marginBottom: 8 },
+    proofBlock: { backgroundColor: colors.surface, borderRadius: 8, padding: 10, marginBottom: 8 },
+    proofLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground, marginBottom: 4 },
+    proofText: { fontSize: 12, fontFamily: "Inter_400Regular", color: colors.foreground, lineHeight: 17 },
+    verdictBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+    verdictBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.primary },
+    dealActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    actionBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+    actionBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#fff" },
+    actionBtnGreen: { backgroundColor: "#388E3C" },
+    actionBtnRed: { backgroundColor: "#C62828" },
+    actionBtnBlue: { backgroundColor: "#1565C0" },
+    actionBtnPurple: { backgroundColor: "#6A1B9A" },
+    actionBtnGray: { backgroundColor: "#546E7A" },
+    modal: { flex: 1, padding: 20 },
+    modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+    modalTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+    label: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 1, marginBottom: 8 },
+    input: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 15, fontFamily: "Inter_400Regular", marginBottom: 16 },
+    inputMulti: { height: 120 },
+    selRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 8 },
+    selRowActive: {},
+    avatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+    avatarText: { fontSize: 15, fontFamily: "Inter_700Bold" },
+    selName: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium" },
+    selBalance: { fontSize: 12, fontFamily: "Inter_400Regular" },
+    submitBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 16, borderRadius: 12, marginTop: 8 },
+    submitBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+    proofDealDesc: { fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 16, lineHeight: 18 },
+    disputeInfo: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18, marginBottom: 16 },
+    verdictOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", padding: 20 },
+    verdictCard: { width: "100%", borderRadius: 16, borderWidth: 1, padding: 20 },
+    verdictText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  });
+}
+
+// ─── Main TiMETR Screen ───────────────────────────────────────────────────────
 export default function TimerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -75,6 +690,7 @@ export default function TimerScreen() {
   const queryClient = useQueryClient();
   const walletGuide = useContextualGuide("wallet");
 
+  const [mode, setMode] = useState<"transfer" | "escrow">("transfer");
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [selectedRecipient, setSelectedRecipient] = useState<Citizen | null>(null);
@@ -89,47 +705,51 @@ export default function TimerScreen() {
     enabled: !!citizen,
   });
 
-  const startMutation = useMutation<Session, Error, { fromCitizenId: number; toCitizenId: number }>({
-    mutationFn: async (body) => {
-      const res = await fetch(`${BASE_URL}/api/sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error((data as { error: string }).error);
-      return data as Session;
-    },
-    onSuccess: (session) => {
-      setActiveSession(session);
-      setElapsed(0);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    },
-    onError: (err) => Alert.alert("Ошибка", err.message),
-  });
+  const startSession = async () => {
+    if (!citizen || !selectedRecipient) return;
+    const res = await fetch(`${BASE_URL}/api/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fromCitizenId: citizen.id, toCitizenId: selectedRecipient.id }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error((data as { error: string }).error);
+    setActiveSession(data as Session);
+    setElapsed(0);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  };
 
-  const stopMutation = useMutation<SessionResult, Error, number>({
-    mutationFn: async (id) => {
-      const res = await fetch(`${BASE_URL}/api/sessions/${id}/stop`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error((data as { error: string }).error);
-      return data as SessionResult;
-    },
-    onSuccess: (result) => {
-      setActiveSession(null);
-      setElapsed(0);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      queryClient.invalidateQueries({ queryKey: ["citizens"] });
-      refreshCitizen();
-      const mins = result.transaction.minutesTransferred;
-      const secs = result.transaction.durationSeconds;
-      const sheetsStatus = result.sheetsLogged ? "Записано в Казначейство" : "Ошибка записи в таблицу";
-      Alert.alert("Сессия завершена", `Передано: ${mins} Д\nДлительность: ${formatTime(secs)}\n${sheetsStatus}`);
-    },
-    onError: (err) => Alert.alert("Ошибка", err.message),
-  });
+  const stopSession = async () => {
+    if (!activeSession) return;
+    const res = await fetch(`${BASE_URL}/api/sessions/${activeSession.id}/stop`, { method: "POST" });
+    const data = await res.json() as SessionResult;
+    if (!res.ok) throw new Error((data as unknown as { error: string }).error);
+    setActiveSession(null);
+    setElapsed(0);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    queryClient.invalidateQueries({ queryKey: ["citizens"] });
+    refreshCitizen();
+    const mins = data.transaction.minutesTransferred;
+    const secs = data.transaction.durationSeconds;
+    const sheetsStatus = data.sheetsLogged ? "Записано в Казначейство" : "Ошибка записи";
+    Alert.alert("Сессия завершена", `Передано: ${mins} Д\nДлительность: ${formatTime(secs)}\n${sheetsStatus}`);
+  };
+
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const handleStart = useCallback(async () => {
+    if (!citizen) { router.push("/register"); return; }
+    if (!selectedRecipient) { Alert.alert("Выбери получателя", "Нажми на гражданина ниже"); return; }
+    setSessionLoading(true);
+    try { await startSession(); } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+    setSessionLoading(false);
+  }, [citizen, selectedRecipient]);
+
+  const handleStop = useCallback(async () => {
+    if (!activeSession) return;
+    setSessionLoading(true);
+    try { await stopSession(); } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+    setSessionLoading(false);
+  }, [activeSession]);
 
   useEffect(() => {
     if (activeSession) {
@@ -140,20 +760,6 @@ export default function TimerScreen() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [activeSession]);
 
-  const handleStart = useCallback(() => {
-    if (!citizen) { router.push("/register"); return; }
-    if (!selectedRecipient) {
-      Alert.alert("Выбери получателя", "Нажми на гражданина ниже, чтобы начать передачу времени");
-      return;
-    }
-    startMutation.mutate({ fromCitizenId: citizen.id, toCitizenId: selectedRecipient.id });
-  }, [citizen, selectedRecipient, startMutation, router]);
-
-  const handleStop = useCallback(() => {
-    if (!activeSession) return;
-    stopMutation.mutate(activeSession.id);
-  }, [activeSession, stopMutation]);
-
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : 0;
   const others = citizens.filter((c) => c.id !== citizen?.id);
@@ -162,6 +768,7 @@ export default function TimerScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <View style={styles.headerBrand}>
           <LogoBrand size={30} />
@@ -176,11 +783,7 @@ export default function TimerScreen() {
               <Feather name="clock" size={12} color={colors.primary} />
               <Text style={styles.balanceText}>{citizen.balanceMinutes} Д</Text>
             </View>
-            <TouchableOpacity
-              style={styles.shopBtn}
-              onPress={() => router.push("/shop")}
-              activeOpacity={0.75}
-            >
+            <TouchableOpacity style={styles.shopBtn} onPress={() => router.push("/shop")} activeOpacity={0.75}>
               <Feather name="plus-circle" size={13} color={colors.primaryForeground} />
             </TouchableOpacity>
             <TouchableOpacity
@@ -207,6 +810,7 @@ export default function TimerScreen() {
           </View>
         )}
       </View>
+
       {citizen && (
         <View style={styles.meritBar}>
           <Feather name="star" size={11} color={colors.primary} />
@@ -216,108 +820,154 @@ export default function TimerScreen() {
         </View>
       )}
 
-      <View style={styles.timerSection}>
-        {activeSession ? (
-          <>
-            <AnimatedHourglass active={true} size={36} />
-            <Text style={styles.timerLabel}>→ {recipientCitizen?.name ?? "..."}</Text>
-            <Text style={styles.timerDisplay}>{formatTime(elapsed)}</Text>
-            <Text style={styles.timerSub}>~{Math.max(1, Math.ceil(elapsed / 60))} Д будет передано</Text>
-            <TouchableOpacity style={styles.stopBtn} onPress={handleStop} disabled={stopMutation.isPending} activeOpacity={0.75}>
-              {stopMutation.isPending ? (
-                <ActivityIndicator color={colors.destructiveForeground} />
-              ) : (
-                <>
-                  <Feather name="square" size={20} color={colors.destructiveForeground} />
-                  <Text style={styles.stopBtnText}>СТОП</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <Text style={styles.timerDisplay}>00:00</Text>
-            <Text style={styles.timerSub}>{selectedRecipient ? `→ ${selectedRecipient.name}` : "Выбери получателя"}</Text>
-            <TouchableOpacity
-              style={[styles.startBtn, !selectedRecipient && styles.startBtnDisabled]}
-              onPress={handleStart}
-              disabled={startMutation.isPending || !selectedRecipient}
-              activeOpacity={0.75}
-            >
-              {startMutation.isPending ? (
-                <ActivityIndicator color={colors.primaryForeground} />
-              ) : (
-                <>
-                  <Feather name="play" size={20} color={colors.primaryForeground} />
-                  <Text style={styles.startBtnText}>СТАРТ</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </>
-        )}
+      {/* ── Mode toggle ────────────────────────────────────────────────────── */}
+      <View style={styles.modeToggle}>
+        <TouchableOpacity
+          style={[styles.modeBtn, mode === "transfer" && styles.modeBtnActive]}
+          onPress={() => setMode("transfer")}
+          activeOpacity={0.8}
+        >
+          <Feather name="play-circle" size={13} color={mode === "transfer" ? colors.primaryForeground : colors.mutedForeground} />
+          <Text style={[styles.modeBtnText, mode === "transfer" && styles.modeBtnTextActive]}>Перевод</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.modeBtn, mode === "escrow" && styles.modeBtnActive]}
+          onPress={() => setMode("escrow")}
+          activeOpacity={0.8}
+        >
+          <Feather name="lock" size={13} color={mode === "escrow" ? colors.primaryForeground : colors.mutedForeground} />
+          <Text style={[styles.modeBtnText, mode === "escrow" && styles.modeBtnTextActive]}>Эскроу</Text>
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.listSection}>
-        <Text style={styles.listTitle}>{activeSession ? "Идёт передача" : "Выбери получателя"}</Text>
-        {!citizen && (
-          <TouchableOpacity style={styles.registerPrompt} onPress={() => router.push("/register")} activeOpacity={0.8}>
-            <Feather name="user-plus" size={20} color={colors.primary} />
-            <Text style={styles.registerPromptText}>Зарегистрируйся как гражданин</Text>
-            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-          </TouchableOpacity>
-        )}
-        {loadingCitizens && citizen && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
-        {!loadingCitizens && others.length === 0 && citizen && (
-          <View style={styles.emptyState}>
-            <Feather name="users" size={32} color={colors.mutedForeground} />
-            <Text style={styles.emptyText}>Нет других граждан</Text>
-            <Text style={styles.emptySubtext}>Пригласи участников в TimeNation</Text>
+      {/* ── Transfer mode ──────────────────────────────────────────────────── */}
+      {mode === "transfer" && (
+        <>
+          <View style={styles.timerSection}>
+            {activeSession ? (
+              <>
+                <AnimatedHourglass active={true} size={36} />
+                <Text style={styles.timerLabel}>→ {recipientCitizen?.name ?? "..."}</Text>
+                <Text style={styles.timerDisplay}>{formatTime(elapsed)}</Text>
+                <Text style={styles.timerSub}>~{Math.max(1, Math.ceil(elapsed / 60))} Д будет передано</Text>
+                <TouchableOpacity style={styles.stopBtn} onPress={handleStop} disabled={sessionLoading} activeOpacity={0.75}>
+                  {sessionLoading ? (
+                    <ActivityIndicator color={colors.destructiveForeground} />
+                  ) : (
+                    <>
+                      <Feather name="square" size={20} color={colors.destructiveForeground} />
+                      <Text style={styles.stopBtnText}>СТОП</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.timerDisplay}>00:00</Text>
+                <Text style={styles.timerSub}>{selectedRecipient ? `→ ${selectedRecipient.name}` : "Выбери получателя"}</Text>
+                <TouchableOpacity
+                  style={[styles.startBtn, !selectedRecipient && styles.startBtnDisabled]}
+                  onPress={handleStart}
+                  disabled={sessionLoading || !selectedRecipient}
+                  activeOpacity={0.75}
+                >
+                  {sessionLoading ? (
+                    <ActivityIndicator color={colors.primaryForeground} />
+                  ) : (
+                    <>
+                      <Feather name="play" size={20} color={colors.primaryForeground} />
+                      <Text style={styles.startBtnText}>СТАРТ</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
           </View>
-        )}
-        <FlatList
-          data={others}
-          keyExtractor={(item) => String(item.id)}
-          scrollEnabled={!!others.length}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => {
-            const isSelected = selectedRecipient?.id === item.id;
-            const isActive = activeSession?.toCitizenId === item.id;
-            return (
-              <TouchableOpacity
-                style={[
-                  styles.citizenRow,
-                  isSelected && styles.citizenRowSelected,
-                  isActive && styles.citizenRowActive,
-                  !!activeSession && !isActive && styles.citizenRowDimmed,
-                ]}
-                onPress={() => {
-                  if (activeSession) return;
-                  setSelectedRecipient(isSelected ? null : item);
-                  Haptics.selectionAsync();
-                }}
-                activeOpacity={0.75}
-                disabled={!!activeSession}
-              >
-                <View style={styles.citizenAvatar}>
-                  <Text style={styles.citizenAvatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-                </View>
-                <View style={styles.citizenInfo}>
-                  <Text style={styles.citizenName}>{item.name}</Text>
-                  <Text style={styles.citizenBalance}>{item.balanceMinutes} Д</Text>
-                </View>
-                {isActive && (
-                  <View style={styles.activeIndicator}>
-                    <View style={styles.activeDot} />
-                    <Text style={styles.activeText}>LIVE</Text>
-                  </View>
-                )}
-                {isSelected && !activeSession && <Feather name="check-circle" size={20} color={colors.primary} />}
+
+          {/* AI Auditor Rate Widget */}
+          {selectedRecipient && !activeSession && (
+            <RateWidget recipient={selectedRecipient} colors={colors} />
+          )}
+
+          <View style={styles.listSection}>
+            <Text style={styles.listTitle}>{activeSession ? "Идёт передача" : "Выбери получателя"}</Text>
+            {!citizen && (
+              <TouchableOpacity style={styles.registerPrompt} onPress={() => router.push("/register")} activeOpacity={0.8}>
+                <Feather name="user-plus" size={20} color={colors.primary} />
+                <Text style={styles.registerPromptText}>Зарегистрируйся как гражданин</Text>
+                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
               </TouchableOpacity>
-            );
-          }}
-          contentContainerStyle={{ paddingBottom: botPad + 90 }}
-        />
-      </View>
+            )}
+            {loadingCitizens && citizen && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
+            {!loadingCitizens && others.length === 0 && citizen && (
+              <View style={styles.emptyState}>
+                <Feather name="users" size={32} color={colors.mutedForeground} />
+                <Text style={styles.emptyText}>Нет других граждан</Text>
+                <Text style={styles.emptySubtext}>Пригласи участников в TimeNation</Text>
+              </View>
+            )}
+            <FlatList
+              data={others}
+              keyExtractor={(item) => String(item.id)}
+              scrollEnabled={!!others.length}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => {
+                const isSelected = selectedRecipient?.id === item.id;
+                const isActive = activeSession?.toCitizenId === item.id;
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.citizenRow,
+                      isSelected && styles.citizenRowSelected,
+                      isActive && styles.citizenRowActive,
+                      !!activeSession && !isActive && styles.citizenRowDimmed,
+                    ]}
+                    onPress={() => {
+                      if (activeSession) return;
+                      setSelectedRecipient(isSelected ? null : item);
+                      Haptics.selectionAsync();
+                    }}
+                    activeOpacity={0.75}
+                    disabled={!!activeSession}
+                  >
+                    <View style={styles.citizenAvatar}>
+                      <Text style={styles.citizenAvatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.citizenInfo}>
+                      <Text style={styles.citizenName}>{item.name}</Text>
+                      <Text style={styles.citizenBalance}>{item.balanceMinutes} Д</Text>
+                    </View>
+                    {isActive && (
+                      <View style={styles.activeIndicator}>
+                        <View style={styles.activeDot} />
+                        <Text style={styles.activeText}>LIVE</Text>
+                      </View>
+                    )}
+                    {isSelected && !activeSession && <Feather name="check-circle" size={20} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              }}
+              contentContainerStyle={{ paddingBottom: botPad + 90 }}
+            />
+          </View>
+        </>
+      )}
+
+      {/* ── Escrow mode ────────────────────────────────────────────────────── */}
+      {mode === "escrow" && citizen && (
+        <EscrowModule citizen={citizen} citizens={others} colors={colors} />
+      )}
+      {mode === "escrow" && !citizen && (
+        <View style={styles.emptyState}>
+          <Feather name="lock" size={32} color={colors.mutedForeground} />
+          <Text style={styles.emptyText}>Нужна регистрация</Text>
+          <TouchableOpacity onPress={() => router.push("/register")} activeOpacity={0.8}>
+            <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 14, marginTop: 8 }}>
+              Зарегистрироваться →
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <ContextualGuideModal
         visible={walletGuide.visible}
@@ -350,7 +1000,12 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     meritBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, paddingBottom: 8 },
     meritText: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
     meritSep: { fontSize: 11, color: colors.mutedForeground },
-    timerSection: { alignItems: "center", paddingVertical: 28, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
+    modeToggle: { flexDirection: "row", marginHorizontal: 20, marginBottom: 12, backgroundColor: colors.surface, borderRadius: 12, padding: 3, gap: 2 },
+    modeBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 9, borderRadius: 10 },
+    modeBtnActive: { backgroundColor: colors.primary },
+    modeBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground },
+    modeBtnTextActive: { color: colors.primaryForeground },
+    timerSection: { alignItems: "center", paddingVertical: 24, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
     timerLabel: { fontSize: 14, fontFamily: "Inter_500Medium", color: colors.mutedForeground, marginBottom: 8, letterSpacing: 1 },
     timerDisplay: { fontSize: 60, fontFamily: "Inter_700Bold", color: colors.foreground, letterSpacing: -2 },
     timerSub: { fontSize: 13, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 4, marginBottom: 20 },
@@ -359,7 +1014,7 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     startBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.primaryForeground, letterSpacing: 2 },
     stopBtn: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.destructive, paddingHorizontal: 40, paddingVertical: 14, borderRadius: 40 },
     stopBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.destructiveForeground, letterSpacing: 2 },
-    listSection: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
+    listSection: { flex: 1, paddingHorizontal: 20, paddingTop: 14 },
     listTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 12 },
     registerPrompt: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary, borderRadius: 12, padding: 16, marginBottom: 16 },
     registerPromptText: { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium", color: colors.foreground },

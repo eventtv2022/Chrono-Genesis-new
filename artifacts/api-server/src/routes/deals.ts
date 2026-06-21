@@ -4,6 +4,7 @@ import { dealsTable, citizensTable } from "@workspace/db";
 import { eq, or } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const router: IRouter = Router();
 
@@ -24,6 +25,11 @@ const ProofBody = z.object({
 
 const ActorBody = z.object({
   citizenId: z.number().int().positive(),
+});
+
+const DisputeBody = z.object({
+  citizenId: z.number().int().positive(),
+  claimText: z.string().min(10).max(2000).optional(),
 });
 
 // ─── POST /api/deals ──────────────────────────────────────────────────────────
@@ -272,12 +278,12 @@ router.post("/deals/:id/cancel", async (req, res): Promise<void> => {
 });
 
 // ─── POST /api/deals/:id/dispute ─────────────────────────────────────────────
-// Either party flags the deal for manual resolution.
+// Either party flags the deal for arbitration. Gemini acts as ИИ-Арбитр Минтруда.
 router.post("/deals/:id/dispute", async (req, res): Promise<void> => {
   const id = parseInt(req.params["id"] ?? "", 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const parsed = ActorBody.safeParse(req.body);
+  const parsed = DisputeBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "citizenId обязателен" }); return; }
 
   const [deal] = await db.select().from(dealsTable).where(eq(dealsTable.id, id)).limit(1);
@@ -291,9 +297,50 @@ router.post("/deals/:id/dispute", async (req, res): Promise<void> => {
     return;
   }
 
+  // ── Gemini AI Arbitration (ИИ-Арбитр Минтруда) ───────────────────────────
+  let aiVerdict: string | null = null;
+  const claimText = parsed.data.claimText;
+  const apiKey = process.env["GOOGLE_API_KEY"];
+  if (apiKey && claimText) {
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const prompt = `Ты — ИИ-Арбитр Министерства Труда суверенного государства TimeNation. Твоя задача — справедливо разобрать конфликт между гражданами.
+
+ПАРАМЕТРЫ СДЕЛКИ:
+Техническое задание (ТЗ): ${deal.description}
+Сумма сделки: ${deal.amount} Дарминов (заморожены в эскроу)
+Статус на момент спора: ${deal.status}
+${deal.proofText ? `Доказательство исполнителя: ${deal.proofText}` : "Доказательство работы: не предоставлено"}
+${deal.proofUrl ? `Ссылка на доказательство: ${deal.proofUrl}` : ""}
+
+СУТЬ ПРЕТЕНЗИИ:
+${claimText}
+
+ТВОЁ ЗАДАНИЕ:
+Проанализируй ситуацию и выдай официальное заключение арбитра (строго до 250 слов):
+1. Оценка ситуации — соответствует ли доказательство ТЗ?
+2. Рекомендация — кому вернуть Дармины и на каком основании?
+3. Финальный вердикт для офицера Минтруда: [ВЕРНУТЬ ЗАКАЗЧИКУ / ВЫПЛАТИТЬ ИСПОЛНИТЕЛЮ / РАЗДЕЛИТЬ ПОПОЛАМ]
+
+Пиши официально, нейтрально, по существу.`;
+
+      const result = await model.generateContent(prompt);
+      aiVerdict = result.response.text();
+      req.log.info({ dealId: id }, "Gemini arbitration verdict generated");
+    } catch (err) {
+      req.log.error({ err }, "Gemini arbitration failed, proceeding without verdict");
+    }
+  }
+
   const [updated] = await db
     .update(dealsTable)
-    .set({ status: "disputed", updatedAt: new Date() })
+    .set({
+      status: "disputed",
+      disputeClaimText: claimText ?? null,
+      aiVerdict: aiVerdict ?? null,
+      updatedAt: new Date(),
+    })
     .where(eq(dealsTable.id, id))
     .returning();
 

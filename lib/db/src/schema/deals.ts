@@ -14,6 +14,8 @@ export const dealsTable = pgTable("deals", {
   status: text("status").notNull().default("open"),
   proofUrl: text("proof_url"),                   // receiver-supplied link to evidence
   proofText: text("proof_text"),                 // receiver-supplied text description
+  disputeClaimText: text("dispute_claim_text"),  // claimant's description of the dispute
+  aiVerdict: text("ai_verdict"),                  // Gemini arbitration verdict
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
