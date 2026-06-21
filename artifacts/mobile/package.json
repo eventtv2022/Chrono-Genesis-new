@@ -59,6 +59,7 @@
   "dependencies": {
     "expo-camera": "^17.0.10",
     "expo-clipboard": "^8.0.8",
+    "expo-notifications": "^56.0.18",
     "leaflet": "^1.9.4",
     "open-location-code": "^1.0.3",
     "react-leaflet": "^4.2.1",

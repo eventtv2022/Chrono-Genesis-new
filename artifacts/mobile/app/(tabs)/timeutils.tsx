@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Notifications from "expo-notifications";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { LogoBrand } from "@/components/LogoBrand";
@@ -175,8 +176,8 @@ export default function TimeUtilsScreen() {
   const [alarmMinute, setAlarmMinute] = useState(0);
   const [alarmDays, setAlarmDays] = useState<Set<number>>(new Set([1, 2, 3, 4, 5]));
   const [alarmActive, setAlarmActive] = useState(false);
+  // Web-only fallback refs (native uses scheduled system notifications)
   const alarmRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Prevent firing more than once per minute
   const lastFiredKey = useRef<string>("");
 
   const toggleDay = (d: number) => {
@@ -187,32 +188,112 @@ export default function TimeUtilsScreen() {
     });
   };
 
-  /** Returns {h, m, weekday} in Asia/Nicosia timezone — robust on all platforms. */
-  const getNicosiaHMS = (): { h: number; m: number; weekday: number } => {
-    const now = new Date();
-    // Use 2-digit hour (always 00–23), month, day, year to derive weekday via Date()
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Nicosia",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).formatToParts(now);
-    const get = (t: string) => parseInt(parts.find((p) => p.type === t)?.value ?? "0", 10);
-    let h = get("hour");
-    // hour12:false can return 24 for midnight on some platforms — normalise
-    if (h === 24) h = 0;
-    const m = get("minute");
-    // Derive weekday from calendar date (0=Sun … 6=Sat)
-    const weekday = new Date(get("year"), get("month") - 1, get("day")).getDay();
-    return { h, m, weekday };
-  };
-
-  // Check alarm every 10 s — small enough to catch any minute
+  // ── Notification setup (native only) ────────────────────────────────────────
   useEffect(() => {
+    if (Platform.OS === "web") return;
+
+    // Show banner + play sound even when app is foregrounded
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+
+    const setup = async () => {
+      // Android: high-priority alarm channel with vibration
+      if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("tn-alarm", {
+          name: "Суверенный Будильник",
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 300, 200, 300],
+          lightColor: "#C9A84C",
+          enableVibrate: true,
+          showBadge: false,
+        });
+      }
+      // Request permission — will prompt the user once
+      const perms = await Notifications.requestPermissionsAsync();
+      const permStatus = (perms as unknown as { status?: string }).status;
+      if (permStatus !== "granted") {
+        Alert.alert(
+          "⛔ Уведомления отключены",
+          "Для работы будильника в фоне разреши уведомления в настройках телефона.",
+          [{ text: "Понятно" }]
+        );
+      }
+    };
+    void setup();
+  }, []);
+
+  // ── Schedule / cancel system notifications (native) ─────────────────────────
+  const syncScheduledAlarms = useCallback(async () => {
+    if (Platform.OS === "web") return;
+
+    // Cancel all previously scheduled alarm notifications
+    const existing = await Notifications.getAllScheduledNotificationsAsync();
+    await Promise.all(
+      existing
+        .filter((n) => n.identifier.startsWith("tn-alarm-"))
+        .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier))
+    );
+
+    if (!alarmActive || alarmDays.size === 0) return;
+
+    const HH = String(alarmHour).padStart(2, "0");
+    const MM = String(alarmMinute).padStart(2, "0");
+
+    // Schedule one weekly notification per selected day
+    // JS getDay(): 0=Sun…6=Sat → Expo weekday: 1=Sun…7=Sat
+    await Promise.all(
+      Array.from(alarmDays).map((jsDay) =>
+        Notifications.scheduleNotificationAsync({
+          identifier: `tn-alarm-day-${jsDay}`,
+          content: {
+            title: "⏰ Суверенный Будильник",
+            body: `${HH}:${MM} по TimeNation · ${citizen?.name ?? "Гражданин"}, доброе утро!`,
+            sound: true,
+            data: { type: "tn-alarm" },
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+            weekday: jsDay + 1,  // 0+1=1(Sun) … 6+1=7(Sat)
+            hour: alarmHour,
+            minute: alarmMinute,
+            repeats: true,
+          } as Notifications.WeeklyTriggerInput,
+        })
+      )
+    );
+  }, [alarmActive, alarmHour, alarmMinute, alarmDays, citizen?.name]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      void syncScheduledAlarms();
+      return;
+    }
+
+    // ── Web fallback: polling every 10 s ──────────────────────────────────────
     if (!alarmActive) return;
+
+    /** Returns {h, m, weekday} in Asia/Nicosia — robust across all platforms. */
+    const getNicosiaHMS = (): { h: number; m: number; weekday: number } => {
+      const now = new Date();
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Nicosia",
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hour12: false,
+      }).formatToParts(now);
+      const get = (t: string) => parseInt(parts.find((p) => p.type === t)?.value ?? "0", 10);
+      let h = get("hour");
+      if (h === 24) h = 0;
+      const weekday = new Date(get("year"), get("month") - 1, get("day")).getDay();
+      return { h, m: get("minute"), weekday };
+    };
+
     const check = () => {
       const { h, m, weekday } = getNicosiaHMS();
       const fireKey = `${h}:${m}:${weekday}`;
@@ -221,15 +302,15 @@ export default function TimeUtilsScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         Alert.alert(
           "⏰ Суверенный Будильник",
-          `Доброе утро, ${citizen?.name ?? "Гражданин"}!\n\nВремя ${String(alarmHour).padStart(2, "0")}:${String(alarmMinute).padStart(2, "0")} по TimeNation (Фамагуста).`,
+          `Доброе утро, ${citizen?.name ?? "Гражданин"}!\n\n${String(alarmHour).padStart(2,"0")}:${String(alarmMinute).padStart(2,"0")} по TimeNation (Фамагуста).`,
           [{ text: "Проснуться в TimeNation 🌅" }]
         );
       }
     };
-    check(); // fire immediately on activation — catches already-matching time
+    check();
     alarmRef.current = setInterval(check, 10_000);
     return () => { if (alarmRef.current) clearInterval(alarmRef.current); };
-  }, [alarmActive, alarmHour, alarmMinute, alarmDays, citizen?.name]);
+  }, [alarmActive, alarmHour, alarmMinute, alarmDays, citizen?.name, syncScheduledAlarms]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
