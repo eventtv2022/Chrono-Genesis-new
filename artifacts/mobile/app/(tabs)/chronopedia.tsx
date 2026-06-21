@@ -25,8 +25,45 @@ import ChronopediaMap, { type ChronopediaMapHandle } from "@/components/Chronope
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { LogoBrand } from "@/components/LogoBrand";
+// @ts-expect-error — no types for this package
+import { OpenLocationCode } from "open-location-code";
 
 const BASE_URL = getBaseUrl();
+
+// ── Plus Code helpers ─────────────────────────────────────────────────────────
+// Reference coordinates for Famagusta / Cyprus region
+const CYPRUS_LAT = 35.1147;
+const CYPRUS_LNG = 33.9531;
+
+const olc = new OpenLocationCode();
+
+/** Extracts a Plus Code token from free-text input (e.g. "4WHF+GW5 Фамагуста"). */
+function extractPlusCode(text: string): string | null {
+  // Match full codes (e.g. 8G7M4WHF+GW) or short codes (e.g. 4WHF+GW5)
+  const match = text.match(/([A-Z0-9]{2,8}\+[A-Z0-9]{2,})/i);
+  return match ? match[1].toUpperCase() : null;
+}
+
+/** Tries to decode text as a Plus Code. Returns { lat, lng, label } or null. */
+function tryDecodePlusCode(text: string): { lat: number; lng: number; label: string } | null {
+  try {
+    const token = extractPlusCode(text);
+    if (!token) return null;
+    if (!olc.isValid(token)) return null;
+    let fullCode = token;
+    if (olc.isShort(token)) {
+      fullCode = olc.recoverNearest(token, CYPRUS_LAT, CYPRUS_LNG);
+    }
+    const decoded = olc.decode(fullCode) as { latitudeCenter: number; longitudeCenter: number };
+    return {
+      lat: decoded.latitudeCenter,
+      lng: decoded.longitudeCenter,
+      label: token,
+    };
+  } catch {
+    return null;
+  }
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -242,6 +279,23 @@ function AddModal({
     }
   }, [placeSearch.query, placeSearch.selected, mode]);
 
+  // ── Plus Code auto-detection ────────────────────────────────────────────────
+  // When user types a Plus Code (e.g. "4WHF+GW5 Фамагуста") in the search field,
+  // automatically decode it and fill the coordinate fields.
+  useEffect(() => {
+    if (mode !== "slot" || placeSearch.selected) return;
+    const q = placeSearch.query;
+    if (!q.includes("+")) return;
+    const decoded = tryDecodePlusCode(q);
+    if (!decoded) return;
+    setManualLat(String(decoded.lat.toFixed(6)));
+    setManualLng(String(decoded.lng.toFixed(6)));
+    // Auto-set location name if user hasn't typed one separately
+    if (!locationName.trim() || locationName === q.trim()) {
+      setLocationName(q.trim());
+    }
+  }, [placeSearch.query, placeSearch.selected, mode]);
+
   const handleSubmit = () => {
     if (!title.trim()) { Alert.alert("Ошибка", "Введите заголовок"); return; }
     if (!description.trim()) { Alert.alert("Ошибка", "Введите описание"); return; }
@@ -251,11 +305,11 @@ function AddModal({
     const lat = parseFloat(manualLat) || 0;
     const lng = parseFloat(manualLng) || 0;
 
-    // Block submission if no real coordinates — tap the map or pick from search results
+    // Require real coordinates — from map tap, place search, Plus Code, or manual entry
     if (mode === "slot" && lat === 0 && lng === 0) {
       Alert.alert(
         "Координаты не указаны",
-        "Тапните по карте, чтобы отметить место, или выберите его из результатов поиска."
+        "Введите Plus Code (например: 4WHF+GW5), выберите место из поиска или тапните на карте."
       );
       return;
     }
@@ -345,6 +399,14 @@ function AddModal({
                 />
 
                 <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Координаты (широта, долгота)</Text>
+                {manualLat && manualLng && placeSearch.query.includes("+") && tryDecodePlusCode(placeSearch.query) && (
+                  <View style={[st.plusCodeBadge, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "55" }]}>
+                    <Feather name="check-circle" size={13} color={colors.primary} />
+                    <Text style={[st.plusCodeBadgeText, { color: colors.primary }]}>
+                      Plus Code распознан: {extractPlusCode(placeSearch.query)}
+                    </Text>
+                  </View>
+                )}
                 <View style={st.coordRow}>
                   <TextInput
                     style={[st.field, st.coordField, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
@@ -1048,6 +1110,17 @@ function getStyles(colors: ReturnType<typeof useColors>) {
 
     coordRow: { flexDirection: "row", gap: 10 },
     coordField: { flex: 1 },
+    plusCodeBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      borderWidth: 1,
+      marginBottom: 8,
+    },
+    plusCodeBadgeText: { fontSize: 12, fontWeight: "600" },
     coordHint: { fontSize: 12, marginTop: 4 },
 
     // FAB
