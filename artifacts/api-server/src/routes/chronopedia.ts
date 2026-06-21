@@ -307,35 +307,40 @@ router.delete("/chronopedia/events/:id", async (req, res): Promise<void> => {
 });
 
 // ── GET /api/chronopedia/places/search?q=TEXT ────────────────────────────────
-// Proxy to Google Places Text Search API (keeps key server-side).
+// Geocoding via Nominatim (OpenStreetMap) — free, no API key required.
 router.get("/chronopedia/places/search", async (req, res): Promise<void> => {
   const q = String(req.query["q"] ?? "").trim();
   if (!q) { res.json({ places: [] }); return; }
 
-  const apiKey = process.env["GOOGLE_API_KEY"];
-  if (!apiKey) { res.json({ places: [] }); return; }
-
   try {
-    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}&key=${apiKey}&language=ru`;
-    const upstream = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&accept-language=ru&addressdetails=1`;
+    const upstream = await fetch(url, {
+      signal: AbortSignal.timeout(6000),
+      headers: { "User-Agent": "TimeNation-Chronopedia/1.0" },
+    });
     if (!upstream.ok) { res.json({ places: [] }); return; }
 
     const data = await upstream.json() as {
-      results?: {
-        place_id: string;
-        name: string;
-        formatted_address: string;
-        geometry: { location: { lat: number; lng: number } };
-      }[];
-    };
+      place_id: number;
+      display_name: string;
+      name?: string;
+      lat: string;
+      lon: string;
+      address?: { city?: string; town?: string; village?: string; country?: string };
+    }[];
 
-    const places = (data.results ?? []).slice(0, 5).map((r) => ({
-      placeId: r.place_id,
-      name: r.name,
-      address: r.formatted_address,
-      lat: r.geometry.location.lat,
-      lng: r.geometry.location.lng,
-    }));
+    const places = (data ?? []).slice(0, 5).map((r) => {
+      const city = r.address?.city ?? r.address?.town ?? r.address?.village ?? "";
+      const name = r.name ?? r.display_name.split(",")[0] ?? q;
+      const shortAddr = r.display_name.split(",").slice(0, 3).join(",");
+      return {
+        placeId: `osm_${r.place_id}`,
+        name: city ? `${name}${city !== name ? ", " + city : ""}` : name,
+        address: shortAddr,
+        lat: parseFloat(r.lat),
+        lng: parseFloat(r.lon),
+      };
+    });
 
     res.json({ places });
   } catch {

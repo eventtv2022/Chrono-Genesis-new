@@ -360,7 +360,7 @@ function AddModal({
                   <Feather name="search" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
                   <TextInput
                     style={[st.searchInput, { color: colors.foreground }]}
-                    placeholder="Поиск по Google Places…"
+                    placeholder="Адрес или Plus Code (4WHF+GW5)…"
                     placeholderTextColor={colors.mutedForeground}
                     value={placeSearch.query}
                     onChangeText={placeSearch.setQuery}
