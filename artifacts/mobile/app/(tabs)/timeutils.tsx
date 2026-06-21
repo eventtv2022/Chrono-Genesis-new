@@ -55,8 +55,13 @@ function getTimeInZone(tz: string): { time: string; date: string; offset: string
 // ── Pomodoro presets ──────────────────────────────────────────────────────────
 
 const PRESETS = [
+  { label: "12 мин", seconds: 12 * 60 },
+  { label: "24 мин", seconds: 24 * 60 },
   { label: "25 мин", seconds: 25 * 60 },
+  { label: "36 мин", seconds: 36 * 60 },
+  { label: "48 мин", seconds: 48 * 60 },
   { label: "50 мин", seconds: 50 * 60 },
+  { label: "60 мин", seconds: 60 * 60 },
   { label: "90 мин", seconds: 90 * 60 },
 ];
 
@@ -518,9 +523,10 @@ function styles(colors: ReturnType<typeof useColors>) {
     clockDate: { fontSize: 12, color: colors.mutedForeground, marginTop: 2 },
 
     // Timer
-    presetRow: { flexDirection: "row", gap: 8 },
+    presetRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" },
     presetBtn: {
-      flex: 1,
+      minWidth: 68,
+      paddingHorizontal: 10,
       paddingVertical: 10,
       borderRadius: 10,
       backgroundColor: colors.card,
