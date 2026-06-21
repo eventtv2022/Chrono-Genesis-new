@@ -248,9 +248,17 @@ function AddModal({
     if (mode === "slot" && !locationName.trim()) { Alert.alert("Ошибка", "Введите название места"); return; }
     if (mode === "slot" && !timeMarker.trim()) { Alert.alert("Ошибка", "Введите дату/время"); return; }
 
-    // Use entered coordinates or fall back to 0,0 (point will appear at map origin)
     const lat = parseFloat(manualLat) || 0;
     const lng = parseFloat(manualLng) || 0;
+
+    // Block submission if no real coordinates — tap the map or pick from search results
+    if (mode === "slot" && lat === 0 && lng === 0) {
+      Alert.alert(
+        "Координаты не указаны",
+        "Тапните по карте, чтобы отметить место, или выберите его из результатов поиска."
+      );
+      return;
+    }
 
     onSubmit({
       locationName: mode === "slot" ? locationName.trim() : undefined,

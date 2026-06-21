@@ -45,6 +45,9 @@ function updateMarkers(slots,myId,selId){
   Object.values(markers).forEach(function(m){m.remove();});
   markers={};
   (slots||[]).forEach(function(s){
+    // Skip null-island (0,0) — coordinates were not geocoded
+    if(!s.geoLat&&!s.geoLng){return;}
+    if(s.geoLat===0&&s.geoLng===0){return;}
     var isMine=!!s.hasMyEvent;
     var isSel=s.id===selectedSlotId;
     var m=L.marker([s.geoLat,s.geoLng],{icon:makeIcon(s.eventCount||0,isMine,isSel)}).addTo(map);
@@ -77,6 +80,7 @@ window.addEventListener('message',function(e){
   }catch(x){}
 });
 setTimeout(function(){send({type:'ready'});},400);
+window.onerror=function(msg,src,line,col,err){send({type:'jsError',message:String(msg),source:String(src),line:line,col:col,stack:err?String(err.stack):''}); return true;};
 </script>
 </body>
 </html>`;

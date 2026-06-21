@@ -6,7 +6,7 @@ import {
   chronopediaEventsTable,
   citizensTable,
 } from "@workspace/db";
-import { eq, ne, desc, and, sql } from "drizzle-orm";
+import { eq, ne, desc, and, sql, or } from "drizzle-orm";
 
 const router = Router();
 
@@ -65,6 +65,12 @@ router.get("/chronopedia/slots", async (req, res): Promise<void> => {
     .leftJoin(
       chronopediaEventsTable,
       eq(chronopediaEventsTable.slotId, chronopediaSlotsTable.id)
+    )
+    .where(
+      or(
+        sql`${chronopediaSlotsTable.geoLat} != 0`,
+        sql`${chronopediaSlotsTable.geoLng} != 0`
+      )
     )
     .groupBy(chronopediaSlotsTable.id)
     .orderBy(desc(chronopediaSlotsTable.createdAt))

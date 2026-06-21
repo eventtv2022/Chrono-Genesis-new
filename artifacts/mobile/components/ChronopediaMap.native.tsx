@@ -77,6 +77,8 @@ const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
             slotId?: number;
             lat?: number;
             lng?: number;
+            message?: string;
+            stack?: string;
           };
           if (msg.type === "ready") {
             setMapReady(true);
@@ -85,6 +87,8 @@ const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
             onSlotClick(msg.slotId!);
           } else if (msg.type === "mapClick") {
             onMapClick(msg.lat!, msg.lng!);
+          } else if (msg.type === "jsError") {
+            console.warn("[ChronopediaMap JS]", msg.message, "| stack:", msg.stack);
           }
         } catch { /* ignore */ }
       },
