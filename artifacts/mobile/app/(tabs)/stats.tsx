@@ -249,6 +249,14 @@ export default function StatsScreen() {
               <Text style={styles.topupBtnText}>Пополнить</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity
+            style={[styles.topupBtn, { backgroundColor: colors.muted }]}
+            onPress={() => router.push("/time-audit")}
+            activeOpacity={0.8}
+          >
+            <Feather name="cpu" size={13} color={colors.primary} />
+            <Text style={[styles.topupBtnText, { color: colors.primary }]}>Аудит</Text>
+          </TouchableOpacity>
         </View>
       </View>
 

@@ -1,10 +1,11 @@
-import { Router, type IRouter } from "express";
-import { eq, sql } from "drizzle-orm";
+import { Router, type IRouter, type Request, type Response } from "express";
+import { eq, sql, desc } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@workspace/db";
-import { citizensTable, timelineAnchorsTable } from "@workspace/db";
+import { citizensTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable } from "@workspace/db";
 import {
   UpdateCitizenBody,
 } from "@workspace/api-zod";
@@ -771,6 +772,100 @@ router.post("/citizens/:id/age-verify", async (req, res): Promise<void> => {
 
   req.log.info({ citizenId: id }, "Age verified (18+ — COPPA/DSA)");
   res.json({ ok: true, ageVerified: true });
+});
+
+// ── POST /citizens/audit-task — гражданский ИИ-аудит (без gov-пароля) ─────────
+
+async function getAuditorPrompt(): Promise<string> {
+  const [row] = await db
+    .select()
+    .from(aiSystemPromptsTable)
+    .where(eq(aiSystemPromptsTable.module, "time_auditor"))
+    .limit(1);
+  return row?.promptText ?? `Ты — Главный Аудитор Времени TimeNation. Оцени задачу в минутах (1 мин = 1 Дармин).
+Базовые ориентиры: Разработка: простой скрипт 60 мин, багфикс 30–90 мин, архитектура 240+ мин. Дизайн: баннер 45 мин, иллюстрация 120 мин, UI-экран 90 мин. Тексты: 1000 знаков 20 мин, перевод страницы 30 мин.
+Верни строго JSON: { "estimated_minutes": number, "confidence_score": number, "complexity_level": "low"|"medium"|"high", "justification": "строка" }`;
+}
+
+router.post("/citizens/audit-task", async (req: Request, res: Response) => {
+  const bodySchema = z.object({
+    taskDescription: z.string().min(5),
+    citizenId: z.number().int().optional(),
+  });
+  const parsed = bodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Неверные данные" });
+    return;
+  }
+  const { taskDescription, citizenId } = parsed.data;
+
+  const apiKey = process.env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    res.status(503).json({ error: "GOOGLE_API_KEY не настроен" });
+    return;
+  }
+
+  try {
+    const systemPrompt = await getAuditorPrompt();
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstruction: systemPrompt });
+    const result = await model.generateContent(`Задача для аудита:\n${taskDescription}`);
+    const raw = result.response.text().trim();
+    const clean = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+
+    let ai: { estimated_minutes: number; confidence_score?: number; complexity_level: string; justification: string };
+    try { ai = JSON.parse(clean) as typeof ai; } catch {
+      res.status(502).json({ error: "ИИ вернул неверный формат" });
+      return;
+    }
+
+    const [row] = await db.insert(timeAuditLogsTable).values({
+      citizenId: citizenId ?? null,
+      taskDescription,
+      estimatedMinutes: ai.estimated_minutes,
+      complexityLevel: ai.complexity_level,
+      justification: ai.justification,
+      requiresCalibration: 0,
+    }).returning();
+
+    res.json({ log: row, confidenceScore: ai.confidence_score ?? null });
+  } catch (err) {
+    req.log.error({ err }, "citizen audit-task error");
+    res.status(500).json({ error: "Ошибка вызова ИИ-аудитора" });
+  }
+});
+
+// GET /citizens/:id/audit-logs — история аудитов гражданина
+router.get("/:id/audit-logs", async (req: Request, res: Response) => {
+  const id = parseInt(req.params["id"] as string);
+  if (isNaN(id)) { res.status(400).json({ error: "Неверный ID" }); return; }
+  const logs = await db
+    .select()
+    .from(timeAuditLogsTable)
+    .where(eq(timeAuditLogsTable.citizenId, id))
+    .orderBy(desc(timeAuditLogsTable.createdAt))
+    .limit(20);
+  res.json({ logs });
+});
+
+// PATCH /citizens/audit-logs/:logId/actual — записать фактическое время
+router.patch("/audit-logs/:logId/actual", async (req: Request, res: Response) => {
+  const logId = parseInt(req.params["logId"] as string);
+  if (isNaN(logId)) { res.status(400).json({ error: "Неверный ID" }); return; }
+  const { actualMinutes } = z.object({ actualMinutes: z.number().positive() }).parse(req.body);
+
+  const [existing] = await db.select().from(timeAuditLogsTable)
+    .where(eq(timeAuditLogsTable.id, logId)).limit(1);
+  if (!existing) { res.status(404).json({ error: "Запись не найдена" }); return; }
+
+  const deviation = Math.abs((actualMinutes - existing.estimatedMinutes) / existing.estimatedMinutes * 100);
+  const [updated] = await db.update(timeAuditLogsTable).set({
+    actualMinutes,
+    deviationPercent: deviation,
+    requiresCalibration: deviation > 20 ? 1 : 0,
+  }).where(eq(timeAuditLogsTable.id, logId)).returning();
+
+  res.json({ log: updated });
 });
 
 export default router;
