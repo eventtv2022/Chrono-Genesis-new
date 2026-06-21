@@ -171,6 +171,8 @@ export default function TimeUtilsScreen() {
   const [alarmDays, setAlarmDays] = useState<Set<number>>(new Set([1, 2, 3, 4, 5]));
   const [alarmActive, setAlarmActive] = useState(false);
   const alarmRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Prevent firing more than once per minute
+  const lastFiredKey = useRef<string>("");
 
   const toggleDay = (d: number) => {
     setAlarmDays((prev) => {
@@ -180,29 +182,47 @@ export default function TimeUtilsScreen() {
     });
   };
 
-  // Check alarm every 30s
+  /** Returns {h, m, weekday} in Asia/Nicosia timezone — robust on all platforms. */
+  const getNicosiaHMS = (): { h: number; m: number; weekday: number } => {
+    const now = new Date();
+    // Use 2-digit hour (always 00–23), month, day, year to derive weekday via Date()
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Nicosia",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+    const get = (t: string) => parseInt(parts.find((p) => p.type === t)?.value ?? "0", 10);
+    let h = get("hour");
+    // hour12:false can return 24 for midnight on some platforms — normalise
+    if (h === 24) h = 0;
+    const m = get("minute");
+    // Derive weekday from calendar date (0=Sun … 6=Sat)
+    const weekday = new Date(get("year"), get("month") - 1, get("day")).getDay();
+    return { h, m, weekday };
+  };
+
+  // Check alarm every 10 s — small enough to catch any minute
   useEffect(() => {
     if (!alarmActive) return;
     const check = () => {
-      const now = new Date();
-      const nowInNicosia = new Intl.DateTimeFormat("en-US", {
-        timeZone: "Asia/Nicosia",
-        hour: "numeric", minute: "numeric", weekday: "short", hour12: false,
-      }).formatToParts(now);
-      const h = parseInt(nowInNicosia.find((p) => p.type === "hour")?.value ?? "0", 10);
-      const m = parseInt(nowInNicosia.find((p) => p.type === "minute")?.value ?? "0", 10);
-      const dayStr = nowInNicosia.find((p) => p.type === "weekday")?.value ?? "";
-      const dayIdx = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(dayStr);
-      if (h === alarmHour && m === alarmMinute && alarmDays.has(dayIdx)) {
+      const { h, m, weekday } = getNicosiaHMS();
+      const fireKey = `${h}:${m}:${weekday}`;
+      if (h === alarmHour && m === alarmMinute && alarmDays.has(weekday) && lastFiredKey.current !== fireKey) {
+        lastFiredKey.current = fireKey;
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         Alert.alert(
           "⏰ Суверенный Будильник",
-          `Доброе утро, ${citizen?.name ?? "Гражданин"}! Время ${String(alarmHour).padStart(2, "0")}:${String(alarmMinute).padStart(2, "0")} по TimeNation (Фамагуста).`,
+          `Доброе утро, ${citizen?.name ?? "Гражданин"}!\n\nВремя ${String(alarmHour).padStart(2, "0")}:${String(alarmMinute).padStart(2, "0")} по TimeNation (Фамагуста).`,
           [{ text: "Проснуться в TimeNation 🌅" }]
         );
       }
     };
-    alarmRef.current = setInterval(check, 30000);
+    check(); // fire immediately on activation — catches already-matching time
+    alarmRef.current = setInterval(check, 10_000);
     return () => { if (alarmRef.current) clearInterval(alarmRef.current); };
   }, [alarmActive, alarmHour, alarmMinute, alarmDays, citizen?.name]);
 
