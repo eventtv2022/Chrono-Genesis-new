@@ -885,7 +885,7 @@ router.post("/citizens/audit-task", async (req: Request, res: Response) => {
   try {
     const systemPrompt = await getAuditorPrompt();
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstruction: systemPrompt });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite", systemInstruction: systemPrompt });
     const result = await model.generateContent(`Задача для аудита:\n${taskDescription}`);
     const raw = result.response.text().trim();
     const clean = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();

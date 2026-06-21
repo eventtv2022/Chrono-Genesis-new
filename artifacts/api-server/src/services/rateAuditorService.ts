@@ -49,7 +49,7 @@ function parseJson<T>(raw: string): T {
 
 export async function auditCitizenRate(skills: string): Promise<RateAuditResult> {
   const genAI = getGenAI();
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstruction: SYSTEM_PROMPT });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite", systemInstruction: SYSTEM_PROMPT });
   const result = await model.generateContent(`Профиль гражданина:\n${skills}`);
   return parseJson<RateAuditResult>(result.response.text().trim());
 }
@@ -60,7 +60,7 @@ export async function adjustRateByReviews(
   reviews: Array<{ rating: number; reviewText: string; authorId: number }>
 ): Promise<ReviewAdjustResult> {
   const genAI = getGenAI();
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstruction: REVIEW_SYSTEM_PROMPT });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite", systemInstruction: REVIEW_SYSTEM_PROMPT });
 
   const reviewsText = reviews
     .map((r, i) => `Отзыв ${i + 1}: оценка ${r.rating}/5 — "${r.reviewText}"`)

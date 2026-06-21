@@ -71,7 +71,7 @@ export async function generateManifesto(
   try {
     const manifesto = await withRetry(async () => {
       const model = client.getGenerativeModel({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.0-flash-lite",
         systemInstruction: SYSTEM_PROMPT,
         generationConfig: {
           maxOutputTokens: 512,

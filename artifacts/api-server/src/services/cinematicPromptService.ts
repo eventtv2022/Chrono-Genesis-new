@@ -71,7 +71,7 @@ export async function generateCinematicPrompt(
 
   try {
     const model = client.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.0-flash-lite",
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: {
         maxOutputTokens: 80,
@@ -150,7 +150,7 @@ export async function generateCinematicPromptTiered(
 
   try {
     const model = client.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.0-flash-lite",
       systemInstruction,
       generationConfig: {
         maxOutputTokens: tier === "apex" ? 120 : tier === "half" ? 100 : 80,
@@ -233,7 +233,7 @@ export async function generateMultiScenePrompts(
 
   try {
     const model = client.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.0-flash-lite",
       systemInstruction: MULTI_SCENE_SYSTEM_PROMPT,
       generationConfig: { maxOutputTokens: 300, temperature: 0.95, topP: 0.95 },
     });
