@@ -201,6 +201,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
   } | null>(null);
   const [creating, setCreating] = useState(false);
   const [recipientError, setRecipientError] = useState(false);
+  const [cancelConfirmId, setCancelConfirmId] = useState<number | null>(null);
 
   // Proof modal
   const [proofDeal, setProofDeal] = useState<Deal | null>(null);
@@ -388,28 +389,13 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
   };
 
   const handleCancel = async (deal: Deal) => {
-    const isAccepted = deal.status === "accepted";
-    Alert.alert(
-      "Отменить сделку",
-      isAccepted
-        ? `Исполнитель уже принял задачу. При отмене ${deal.amount} Д вернутся на ваш баланс, а исполнитель потеряет задание.`
-        : `Дармины (${deal.amount} Д) вернутся на ваш баланс.`,
-      [
-        { text: "Назад", style: "cancel" },
-        {
-          text: "Отменить сделку",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await apiPost(`/api/deals/${deal.id}/cancel`, { citizenId: citizen.id });
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              await loadDeals();
-              refreshCitizen();
-            } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
-          },
-        },
-      ]
-    );
+    try {
+      await apiPost(`/api/deals/${deal.id}/cancel`, { citizenId: citizen.id });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setCancelConfirmId(null);
+      await loadDeals();
+      void refreshCitizen();
+    } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
   };
 
   const handleDisputeSubmit = async () => {
@@ -498,10 +484,34 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
               <Text style={s.actionBtnText}>Апелляция в Минтруд</Text>
             </TouchableOpacity>
           )}
-          {canCancel && (
-            <TouchableOpacity style={[s.actionBtn, s.actionBtnGray]} onPress={() => handleCancel(deal)}>
-              <Text style={s.actionBtnText}>Отменить</Text>
+          {canCancel && cancelConfirmId !== deal.id && (
+            <TouchableOpacity style={[s.actionBtn, s.actionBtnGray]} onPress={() => setCancelConfirmId(deal.id)}>
+              <Text style={s.actionBtnText}>Отменить сделку</Text>
             </TouchableOpacity>
+          )}
+          {canCancel && cancelConfirmId === deal.id && (
+            <View style={{ width: "100%", backgroundColor: "#E0525222", borderRadius: 10, padding: 10, marginTop: 4, gap: 8 }}>
+              <Text style={{ color: "#E05252", fontSize: 12, fontFamily: "Inter_600SemiBold", textAlign: "center" }}>
+                {deal.status === "accepted"
+                  ? `Исполнитель уже принял задачу. Отменить и вернуть ${deal.amount} Д?`
+                  : `Вернуть ${deal.amount} Д на баланс и отменить сделку?`}
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <TouchableOpacity
+                  style={[s.actionBtn, s.actionBtnGray, { flex: 1, marginTop: 0 }]}
+                  onPress={() => setCancelConfirmId(null)}
+                >
+                  <Text style={s.actionBtnText}>Нет, оставить</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.actionBtn, s.actionBtnRed, { flex: 1, marginTop: 0 }]}
+                  onPress={() => handleCancel(deal)}
+                >
+                  <Feather name="x-circle" size={13} color="#fff" />
+                  <Text style={s.actionBtnText}>Да, отменить</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
         </View>
       </View>
