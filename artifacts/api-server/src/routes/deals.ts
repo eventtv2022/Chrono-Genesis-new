@@ -357,7 +357,7 @@ router.post("/deals/:id/cancel", async (req, res): Promise<void> => {
 
   const [deal] = await db.select().from(dealsTable).where(eq(dealsTable.id, id)).limit(1);
   if (!deal) { res.status(404).json({ error: "Сделка не найдена" }); return; }
-  if (!["open", "declined"].includes(deal.status)) {
+  if (!["open", "accepted", "declined"].includes(deal.status)) {
     res.status(409).json({ error: `Нельзя отменить сделку в статусе «${deal.status}»` });
     return;
   }

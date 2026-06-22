@@ -175,13 +175,17 @@ const rateStyles = StyleSheet.create({
 });
 
 // ─── Escrow Module ────────────────────────────────────────────────────────────
-function EscrowModule({ citizen, citizens, colors }: {
+function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
   citizen: NonNullable<ReturnType<typeof useCitizen>["citizen"]>;
   citizens: Citizen[];
   colors: ReturnType<typeof useColors>;
+  refreshCitizen: () => Promise<void>;
 }) {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Refresh citizen balance when module is opened so escrow guard has fresh data
+  useEffect(() => { void refreshCitizen(); }, []);
 
   // Create deal modal — two-step flow
   const [showCreate, setShowCreate] = useState(false);
@@ -278,11 +282,13 @@ function EscrowModule({ citizen, citizens, colors }: {
     if (description.trim().length < 5) { Alert.alert("Ошибка", "ТЗ должно быть не менее 5 символов"); return; }
 
     // Client-side balance guard (-1 for the founding minute)
-    if (citizen.balanceMinutes - 1 < amt) {
+    // Use Number() to guard against stale string values from context
+    const available = Number(citizen.balanceMinutes) - 1;
+    if (available < amt) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(
         "Недостаточно Дарминов",
-        `Недостаточно Дарминов на Вашем счету для совершения сделки.\n\nДоступно: ${citizen.balanceMinutes - 1} Д\nНеобходимо: ${amt} Д`,
+        `Недостаточно Дарминов на Вашем счету для совершения сделки.\n\nДоступно: ${available.toFixed(2)} Д\nНеобходимо: ${amt} Д`,
         [{ text: "Понятно" }]
       );
       return;
@@ -293,7 +299,7 @@ function EscrowModule({ citizen, citizens, colors }: {
       await apiPost("/api/deals", { senderId: citizen.id, receiverId: selRecipient.id, amount: amt, description: description.trim() });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       resetCreateModal();
-      await loadDeals();
+      await Promise.all([loadDeals(), refreshCitizen()]);
     } catch (e: unknown) {
       const msg = (e as Error).message;
       if (msg.toLowerCase().includes("недостаточно")) {
@@ -369,9 +375,12 @@ function EscrowModule({ citizen, citizens, colors }: {
   };
 
   const handleCancel = async (deal: Deal) => {
+    const isAccepted = deal.status === "accepted";
     Alert.alert(
       "Отменить сделку",
-      `Дармины (${deal.amount} Д) вернутся на ваш баланс.`,
+      isAccepted
+        ? `Исполнитель уже принял задачу. При отмене ${deal.amount} Д вернутся на ваш баланс, а исполнитель потеряет задание.`
+        : `Дармины (${deal.amount} Д) вернутся на ваш баланс.`,
       [
         { text: "Назад", style: "cancel" },
         {
@@ -382,6 +391,7 @@ function EscrowModule({ citizen, citizens, colors }: {
               await apiPost(`/api/deals/${deal.id}/cancel`, { citizenId: citizen.id });
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               await loadDeals();
+              refreshCitizen();
             } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
           },
         },
@@ -416,7 +426,7 @@ function EscrowModule({ citizen, citizens, colors }: {
     const canProof = !isSender && deal.status === "accepted" && deal.receiverId === citizen.id;
     const canComplete = isSender && deal.status === "proof_submitted";
     const canDecline = isSender && deal.status === "proof_submitted";
-    const canCancel = isSender && ["open", "declined"].includes(deal.status);
+    const canCancel = isSender && ["open", "accepted", "declined"].includes(deal.status);
     const canDispute = ["accepted", "proof_submitted", "declined"].includes(deal.status) &&
       (deal.senderId === citizen.id || deal.receiverId === citizen.id) &&
       deal.status !== "disputed";
@@ -1109,7 +1119,7 @@ export default function TimerScreen() {
 
       {/* ── Escrow mode ────────────────────────────────────────────────────── */}
       {mode === "escrow" && citizen && (
-        <EscrowModule citizen={citizen} citizens={others} colors={colors} />
+        <EscrowModule citizen={citizen} citizens={others} colors={colors} refreshCitizen={refreshCitizen} />
       )}
       {mode === "escrow" && !citizen && (
         <View style={styles.emptyState}>
