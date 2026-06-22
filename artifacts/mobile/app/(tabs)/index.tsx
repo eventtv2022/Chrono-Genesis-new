@@ -24,6 +24,7 @@ import { LogoBrand } from "@/components/LogoBrand";
 import { AnimatedHourglass } from "@/components/AnimatedHourglass";
 import { ContextualGuideModal } from "@/components/ContextualGuideModal";
 import { useContextualGuide } from "@/hooks/useContextualGuide";
+import { DiscussionModal } from "@/components/DiscussionModal";
 
 const BASE_URL = getBaseUrl();
 
@@ -64,6 +65,9 @@ interface Deal {
   proofText: string | null;
   disputeClaimText: string | null;
   aiVerdict: string | null;
+  timerStatus: string;
+  totalTrackedMinutes: number;
+  timerStartedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -202,6 +206,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
   const [creating, setCreating] = useState(false);
   const [recipientError, setRecipientError] = useState(false);
   const [cancelConfirmId, setCancelConfirmId] = useState<number | null>(null);
+  const [chatDeal, setChatDeal] = useState<Deal | null>(null);
 
   // Proof modal
   const [proofDeal, setProofDeal] = useState<Deal | null>(null);
@@ -457,6 +462,16 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
         ) : null}
 
         <View style={s.dealActions}>
+          {(isSender || deal.receiverId === citizen.id) && !["cancelled", "completed"].includes(deal.status) && (
+            <TouchableOpacity
+              style={[s.actionBtn, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary + "66", marginBottom: 4 }]}
+              onPress={() => setChatDeal(deal)}
+              activeOpacity={0.8}
+            >
+              <Feather name="message-circle" size={13} color={colors.primary} />
+              <Text style={[s.actionBtnText, { color: colors.primary }]}>Обсудить{deal.totalTrackedMinutes > 0 ? ` · ${deal.totalTrackedMinutes} мин` : ""}</Text>
+            </TouchableOpacity>
+          )}
           {canAccept && (
             <TouchableOpacity style={[s.actionBtn, s.actionBtnBlue]} onPress={() => handleAccept(deal)}>
               <Text style={s.actionBtnText}>Принять задачу</Text>
@@ -547,6 +562,22 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
           showsVerticalScrollIndicator={false}
           onRefresh={loadDeals}
           refreshing={loading}
+        />
+      )}
+
+      {/* ── Discussion / Chat Modal ──────────────────────────────────────── */}
+      {chatDeal && (
+        <DiscussionModal
+          visible={chatDeal !== null}
+          deal={chatDeal}
+          citizenId={citizen.id}
+          citizenName={citizen.name}
+          colors={colors}
+          onClose={() => setChatDeal(null)}
+          onDealUpdate={(updated) => {
+            setDeals((prev) => prev.map((d) => d.id === updated.id ? { ...d, ...updated } : d));
+            setChatDeal((prev) => prev && prev.id === updated.id ? { ...prev, ...updated } : prev);
+          }}
         />
       )}
 

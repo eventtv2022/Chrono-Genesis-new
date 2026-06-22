@@ -16,6 +16,10 @@ export const dealsTable = pgTable("deals", {
   proofText: text("proof_text"),                 // receiver-supplied text description
   disputeClaimText: text("dispute_claim_text"),  // claimant's description of the dispute
   aiVerdict: text("ai_verdict"),                  // Gemini arbitration verdict
+  // Work-timer fields (managed by receiver inside DiscussionModal)
+  timerStatus: text("timer_status").notNull().default("stopped"), // stopped | running | paused | completed
+  totalTrackedMinutes: integer("total_tracked_minutes").notNull().default(0),
+  timerStartedAt: timestamp("timer_started_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

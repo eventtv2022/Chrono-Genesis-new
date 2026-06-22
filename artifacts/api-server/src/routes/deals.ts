@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { dealsTable, citizensTable } from "@workspace/db";
-import { eq, or } from "drizzle-orm";
+import { dealsTable, citizensTable, chatMessagesTable } from "@workspace/db";
+import { eq, or, asc } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -477,6 +477,216 @@ ${claimText}
   }
 
   res.json(updated);
+});
+
+// ─── Chat + Timer validation schemas ─────────────────────────────────────────
+const ChatMessageBody = z.object({
+  senderId: z.number().int().positive(),
+  messageText: z.string().max(2000).optional(),
+  imageUrl: z.string().max(600000).optional(), // base64 data URL, ~450KB image
+});
+
+const TimerActorBody = z.object({
+  citizenId: z.number().int().positive(),
+});
+
+// ─── GET /api/deals/:id/chat ─────────────────────────────────────────────────
+// Returns chat messages with sender name, ordered by createdAt asc
+router.get("/deals/:id/chat", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const messages = await db
+    .select({
+      id: chatMessagesTable.id,
+      dealId: chatMessagesTable.dealId,
+      senderId: chatMessagesTable.senderId,
+      senderName: citizensTable.name,
+      messageText: chatMessagesTable.messageText,
+      imageUrl: chatMessagesTable.imageUrl,
+      createdAt: chatMessagesTable.createdAt,
+    })
+    .from(chatMessagesTable)
+    .leftJoin(citizensTable, eq(chatMessagesTable.senderId, citizensTable.id))
+    .where(eq(chatMessagesTable.dealId, id))
+    .orderBy(asc(chatMessagesTable.createdAt));
+
+  res.json({ messages });
+});
+
+// ─── POST /api/deals/:id/chat ─────────────────────────────────────────────────
+// Send a chat message (text and/or image). Either party can message.
+router.post("/deals/:id/chat", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = ChatMessageBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const { senderId, messageText, imageUrl } = parsed.data;
+  if (!messageText && !imageUrl) {
+    res.status(400).json({ error: "Нужен текст или изображение" }); return;
+  }
+
+  const [deal] = await db.select().from(dealsTable).where(eq(dealsTable.id, id)).limit(1);
+  if (!deal) { res.status(404).json({ error: "Сделка не найдена" }); return; }
+  if (deal.senderId !== senderId && deal.receiverId !== senderId) {
+    res.status(403).json({ error: "Только участники сделки могут отправлять сообщения" }); return;
+  }
+
+  const [msg] = await db
+    .insert(chatMessagesTable)
+    .values({ dealId: id, senderId, messageText: messageText ?? null, imageUrl: imageUrl ?? null })
+    .returning();
+
+  // Notify the other party via Telegram
+  const otherId = senderId === deal.senderId ? deal.receiverId : deal.senderId;
+  if (otherId) {
+    const [sender] = await db.select({ name: citizensTable.name }).from(citizensTable).where(eq(citizensTable.id, senderId)).limit(1);
+    void sendTransactionNotification(
+      otherId,
+      `💬 *Новое сообщение по Сделке #${id}*\n👤 ${sender?.name ?? "Участник"}: ${messageText ? `_${messageText.slice(0, 200)}_` : "📎 фото"}`,
+    );
+  }
+
+  res.status(201).json(msg);
+});
+
+// ─── POST /api/deals/:id/timer/start ─────────────────────────────────────────
+// Receiver starts work timer.
+router.post("/deals/:id/timer/start", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = TimerActorBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "citizenId обязателен" }); return; }
+
+  const [deal] = await db.select().from(dealsTable).where(eq(dealsTable.id, id)).limit(1);
+  if (!deal) { res.status(404).json({ error: "Сделка не найдена" }); return; }
+  if (deal.receiverId !== parsed.data.citizenId) {
+    res.status(403).json({ error: "Только исполнитель управляет таймером" }); return;
+  }
+  if (deal.timerStatus === "running") {
+    res.status(409).json({ error: "Таймер уже запущен" }); return;
+  }
+  if (deal.timerStatus === "completed") {
+    res.status(409).json({ error: "Работа уже завершена" }); return;
+  }
+
+  const [updated] = await db
+    .update(dealsTable)
+    .set({ timerStatus: "running", timerStartedAt: new Date(), updatedAt: new Date() })
+    .where(eq(dealsTable.id, id))
+    .returning();
+
+  req.log.info({ dealId: id, citizenId: parsed.data.citizenId }, "Work timer started");
+  res.json(updated);
+});
+
+// ─── POST /api/deals/:id/timer/pause ─────────────────────────────────────────
+// Receiver pauses timer. Calculates elapsed minutes and accumulates.
+router.post("/deals/:id/timer/pause", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = TimerActorBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "citizenId обязателен" }); return; }
+
+  const [deal] = await db.select().from(dealsTable).where(eq(dealsTable.id, id)).limit(1);
+  if (!deal) { res.status(404).json({ error: "Сделка не найдена" }); return; }
+  if (deal.receiverId !== parsed.data.citizenId) {
+    res.status(403).json({ error: "Только исполнитель управляет таймером" }); return;
+  }
+  if (deal.timerStatus !== "running") {
+    res.status(409).json({ error: "Таймер не запущен" }); return;
+  }
+
+  const now = new Date();
+  const elapsed = deal.timerStartedAt
+    ? Math.floor((now.getTime() - deal.timerStartedAt.getTime()) / 60000)
+    : 0;
+  const newTotal = deal.totalTrackedMinutes + elapsed;
+
+  const [updated] = await db
+    .update(dealsTable)
+    .set({ timerStatus: "paused", totalTrackedMinutes: newTotal, timerStartedAt: null, updatedAt: now })
+    .where(eq(dealsTable.id, id))
+    .returning();
+
+  req.log.info({ dealId: id, elapsed, newTotal }, "Work timer paused");
+  res.json(updated);
+});
+
+// ─── POST /api/deals/:id/timer/complete ──────────────────────────────────────
+// Receiver finishes work. Calculates deviation via Gemini.
+router.post("/deals/:id/timer/complete", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = TimerActorBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "citizenId обязателен" }); return; }
+
+  const [deal] = await db.select().from(dealsTable).where(eq(dealsTable.id, id)).limit(1);
+  if (!deal) { res.status(404).json({ error: "Сделка не найдена" }); return; }
+  if (deal.receiverId !== parsed.data.citizenId) {
+    res.status(403).json({ error: "Только исполнитель управляет таймером" }); return;
+  }
+  if (deal.timerStatus === "completed") {
+    res.status(409).json({ error: "Работа уже завершена" }); return;
+  }
+
+  const now = new Date();
+  let newTotal = deal.totalTrackedMinutes;
+  if (deal.timerStatus === "running" && deal.timerStartedAt) {
+    newTotal += Math.floor((now.getTime() - deal.timerStartedAt.getTime()) / 60000);
+  }
+
+  // AI deviation analysis
+  let aiDeviation: string | null = null;
+  const apiKey = process.env["GOOGLE_API_KEY"];
+  if (apiKey) {
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const plannedMin = deal.amount;
+      const actualMin = newTotal;
+      const deviationPct = plannedMin > 0
+        ? Math.round(((actualMin - plannedMin) / plannedMin) * 100)
+        : 0;
+      const prompt = `Ты ИИ-аудитор временного банка TimeNation. Проанализируй отклонение хронометража.
+
+Задача: "${deal.description}"
+Плановое время (из эскроу): ${plannedMin} Д (минут)
+Фактическое время (трекер): ${actualMin} Д (минут)
+Отклонение: ${deviationPct > 0 ? "+" : ""}${deviationPct}%
+
+Дай краткий (2-3 предложения) анализ: почему могло возникнуть отклонение, как это влияет на калибровку будущих оценок аналогичных задач. Без лишних слов.`;
+      const result = await model.generateContent(prompt);
+      aiDeviation = result.response.text().trim();
+    } catch (e) {
+      logger.error({ err: e }, "Timer deviation AI failed");
+    }
+  }
+
+  const [updated] = await db
+    .update(dealsTable)
+    .set({ timerStatus: "completed", totalTrackedMinutes: newTotal, timerStartedAt: null, updatedAt: now })
+    .where(eq(dealsTable.id, id))
+    .returning();
+
+  req.log.info({ dealId: id, planned: deal.amount, actual: newTotal }, "Work timer completed");
+
+  // Post AI analysis as a system message in chat
+  if (aiDeviation) {
+    await db.insert(chatMessagesTable).values({
+      dealId: id,
+      senderId: parsed.data.citizenId,
+      messageText: `🤖 *ИИ-Хронометраж:* ${aiDeviation}\n\n📊 План: ${deal.amount} Д · Факт: ${newTotal} Д`,
+      imageUrl: null,
+    });
+  }
+
+  res.json({ deal: updated, aiDeviation, actualMinutes: newTotal });
 });
 
 export default router;

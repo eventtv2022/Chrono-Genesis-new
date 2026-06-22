@@ -8,6 +8,7 @@ export * from "./nationalEmbassies";
 export * from "./tvSlots";
 export * from "./tvCapsules";
 export * from "./deals";
+export * from "./chatMessages";
 export * from "./timelineCapsules";
 export * from "./chronopediaSlots";
 export * from "./chronopediaEvents";
