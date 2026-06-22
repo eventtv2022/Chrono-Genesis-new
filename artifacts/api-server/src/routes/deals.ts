@@ -11,6 +11,10 @@ const router: IRouter = Router();
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
+const AuditBody = z.object({
+  description: z.string().min(5).max(2000),
+});
+
 const CreateDealBody = z.object({
   senderId: z.number().int().positive(),
   receiverId: z.number().int().positive().optional(),
@@ -31,6 +35,67 @@ const ActorBody = z.object({
 const DisputeBody = z.object({
   citizenId: z.number().int().positive(),
   claimText: z.string().min(10).max(2000).optional(),
+});
+
+// ─── POST /api/deals/audit ────────────────────────────────────────────────────
+// ИИ-аудитор: анализирует описание задачи и предлагает справедливую сумму в Д.
+router.post("/deals/audit", async (req, res): Promise<void> => {
+  const parsed = AuditBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Описание задачи обязательно (мин. 5 символов)" }); return; }
+
+  const apiKey = process.env["GOOGLE_API_KEY"];
+  if (!apiKey) { res.status(503).json({ error: "ИИ-аудитор временно недоступен" }); return; }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    const prompt = `Ты — ИИ-Аудитор Министерства Труда суверенного государства TimeNation.
+Валюта государства — Дармины (Д). 1 Дармин = 1 минута реального рабочего времени.
+
+Задача гражданина:
+${parsed.data.description}
+
+Твоё задание — объективно оценить трудозатраты и вернуть ТОЛЬКО JSON без markdown-блоков.
+
+Формат ответа (строго JSON):
+{
+  "suggestedAmount": <целое число Д от 1 до 1000>,
+  "summary": "<краткая оценка задачи 1-2 предложения>",
+  "breakdown": [
+    "<действие 1> — <N Д>",
+    "<действие 2> — <N Д>",
+    ...
+  ]
+}
+
+Правила:
+- 1 Дармин = 1 минута. Простая задача ~5-15 Д. Средняя ~30-60 Д. Сложная ~100-500 Д.
+- Разбей на 2-5 конкретных этапов с указанием минут.
+- Сумма breakdown должна равняться suggestedAmount.
+- Отвечай на русском языке.`;
+
+    const result = await model.generateContent(prompt);
+    const rawText = result.response.text().trim();
+
+    // Strip possible markdown fences
+    const jsonText = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    const audit = JSON.parse(jsonText) as {
+      suggestedAmount: number;
+      summary: string;
+      breakdown: string[];
+    };
+
+    if (!Number.isInteger(audit.suggestedAmount) || audit.suggestedAmount < 1) {
+      throw new Error("Invalid suggestedAmount from AI");
+    }
+
+    req.log.info({ description: parsed.data.description.slice(0, 80), suggestedAmount: audit.suggestedAmount }, "Deal audit completed");
+    res.json(audit);
+  } catch (err) {
+    req.log.error({ err }, "Deal audit failed");
+    res.status(500).json({ error: "ИИ-аудитор не смог обработать задачу. Попробуйте позже." });
+  }
 });
 
 // ─── POST /api/deals ──────────────────────────────────────────────────────────

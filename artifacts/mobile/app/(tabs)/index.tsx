@@ -183,11 +183,18 @@ function EscrowModule({ citizen, citizens, colors }: {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Create deal modal
+  // Create deal modal — two-step flow
   const [showCreate, setShowCreate] = useState(false);
+  const [createStep, setCreateStep] = useState<"describe" | "audit">("describe");
   const [selRecipient, setSelRecipient] = useState<Citizen | null>(null);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [auditing, setAuditing] = useState(false);
+  const [auditResult, setAuditResult] = useState<{
+    suggestedAmount: number;
+    summary: string;
+    breakdown: string[];
+  } | null>(null);
   const [creating, setCreating] = useState(false);
 
   // Proof modal
@@ -226,6 +233,44 @@ function EscrowModule({ citizen, citizens, colors }: {
     return data as Deal;
   };
 
+  const resetCreateModal = () => {
+    setShowCreate(false);
+    setCreateStep("describe");
+    setSelRecipient(null);
+    setAmount("");
+    setDescription("");
+    setAuditResult(null);
+    setAuditing(false);
+  };
+
+  const handleAudit = async () => {
+    if (description.trim().length < 5) {
+      Alert.alert("Ошибка", "Опиши задачу подробнее (минимум 5 символов)");
+      return;
+    }
+    setAuditing(true);
+    try {
+      const r = await fetch(`${BASE_URL}/api/deals/audit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: description.trim() }),
+      });
+      const data = await r.json() as { suggestedAmount?: number; summary?: string; breakdown?: string[]; error?: string };
+      if (!r.ok) throw new Error(data.error ?? "Ошибка аудита");
+      setAuditResult({
+        suggestedAmount: data.suggestedAmount ?? 1,
+        summary: data.summary ?? "",
+        breakdown: data.breakdown ?? [],
+      });
+      setAmount(String(data.suggestedAmount ?? ""));
+      setCreateStep("audit");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: unknown) {
+      Alert.alert("ИИ-Аудитор", (e as Error).message);
+    }
+    setAuditing(false);
+  };
+
   const handleCreate = async () => {
     if (!selRecipient) { Alert.alert("Ошибка", "Выбери исполнителя"); return; }
     const amt = parseInt(amount, 10);
@@ -235,10 +280,7 @@ function EscrowModule({ citizen, citizens, colors }: {
     try {
       await apiPost("/api/deals", { senderId: citizen.id, receiverId: selRecipient.id, amount: amt, description: description.trim() });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setShowCreate(false);
-      setSelRecipient(null);
-      setAmount("");
-      setDescription("");
+      resetCreateModal();
       await loadDeals();
     } catch (e: unknown) {
       Alert.alert("Ошибка создания сделки", (e as Error).message);
@@ -457,15 +499,110 @@ function EscrowModule({ citizen, citizens, colors }: {
         />
       )}
 
-      {/* ── Create Deal Modal ──────────────────────────────────────────────── */}
-      <Modal visible={showCreate} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCreate(false)}>
+      {/* ── Create Deal Modal — Step 1: describe task ───────────────────── */}
+      <Modal visible={showCreate && createStep === "describe"} animationType="slide" presentationStyle="pageSheet" onRequestClose={resetCreateModal}>
         <ScrollView style={[s.modal, { backgroundColor: colors.background }]} keyboardShouldPersistTaps="handled">
           <View style={s.modalHeader}>
-            <Text style={[s.modalTitle, { color: colors.foreground }]}>Новая Эскроу-сделка</Text>
-            <TouchableOpacity onPress={() => setShowCreate(false)}>
+            <View>
+              <Text style={[s.modalTitle, { color: colors.foreground }]}>Новая Эскроу-сделка</Text>
+              <Text style={[{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }]}>Шаг 1 из 2 — Описание задачи</Text>
+            </View>
+            <TouchableOpacity onPress={resetCreateModal}>
               <Feather name="x" size={22} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
+
+          <Text style={[s.label, { color: colors.mutedForeground }]}>ТЕХНИЧЕСКОЕ ЗАДАНИЕ</Text>
+          <TextInput
+            style={[s.input, s.inputMulti, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+            placeholder="Подробно опиши, что должен сделать исполнитель: что именно, в каком объёме, какой результат..."
+            placeholderTextColor={colors.mutedForeground}
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={6}
+            textAlignVertical="top"
+            autoFocus
+          />
+
+          <View style={{ backgroundColor: colors.card, borderRadius: 10, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <Feather name="cpu" size={14} color={colors.primary} />
+              <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.primary }}>ИИ-Аудитор Минтруда</Text>
+            </View>
+            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 16 }}>
+              После описания задачи аудитор оценит трудозатраты в Дарминах, разобьёт работу на этапы и предложит справедливую сумму.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[s.submitBtn, { backgroundColor: colors.primary, opacity: auditing ? 0.7 : 1 }]}
+            onPress={handleAudit}
+            disabled={auditing}
+            activeOpacity={0.8}
+          >
+            {auditing ? (
+              <>
+                <ActivityIndicator color={colors.primaryForeground} size="small" />
+                <Text style={[s.submitBtnText, { color: colors.primaryForeground }]}>Аудитор анализирует...</Text>
+              </>
+            ) : (
+              <>
+                <Feather name="cpu" size={16} color={colors.primaryForeground} />
+                <Text style={[s.submitBtnText, { color: colors.primaryForeground }]}>Оценить задачу</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </Modal>
+
+      {/* ── Create Deal Modal — Step 2: audit result + confirm ─────────── */}
+      <Modal visible={showCreate && createStep === "audit"} animationType="slide" presentationStyle="pageSheet" onRequestClose={resetCreateModal}>
+        <ScrollView style={[s.modal, { backgroundColor: colors.background }]} keyboardShouldPersistTaps="handled">
+          <View style={s.modalHeader}>
+            <View>
+              <Text style={[s.modalTitle, { color: colors.foreground }]}>Оценка ИИ-Аудитора</Text>
+              <Text style={[{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }]}>Шаг 2 из 2 — Подтверждение сделки</Text>
+            </View>
+            <TouchableOpacity onPress={resetCreateModal}>
+              <Feather name="x" size={22} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+
+          {/* AI audit card */}
+          {auditResult && (
+            <View style={{ backgroundColor: colors.primary + "18", borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: colors.primary + "44" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <Feather name="cpu" size={15} color={colors.primary} />
+                <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.primary }}>Заключение Минтруда</Text>
+              </View>
+              <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular", lineHeight: 18, marginBottom: 10 }}>
+                {auditResult.summary}
+              </Text>
+              <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: colors.mutedForeground, marginBottom: 6, letterSpacing: 0.5 }}>РАЗБИВКА ПО ЭТАПАМ</Text>
+              {auditResult.breakdown.map((line, i) => (
+                <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginBottom: 4 }}>
+                  <Text style={{ color: colors.primary, fontSize: 11, fontFamily: "Inter_700Bold", marginTop: 1 }}>•</Text>
+                  <Text style={{ fontSize: 11, color: colors.foreground, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 16 }}>{line}</Text>
+                </View>
+              ))}
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.primary + "33" }}>
+                <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.mutedForeground }}>Рекомендуемая сумма</Text>
+                <Text style={{ fontSize: 18, fontFamily: "Inter_700Bold", color: colors.primary }}>{auditResult.suggestedAmount} Д</Text>
+              </View>
+            </View>
+          )}
+
+          {/* ТЗ summary (readonly) */}
+          <View style={{ backgroundColor: colors.card, borderRadius: 8, padding: 10, marginBottom: 16, borderWidth: 1, borderColor: colors.border }}>
+            <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.mutedForeground, marginBottom: 4, letterSpacing: 0.5 }}>ТЕХНИЧЕСКОЕ ЗАДАНИЕ</Text>
+            <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular", lineHeight: 17 }} numberOfLines={4}>{description}</Text>
+            <TouchableOpacity onPress={() => setCreateStep("describe")} style={{ marginTop: 6 }}>
+              <Text style={{ fontSize: 11, color: colors.primary, fontFamily: "Inter_700Bold" }}>✎ Изменить задачу</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Recipient */}
           <Text style={[s.label, { color: colors.mutedForeground }]}>ИСПОЛНИТЕЛЬ</Text>
           {others.map((c) => (
             <TouchableOpacity
@@ -482,28 +619,27 @@ function EscrowModule({ citizen, citizens, colors }: {
               {selRecipient?.id === c.id && <Feather name="check-circle" size={18} color={colors.primary} />}
             </TouchableOpacity>
           ))}
+
+          {/* Amount (pre-filled, editable) */}
           <Text style={[s.label, { color: colors.mutedForeground, marginTop: 16 }]}>СУММА (ДАРМИНЫ)</Text>
           <TextInput
-            style={[s.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+            style={[s.input, { borderColor: colors.primary + "88", color: colors.foreground, backgroundColor: colors.card, borderWidth: 1.5 }]}
             keyboardType="number-pad"
-            placeholder="Например: 60"
+            placeholder="Количество Дарминов"
             placeholderTextColor={colors.mutedForeground}
             value={amount}
             onChangeText={setAmount}
           />
-          <Text style={[s.label, { color: colors.mutedForeground }]}>ТЕХНИЧЕСКОЕ ЗАДАНИЕ</Text>
-          <TextInput
-            style={[s.input, s.inputMulti, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
-            placeholder="Подробно опиши, что должен сделать исполнитель..."
-            placeholderTextColor={colors.mutedForeground}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
+          {auditResult && parseInt(amount, 10) !== auditResult.suggestedAmount && (
+            <TouchableOpacity onPress={() => setAmount(String(auditResult.suggestedAmount))} style={{ marginTop: -8, marginBottom: 8, alignSelf: "flex-end", paddingRight: 4 }}>
+              <Text style={{ fontSize: 11, color: colors.primary, fontFamily: "Inter_400Regular" }}>
+                ↩ Вернуть рекомендацию ({auditResult.suggestedAmount} Д)
+              </Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
-            style={[s.submitBtn, { backgroundColor: colors.primary, opacity: creating ? 0.6 : 1 }]}
+            style={[s.submitBtn, { backgroundColor: colors.primary, opacity: creating ? 0.6 : 1, marginTop: 8 }]}
             onPress={handleCreate}
             disabled={creating}
             activeOpacity={0.8}
