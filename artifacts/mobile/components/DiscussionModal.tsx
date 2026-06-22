@@ -193,11 +193,34 @@ export function DiscussionModal({ visible, deal, citizenId, citizenName, colors,
   // Web: uses native browser <input type="file"> (no permissions needed)
   // Native: uses expo-image-picker with permission request
 
+  // Compress image via Canvas before sending (web only)
+  // Resizes to max 900px and encodes as JPEG at 60% quality → ~100-200 KB
+  const compressImageWeb = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(file);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const img = new (window as any).Image() as HTMLImageElement;
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const MAX = 900;
+        const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const canvas = (document as any).createElement("canvas") as HTMLCanvasElement;
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("canvas not supported")); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.6));
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("img load failed")); };
+      img.src = objectUrl;
+    });
+
   const openFileInputWeb = (capture: boolean) => {
+    if (typeof document === "undefined") return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const doc = (typeof document !== "undefined" ? document : null) as any;
-    if (!doc) return;
-    const input = doc.createElement("input") as HTMLInputElement;
+    const input = (document as any).createElement("input") as HTMLInputElement;
     input.type = "file";
     input.accept = "image/*";
     if (capture) input.setAttribute("capture", "environment");
@@ -206,12 +229,7 @@ export function DiscussionModal({ visible, deal, citizenId, citizenName, colors,
       if (!file) return;
       setSending(true);
       try {
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => resolve(e.target?.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
+        const dataUrl = await compressImageWeb(file);
         await sendMessage(undefined, dataUrl);
       } catch {
         Alert.alert("Ошибка", "Не удалось загрузить изображение");

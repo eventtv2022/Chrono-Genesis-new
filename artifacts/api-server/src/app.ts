@@ -37,8 +37,9 @@ app.use(
 );
 // Raw body needed for Stripe webhook signature verification — must come before express.json()
 app.use("/api/payments/webhook", express.raw({ type: "application/json" }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// 10 MB limit to accept base64-encoded images in JSON bodies (chat messages)
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/api", router);
 
