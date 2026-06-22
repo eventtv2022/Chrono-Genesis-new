@@ -189,8 +189,43 @@ export function DiscussionModal({ visible, deal, citizenId, citizenName, colors,
     setSending(false);
   };
 
-  // ── Image picker ─────────────────────────────────────────────────────────────
+  // ── Image picker (platform-aware) ───────────────────────────────────────────
+  // Web: uses native browser <input type="file"> (no permissions needed)
+  // Native: uses expo-image-picker with permission request
+
+  const openFileInputWeb = (capture: boolean) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doc = (typeof document !== "undefined" ? document : null) as any;
+    if (!doc) return;
+    const input = doc.createElement("input") as HTMLInputElement;
+    input.type = "file";
+    input.accept = "image/*";
+    if (capture) input.setAttribute("capture", "environment");
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setSending(true);
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        await sendMessage(undefined, dataUrl);
+      } catch {
+        Alert.alert("Ошибка", "Не удалось загрузить изображение");
+        setSending(false);
+      }
+    };
+    input.click();
+  };
+
   const pickImage = async () => {
+    if (Platform.OS === "web") {
+      openFileInputWeb(false);
+      return;
+    }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       Alert.alert("Нет доступа", "Разреши доступ к галерее в настройках");
@@ -205,12 +240,15 @@ export function DiscussionModal({ visible, deal, citizenId, citizenName, colors,
     if (!result.canceled && result.assets[0]) {
       const { base64, mimeType } = result.assets[0];
       if (!base64) return;
-      const dataUrl = `data:${mimeType ?? "image/jpeg"};base64,${base64}`;
-      await sendMessage(undefined, dataUrl);
+      await sendMessage(undefined, `data:${mimeType ?? "image/jpeg"};base64,${base64}`);
     }
   };
 
   const takePhoto = async () => {
+    if (Platform.OS === "web") {
+      openFileInputWeb(true);
+      return;
+    }
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
       Alert.alert("Нет доступа", "Разреши доступ к камере в настройках");
@@ -224,8 +262,7 @@ export function DiscussionModal({ visible, deal, citizenId, citizenName, colors,
     if (!result.canceled && result.assets[0]) {
       const { base64, mimeType } = result.assets[0];
       if (!base64) return;
-      const dataUrl = `data:${mimeType ?? "image/jpeg"};base64,${base64}`;
-      await sendMessage(undefined, dataUrl);
+      await sendMessage(undefined, `data:${mimeType ?? "image/jpeg"};base64,${base64}`);
     }
   };
 
