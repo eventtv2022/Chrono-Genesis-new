@@ -200,6 +200,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
     breakdown: string[];
   } | null>(null);
   const [creating, setCreating] = useState(false);
+  const [recipientError, setRecipientError] = useState(false);
 
   // Proof modal
   const [proofDeal, setProofDeal] = useState<Deal | null>(null);
@@ -245,6 +246,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
     setDescription("");
     setAuditResult(null);
     setAuditing(false);
+    setRecipientError(false);
   };
 
   const handleAudit = async () => {
@@ -278,7 +280,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
   };
 
   const handleCreate = async () => {
-    if (!selRecipient) { Alert.alert("Ошибка", "Выбери исполнителя"); return; }
+    if (!selRecipient) { setRecipientError(true); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); return; }
     const amt = parseInt(amount, 10);
     if (isNaN(amt) || amt < 1) { Alert.alert("Ошибка", "Укажи сумму в Дарминах (минимум 1)"); return; }
     if (description.trim().length < 5) { Alert.alert("Ошибка", "ТЗ должно быть не менее 5 символов"); return; }
@@ -649,12 +651,25 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
               </View>
 
               {/* Recipient */}
-              <Text style={[s.label, { color: colors.mutedForeground }]}>ИСПОЛНИТЕЛЬ</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <Text style={[s.label, { color: recipientError && !selRecipient ? "#E05252" : colors.mutedForeground, marginBottom: 0 }]}>
+                  ИСПОЛНИТЕЛЬ <Text style={{ color: "#E05252" }}>*</Text>
+                </Text>
+                {recipientError && !selRecipient && (
+                  <Text style={{ fontSize: 11, color: "#E05252", fontFamily: "Inter_400Regular" }}>↑ Выбери исполнителя</Text>
+                )}
+              </View>
               {others.map((c) => (
                 <TouchableOpacity
                   key={c.id}
-                  style={[s.selRow, selRecipient?.id === c.id && s.selRowActive, { borderColor: selRecipient?.id === c.id ? colors.primary : colors.border }]}
-                  onPress={() => setSelRecipient(c)}
+                  style={[s.selRow, selRecipient?.id === c.id && s.selRowActive, {
+                    borderColor: selRecipient?.id === c.id
+                      ? colors.primary
+                      : recipientError && !selRecipient
+                        ? "#E05252" + "66"
+                        : colors.border
+                  }]}
+                  onPress={() => { setSelRecipient(c); setRecipientError(false); }}
                   activeOpacity={0.8}
                 >
                   <View style={[s.avatar, { backgroundColor: colors.surface }]}>
@@ -690,15 +705,23 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
               )}
 
               <TouchableOpacity
-                style={[s.submitBtn, { backgroundColor: colors.primary, opacity: creating ? 0.6 : 1, marginTop: 8 }]}
+                style={[s.submitBtn, {
+                  backgroundColor: !selRecipient ? colors.surface : colors.primary,
+                  opacity: creating ? 0.6 : 1,
+                  marginTop: 8,
+                  borderWidth: !selRecipient ? 1.5 : 0,
+                  borderColor: recipientError && !selRecipient ? "#E05252" : colors.border,
+                }]}
                 onPress={handleCreate}
                 disabled={creating}
                 activeOpacity={0.8}
               >
                 {creating ? <ActivityIndicator color={colors.primaryForeground} /> : (
                   <>
-                    <Feather name="lock" size={16} color={colors.primaryForeground} />
-                    <Text style={[s.submitBtnText, { color: colors.primaryForeground }]}>Заморозить Дармины и создать сделку</Text>
+                    <Feather name={!selRecipient ? "user" : "lock"} size={16} color={!selRecipient ? colors.mutedForeground : colors.primaryForeground} />
+                    <Text style={[s.submitBtnText, { color: !selRecipient ? colors.mutedForeground : colors.primaryForeground }]}>
+                      {!selRecipient ? "Сначала выбери исполнителя ↑" : "Заморозить Дармины и создать сделку"}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
