@@ -5,6 +5,7 @@ import { eq, or } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { sendTransactionNotification } from "../services/telegramService";
 
 const router: IRouter = Router();
 
@@ -65,6 +66,20 @@ router.post("/deals", async (req, res): Promise<void> => {
     .returning();
 
   req.log.info({ dealId: deal.id, senderId, amount }, "TiMETR escrow deal created");
+
+  // Notify sender
+  void sendTransactionNotification(
+    senderId,
+    `🔒 *Сделка #${deal.id} создана*\n💎 ${amount} Д заморожено в эскроу\n📋 _${description}_`
+  );
+  // Notify receiver if already assigned
+  if (receiverId) {
+    void sendTransactionNotification(
+      receiverId,
+      `📨 *Новая сделка для вас #${deal.id}*\n💰 Награда: ${amount} Д\n📋 _${description}_`
+    );
+  }
+
   res.status(201).json(deal);
 });
 
@@ -137,6 +152,13 @@ router.post("/deals/:id/accept-task", async (req, res): Promise<void> => {
     .returning();
 
   req.log.info({ dealId: id, receiverId: parsed.data.citizenId }, "Deal accepted by receiver");
+
+  // Notify sender that someone took the task
+  void sendTransactionNotification(
+    deal.senderId,
+    `✅ *Сделка #${id} принята исполнителем*\n💰 ${deal.amount} Д в эскроу\n📋 _${deal.description}_`
+  );
+
   res.json(updated);
 });
 
@@ -170,6 +192,13 @@ router.post("/deals/:id/proof", async (req, res): Promise<void> => {
     .returning();
 
   req.log.info({ dealId: id }, "Proof of work submitted");
+
+  // Notify sender to review the proof
+  void sendTransactionNotification(
+    deal.senderId,
+    `📤 *Доказательство по сделке #${id}*\n${parsed.data.proofText ? `_${parsed.data.proofText.slice(0, 200)}_` : ""}${parsed.data.proofUrl ? `\n🔗 ${parsed.data.proofUrl}` : ""}\n\nПодтвердите или отклоните работу.`
+  );
+
   res.json(updated);
 });
 
@@ -209,6 +238,13 @@ router.post("/deals/:id/complete", async (req, res): Promise<void> => {
     .returning();
 
   req.log.info({ dealId: id, receiverId: deal.receiverId, amount: deal.amount }, "Deal completed, escrow released");
+
+  // Notify receiver — payout confirmed
+  void sendTransactionNotification(
+    deal.receiverId,
+    `🎉 *Сделка #${id} завершена!*\n💎 +${deal.amount} Д зачислено на ваш баланс\n📋 _${deal.description}_`
+  );
+
   res.json(updated);
 });
 
@@ -233,6 +269,15 @@ router.post("/deals/:id/decline", async (req, res): Promise<void> => {
     .returning();
 
   req.log.info({ dealId: id }, "Deal declined by sender — escrow remains locked");
+
+  // Notify receiver — proof rejected
+  if (deal.receiverId) {
+    void sendTransactionNotification(
+      deal.receiverId,
+      `❌ *Доказательство по сделке #${id} отклонено*\n💎 ${deal.amount} Д остаются заморожены\n📋 _${deal.description}_\n\nВы можете открыть спор.`
+    );
+  }
+
   res.json({ ...updated, note: "Эскроу заморожен. Откройте спор или отмените сделку для возврата." });
 });
 
@@ -274,6 +319,13 @@ router.post("/deals/:id/cancel", async (req, res): Promise<void> => {
     .returning();
 
   req.log.info({ dealId: id, senderId: deal.senderId, refunded: deal.amount }, "Deal cancelled, escrow returned to sender");
+
+  // Notify sender — funds returned
+  void sendTransactionNotification(
+    deal.senderId,
+    `↩️ *Сделка #${id} отменена*\n💎 +${deal.amount} Д возвращено на ваш баланс\n📋 _${deal.description}_`
+  );
+
   res.json(updated);
 });
 
@@ -345,6 +397,20 @@ ${claimText}
     .returning();
 
   req.log.info({ dealId: id, initiatorId: parsed.data.citizenId }, "Deal disputed");
+
+  // Notify both parties about the dispute
+  const otherPartyId = parsed.data.citizenId === deal.senderId ? deal.receiverId : deal.senderId;
+  void sendTransactionNotification(
+    parsed.data.citizenId,
+    `⚖️ *Спор по сделке #${id} открыт*\n${aiVerdict ? `\n🤖 *Вердикт ИИ-Арбитра:*\n_${aiVerdict.slice(0, 500)}_` : "ИИ-арбитраж недоступен — ожидайте решения вручную."}`
+  );
+  if (otherPartyId) {
+    void sendTransactionNotification(
+      otherPartyId,
+      `⚖️ *По сделке #${id} открыт спор*\n💎 ${deal.amount} Д заморожено до решения арбитра\n📋 _${deal.description}_${aiVerdict ? `\n\n🤖 *Вердикт ИИ-Арбитра:*\n_${aiVerdict.slice(0, 500)}_` : ""}`
+    );
+  }
+
   res.json(updated);
 });
 
