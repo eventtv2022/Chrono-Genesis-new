@@ -2,7 +2,7 @@ import crypto from "crypto";
 import type { Request } from "express";
 import { db } from "@workspace/db";
 import { tvSlotsTable, tvCapsulesTable } from "@workspace/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { sendTransactionNotification } from "./telegramService";
 
@@ -103,6 +103,8 @@ export async function airDueSlots(): Promise<number> {
   const todayUTC = now.toISOString().slice(0, 10);
   const minuteIndex = now.getUTCHours() * 60 + now.getUTCMinutes();
 
+  // Check both "booked" (normal) and "broadcast" (pre-rendered before scheduled time)
+  // so the owner always gets a "now live" notification at the correct minute.
   const dueSlots = await db
     .select()
     .from(tvSlotsTable)
@@ -110,23 +112,29 @@ export async function airDueSlots(): Promise<number> {
       and(
         eq(tvSlotsTable.date, todayUTC),
         eq(tvSlotsTable.minuteIndex, minuteIndex),
-        eq(tvSlotsTable.status, "booked"),
+        or(
+          eq(tvSlotsTable.status, "booked"),
+          eq(tvSlotsTable.status, "broadcast"),
+        ),
       )
     );
 
   if (dueSlots.length === 0) return 0;
 
   for (const slot of dueSlots) {
-    await db
-      .update(tvSlotsTable)
-      .set({ status: "broadcast" })
-      .where(eq(tvSlotsTable.id, slot.id));
+    // Promote "booked" → "broadcast"; already-broadcast slots are left untouched
+    if (slot.status === "booked") {
+      await db
+        .update(tvSlotsTable)
+        .set({ status: "broadcast" })
+        .where(eq(tvSlotsTable.id, slot.id));
 
-    await db
-      .update(tvCapsulesTable)
-      .set({ status: "broadcast" })
-      .where(eq(tvCapsulesTable.slotId, slot.id))
-      .catch(() => {});
+      await db
+        .update(tvCapsulesTable)
+        .set({ status: "broadcast" })
+        .where(eq(tvCapsulesTable.slotId, slot.id))
+        .catch(() => {});
+    }
 
     if (slot.ownerId) {
       const hh = String(Math.floor(minuteIndex / 60)).padStart(2, "0");
