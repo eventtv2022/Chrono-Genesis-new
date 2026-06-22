@@ -276,6 +276,18 @@ function EscrowModule({ citizen, citizens, colors }: {
     const amt = parseInt(amount, 10);
     if (isNaN(amt) || amt < 1) { Alert.alert("Ошибка", "Укажи сумму в Дарминах (минимум 1)"); return; }
     if (description.trim().length < 5) { Alert.alert("Ошибка", "ТЗ должно быть не менее 5 символов"); return; }
+
+    // Client-side balance guard (-1 for the founding minute)
+    if (citizen.balanceMinutes - 1 < amt) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Недостаточно Дарминов",
+        `Недостаточно Дарминов на Вашем счету для совершения сделки.\n\nДоступно: ${citizen.balanceMinutes - 1} Д\nНеобходимо: ${amt} Д`,
+        [{ text: "Понятно" }]
+      );
+      return;
+    }
+
     setCreating(true);
     try {
       await apiPost("/api/deals", { senderId: citizen.id, receiverId: selRecipient.id, amount: amt, description: description.trim() });
@@ -283,7 +295,13 @@ function EscrowModule({ citizen, citizens, colors }: {
       resetCreateModal();
       await loadDeals();
     } catch (e: unknown) {
-      Alert.alert("Ошибка создания сделки", (e as Error).message);
+      const msg = (e as Error).message;
+      if (msg.toLowerCase().includes("недостаточно")) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert("Недостаточно Дарминов", "Недостаточно Дарминов на Вашем счету для совершения сделки.", [{ text: "Понятно" }]);
+      } else {
+        Alert.alert("Ошибка создания сделки", msg);
+      }
     }
     setCreating(false);
   };
