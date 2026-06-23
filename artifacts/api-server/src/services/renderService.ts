@@ -24,8 +24,9 @@ export const MEDIA_DIR = path.join(process.cwd(), "media");
 // Google TTS voice — Wavenet-D (male) is the best Russian voice on free tier
 const GOOGLE_TTS_VOICE = "ru-RU-Wavenet-D";
 const GOOGLE_TTS_LANG  = "ru-RU";
-const VIDEO_DURATION_SEC = 60;   // 60-second broadcast slot
-const SEGMENT_DURATION_SEC = 12; // 5 × 12s = 60s exactly
+// Video duration is now dynamic (driven by actual TTS audio lengths via ffprobe).
+// No fixed VIDEO_DURATION_SEC / SEGMENT_DURATION_SEC constants — each render function
+// measures real audio length per segment and syncs the video timeline to it.
 
 // Ensure media directory exists at startup
 fs.mkdirSync(MEDIA_DIR, { recursive: true });
@@ -264,8 +265,10 @@ export const VISUAL_STYLE_THEMES = {
 export type VisualStyle = keyof typeof VISUAL_STYLE_THEMES;
 
 // ── FFmpeg LIGHT render ────────────────────────────────────────────────────────
+// audioBuffer param is retained for backward-compat but ignored —
+// TTS is generated per-segment internally for precise subtitle sync.
 export async function renderLightVideo(
-  audioBuffer: Buffer | null,
+  _audioBuffer: Buffer | null,
   manifestoText: string,
   slotId: number,
   visualStyle?: string | null,
@@ -275,27 +278,32 @@ export async function renderLightVideo(
   const outputPath = path.join(MEDIA_DIR, `slot_${slotId}.mp4`);
 
   try {
-    const segCount = Math.ceil(VIDEO_DURATION_SEC / SEGMENT_DURATION_SEC);
-    const segments = splitSegments(manifestoText, segCount);
-
-    // Apply visual style theme (Shariah anti-Gharar: user chose this before render)
+    const SEG_COUNT = 5;
+    const segments = splitSegments(manifestoText, SEG_COUNT);
     const style = visualStyle && visualStyle in VISUAL_STYLE_THEMES
       ? VISUAL_STYLE_THEMES[visualStyle as VisualStyle]
       : VISUAL_STYLE_THEMES.space;
 
-    // Build drawtext filters: title always visible + rotating text segments
+    // ── Step 1: Generate TTS per segment, measure real durations ─────────────
+    await onProgress?.("generating_tts");
+    const { segFiles, durations, totalDuration } = await buildSegmentAudio(segments, tmpDir);
+    const timeline = buildTimeline(durations);
+    logger.info({ slotId, durations: durations.map(d => d.toFixed(2)), totalDuration: totalDuration.toFixed(2) }, "LIGHT: per-segment audio ready");
+
+    // ── Step 2: Concat segment audio into master track ────────────────────────
+    const combinedAudioPath = await concatAudioSegments(segFiles, tmpDir);
+
+    // ── Step 3: Build drawtext filters using real audio timestamps ────────────
     const titleFilter =
       `drawtext=text='TIMENATION TV':fontsize=18:fontcolor=${style.title}:` +
       `x=(w-text_w)/2:y=48:alpha=0.8`;
-
     const slotFilter =
       `drawtext=text='SLOT ${slotId}':fontsize=14:fontcolor=${style.accent}@0.6:` +
       `x=(w-text_w)/2:y=78`;
 
     const segFilters: string[] = [];
     segments.forEach((seg, i) => {
-      const t0 = i * SEGMENT_DURATION_SEC;
-      const t1 = t0 + SEGMENT_DURATION_SEC;
+      const { t0, t1 } = timeline[i]!;
       const lines = wrapLine(seg, 52).slice(0, 4);
       const totalH = lines.length * 42;
       const baseY = Math.round((720 - totalH) / 2);
@@ -303,19 +311,16 @@ export async function renderLightVideo(
         segFilters.push(
           `drawtext=text='${esc(line)}':fontsize=28:fontcolor=${style.text}:` +
           `x=(w-text_w)/2:y=${baseY + li * 42}:` +
-          `enable='between(t\\,${t0}\\,${t1})'`
+          `enable='between(t\\,${t0.toFixed(2)}\\,${t1.toFixed(2)})'`
         );
       });
     });
 
-    // EU AI Act / China CAC: permanent AI watermark, bottom-right corner
     const watermarkFilter =
       `drawtext=text='TimeNation AI':fontsize=14:fontcolor=white@0.75:` +
       `x=w-tw-10:y=h-th-10:shadowcolor=black@0.5:shadowx=1:shadowy=1`;
-
     const vf = [titleFilter, slotFilter, ...segFilters, watermarkFilter].join(",");
 
-    // Cryptographic metadata injection (EU AI Act / CAC Article 25)
     const metadataArgs = [
       "-metadata", `title=TimeNation-TV — Slot ${slotId}`,
       "-metadata", "comment=Author: TimeNation AI, Type: Synthesized Media",
@@ -323,58 +328,29 @@ export async function renderLightVideo(
       "-metadata", `description=AI Generated / Сгенерировано ИИ / Generated via Artificial Intelligence technologies. Visual style: ${visualStyle ?? "space"}.`,
     ];
 
+    // ── Step 4: Single-pass render: solid color BG + combined audio + drawtext ─
+    // Duration driven by actual TTS length (totalDuration), not a fixed 60s.
     await onProgress?.("encoding");
-    if (audioBuffer) {
-      // ── 2-pass audio/video sync (as per Synchronized AI Capsule spec) ──────
-      // Pass 1: generate visual-only MP4 with exactly VIDEO_DURATION_SEC duration
-      const audioPath = path.join(tmpDir, "audio.mp3");
-      const visualPath = path.join(tmpDir, "visual_only.mp4");
-      fs.writeFileSync(audioPath, audioBuffer);
+    await runFFmpeg([
+      "-f", "lavfi", "-i", `color=c=${style.bg}:s=1280x720:r=25`,
+      "-i", combinedAudioPath,
+      "-vf", vf,
+      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+      "-c:a", "aac", "-b:a", "128k",
+      "-map", "0:v:0", "-map", "1:a:0",
+      "-t", totalDuration.toFixed(3),
+      ...metadataArgs,
+      "-y", outputPath,
+    ]);
 
-      await runFFmpeg([
-        "-f", "lavfi", "-i", `color=c=${style.bg}:s=1280x720:r=25`,
-        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-        "-vf", vf,
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
-        "-c:a", "aac",
-        "-t", String(VIDEO_DURATION_SEC),
-        "-y", visualPath,
-      ]);
-
-      // Pass 2: merge ElevenLabs audio into visual — copy video stream (no re-encode)
-      // NOTE: no -shortest — audio may be shorter than 60s; video defines the duration.
-      await runFFmpeg([
-        "-i", visualPath,
-        "-i", audioPath,
-        "-c:v", "copy",
-        "-c:a", "aac", "-b:a", "128k",
-        "-map", "0:v:0",
-        "-map", "1:a:0",
-        "-t", String(VIDEO_DURATION_SEC),
-        ...metadataArgs,
-        "-y", outputPath,
-      ]);
-    } else {
-      // No audio: single pass with silent track
-      await runFFmpeg([
-        "-f", "lavfi", "-i", `color=c=${style.bg}:s=1280x720:r=25`,
-        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-        "-vf", vf,
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
-        "-c:a", "aac",
-        "-t", String(VIDEO_DURATION_SEC),
-        ...metadataArgs,
-        "-y", outputPath,
-      ]);
-    }
-    logger.info({ slotId, hasAudio: !!audioBuffer }, "LIGHT render complete");
+    logger.info({ slotId, totalDuration: totalDuration.toFixed(2) }, "LIGHT render complete (audio-driven duration)");
     return `/api/tv/media/slot_${slotId}.mp4`;
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
-function runFFmpeg(args: string[]): Promise<void> {
+function runFFmpeg(args: string[], signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
@@ -384,7 +360,103 @@ function runFFmpeg(args: string[]): Promise<void> {
       else reject(new Error(`FFmpeg exited ${code}: ${stderr.slice(-1000)}`));
     });
     proc.on("error", (err) => reject(err));
+    if (signal) signal.addEventListener("abort", () => { proc.kill("SIGTERM"); }, { once: true });
   });
+}
+
+// ── ffprobe: get exact audio duration in seconds ──────────────────────────────
+async function getAudioDuration(filePath: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("ffprobe", [
+      "-v", "error",
+      "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1",
+      filePath,
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString(); });
+    proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString(); });
+    proc.on("close", (code) => {
+      if (code !== 0) { reject(new Error(`ffprobe exited ${code}: ${stderr.slice(-200)}`)); return; }
+      const dur = parseFloat(stdout.trim());
+      if (isNaN(dur)) { reject(new Error(`ffprobe returned non-numeric: "${stdout.trim()}"`)); return; }
+      resolve(dur);
+    });
+    proc.on("error", reject);
+  });
+}
+
+// ── Per-segment TTS builder ────────────────────────────────────────────────────
+// Generates one TTS file per segment, measures real duration via ffprobe.
+// Falls back to proportional silence when TTS fails for a segment.
+interface SegmentAudio {
+  segFiles: string[];
+  durations: number[];    // real duration in seconds for each segment
+  totalDuration: number;  // sum of durations
+}
+
+async function buildSegmentAudio(segments: string[], tmpDir: string): Promise<SegmentAudio> {
+  const segFiles: string[] = [];
+  const durations: number[] = [];
+
+  for (let i = 0; i < segments.length; i++) {
+    const segPath = path.join(tmpDir, `tts_seg_${i}.mp3`);
+    const text = segments[i] ?? "";
+
+    let buf: Buffer | null = null;
+    try { buf = await generateTTSBuffer(text); } catch (err) {
+      logger.warn({ err, i }, "buildSegmentAudio: TTS threw for segment");
+    }
+
+    if (buf && buf.byteLength > 512) {
+      fs.writeFileSync(segPath, buf);
+    } else {
+      // Fallback: silence proportional to word count (~2.5 words/sec speaking pace)
+      const silenceSec = Math.max(3, Math.round(text.split(/\s+/).length / 2.5));
+      await runFFmpeg([
+        "-f", "lavfi", "-i", `anullsrc=r=44100:cl=stereo`,
+        "-t", String(silenceSec), "-c:a", "libmp3lame", "-b:a", "64k", "-y", segPath,
+      ]);
+      logger.info({ i, silenceSec }, "buildSegmentAudio: silence fallback");
+    }
+
+    let dur = 8;
+    try { dur = await getAudioDuration(segPath); } catch (err) {
+      logger.warn({ err, i }, "buildSegmentAudio: ffprobe failed, using 8s fallback");
+    }
+
+    segFiles.push(segPath);
+    durations.push(dur);
+    logger.info({ i, dur: dur.toFixed(2) }, "buildSegmentAudio: segment ready");
+  }
+
+  const totalDuration = durations.reduce((a, b) => a + b, 0);
+  logger.info({ count: segments.length, totalDuration: totalDuration.toFixed(2) }, "buildSegmentAudio: all segments ready");
+  return { segFiles, durations, totalDuration };
+}
+
+// ── Concatenate audio segments into one file ───────────────────────────────────
+async function concatAudioSegments(segFiles: string[], tmpDir: string): Promise<string> {
+  const listPath = path.join(tmpDir, "audio_list.txt");
+  fs.writeFileSync(listPath, segFiles.map(f => `file '${f}'`).join("\n"));
+  const outPath = path.join(tmpDir, "audio_combined.mp3");
+  await runFFmpeg([
+    "-y", "-f", "concat", "-safe", "0", "-i", listPath,
+    "-c:a", "libmp3lame", "-b:a", "128k", outPath,
+  ]);
+  return outPath;
+}
+
+// ── Build cumulative timeline from durations ───────────────────────────────────
+function buildTimeline(durations: number[]): Array<{ t0: number; t1: number }> {
+  const timeline: Array<{ t0: number; t1: number }> = [];
+  let t = 0;
+  for (const d of durations) {
+    timeline.push({ t0: t, t1: t + d });
+    t += d;
+  }
+  return timeline;
 }
 
 // ── Progress reporter ──────────────────────────────────────────────────────────
@@ -406,7 +478,7 @@ async function setRenderProgress(slotId: number, stage: string): Promise<void> {
 // overlaying the text manifesto and TTS audio on top.
 // Falls back to solid-color renderLightVideo if AI video unavailable.
 async function renderWithAIBackground(
-  audioBuffer: Buffer | null,
+  _audioBuffer: Buffer | null,
   manifestoText: string,
   slotId: number,
   visualStyle?: string | null,
@@ -461,36 +533,36 @@ async function renderWithAIBackground(
     if (!aiVideoPath) {
       // Total failure — fall back to solid-color light render
       logger.info({ slotId, style }, "AI background unavailable — falling back to solid-color render");
-      return renderLightVideo(audioBuffer, manifestoText, slotId, visualStyle);
+      return renderLightVideo(null, manifestoText, slotId, visualStyle);
     }
 
-    // Step 3: Build overlay filters (manifesto text + citizen rank/name)
+    // Step 3: Per-segment TTS → real durations → dynamic timeline
     const theme = VISUAL_STYLE_THEMES[style];
-    const segCount = Math.ceil(VIDEO_DURATION_SEC / SEGMENT_DURATION_SEC);
-    const segments = splitSegments(manifestoText, segCount);
+    const SEG_COUNT = 5;
+    const segments = splitSegments(manifestoText, SEG_COUNT);
+
+    await onProgress?.("generating_tts");
+    const { segFiles, durations, totalDuration } = await buildSegmentAudio(segments, tmpDir);
+    const timeline = buildTimeline(durations);
+    logger.info({ slotId, totalDuration: totalDuration.toFixed(2) }, "AI-BG: per-segment audio ready");
+    const combinedAudioPath = await concatAudioSegments(segFiles, tmpDir);
 
     const titleFilter =
       `drawtext=text='TIMENATION TV':fontsize=18:fontcolor=${theme.title}:` +
       `x=(w-text_w)/2:y=48:alpha=0.8`;
-
     const slotFilter =
       `drawtext=text='SLOT ${slotId}':fontsize=14:fontcolor=${theme.accent}@0.6:` +
       `x=(w-text_w)/2:y=78`;
-
-    // Citizen rank (bottom-left, always visible)
     const rankFilter =
       `drawtext=text='${esc(citizenRank)}':fontsize=15:fontcolor=${theme.accent}@0.9:` +
       `x=12:y=h-th-34:shadowcolor=black@0.6:shadowx=1:shadowy=1`;
-
-    // Citizen name (bottom-left below rank, always visible)
     const nameFilter =
       `drawtext=text='${esc(citizenName)}':fontsize=17:fontcolor=${theme.text}:` +
       `x=12:y=h-th-12:shadowcolor=black@0.6:shadowx=1:shadowy=1`;
 
     const segFilters: string[] = [];
     segments.forEach((seg, i) => {
-      const t0 = i * SEGMENT_DURATION_SEC;
-      const t1 = t0 + SEGMENT_DURATION_SEC;
+      const { t0, t1 } = timeline[i]!;
       const lines = wrapLine(seg, 52).slice(0, 4);
       const totalH = lines.length * 42;
       const baseY = Math.round((720 - totalH) / 2);
@@ -498,7 +570,7 @@ async function renderWithAIBackground(
         segFilters.push(
           `drawtext=text='${esc(line)}':fontsize=28:fontcolor=${theme.text}:` +
           `x=(w-text_w)/2:y=${baseY + li * 42}:` +
-          `enable='between(t\\,${t0}\\,${t1})'`
+          `enable='between(t\\,${t0.toFixed(2)}\\,${t1.toFixed(2)})'`
         );
       });
     });
@@ -506,12 +578,9 @@ async function renderWithAIBackground(
     const watermarkFilter =
       `drawtext=text='TimeNation AI':fontsize=14:fontcolor=white@0.75:` +
       `x=w-tw-10:y=h-th-10:shadowcolor=black@0.5:shadowx=1:shadowy=1`;
-
-    // Semi-transparent dark overlay to ensure text readability over any background
     const darkenFilter = `colorchannelmixer=aa=0.55`;
 
     const vf = [
-      // Scale AI video to 1280×720, then darken slightly for readability
       `scale=1280:720:force_original_aspect_ratio=decrease`,
       `pad=1280:720:(ow-iw)/2:(oh-ih)/2`,
       `setsar=1`,
@@ -531,43 +600,25 @@ async function renderWithAIBackground(
       "-metadata", `description=AI Generated / Сгенерировано ИИ / AI cinematic background. Visual style: ${style}. Prompt: ${cinematicPrompt.slice(0, 120)}.`,
     ];
 
+    // Single-pass: AI video looped to totalDuration + combined per-segment audio
     await onProgress?.("encoding");
-    if (audioBuffer) {
-      const audioPath = path.join(tmpDir, "audio.mp3");
-      fs.writeFileSync(audioPath, audioBuffer);
+    await runFFmpeg([
+      "-stream_loop", "-1", "-i", aiVideoPath,
+      "-i", combinedAudioPath,
+      "-vf", vf,
+      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+      "-c:a", "aac", "-b:a", "128k",
+      "-map", "0:v:0", "-map", "1:a:0",
+      "-t", totalDuration.toFixed(3),
+      ...metadataArgs,
+      "-y", outputPath,
+    ]);
 
-      await runFFmpeg([
-        "-stream_loop", "-1", "-i", aiVideoPath,
-        "-i", audioPath,
-        "-vf", vf,
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-        "-c:a", "aac", "-b:a", "128k",
-        "-map", "0:v:0",
-        "-map", "1:a:0",
-        "-t", String(VIDEO_DURATION_SEC),
-        ...metadataArgs,
-        "-y", outputPath,
-      ]);
-    } else {
-      await runFFmpeg([
-        "-stream_loop", "-1", "-i", aiVideoPath,
-        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-        "-vf", vf,
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-        "-c:a", "aac",
-        "-map", "0:v:0",
-        "-map", "1:a:0",
-        "-t", String(VIDEO_DURATION_SEC),
-        ...metadataArgs,
-        "-y", outputPath,
-      ]);
-    }
-
-    logger.info({ slotId, style, cinematicPrompt: cinematicPrompt.slice(0, 80) }, "AI background render complete");
+    logger.info({ slotId, style, totalDuration: totalDuration.toFixed(2), cinematicPrompt: cinematicPrompt.slice(0, 80) }, "AI background render complete (audio-driven duration)");
     return `/api/tv/media/slot_${slotId}.mp4`;
   } catch (err) {
     logger.error({ err, slotId }, "renderWithAIBackground failed — falling back to solid-color");
-    return renderLightVideo(audioBuffer, manifestoText, slotId, visualStyle, onProgress);
+    return renderLightVideo(null, manifestoText, slotId, visualStyle, onProgress);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -575,7 +626,7 @@ async function renderWithAIBackground(
 
 // ── Prime Time Render (:00 — multi-scene 3-part montage with xfade) ─────────────
 async function renderPrimeVideo(
-  audioBuffer: Buffer | null,
+  _audioBuffer: Buffer | null,
   manifestoText: string,
   slotId: number,
   visualStyle?: string | null,
@@ -652,17 +703,38 @@ async function renderPrimeVideo(
       }
     }
 
-    // Step 3 — Xfade montage: 3×22s clips → ~62s composite, trimmed to 60s
-    //   offset=18: scene1 full 18s → 2s dissolve into scene2 (starts at t=18, ends t=20)
-    //   offset=36: scene2 full from t=20-36 → 2s dissolve into scene3 (ends t=38)
-    //   scene3 visible from t=38 to t=60
+    // Step 3a — Per-segment TTS (3 segments for 3 scenes) → real audio durations
+    await onProgress?.("generating_tts");
+    const primeSegments = splitSegments(manifestoText, 3);
+    const { segFiles: primeSegFiles, durations: primeDurations, totalDuration: primeTotalDuration } =
+      await buildSegmentAudio(primeSegments, tmpDir);
+    const primeCombinedAudio = await concatAudioSegments(primeSegFiles, tmpDir);
+
+    // Scene lengths driven by audio; each scene clip = audio duration + 2s for xfade overlap.
+    // Minimum 8s per scene to avoid xfade glitches.
+    const sceneDurations = primeDurations.map(d => Math.max(8, d + 2));
+    const [sd0, sd1, sd2] = [sceneDurations[0]!, sceneDurations[1]!, sceneDurations[2]!];
+    // xfade offset = cumulative scene length minus transition overlap (2s)
+    const xfadeOffset1 = sd0 - 2;
+    const xfadeOffset2 = xfadeOffset1 + sd1 - 2;
+    const compositeTotal = sd0 + sd1 + sd2 - 4; // two 2s overlaps removed
+
+    logger.info({
+      slotId,
+      primeDurations: primeDurations.map(d => d.toFixed(2)),
+      primeTotalDuration: primeTotalDuration.toFixed(2),
+      xfadeOffset1: xfadeOffset1.toFixed(2),
+      xfadeOffset2: xfadeOffset2.toFixed(2),
+    }, "PRIME: audio-driven xfade offsets computed");
+
+    // Step 3b — Xfade montage with dynamic scene lengths
     await onProgress?.("compositing");
     const compositePath = path.join(tmpDir, "composite.mp4");
 
     await runFFmpeg([
-      "-stream_loop", "-1", "-t", "22", "-i", sceneVideoFiles[0]!,
-      "-stream_loop", "-1", "-t", "22", "-i", sceneVideoFiles[1]!,
-      "-stream_loop", "-1", "-t", "22", "-i", sceneVideoFiles[2]!,
+      "-stream_loop", "-1", "-t", sd0.toFixed(3), "-i", sceneVideoFiles[0]!,
+      "-stream_loop", "-1", "-t", sd1.toFixed(3), "-i", sceneVideoFiles[1]!,
+      "-stream_loop", "-1", "-t", sd2.toFixed(3), "-i", sceneVideoFiles[2]!,
       "-filter_complex",
         "[0:v]scale=1280:720:force_original_aspect_ratio=decrease," +
         "pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1[sv0];" +
@@ -670,24 +742,24 @@ async function renderPrimeVideo(
         "pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1[sv1];" +
         "[2:v]scale=1280:720:force_original_aspect_ratio=decrease," +
         "pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1[sv2];" +
-        "[sv0][sv1]xfade=transition=dissolve:duration=2:offset=18[v01];" +
-        "[v01][sv2]xfade=transition=dissolve:duration=2:offset=36[vout]",
+        `[sv0][sv1]xfade=transition=dissolve:duration=2:offset=${xfadeOffset1.toFixed(3)}[v01];` +
+        `[v01][sv2]xfade=transition=dissolve:duration=2:offset=${xfadeOffset2.toFixed(3)}[vout]`,
       "-map", "[vout]",
       "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
-      "-t", "60", "-y", compositePath,
+      "-t", compositeTotal.toFixed(3), "-y", compositePath,
     ]);
-    logger.info({ slotId }, "PRIME xfade composite assembled");
+    logger.info({ slotId, compositeTotal: compositeTotal.toFixed(2) }, "PRIME xfade composite assembled");
 
-    // Step 4 — Text overlay + audio over the composite
+    // Step 4 — Text overlay + per-segment audio over the composite
+    // Scene text windows align with real TTS durations (2s dissolve is transition buffer)
     await onProgress?.("encoding");
 
-    // 3 text segments: each shown only during its scene's "clear" window
-    const segments = splitSegments(manifestoText, 3);
-    const sceneTimes = [
-      { t0: 0,  t1: 18 },  // scene 1: fully visible 0-18s
-      { t0: 20, t1: 38 },  // scene 2: fully visible 20-38s
-      { t0: 40, t1: 60 },  // scene 3: fully visible 40-60s
-    ] as const;
+    const sceneTimes: Array<{ t0: number; t1: number }> = [];
+    let timeAccum = 0;
+    for (const d of primeDurations) {
+      sceneTimes.push({ t0: timeAccum, t1: timeAccum + d });
+      timeAccum += d;
+    }
 
     const titleFilter =
       `drawtext=text='TIMENATION PRIME':fontsize=20:fontcolor=${theme.title}:` +
@@ -703,7 +775,7 @@ async function renderPrimeVideo(
       `x=12:y=h-th-12:shadowcolor=black@0.6:shadowx=1:shadowy=1`;
 
     const segFilters: string[] = [];
-    segments.forEach((seg, i) => {
+    primeSegments.forEach((seg, i) => {
       const { t0, t1 } = sceneTimes[i]!;
       const lines = wrapLine(seg, 52).slice(0, 4);
       const totalH = lines.length * 42;
@@ -712,7 +784,7 @@ async function renderPrimeVideo(
         segFilters.push(
           `drawtext=text='${esc(line)}':fontsize=28:fontcolor=${theme.text}:` +
           `x=(w-text_w)/2:y=${baseY + li * 42}:` +
-          `enable='between(t\\,${t0}\\,${t1})'`
+          `enable='between(t\\,${t0.toFixed(2)}\\,${t1.toFixed(2)})'`
         );
       });
     });
@@ -721,7 +793,6 @@ async function renderPrimeVideo(
       `drawtext=text='TimeNation AI — PRIME':fontsize=14:fontcolor=white@0.75:` +
       `x=w-tw-10:y=h-th-10:shadowcolor=black@0.5:shadowx=1:shadowy=1`;
     const darkenFilter = `colorchannelmixer=aa=0.55`;
-
     const vf = [darkenFilter, titleFilter, slotFilter, rankFilter, nameFilter, ...segFilters, watermarkFilter].join(",");
 
     const metadataArgs = [
@@ -731,42 +802,27 @@ async function renderPrimeVideo(
       "-metadata", `description=AI Prime Montage / 3 scenes: ${scenePrompts.scene1.slice(0, 40)} | ${scenePrompts.scene2.slice(0, 40)} | ${scenePrompts.scene3.slice(0, 40)}.`,
     ];
 
-    if (audioBuffer) {
-      const audioPath = path.join(tmpDir, "audio.mp3");
-      fs.writeFileSync(audioPath, audioBuffer);
-      await runFFmpeg([
-        "-i", compositePath,
-        "-i", audioPath,
-        "-vf", vf,
-        "-c:v", "libx264", "-preset", "fast", "-crf", "24",
-        "-c:a", "aac", "-b:a", "192k",
-        "-map", "0:v:0", "-map", "1:a:0",
-        "-t", String(VIDEO_DURATION_SEC),
-        ...metadataArgs, "-y", outputPath,
-      ]);
-    } else {
-      await runFFmpeg([
-        "-i", compositePath,
-        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-        "-vf", vf,
-        "-c:v", "libx264", "-preset", "fast", "-crf", "24",
-        "-c:a", "aac",
-        "-map", "0:v:0", "-map", "1:a:0",
-        "-t", String(VIDEO_DURATION_SEC),
-        ...metadataArgs, "-y", outputPath,
-      ]);
-    }
+    await runFFmpeg([
+      "-i", compositePath,
+      "-i", primeCombinedAudio,
+      "-vf", vf,
+      "-c:v", "libx264", "-preset", "fast", "-crf", "24",
+      "-c:a", "aac", "-b:a", "192k",
+      "-map", "0:v:0", "-map", "1:a:0",
+      "-t", primeTotalDuration.toFixed(3),
+      ...metadataArgs, "-y", outputPath,
+    ]);
 
     logger.info(
-      { slotId, style, s1: scenePrompts.scene1.slice(0, 40), s2: scenePrompts.scene2.slice(0, 40), s3: scenePrompts.scene3.slice(0, 40) },
-      "PRIME TIME 3-scene montage render complete"
+      { slotId, style, primeTotalDuration: primeTotalDuration.toFixed(2), s1: scenePrompts.scene1.slice(0, 40) },
+      "PRIME TIME 3-scene montage render complete (audio-driven duration)"
     );
     return `/api/tv/media/slot_${slotId}.mp4`;
 
   } catch (err) {
     logger.error({ err, slotId }, "renderPrimeVideo failed — falling back to apex AI background");
     return renderWithAIBackground(
-      audioBuffer, manifestoText, slotId, visualStyle, seedText, citizenId, onProgress, signal, "apex"
+      null, manifestoText, slotId, visualStyle, seedText, citizenId, onProgress, signal, "apex"
     );
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -840,15 +896,14 @@ export async function renderCapsule(slotId: number, signal?: AbortSignal): Promi
   let mediaUrl: string | null = null;
   let finalStatus = "draft";
 
-  // Generate TTS audio once (shared by all paths)
-  await reportProgress("generating_tts");
-  const audioBuffer = manifestoText ? await generateTTSBuffer(manifestoText) : null;
+  // TTS is now generated per-segment inside each render function for precise subtitle sync.
+  // No pre-generated single audioBuffer here anymore.
 
   if (slotType === "apex") {
     // PRIME TIME (:00) — 3-scene multi-montage (Gemini splits text → 3 AI frames → xfade)
     try {
       mediaUrl = await renderPrimeVideo(
-        audioBuffer, manifestoText, slotId,
+        null, manifestoText, slotId,
         capsule.visualStyle, capsule.seedText, capsule.citizenId,
         reportProgress, signal
       );
@@ -858,7 +913,7 @@ export async function renderCapsule(slotId: number, signal?: AbortSignal): Promi
       logger.error({ err, slotId }, "renderPrimeVideo failed — falling back to apex AI background");
       try {
         mediaUrl = await renderWithAIBackground(
-          audioBuffer, manifestoText, slotId,
+          null, manifestoText, slotId,
           capsule.visualStyle, capsule.seedText, capsule.citizenId,
           reportProgress, signal, "apex"
         );
@@ -866,7 +921,7 @@ export async function renderCapsule(slotId: number, signal?: AbortSignal): Promi
       } catch (bgErr) {
         logger.error({ bgErr, slotId }, "APEX AI background also failed — solid-color fallback");
         try {
-          mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle, reportProgress);
+          mediaUrl = await renderLightVideo(null, manifestoText, slotId, capsule.visualStyle, reportProgress);
           finalStatus = "rendered";
         } catch (lightErr) {
           logger.error({ lightErr, slotId }, "renderLightVideo fallback also failed");
@@ -878,7 +933,7 @@ export async function renderCapsule(slotId: number, signal?: AbortSignal): Promi
     // HALF / QUARTER / CITIZEN — AI background with tier-specific prompt quality
     try {
       mediaUrl = await renderWithAIBackground(
-        audioBuffer, manifestoText, slotId,
+        null, manifestoText, slotId,
         capsule.visualStyle, capsule.seedText, capsule.citizenId,
         reportProgress, signal, tier
       );
@@ -887,7 +942,7 @@ export async function renderCapsule(slotId: number, signal?: AbortSignal): Promi
     } catch (err) {
       logger.error({ err, slotId, tier }, `${tier.toUpperCase()} renderWithAIBackground failed — solid-color fallback`);
       try {
-        mediaUrl = await renderLightVideo(audioBuffer, manifestoText, slotId, capsule.visualStyle, reportProgress);
+        mediaUrl = await renderLightVideo(null, manifestoText, slotId, capsule.visualStyle, reportProgress);
         finalStatus = "rendered";
       } catch (lightErr) {
         logger.error({ lightErr, slotId }, "renderLightVideo also failed");

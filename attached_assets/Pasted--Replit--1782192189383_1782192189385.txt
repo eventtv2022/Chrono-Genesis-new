@@ -1,0 +1,55 @@
+Вот готовый, выверенный до мелочей технический промт для Replit-агента. Он спроектирован так, чтобы робот не просто переписал код, а внедрил отказоустойчивую архитектуру с точным расчетом таймингов через `ffprobe`.
+
+Скопируйте текст ниже целиком и отправьте его в чат Replit-агента:
+
+---
+
+# REPLIT ACTUATOR: IMPLEMENT DYNAMIC AUDIO-DRIVEN VIDEO TIMINGS IN RENDER_SERVICE
+
+## 1. OBJECTIVE
+
+Провести глубокий рефакторинг пайплайна генерации видео в файле `artifacts/api-server/src/services/renderService.ts`. Нам необходимо полностью избавиться от жестко закодированного интервала сцен в 12 секунд (`SEGMENT_DURATION_SEC = 12`). Вместо этого длительность каждой из 5 сцен видеоряда и появление соответствующих субтитров должны динамически адаптироваться под реальную скорость речи, полученную из аудиофайлов Google TTS.
+
+## 2. TECHNICAL SPECIFICATION & LOGIC FLOW
+
+1. **Посегментный рендеринг аудио:** Изменить логику обработки текста манифеста. Массив `segments` (ровно 5 штук) должен обрабатываться последовательно. Для каждого текстового сегмента по отдельности вызывается функция `generateTTSBuffer(segmentText)`. Полученный буфер записывается на диск во временную папку `tmpDir` как `tts_seg_0.mp3`, `tts_seg_1.mp3` и т.д.
+2. **Инспекция длительности через `ffprobe`:** Написать асинхронную функцию-хелпер `getAudioDuration(filePath: string): Promise<number>`, которая через `child_process.spawn` вызывает утилиту `ffprobe`:
+```bash
+ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 [filePath]
+
+```
+
+
+
+```
+   Функция должна возвращать точную длительность аудиофайла в секундах (тип `number`).
+3. **Расчет таймлайна (Timeline Сoordinates):** Сформировать массив реальных длительностей `const durations = [d0, d1, d2, d3, d4]`. На его основе рассчитать накопительные точки смещения для переходов видео и показа текста:
+   - Сцена 0: `start = 0`, `end = d0`
+   - Сцена 1: `start = d0`, `end = d0 + d1`
+   - Сцена $i$: `start = текущий_офсет`, `end = текущий_офсет + d_i`
+4. **Динамическая склейка в FFmpeg (Complex Filter):**
+   - **Аудио:** Склеить 5 временных файлов `tts_seg_X.mp3` в один аудиопоток с помощью фильтра `concat=n=5:v=0:a=1` или через команду предварительной склейки файлов.
+   - **Видео (Провайдеры фона):** Передать высчитанные точки смещения в фильтр переходов `xfade`. Параметр `offset` для перехода к следующей сцене должен строго равняться сумме длительностей всех предыдущих сцен.
+   - **Субтитры:** В макросах фильтра `drawtext` для каждого сегмента текста жестко прописать динамические интервалы отображения: `enable='between(t, start_time, end_time)'`.
+5. **Общий хронометраж:** Итоговая длительность выходного `.mp4` файла должна динамически подстраиваться под общую сумму длин всех аудио-сегментов (вместо фиксированных 60 секунд).
+
+## 3. INSTRUCTION FOR REPLIT AGENT
+
+> *"Agent, your task is to rewrite the video rendering logic in `artifacts/api-server/src/services/renderService.ts` to sync the video cuts and subtitles perfectly with the generated voice track.
+>
+> **Please perform the following steps:**
+> 1. Create a helper function `getAudioDuration(filePath: string): Promise<number>` that spawns `ffprobe` and parses its stdout to get the exact duration of an audio file in seconds.
+> 2. Inside `renderLightVideo` (and any other rendering paths used for slots), modify the loop that processes the text `segments`. Generate a separate TTS buffer for each of the 5 segments using `generateTTSBuffer` and write them to `tmpDir` as separate files.
+> 3. Use `getAudioDuration` on each generated segment file to build an array of precise durations: `[d0, d1, d2, d3, d4]`.
+> 4. Rewrite the FFmpeg arguments construction:
+>    - Concatenate the 5 audio files into a single master audio track using FFmpeg's concat protocol or filter.
+>    - Calculate cumulative offsets for the `xfade` filter transitions between background visual scenes. Each scene's visible lifespan must precisely match its corresponding audio segment duration.
+>    - Update the `drawtext` video filters for subtitles, changing the static timeline blocks to dynamic expressions using the calculated segment timestamps: `enable='between(t, segment_start, segment_end)'`.
+> 5. Ensure that the final output video has an accurate global duration matching the sum of all audio parts. 
+> 6. Run `npm run typecheck` to verify TypeScript compliance, fix any type mismatches, and confirm that the API build succeeds."*
+
+***
+
+Этот промт заставит Replit-агента аккуратно разобрать текущую функцию рендеринга, собрать звуковые файлы, высчитать их тайминги до миллисекунды и пересобрать финальный скрипт генерации без рассинхронов. Вы можете отправлять его в работу!
+
+```
