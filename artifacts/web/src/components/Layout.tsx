@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search } from "lucide-react";
+import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock } from "lucide-react";
 import { SystemClock } from "./SystemClock";
 import { useCitizen } from "@/context/CitizenContext";
 
@@ -97,6 +97,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/shop", label: "Казначейство", icon: ShoppingCart },
     { href: "/register", label: "Стать гражданином", icon: UserPlus },
     { href: "/passport-lookup", label: "Мой паспорт", icon: Search },
+    { href: "/time", label: "Время", icon: Clock },
   ];
 
   return (
