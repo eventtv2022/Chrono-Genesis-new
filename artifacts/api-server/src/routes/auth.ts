@@ -2,11 +2,16 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
+import fs from "fs";
+import path from "path";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { citizensTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
+
+const VAULT_PHOTOS_DIR = path.join(process.cwd(), "secure_vault", "photos");
+fs.mkdirSync(VAULT_PHOTOS_DIR, { recursive: true });
 
 const router: IRouter = Router();
 
@@ -44,6 +49,7 @@ const RegisterBody = z.object({
   telegramId: z.string().optional(),
   tosAcceptedAt: z.string().optional(),
   privacyAgreementAccepted: z.boolean().optional(),
+  photoBase64: z.string().optional(), // data:image/...;base64,... from mobile
 });
 
 router.post("/auth/register", async (req, res): Promise<void> => {
@@ -53,7 +59,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  const { name, phone, password, surname, givenNames, dateOfBirth, email, telegramId, tosAcceptedAt, privacyAgreementAccepted } = parsed.data;
+  const { name, phone, password, surname, givenNames, dateOfBirth, email, telegramId, tosAcceptedAt, privacyAgreementAccepted, photoBase64 } = parsed.data;
 
   const existing = await db
     .select({ id: citizensTable.id })
@@ -76,6 +82,24 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   const citizenNumber = String(countRow.length + 1).padStart(9, "0");
   const availableAt = new Date(Date.now() + 60 * 60 * 1000);
 
+  // Save base64 photo to vault if provided
+  let photoUrl: string | null = null;
+  if (photoBase64) {
+    try {
+      const matches = photoBase64.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (matches) {
+        const ext = matches[1] === "jpeg" ? "jpg" : matches[1];
+        const buf = Buffer.from(matches[2]!, "base64");
+        const filename = `photo_${Date.now()}.${ext}`;
+        const filepath = path.join(VAULT_PHOTOS_DIR, filename);
+        fs.writeFileSync(filepath, buf);
+        photoUrl = filepath;
+      }
+    } catch (err) {
+      logger.warn({ err }, "Failed to save photo from /auth/register");
+    }
+  }
+
   const [citizen] = await db
     .insert(citizensTable)
     .values({
@@ -93,6 +117,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       tosAcceptedAt: tosAcceptedAt ? new Date(tosAcceptedAt) : undefined,
       privacyAgreementAccepted: privacyAgreementAccepted ? 1 : 0,
       privacyAgreementDate: privacyAgreementAccepted ? new Date() : null,
+      photoUrl,
     })
     .returning();
 

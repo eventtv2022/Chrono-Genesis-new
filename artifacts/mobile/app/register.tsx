@@ -11,16 +11,20 @@ import {
   Platform,
   ScrollView,
   Linking,
+  Image,
 } from "react-native";
 import SignatureCanvas from "react-native-signature-canvas";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCitizen, CitizenProfile } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
+
+const MANIFESTO_URL = "https://issuu.com/timenation2025/docs/_timenatio";
 
 const BASE_URL = getBaseUrl();
 
@@ -57,10 +61,20 @@ export default function RegisterScreen() {
   const [givenNames, setGivenNames] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState(""); // YYYY-MM-DD
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [signatureBase64, setSignatureBase64] = useState<string | null>(null);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+
+  // Compliance
+  const [manifestoAccepted, setManifestoAccepted] = useState(false);
+  const [tosAccepted, setTosAccepted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+
+  const canSubmit = manifestoAccepted && tosAccepted && privacyAccepted && !!signatureBase64;
 
   // Login
   const [loginPhone, setLoginPhone] = useState("");
@@ -118,6 +132,39 @@ export default function RegisterScreen() {
     };
   }, [mode, pendingData]);
 
+  // ── Photo picker ───────────────────────────────────────────────────────────
+  async function handlePickPhoto() {
+    const choice = await new Promise<"camera" | "gallery" | null>(resolve => {
+      Alert.alert("Фото для паспорта", "Выбери источник", [
+        { text: "Камера", onPress: () => resolve("camera") },
+        { text: "Галерея", onPress: () => resolve("gallery") },
+        { text: "Отмена", style: "cancel", onPress: () => resolve(null) },
+      ]);
+    });
+    if (!choice) return;
+
+    const permResult = choice === "camera"
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permResult.granted) {
+      Alert.alert("Нет доступа", "Разреши доступ в настройках устройства.");
+      return;
+    }
+
+    const result = choice === "camera"
+      ? await ImagePicker.launchCameraAsync({ base64: true, quality: 0.7, allowsEditing: true, aspect: [3, 4] })
+      : await ImagePicker.launchImageLibraryAsync({ base64: true, quality: 0.7, allowsEditing: true, aspect: [3, 4], mediaTypes: ["images"] });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setPhotoUri(asset.uri);
+      if (asset.base64) {
+        const mime = asset.mimeType ?? "image/jpeg";
+        setPhotoBase64(`data:${mime};base64,${asset.base64}`);
+      }
+    }
+  }
+
   // ── Register ──────────────────────────────────────────────────────────────
   async function handleRegister() {
     const n = name.trim() || `${surname.trim()} ${givenNames.trim()}`.trim();
@@ -133,16 +180,24 @@ export default function RegisterScreen() {
       Alert.alert("Пароли не совпадают", "Проверь введённый пароль.");
       return;
     }
+    if (!canSubmit) {
+      Alert.alert("Подтвердите согласия", "Поставьте подпись и отметьте все три пункта.");
+      return;
+    }
     setLoading(true);
     try {
       const body: Record<string, string | boolean> = {
         name: n,
         phone: phone.trim(),
         password: password.trim(),
+        privacyAgreementAccepted: true,
+        tosAcceptedAt: new Date().toISOString(),
       };
       if (surname.trim()) body["surname"] = surname.trim();
       if (givenNames.trim()) body["givenNames"] = givenNames.trim();
       if (dateOfBirth.trim().match(/^\d{4}-\d{2}-\d{2}$/)) body["dateOfBirth"] = dateOfBirth.trim();
+      if (email.trim()) body["email"] = email.trim();
+      if (photoBase64) body["photoBase64"] = photoBase64;
 
       const res = await fetch(`${BASE_URL}/api/auth/register`, {
         method: "POST",
@@ -315,6 +370,10 @@ export default function RegisterScreen() {
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={phone} onChangeText={setPhone} placeholder="+7..." placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" />
 
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>E-MAIL (для получения паспорта)</Text>
+          <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            value={email} onChangeText={setEmail} placeholder="example@timenation.com" placeholderTextColor={colors.mutedForeground} keyboardType="email-address" autoCapitalize="none" />
+
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ПАРОЛЬ * (мин. 6 символов)</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.mutedForeground} secureTextEntry />
@@ -323,6 +382,30 @@ export default function RegisterScreen() {
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={confirmPassword} onChangeText={setConfirmPassword} placeholder="••••••••" placeholderTextColor={colors.mutedForeground} secureTextEntry />
 
+          {/* ── Photo picker ── */}
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ФОТОГРАФИЯ (для паспорта)</Text>
+          <TouchableOpacity
+            style={[styles.photoPicker, { borderColor: colors.border, backgroundColor: colors.card }]}
+            onPress={() => void handlePickPhoto()}
+            activeOpacity={0.8}
+          >
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
+            ) : (
+              <View style={styles.photoPlaceholder}>
+                <Feather name="camera" size={28} color={colors.mutedForeground} />
+                <Text style={[styles.photoPlaceholderText, { color: colors.mutedForeground }]}>Загрузить фото анфас</Text>
+                <Text style={[styles.photoPlaceholderSub, { color: colors.mutedForeground }]}>Светлый фон · JPG, PNG</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          {photoUri && (
+            <TouchableOpacity onPress={() => void handlePickPhoto()} style={{ alignSelf: "flex-end", marginTop: 4 }}>
+              <Text style={{ fontSize: 12, color: colors.primary }}>Заменить фото</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* ── Signature ── */}
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ПОДПИСЬ *</Text>
           <View style={[styles.signatureContainer, { borderColor: colors.border }]}>
             <SignatureCanvas
@@ -341,6 +424,57 @@ export default function RegisterScreen() {
             <Text style={[styles.signatureStatus, { color: "#22c55e" }]}>✓ Подпись сохранена</Text>
           )}
 
+          {/* ── Compliance checkboxes ── */}
+          <View style={[styles.complianceBlock, { borderTopColor: colors.border }]}>
+
+            {/* 1. Manifesto */}
+            <View style={[styles.checkRow, { backgroundColor: "#f59e0b10", borderColor: "#f59e0b40", borderWidth: 1, borderRadius: 10, padding: 12 }]}>
+              <TouchableOpacity
+                onPress={() => Linking.openURL(MANIFESTO_URL)}
+                style={[styles.manifestoBtn, { backgroundColor: "#f59e0b20", borderColor: "#f59e0b50" }]}
+              >
+                <Feather name="book-open" size={14} color="#f59e0b" />
+                <Text style={[styles.manifestoBtnText, { color: "#f59e0b" }]}>Открыть документ TimeNation</Text>
+                <Feather name="external-link" size={12} color="#f59e0b" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.checkRowInner} onPress={() => setManifestoAccepted(v => !v)}>
+                <View style={[styles.checkbox, { borderColor: colors.border, backgroundColor: manifestoAccepted ? colors.primary : "transparent" }]}>
+                  {manifestoAccepted && <Feather name="check" size={12} color={colors.primaryForeground} />}
+                </View>
+                <Text style={[styles.checkLabel, { color: colors.mutedForeground }]}>
+                  Я ознакомлен с основополагающим документом TimeNation и понимаю принципы цифрового государства.
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 2. TOS */}
+            <TouchableOpacity style={styles.checkRowInner} onPress={() => setTosAccepted(v => !v)}>
+              <View style={[styles.checkbox, { borderColor: colors.border, backgroundColor: tosAccepted ? colors.primary : "transparent" }]}>
+                {tosAccepted && <Feather name="check" size={12} color={colors.primaryForeground} />}
+              </View>
+              <Text style={[styles.checkLabel, { color: colors.mutedForeground }]}>
+                Я ознакомлен с{" "}
+                <Text style={{ color: colors.primary }} onPress={() => Linking.openURL(`${BASE_URL}/tos`)}>
+                  Условиями использования
+                </Text>
+                . Дармины — внутриигровые баллы, не являются денежными средствами.
+              </Text>
+            </TouchableOpacity>
+
+            {/* 3. Privacy / GDPR */}
+            <View style={[styles.checkRow, { backgroundColor: colors.muted + "20", borderColor: colors.border, borderWidth: 1, borderRadius: 10, padding: 12 }]}>
+              <Feather name="lock" size={14} color={colors.mutedForeground} style={{ marginBottom: 6 }} />
+              <TouchableOpacity style={styles.checkRowInner} onPress={() => setPrivacyAccepted(v => !v)}>
+                <View style={[styles.checkbox, { borderColor: colors.border, backgroundColor: privacyAccepted ? colors.primary : "transparent" }]}>
+                  {privacyAccepted && <Feather name="check" size={12} color={colors.primaryForeground} />}
+                </View>
+                <Text style={[styles.checkLabel, { color: colors.mutedForeground }]}>
+                  Я даю согласие на обработку персональных данных (ФИО, email, фото) для выпуска цифрового удостоверения TimeNation. Данные хранятся в защищённой базе (GDPR / 152-ФЗ).
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           <View style={[styles.infoBox, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "40" }]}>
             <Feather name="clock" size={14} color={colors.primary} />
             <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
@@ -348,14 +482,24 @@ export default function RegisterScreen() {
             </Text>
           </View>
 
-          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: loading ? 0.6 : 1 }]} onPress={handleRegister} disabled={loading} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: (loading || !canSubmit) ? 0.5 : 1 }]}
+            onPress={handleRegister}
+            disabled={loading || !canSubmit}
+            activeOpacity={0.8}
+          >
             {loading ? <ActivityIndicator color={colors.primaryForeground} /> : (
               <>
                 <Feather name="user-check" size={18} color={colors.primaryForeground} />
-                <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>Зарегистрироваться</Text>
+                <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>Подать заявку на гражданство</Text>
               </>
             )}
           </TouchableOpacity>
+          {!canSubmit && (
+            <Text style={[styles.cancelBtnText, { color: colors.mutedForeground, textAlign: "center", fontSize: 12, marginTop: 4 }]}>
+              {!signatureBase64 ? "Поставьте подпись и отметьте все три пункта" : "Отметьте все три пункта, чтобы продолжить"}
+            </Text>
+          )}
           <TouchableOpacity style={styles.cancelBtn} onPress={() => setMode("choose")} activeOpacity={0.8}>
             <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Назад</Text>
           </TouchableOpacity>
@@ -545,5 +689,19 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     issuedHeader: { alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 16, padding: 24, marginBottom: 16 },
     signatureContainer: { borderWidth: 1, borderRadius: 12, overflow: "hidden", height: 150, marginTop: 4 },
     signatureStatus: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 4 },
+    // Photo picker
+    photoPicker: { borderWidth: 2, borderStyle: "dashed", borderRadius: 12, overflow: "hidden", marginTop: 4, minHeight: 140 },
+    photoPlaceholder: { alignItems: "center", justifyContent: "center", paddingVertical: 28, gap: 6 },
+    photoPlaceholderText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+    photoPlaceholderSub: { fontSize: 11, fontFamily: "Inter_400Regular" },
+    photoPreview: { width: "100%", height: 180 },
+    // Compliance
+    complianceBlock: { borderTopWidth: 1, paddingTop: 16, gap: 12, marginTop: 8 },
+    checkRow: { gap: 8 },
+    checkRowInner: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+    checkbox: { width: 20, height: 20, borderWidth: 2, borderRadius: 4, alignItems: "center", justifyContent: "center", marginTop: 1, flexShrink: 0 },
+    checkLabel: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 18 },
+    manifestoBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, marginBottom: 8 },
+    manifestoBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   });
 }
