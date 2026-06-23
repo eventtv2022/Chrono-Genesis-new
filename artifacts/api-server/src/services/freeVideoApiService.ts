@@ -7,8 +7,9 @@ import { logger } from "../lib/logger";
 // ── Free Video API Service ─────────────────────────────────────────────────────
 // Provider chain:
 //   1. HuggingFace text-to-video-ms-1.7b  (free, optional HF_TOKEN for higher limits)
-//   2. Pollinations AI slideshow (8 images → FFmpeg crossfade → 60s video)
-//   3. null → caller falls back to solid-color light path
+//   2. Picsum Photos slideshow             (reliable CDN, no auth, no rate limits)
+//   3. Pollinations AI slideshow           (AI-generated but often 429 on shared IPs)
+//   4. null → caller falls back to solid-color light path
 
 const HF_API_URL =
   "https://api-inference.huggingface.co/models/damo-vilab/text-to-video-ms-1.7b";
@@ -120,7 +121,112 @@ async function generateViaHuggingFace(
   }
 }
 
-// ── Provider 2: Pollinations AI slideshow ─────────────────────────────────────
+// ── Provider 2: Picsum Photos slideshow ───────────────────────────────────────
+// Uses https://picsum.photos (free, no auth, reliable CDN backed by Unsplash)
+// Images are scenic/nature/architecture photos with seed-based selection.
+// Seed is derived from a hash of the prompt so the same prompt always gets
+// visually consistent images.
+const PICSUM_IMAGES = 5;
+
+async function generateViaPicsumSlideshow(
+  prompt: string,
+  tmpDir: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  logger.info({ count: PICSUM_IMAGES }, "Picsum slideshow: fetching images");
+
+  // Derive a numeric seed from the prompt so renders are deterministic
+  let seed = 0;
+  for (let i = 0; i < prompt.length; i++) seed = ((seed << 5) - seed + prompt.charCodeAt(i)) | 0;
+  if (seed < 0) seed = -seed;
+
+  const imageBuffers: (Buffer | null)[] = [];
+  for (let i = 0; i < PICSUM_IMAGES; i++) {
+    if (signal?.aborted) break;
+    const imgSeed = (seed + i * 97) % 1000;
+    const url = `https://picsum.photos/seed/${imgSeed}/1280/720`;
+    try {
+      const res = await fetchWithTimeout(url, {}, 20_000, signal);
+      if (!res.ok) {
+        logger.warn({ status: res.status, i }, "Picsum image fetch failed");
+        imageBuffers.push(null);
+        continue;
+      }
+      const buf = Buffer.from(await res.arrayBuffer());
+      imageBuffers.push(buf.byteLength >= 1024 ? buf : null);
+      logger.info({ i, ok: true, bytes: buf.byteLength }, "Picsum image fetched");
+    } catch (err) {
+      logger.warn({ err, i }, "Picsum image error");
+      imageBuffers.push(null);
+    }
+  }
+
+  const validImages = imageBuffers.filter((b): b is Buffer<ArrayBuffer> => b !== null);
+  if (validImages.length === 0) {
+    logger.warn("Picsum: all image fetches failed");
+    return null;
+  }
+
+  logger.info({ count: validImages.length }, "Picsum: building crossfade slideshow");
+
+  const imagePaths = validImages.map((buf, i) => {
+    const imgPath = path.join(tmpDir, `picsum_${i}.jpg`);
+    fs.writeFileSync(imgPath, buf);
+    return imgPath;
+  });
+
+  const N = imagePaths.length;
+  const C = CROSSFADE_DURATION_SEC;
+  const perImg = (TARGET_VIDEO_DURATION_SEC + C * (N - 1)) / N;
+  const outputPath = path.join(tmpDir, "picsum_slideshow.mp4");
+
+  try {
+    if (N === 1) {
+      await runFFmpeg([
+        "-loop", "1", "-t", String(TARGET_VIDEO_DURATION_SEC), "-i", imagePaths[0]!,
+        "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=25",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
+        "-an", "-y", outputPath,
+      ], signal);
+    } else {
+      const inputArgs: string[] = [];
+      for (const imgPath of imagePaths) {
+        inputArgs.push("-loop", "1", "-t", perImg.toFixed(3), "-i", imgPath);
+      }
+      const scaleFilters = imagePaths.map(
+        (_, i) =>
+          `[${i}:v]scale=1280:720:force_original_aspect_ratio=decrease,` +
+          `pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=25[sv${i}]`
+      );
+      const xfadeChains: string[] = [];
+      let prevLabel = `sv0`;
+      for (let i = 0; i < N - 1; i++) {
+        const offset = ((i + 1) * perImg - i * C).toFixed(3);
+        const outLabel = i === N - 2 ? "vout" : `xf${i}`;
+        xfadeChains.push(
+          `[${prevLabel}][sv${i + 1}]xfade=transition=fade:duration=${C}:offset=${offset}[${outLabel}]`
+        );
+        prevLabel = outLabel;
+      }
+      const filterComplex = [...scaleFilters, ...xfadeChains].join(";");
+      await runFFmpeg([
+        ...inputArgs,
+        "-filter_complex", filterComplex,
+        "-map", "[vout]",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
+        "-t", String(TARGET_VIDEO_DURATION_SEC),
+        "-an", "-y", outputPath,
+      ], signal);
+    }
+    logger.info({ outputPath, images: N }, "Picsum crossfade slideshow created");
+    return outputPath;
+  } catch (err) {
+    logger.warn({ err }, "Picsum: FFmpeg crossfade failed");
+    return null;
+  }
+}
+
+// ── Provider 3: Pollinations AI slideshow ─────────────────────────────────────
 async function generateViaPollinationsSlideshow(
   prompt: string,
   tmpDir: string,
@@ -258,13 +364,19 @@ export async function generateAIBackground(
   const dir = tmpDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "tn-aibg-"));
   const ownsTmpDir = !tmpDir;
 
-  // Try HuggingFace first
+  // Provider 1: HuggingFace text-to-video
   const hfPath = await generateViaHuggingFace(prompt, dir, signal);
   if (hfPath) {
     return { videoPath: hfPath, ownsTmpDir, tmpDir: dir };
   }
 
-  // Fallback: Pollinations slideshow
+  // Provider 2: Picsum Photos slideshow (reliable, no auth, no rate limits)
+  const picsumPath = await generateViaPicsumSlideshow(prompt, dir, signal);
+  if (picsumPath) {
+    return { videoPath: picsumPath, ownsTmpDir, tmpDir: dir };
+  }
+
+  // Provider 3: Pollinations AI slideshow (may be rate-limited on shared IPs)
   const slidePath = await generateViaPollinationsSlideshow(prompt, dir, signal);
   if (slidePath) {
     return { videoPath: slidePath, ownsTmpDir, tmpDir: dir };
