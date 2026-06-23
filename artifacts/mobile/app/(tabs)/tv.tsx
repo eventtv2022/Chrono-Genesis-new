@@ -1125,6 +1125,7 @@ const FIAT_PRICES: Record<string, string> = {
 };
 
 function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooked }: BookSlotModalProps) {
+  const qc = useQueryClient();
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
   const [typeFilter, setTypeFilter] = useState<SlotTypeFilter>("all");
   const [paymentType, setPaymentType] = useState<"timeltr" | "fiat">("timeltr");
@@ -1163,6 +1164,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
       return json;
     },
     onSuccess: async (data) => {
+      void qc.invalidateQueries({ queryKey: ["tvSlots"] });
       if (paymentType === "fiat" && data.url) {
         await WebBrowser.openBrowserAsync(data.url, { toolbarColor: "#0D1B2A" });
         setSelectedSlotId(null);
@@ -1443,8 +1445,8 @@ function ChronosGrid({
     if (isToday && idx === curMin) return "#ffffff";
     if (!s) return colors.border + "70";
     if (selectedSlotId != null && s.id === selectedSlotId) return "#22c55e";
+    if (s.ownerId != null && s.ownerId === citizenId) return s.isRetro ? colors.primary + "80" : colors.primary;
     if (s.status === "broadcast") return s.isRetro ? "#f9731699" : "#f97316";
-    if (s.ownerId === citizenId) return s.isRetro ? colors.primary + "80" : colors.primary;
     if (s.status === "booked") return colors.mutedForeground + "45";
     return s.isRetro ? colors.muted + "50" : colors.border + "70";
   };
@@ -1515,7 +1517,7 @@ interface CalendarBookingSheetProps {
   initialDate: string;
   initialSlot?: TvSlot | null;
   colors: ReturnType<typeof useColors>;
-  onBooked: () => void;
+  onBooked: (bookedDate: string) => void;
 }
 
 type BookStep = "date" | "grid";
@@ -1588,7 +1590,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
         await WebBrowser.openBrowserAsync(data.url, { toolbarColor: "#0D1B2A" });
       }
       void qc.invalidateQueries({ queryKey: ["tvSlots"] });
-      onBooked();
+      onBooked(bookDate);
       onClose();
     },
     onError: (e: Error) => setBookError(e.message),
@@ -2284,7 +2286,7 @@ export default function TvScreen() {
           initialDate={gridTappedSlot?.date ?? date}
           initialSlot={gridTappedSlot}
           colors={colors}
-          onBooked={() => { setGridTappedSlot(null); void refetch(); }}
+          onBooked={(bookedDate) => { setGridTappedSlot(null); setDate(bookedDate); }}
         />
       )}
 
