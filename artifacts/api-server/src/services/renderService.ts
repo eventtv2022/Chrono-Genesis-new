@@ -342,6 +342,7 @@ export async function renderLightVideo(
       ]);
 
       // Pass 2: merge ElevenLabs audio into visual — copy video stream (no re-encode)
+      // NOTE: no -shortest — audio may be shorter than 60s; video defines the duration.
       await runFFmpeg([
         "-i", visualPath,
         "-i", audioPath,
@@ -349,7 +350,7 @@ export async function renderLightVideo(
         "-c:a", "aac", "-b:a", "128k",
         "-map", "0:v:0",
         "-map", "1:a:0",
-        "-shortest",
+        "-t", String(VIDEO_DURATION_SEC),
         ...metadataArgs,
         "-y", outputPath,
       ]);
@@ -544,7 +545,6 @@ async function renderWithAIBackground(
         "-map", "0:v:0",
         "-map", "1:a:0",
         "-t", String(VIDEO_DURATION_SEC),
-        "-shortest",
         ...metadataArgs,
         "-y", outputPath,
       ]);
@@ -741,7 +741,7 @@ async function renderPrimeVideo(
         "-c:v", "libx264", "-preset", "fast", "-crf", "24",
         "-c:a", "aac", "-b:a", "192k",
         "-map", "0:v:0", "-map", "1:a:0",
-        "-t", String(VIDEO_DURATION_SEC), "-shortest",
+        "-t", String(VIDEO_DURATION_SEC),
         ...metadataArgs, "-y", outputPath,
       ]);
     } else {
