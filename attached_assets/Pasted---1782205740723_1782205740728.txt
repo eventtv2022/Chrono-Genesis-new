@@ -1,0 +1,53 @@
+Геннадий, вы правы. Беспарольный вход (или отсутствие механики хэширования и восстановления) — это огромная дыра в безопасности. Гражданин не должен потерять доступ к своему аккаунту и балансу Дарминов из-за забытого пароля.
+
+Для интеграции полноценной аутентификации в Replit нам понадобятся:
+
+1. **Хэширование:** Использование библиотеки `bcrypt` (или встроенного в Node.js `crypto`) для безопасного хранения паролей в базе.
+2. **Токены восстановления:** Добавление в таблицу пользователей полей `resetPasswordToken` и `resetPasswordExpires`.
+3. **Эндпоинты:** Маршруты `/api/auth/register`, `/api/auth/login`, `/api/auth/forgot-password` и `/api/auth/reset-password`.
+
+Вот выверенный и жесткий промт для Replit-агента, который развернет эту систему под ключ:
+
+---
+
+# REPLIT ACTUATOR: IMPLEMENT SECURE PASSWORD AUTHENTICATION & RECOVERY SYSTEM
+
+## 1. OBJECTIVE
+
+Модернизировать систему аутентификации пользователей (граждан). Добавить обязательное поле пароля (с хэшированием), эндпоинт авторизации (Login) и полноценный механизм генерации токенов для восстановления доступа при потере пароля.
+
+## 2. DATABASE SCHEMA CHANGES
+
+В схему таблицы пользователей/граждан (например, `citizensTable` или аналогичную таблицу авторизации в `db/schema.ts`) необходимо добавить три поля:
+
+* `passwordHash` (text, not null) — для хранения хэшированного пароля.
+* `resetPasswordToken` (text, nullable) — случайный безопасный токен восстановления.
+* `resetPasswordExpires` (timestamp, nullable) — время жизни токена (например, 1 час).
+
+## 3. INSTRUCTION FOR REPLIT AGENT
+
+> *"Agent, we need to secure the authentication pipeline and add a password reset mechanism. Currently, password protection and recovery are missing. Please implement the following architecture:
+> **1. Database & Security Setup:**
+> * Update your database schema file (e.g., `db/schema.ts` or where your users/citizens table is stored) to include `passwordHash` (text), `resetPasswordToken` (text, nullable), and `resetPasswordExpires` (timestamp, nullable).
+> * Install `bcrypt` (or `bcryptjs`) and its type definitions if they aren't available, to securely hash and compare passwords.
+> 
+> 
+> **2. Authentication Routes & Logic:**
+> * **Registration (`POST /api/auth/register`):** Modify registration so it accepts a `password`. Hash it using `bcrypt.hash(password, 10)` before storing it in `passwordHash`. Never store plain text!
+> * **Login (`POST /api/auth/login`):** Implement standard validation. Fetch the user by their identifier (email/username), verify the password using `bcrypt.compare()`, and issue a secure session cookie or JWT token if correct.
+> 
+> 
+> **3. Password Recovery Pipeline:**
+> * **Forgot Password (`POST /api/auth/forgot-password`):** This route accepts the user's email. If the user exists, generate a secure, random crypto token (e.g., using Node's native `crypto.randomBytes(32).toString('hex')`). Save this token as `resetPasswordToken` and set `resetPasswordExpires` to 1 hour in the future. For now, log the recovery link to the server console (`/api/auth/reset-password?token=XYZ`) so we can use it, or simulate sending an email.
+> * **Reset Password (`POST /api/auth/reset-password`):** This route accepts `token` and `newPassword`. It must look up the user by `resetPasswordToken`, check if `resetPasswordExpires` is still valid (in the future), hash the `newPassword`, update `passwordHash`, and clear the token fields.
+> 
+> 
+> **4. Validation & Build:**
+> * Ensure proper error handling (e.g., 400 for expired tokens, 401 for wrong credentials).
+> * Run `npm run typecheck` to verify database types and routes, fix any TS compilation errors, and restart the backend API server."*
+> 
+> 
+
+---
+
+Отправляйте этот промт агенту в Replit. Он создаст надежный защитный контур, пропишет миграцию для новых колонок в БД и развернет рабочую логику сброса паролей. Как только он закончит, система авторизации станет монолитной! Направляем?

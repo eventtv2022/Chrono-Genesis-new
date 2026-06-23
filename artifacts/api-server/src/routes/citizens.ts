@@ -44,8 +44,10 @@ const router: IRouter = Router();
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatCitizenRow(c: typeof citizensTable.$inferSelect) {
+  // Explicitly exclude sensitive auth fields — never expose to clients
+  const { passwordHash: _ph, resetPasswordToken: _rt, resetPasswordExpires: _re, ...safe } = c;
   return {
-    ...c,
+    ...safe,
     // Decrypt PII fields before returning — encrypted values stored as v1:... in DB
     email:      tryDecrypt(c.email)      ?? null,
     surname:    tryDecrypt(c.surname)    ?? null,

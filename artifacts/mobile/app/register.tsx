@@ -24,7 +24,7 @@ import { LogoBrand } from "@/components/LogoBrand";
 
 const BASE_URL = getBaseUrl();
 
-type Mode = "choose" | "register" | "login" | "pending" | "issued";
+type Mode = "choose" | "register" | "login" | "forgot" | "pending" | "issued";
 
 interface PendingData {
   citizenNumber: string;
@@ -57,11 +57,19 @@ export default function RegisterScreen() {
   const [givenNames, setGivenNames] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState(""); // YYYY-MM-DD
   const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [signatureBase64, setSignatureBase64] = useState<string | null>(null);
 
   // Login
   const [loginPhone, setLoginPhone] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
+  // Forgot password
+  const [forgotPhone, setForgotPhone] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
 
   // Pending / issued
   const [pendingData, setPendingData] = useState<PendingData | null>(null);
@@ -117,18 +125,26 @@ export default function RegisterScreen() {
       Alert.alert("Заполни обязательные поля", "Имя и номер телефона обязательны.");
       return;
     }
+    if (!password.trim() || password.length < 6) {
+      Alert.alert("Пароль слишком короткий", "Минимум 6 символов.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert("Пароли не совпадают", "Проверь введённый пароль.");
+      return;
+    }
     setLoading(true);
     try {
-      const body: Record<string, string> = {
+      const body: Record<string, string | boolean> = {
         name: n,
         phone: phone.trim(),
+        password: password.trim(),
       };
       if (surname.trim()) body["surname"] = surname.trim();
       if (givenNames.trim()) body["givenNames"] = givenNames.trim();
       if (dateOfBirth.trim().match(/^\d{4}-\d{2}-\d{2}$/)) body["dateOfBirth"] = dateOfBirth.trim();
-      if (signatureBase64) body["signatureBase64"] = signatureBase64;
 
-      const res = await fetch(`${BASE_URL}/api/citizens`, {
+      const res = await fetch(`${BASE_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -150,7 +166,6 @@ export default function RegisterScreen() {
         registrationStatus?: string;
       };
 
-      // Store citizen in context so they can use the app during pending period
       setCitizen(cd as CitizenProfile);
       queryClient.invalidateQueries({ queryKey: ["citizens"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -178,13 +193,51 @@ export default function RegisterScreen() {
     if (!loginPhone.trim()) { Alert.alert("Введи номер телефона"); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/citizens/by-phone/${encodeURIComponent(loginPhone.trim())}`);
+      const res = await fetch(`${BASE_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: loginPhone.trim(),
+          password: loginPassword.trim() || undefined,
+        }),
+      });
       const data = await res.json() as CitizenProfile | { error: string };
-      if (!res.ok) { Alert.alert("Гражданин не найден", "Проверь номер или зарегистрируйся"); return; }
+      if (!res.ok) {
+        Alert.alert("Ошибка входа", (data as { error: string }).error);
+        return;
+      }
       setCitizen(data as CitizenProfile);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
-    } finally { setLoading(false); }
+    } catch {
+      Alert.alert("Ошибка соединения");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── Forgot password ────────────────────────────────────────────────────────
+  async function handleForgotPassword() {
+    if (!forgotPhone.trim()) { Alert.alert("Введи номер телефона"); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: forgotPhone.trim() }),
+      });
+      if (res.ok) {
+        setForgotSent(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        const d = await res.json() as { error: string };
+        Alert.alert("Ошибка", d.error);
+      }
+    } catch {
+      Alert.alert("Ошибка соединения");
+    } finally {
+      setLoading(false);
+    }
   }
 
   // ── Open passport ─────────────────────────────────────────────────────────
@@ -262,6 +315,14 @@ export default function RegisterScreen() {
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={phone} onChangeText={setPhone} placeholder="+7..." placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" />
 
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ПАРОЛЬ * (мин. 6 символов)</Text>
+          <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.mutedForeground} secureTextEntry />
+
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ПОВТОРИТЕ ПАРОЛЬ *</Text>
+          <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            value={confirmPassword} onChangeText={setConfirmPassword} placeholder="••••••••" placeholderTextColor={colors.mutedForeground} secureTextEntry />
+
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ПОДПИСЬ *</Text>
           <View style={[styles.signatureContainer, { borderColor: colors.border }]}>
             <SignatureCanvas
@@ -305,14 +366,75 @@ export default function RegisterScreen() {
       {mode === "login" && (
         <View style={styles.section}>
           <Text style={[styles.formTitle, { color: colors.foreground }]}>Вход</Text>
+
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ТЕЛЕФОН</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={loginPhone} onChangeText={setLoginPhone} placeholder="+7..." placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" autoFocus />
+
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ПАРОЛЬ</Text>
+          <View style={{ position: "relative" }}>
+            <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground, paddingRight: 44 }]}
+              value={loginPassword} onChangeText={setLoginPassword} placeholder="••••••••" placeholderTextColor={colors.mutedForeground}
+              secureTextEntry={!showLoginPassword} />
+            <TouchableOpacity
+              onPress={() => setShowLoginPassword(v => !v)}
+              style={{ position: "absolute", right: 12, top: 0, bottom: 0, justifyContent: "center" }}
+            >
+              <Feather name={showLoginPassword ? "eye-off" : "eye"} size={18} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity onPress={() => { setForgotPhone(loginPhone); setForgotSent(false); setMode("forgot"); }} style={{ marginBottom: 12, alignSelf: "flex-end" }}>
+            <Text style={{ fontSize: 13, color: colors.primary }}>Забыли пароль?</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: loading ? 0.6 : 1 }]} onPress={handleLogin} disabled={loading} activeOpacity={0.8}>
-            {loading ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>Войти</Text>}
+            {loading ? <ActivityIndicator color={colors.primaryForeground} /> : (
+              <>
+                <Feather name="log-in" size={18} color={colors.primaryForeground} />
+                <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>Войти</Text>
+              </>
+            )}
           </TouchableOpacity>
           <TouchableOpacity style={styles.cancelBtn} onPress={() => setMode("choose")} activeOpacity={0.8}>
             <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Назад</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── FORGOT PASSWORD ── */}
+      {mode === "forgot" && (
+        <View style={styles.section}>
+          <Text style={[styles.formTitle, { color: colors.foreground }]}>Восстановление пароля</Text>
+
+          {forgotSent ? (
+            <View style={[styles.infoBox, { backgroundColor: "#22c55e20", borderColor: "#22c55e60" }]}>
+              <Feather name="check-circle" size={18} color="#22c55e" />
+              <Text style={[styles.infoText, { color: colors.foreground }]}>
+                Токен восстановления выдан. Администратор вышлет ссылку для сброса пароля.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={[styles.infoText, { color: colors.mutedForeground, marginBottom: 12 }]}>
+                Введите телефон, привязанный к аккаунту. Токен для сброса будет выдан администратором.
+              </Text>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ТЕЛЕФОН</Text>
+              <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+                value={forgotPhone} onChangeText={setForgotPhone} placeholder="+7..." placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" autoFocus />
+              <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: loading ? 0.6 : 1 }]} onPress={handleForgotPassword} disabled={loading} activeOpacity={0.8}>
+                {loading ? <ActivityIndicator color={colors.primaryForeground} /> : (
+                  <>
+                    <Feather name="send" size={18} color={colors.primaryForeground} />
+                    <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>Запросить сброс</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+
+          <TouchableOpacity style={styles.cancelBtn} onPress={() => setMode("login")} activeOpacity={0.8}>
+            <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Назад ко входу</Text>
           </TouchableOpacity>
         </View>
       )}

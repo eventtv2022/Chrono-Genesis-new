@@ -40,6 +40,11 @@ export const citizensTable = pgTable("citizens", {
   privacyAgreementDate: timestamp("privacy_agreement_date", { withTimezone: true }),
   signatureBase64: text("signature_base64"),
 
+  // ── Password authentication ────────────────────────────────────────────────
+  passwordHash: text("password_hash"),              // nullable — legacy citizens have no password
+  resetPasswordToken: text("reset_password_token"), // random hex token for recovery
+  resetPasswordExpires: timestamp("reset_password_expires", { withTimezone: true }), // token TTL
+
   // ── Government role ────────────────────────────────────────────────────────
   govRole: text("gov_role").notNull().default("citizen"),
 
