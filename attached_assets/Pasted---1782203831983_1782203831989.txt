@@ -1,0 +1,60 @@
+Если ИИ выдает слабые, банальные или «роботизированные» манифесты из коротких мыслей граждан, проблема кроется в **системном промпте (System Prompt)** для Gemini. Когда модели дают слишком много свободы или размытые инструкции, она скатывается в канцеляризмы и скучные обобщения.
+
+Чтобы выжать из Gemini максимум, его нужно жестко ограничить ролевой моделью и задать четкую структуру «усиления» смысла.
+
+---
+
+## 💡 Что делать: Меняем стратегию промптинга
+
+Вместо простой просьбы *«расширь этот текст»*, мы должны заставить Gemini работать по принципу **драматургического катализатора**. Мы даем модели роль главного идеолога утопии/дистопии TimeNation, который превращает бытовую мысль в мощный манифест.
+
+### Как переписать промпт в `geminiService.ts`:
+
+Внедрите в код следующий шаблон системных инструкций для функции `generateManifesto`:
+
+> **Роль:** Ты — Главный Архитектор Смысла цифрового государства TimeNation. Твоя задача — взять сырую, хаотичную или простую мысль гражданина и катализировать её: очистить от словесного мусора, усилить её внутреннюю философию и превратить в концентрированный, кинематографичный манифест для трансляции на главном ТВ-экране нации.
+> **Правила генерации:**
+> 1. **Никакой воды и банальностей:** Избегай фраз вроде "В нашем мире...", "Важно помнить...", "Каждый из нас...". Пиши сразу по существу, дерзко, веско.
+> 2. **Контекст Времени:** Помни, что главная валюта — Время (Минуты/Дармины). Любая мысль (о ремонте, технологиях, искусстве) должна неявно или явно резонировать с ценностью человеческого времени, созидания и эволюции.
+> 3. **Ритмика и Тон:** Текст должен быть разбит на 5 четких, емких предложений (сегментов). Каждое предложение — законченная, сильная мысль. Стиль: смесь киберпанка, глубокой философии и манифестов Apple/SpaceX. Текст должен идеально подходить для пафосной озвучки TTS.
+> 
+> 
+
+---
+
+## 🛠️ Промт для Replit: Прокачка ИИ-генератора смыслов
+
+Вот готовый исполнительный промт для Replit-агента, который перепишет логику и промпты в вашем сервисе, чтобы манифесты стали сильными и фактурными.
+
+---
+
+# REPLIT ACTUATOR: UPGRADE GEMINI MANIFESTO PROMPT & AI GENERATION QUALITY
+
+## 1. OBJECTIVE
+
+Капитально улучшить качество генерации смыслов в файле `artifacts/api-server/src/services/geminiService.ts` (или файле, отвечающем за работу с Gemini AI). Нам нужно заменить слабый базовый промпт на глубокий, структурированный системный промпт, который превращает простые фразы граждан в мощные, кинематографичные манифесты.
+
+## 2. INSTRUCTION FOR REPLIT AGENT
+
+> *"Agent, the current AI-generated manifestos from citizen seed thoughts are too weak, generic, and boring. We need to upgrade the prompt engineering for the Gemini model to ensure high-density, cinematic, and impactful output.
+> **Please update the prompt inside the manifesto generation function with the following structure:**
+> 1. **System Instruction / Role:**
+> Set the system context: 'You are the Chief Architect of Meaning for TimeNation. Your absolute goal is to transform a raw, simple, or casual seed thought from a citizen into a high-impact, elite, cinematic broadcast manifesto. Never use corporate buzzwords, generic advice, or robotic preambles like "In a world where...". Be direct, profound, and sharp. Every statement must feel like a quote from a high-budget sci-fi masterpiece or a revolutionary philosophical doctrine.'
+> 2. **Strict Output Formatting:**
+> * The output must strictly consist of exactly 5 powerful, independent sentences (segments).
+> * Each sentence must represent a progressive stage of the thought: 1. The Trigger/Problem, 2. The Inner Depth, 3. The Shift, 4. The Core Value (implicitly tying into Time, Focus, or Creation), 5. The Final Climax.
+> * Do not include any markdown formatting like bolding (`**`), lists, or numbering in the final text. Just 5 clean sentences separated by periods so the TTS engine can read it smoothly.
+> 
+> 
+> 3. **Fallback Mechanism:**
+> Review the code and make sure that if Gemini returns an empty string or fails, our local `expandSeedToManifesto` function acts as a robust backup with pre-authored, high-quality dystopian/utopian templates instead of breaking the pipeline.
+> 
+> 
+> Run `npm run typecheck` after modifying the prompt to ensure the service compiles perfectly."*
+
+---
+
+### ⚡ Что изменится после этого фикса:
+
+* **Было:** *"Я хочу сделать ремонт в комнате."* → ИИ выдавал: *"Ремонт это очень важно для каждого гражданина, чтобы жить в уюте и тепле, ведь дом это наше всё..."* (Скучно, затянуто).
+* **Станет:** *"Я хочу сделать ремонт в комнате."* → ИИ выдаст: *"Пространство вокруг нас формирует архитектонику нашего разума. Хаос в стенах — это хаос в мыслях, сжигающий драгоценные минуты жизни. Мы пересобираем свой быт, чтобы создать безупречный плацдарм для эволюции. Фиксация нового порядка начинается с первого ровного шва. Покоряя материю, мы возвращаем контроль над собственным временем."* (Готовый манифест для ТВ-слота).
