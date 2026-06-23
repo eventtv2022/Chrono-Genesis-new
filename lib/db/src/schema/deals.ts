@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, real } from "drizzle-orm/pg-core";
 
 // TiMETR Escrow — task-based citizen-to-citizen time transfer
 // Flow: Sender creates deal → minutes locked → Receiver accepts + submits proof →
@@ -16,6 +16,9 @@ export const dealsTable = pgTable("deals", {
   proofText: text("proof_text"),                 // receiver-supplied text description
   disputeClaimText: text("dispute_claim_text"),  // claimant's description of the dispute
   aiVerdict: text("ai_verdict"),                  // Gemini arbitration verdict
+  // Rate snapshot — calculatedMinuteRate locked at deal creation to prevent
+  // retroactive mutations when AI auditor later adjusts citizen's Kq
+  snapshotMinuteRate: real("snapshot_minute_rate").notNull().default(1.0),
   // Work-timer fields (managed by receiver inside DiscussionModal)
   timerStatus: text("timer_status").notNull().default("stopped"), // stopped | running | paused | completed
   totalTrackedMinutes: integer("total_tracked_minutes").notNull().default(0),

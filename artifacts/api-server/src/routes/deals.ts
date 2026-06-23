@@ -1,4 +1,6 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
+import multer from "multer";
+import path from "path";
 import { db } from "@workspace/db";
 import { dealsTable, citizensTable, chatMessagesTable } from "@workspace/db";
 import { eq, or, asc } from "drizzle-orm";
@@ -6,6 +8,20 @@ import { z } from "zod";
 import { logger } from "../lib/logger";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { sendTransactionNotification } from "../services/telegramService";
+import { UPLOADS_DIR } from "../app";
+
+// ── Multer: disk storage for chat image uploads ────────────────────────────────
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    filename: (_req, _file, cb) => cb(null, `${Date.now()}.jpg`),
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Только изображения"));
+  },
+});
 
 const router: IRouter = Router();
 
@@ -107,7 +123,7 @@ router.post("/deals", async (req, res): Promise<void> => {
   const { senderId, receiverId, amount, description } = parsed.data;
 
   const [sender] = await db
-    .select({ id: citizensTable.id, balance: citizensTable.balanceMinutes })
+    .select({ id: citizensTable.id, balance: citizensTable.balanceMinutes, minuteRate: citizensTable.calculatedMinuteRate })
     .from(citizensTable)
     .where(eq(citizensTable.id, senderId))
     .limit(1);
@@ -125,9 +141,18 @@ router.post("/deals", async (req, res): Promise<void> => {
     .set({ balanceMinutes: sender.balance - amount })
     .where(eq(citizensTable.id, senderId));
 
+  // Snapshot the sender's current Kq so future rate adjustments
+  // by the AI auditor don't mutate the historical cost of this contract
   const [deal] = await db
     .insert(dealsTable)
-    .values({ senderId, receiverId: receiverId ?? null, amount, description, status: "open" })
+    .values({
+      senderId,
+      receiverId: receiverId ?? null,
+      amount,
+      description,
+      status: "open",
+      snapshotMinuteRate: sender.minuteRate ?? 1.0,
+    })
     .returning();
 
   req.log.info({ dealId: deal.id, senderId, amount }, "TiMETR escrow deal created");
@@ -483,12 +508,30 @@ ${claimText}
 const ChatMessageBody = z.object({
   senderId: z.number().int().positive(),
   messageText: z.string().max(2000).optional(),
-  imageUrl: z.string().max(600000).optional(), // base64 data URL, ~450KB image
+  imageUrl: z.string().max(500).optional(), // URL path only, e.g. /uploads/1234567890.jpg
 });
 
 const TimerActorBody = z.object({
   citizenId: z.number().int().positive(),
 });
+
+// ─── POST /api/deals/:id/chat/upload ─────────────────────────────────────────
+// Upload an image for a chat message. Accepts multipart/form-data with field "image".
+// Returns { url: "/uploads/filename.jpg" } — store only this URL in chat_messages.imageUrl.
+router.post(
+  "/deals/:id/chat/upload",
+  upload.single("image"),
+  async (req: Request, res: Response): Promise<void> => {
+    const rawId = Array.isArray(req.params["id"]) ? req.params["id"][0] : (req.params["id"] ?? "");
+    const id = parseInt(rawId, 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid deal id" }); return; }
+    if (!req.file) { res.status(400).json({ error: "Файл не прикреплён или неверный тип" }); return; }
+
+    const url = `/uploads/${req.file.filename}`;
+    req.log.info({ dealId: id, filename: req.file.filename, size: req.file.size }, "Chat image uploaded");
+    res.status(201).json({ url });
+  }
+);
 
 // ─── GET /api/deals/:id/chat ─────────────────────────────────────────────────
 // Returns chat messages with sender name, ordered by createdAt asc

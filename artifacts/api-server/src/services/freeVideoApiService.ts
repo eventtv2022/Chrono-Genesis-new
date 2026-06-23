@@ -140,26 +140,27 @@ async function generateViaPicsumSlideshow(
   for (let i = 0; i < prompt.length; i++) seed = ((seed << 5) - seed + prompt.charCodeAt(i)) | 0;
   if (seed < 0) seed = -seed;
 
-  const imageBuffers: (Buffer | null)[] = [];
-  for (let i = 0; i < PICSUM_IMAGES; i++) {
-    if (signal?.aborted) break;
-    const imgSeed = (seed + i * 97) % 1000;
-    const url = `https://picsum.photos/seed/${imgSeed}/1280/720`;
-    try {
-      const res = await fetchWithTimeout(url, {}, 20_000, signal);
-      if (!res.ok) {
-        logger.warn({ status: res.status, i }, "Picsum image fetch failed");
-        imageBuffers.push(null);
-        continue;
+  // Fetch all images in parallel — reduces total wait from ~5×20s to ~20s worst case
+  const imageBuffers: (Buffer | null)[] = await Promise.all(
+    Array.from({ length: PICSUM_IMAGES }, async (_, i) => {
+      if (signal?.aborted) return null;
+      const imgSeed = (seed + i * 97) % 1000;
+      const url = `https://picsum.photos/seed/${imgSeed}/1280/720`;
+      try {
+        const res = await fetchWithTimeout(url, {}, 20_000, signal);
+        if (!res.ok) {
+          logger.warn({ status: res.status, i }, "Picsum image fetch failed");
+          return null;
+        }
+        const buf = Buffer.from(await res.arrayBuffer());
+        logger.info({ i, ok: true, bytes: buf.byteLength }, "Picsum image fetched");
+        return buf.byteLength >= 1024 ? buf : null;
+      } catch (err) {
+        logger.warn({ err, i }, "Picsum image error");
+        return null;
       }
-      const buf = Buffer.from(await res.arrayBuffer());
-      imageBuffers.push(buf.byteLength >= 1024 ? buf : null);
-      logger.info({ i, ok: true, bytes: buf.byteLength }, "Picsum image fetched");
-    } catch (err) {
-      logger.warn({ err, i }, "Picsum image error");
-      imageBuffers.push(null);
-    }
-  }
+    })
+  );
 
   const validImages = imageBuffers.filter((b): b is Buffer<ArrayBuffer> => b !== null);
   if (validImages.length === 0) {

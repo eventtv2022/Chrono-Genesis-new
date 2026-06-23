@@ -1,10 +1,14 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { MEDIA_DIR } from "./services/renderService";
+
+export const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const app: Express = express();
 
@@ -52,5 +56,8 @@ app.use("/media", express.static(MEDIA_DIR, {
     res.setHeader("Content-Type", "video/mp4");
   },
 }));
+
+// Serve chat image uploads at /uploads/*
+app.use("/uploads", express.static(UPLOADS_DIR, { maxAge: "7d" }));
 
 export default app;
