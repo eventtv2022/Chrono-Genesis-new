@@ -12,3 +12,9 @@ id = "tlsQgrbfhLJhDw0Af0pb1"
 uri = "file://project_snapshot.txt"
 type = "text"
 title = "TimeNation — Full Project Snapshot (для аудита)"
+
+[[outputs]]
+id = "g7D7GO-TCys85Ueib8htz"
+uri = "file://CODEBASE_AUDIT.md"
+type = "text"
+title = "TimeNation — Полный кодовый дайджест для аудита"
