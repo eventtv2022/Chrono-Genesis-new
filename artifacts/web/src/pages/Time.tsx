@@ -117,8 +117,60 @@ export function Time() {
   const [alarmMinute, setAlarmMinute] = useState(0);
   const [alarmDays, setAlarmDays] = useState<Set<number>>(new Set([1, 2, 3, 4, 5]));
   const [alarmActive, setAlarmActive] = useState(false);
+  const [alarmFiring, setAlarmFiring] = useState(false);
+  const [notifGranted, setNotifGranted] = useState(false);
   const alarmRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const alarmSoundRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastFiredKey = useRef("");
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "granted") setNotifGranted(true);
+  }, []);
+
+  const requestNotifPermission = async () => {
+    if (!("Notification" in window)) return;
+    const perm = await Notification.requestPermission();
+    setNotifGranted(perm === "granted");
+  };
+
+  // Web Audio beep: plays a repeating 880Hz + 440Hz alarm tone
+  const playAlarmSound = useCallback(() => {
+    const AudioCtxClass = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtxClass) return;
+    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+      audioCtxRef.current = new AudioCtxClass();
+    }
+    const ctx = audioCtxRef.current;
+
+    let beat = 0;
+    const playBeat = () => {
+      const freq = beat % 2 === 0 ? 880 : 660;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      gain.gain.setValueAtTime(0.5, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.35);
+      beat++;
+    };
+    playBeat();
+    alarmSoundRef.current = setInterval(playBeat, 600);
+  }, []);
+
+  const stopAlarmSound = useCallback(() => {
+    if (alarmSoundRef.current) { clearInterval(alarmSoundRef.current); alarmSoundRef.current = null; }
+  }, []);
+
+  const dismissAlarm = useCallback(() => {
+    setAlarmFiring(false);
+    stopAlarmSound();
+  }, [stopAlarmSound]);
 
   const getNicosiaHMS = (): { h: number; m: number; weekday: number } => {
     const now = new Date();
@@ -133,19 +185,29 @@ export function Time() {
   };
 
   useEffect(() => {
-    if (!alarmActive) { if (alarmRef.current) clearInterval(alarmRef.current); return; }
+    if (!alarmActive) {
+      if (alarmRef.current) { clearInterval(alarmRef.current); alarmRef.current = null; }
+      return;
+    }
     const check = () => {
       const { h, m, weekday } = getNicosiaHMS();
       const fireKey = `${h}:${m}:${weekday}`;
       if (h === alarmHour && m === alarmMinute && alarmDays.has(weekday) && lastFiredKey.current !== fireKey) {
         lastFiredKey.current = fireKey;
-        alert(`⏰ Суверенный Будильник\nДоброе утро, ${citizen?.name ?? "Гражданин"}!\n${String(alarmHour).padStart(2,"0")}:${String(alarmMinute).padStart(2,"0")} по TimeNation (Фамагуста).`);
+        setAlarmFiring(true);
+        playAlarmSound();
+        // Push notification for background tabs
+        if (notifGranted && Notification.permission === "granted") {
+          new Notification("⏰ Суверенный Будильник — TimeNation", {
+            body: `Доброе утро, ${citizen?.name ?? "Гражданин"}! ${String(alarmHour).padStart(2,"0")}:${String(alarmMinute).padStart(2,"0")} по Фамагусте.`,
+            icon: "/favicon.ico",
+          });
+        }
       }
     };
-    check();
-    alarmRef.current = setInterval(check, 10_000);
-    return () => { if (alarmRef.current) clearInterval(alarmRef.current); };
-  }, [alarmActive, alarmHour, alarmMinute, alarmDays, citizen?.name]);
+    alarmRef.current = setInterval(check, 5_000);
+    return () => { if (alarmRef.current) { clearInterval(alarmRef.current); alarmRef.current = null; } };
+  }, [alarmActive, alarmHour, alarmMinute, alarmDays, citizen?.name, notifGranted, playAlarmSound]);
 
   const toggleDay = (d: number) => {
     setAlarmDays(prev => {
@@ -368,12 +430,23 @@ export function Time() {
               </div>
             </div>
 
+            {/* Notification permission request */}
+            {"Notification" in window && Notification.permission === "default" && (
+              <button
+                onClick={() => void requestNotifPermission()}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+              >
+                <Bell className="w-4 h-4" />
+                Разрешить уведомления (для фоновой работы)
+              </button>
+            )}
+
             {/* Activate */}
             <button
               onClick={() => {
                 const next = !alarmActive;
                 setAlarmActive(next);
-                if (next) alert(`Будильник активирован.\nСработает в ${String(alarmHour).padStart(2,"0")}:${String(alarmMinute).padStart(2,"0")} по времени Фамагусты.\nСтраница должна оставаться открытой.`);
+                if (!next) { stopAlarmSound(); setAlarmFiring(false); }
               }}
               className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg font-semibold border transition-colors ${
                 alarmActive
@@ -385,7 +458,7 @@ export function Time() {
               {alarmActive ? "Будильник активен — выключить" : "Включить будильник"}
             </button>
 
-            {alarmActive && (
+            {alarmActive && !alarmFiring && (
               <div className="flex items-center gap-3 p-3 rounded-lg border bg-primary/10 border-primary/40">
                 <Bell className="w-4 h-4 text-primary shrink-0" />
                 <p className="text-sm text-primary">
@@ -397,9 +470,30 @@ export function Time() {
               </div>
             )}
 
+            {/* Firing banner */}
+            {alarmFiring && (
+              <div className="flex items-center justify-between gap-3 p-4 rounded-lg border-2 border-primary bg-primary/10 animate-pulse">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">⏰</span>
+                  <div>
+                    <p className="font-bold text-primary">Суверенный Будильник!</p>
+                    <p className="text-sm text-primary/80">
+                      {String(alarmHour).padStart(2,"0")}:{String(alarmMinute).padStart(2,"0")} · Фамагуста
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={dismissAlarm}
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/80 transition-colors"
+                >
+                  Выключить
+                </button>
+              </div>
+            )}
+
             <div className="flex items-start gap-2 p-3 rounded-lg bg-muted text-xs text-muted-foreground">
               <Info className="w-4 h-4 shrink-0 mt-0.5" />
-              Будильник работает пока вкладка браузера открыта. При срабатывании — всплывающее уведомление на экране.
+              Будильник воспроизводит звуковой сигнал и показывает баннер. Разреши уведомления — тогда сработает даже если вкладка свёрнута. Страница должна быть открыта.
             </div>
           </div>
         )}
