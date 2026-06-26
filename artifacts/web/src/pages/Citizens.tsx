@@ -8,12 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 
 const RANK_STYLES: Record<string, string> = {
-  "Странник": "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
-  "Созидатель": "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+  "Гражданин":              "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
+  "Оператор времени":       "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+  "Хранитель времени":      "bg-violet-500/20 text-violet-300 border-violet-500/30",
+  "Архитектор потока":      "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  "Мастер хронологии":      "bg-amber-500/20 text-amber-300 border-amber-500/30",
+  "Синхронизатор вечности": "bg-rose-500/20 text-rose-300 border-rose-500/30",
+  // Посол — особый статус (Земельный Фонд), не входит в шкалу merit
   "Посол": "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  "Хранитель Времени": "bg-violet-500/20 text-violet-300 border-violet-500/30",
-  "Вершитель Эпох": "bg-amber-500/20 text-amber-300 border-amber-500/30",
-  "Архитектор Таймлайна": "bg-rose-500/20 text-rose-300 border-rose-500/30",
 };
 
 export function Citizens() {

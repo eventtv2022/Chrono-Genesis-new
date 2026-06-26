@@ -1030,7 +1030,7 @@ export default function TimerScreen() {
         {citizen && (
           <View style={styles.headerRight}>
             <View style={styles.rankPill}>
-              <Text style={styles.rankText}>{citizen.rank ?? "Странник"}</Text>
+              <Text style={styles.rankText}>{citizen.rank ?? "Гражданин"}</Text>
             </View>
             <View style={styles.balancePill}>
               <Feather name="clock" size={12} color={colors.primary} />
@@ -1087,7 +1087,7 @@ export default function TimerScreen() {
           </View>
           <View style={styles.passportRight}>
             <Text style={styles.passportRankLabel}>Ранг</Text>
-            <Text style={styles.passportRank}>{citizen.rank ?? "Странник"}</Text>
+            <Text style={styles.passportRank}>{citizen.rank ?? "Гражданин"}</Text>
           </View>
         </View>
       ) : (
