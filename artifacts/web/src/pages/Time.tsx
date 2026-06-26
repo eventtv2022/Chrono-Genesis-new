@@ -162,7 +162,7 @@ export function Time() {
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const getAudioEl = useCallback((): HTMLAudioElement => {
     if (!audioElRef.current) {
-      const a = new window.Audio("/alarm.mp3");
+      const a = new window.Audio(`${import.meta.env.BASE_URL}alarm.mp3`);
       a.loop = true;
       a.preload = "auto";
       audioElRef.current = a;
