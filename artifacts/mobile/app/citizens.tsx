@@ -61,8 +61,7 @@ export default function CitizensScreen() {
   const filtered = (citizens ?? []).filter(
     (c) =>
       !query ||
-      c.name.toLowerCase().includes(query.toLowerCase()) ||
-      c.phone.includes(query)
+      c.name.toLowerCase().includes(query.toLowerCase())
   );
 
   const sorted = [...filtered].sort((a, b) => (b.meritScore ?? 0) - (a.meritScore ?? 0));
@@ -80,7 +79,6 @@ export default function CitizensScreen() {
           </View>
           <View style={styles.nameBlock}>
             <Text style={styles.name} numberOfLines={1}>{c.name}</Text>
-            <Text style={styles.phone}>{c.phone}</Text>
           </View>
         </View>
         <View style={[styles.rankPill, { backgroundColor: rankColor + "22", borderColor: rankColor + "55" }]}>
@@ -122,7 +120,7 @@ export default function CitizensScreen() {
           style={styles.searchInput}
           value={query}
           onChangeText={setQuery}
-          placeholder="Поиск по имени или номеру…"
+          placeholder="Поиск по псевдониму…"
           placeholderTextColor={colors.mutedForeground}
         />
         {query.length > 0 && (

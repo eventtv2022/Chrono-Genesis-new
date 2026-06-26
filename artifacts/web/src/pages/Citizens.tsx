@@ -31,8 +31,7 @@ export function Citizens() {
   const filtered = (citizens ?? []).filter(
     (c) =>
       !query ||
-      c.name.toLowerCase().includes(query.toLowerCase()) ||
-      c.phone.includes(query)
+      c.name.toLowerCase().includes(query.toLowerCase())
   );
 
   const sorted = [...filtered].sort((a, b) => (b.meritScore ?? 0) - (a.meritScore ?? 0));
@@ -52,7 +51,7 @@ export function Citizens() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск по имени или номеру..."
+            placeholder="Поиск по псевдониму..."
             className="pl-9 bg-secondary border-border font-mono text-sm"
           />
         </div>
@@ -90,7 +89,6 @@ export function Citizens() {
                     <span className="w-8 text-xs font-mono text-muted-foreground">{idx + 1}</span>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">{citizen.name}</div>
-                      <div className="text-[11px] text-muted-foreground font-mono">{citizen.phone}</div>
                     </div>
                     <div className="w-24 text-right">
                       <Badge
