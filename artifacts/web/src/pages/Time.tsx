@@ -224,11 +224,16 @@ export function Time() {
     const h = alarmHourRef.current;
     const m = alarmMinuteRef.current;
     if (notifGranted && "Notification" in window && Notification.permission === "granted") {
-      new Notification("⏰ Суверенный Будильник — TimeNation", {
+      const opts: NotificationOptions = {
         body: `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")} по Фамагусте`,
         icon: "/favicon.ico",
         requireInteraction: true,
-      });
+      };
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.ready
+          .then((reg) => reg.showNotification("⏰ Суверенный Будильник — TimeNation", opts))
+          .catch(() => { /* sw not available */ });
+      }
     }
   }, [playAlarmSound, notifGranted]);
 
