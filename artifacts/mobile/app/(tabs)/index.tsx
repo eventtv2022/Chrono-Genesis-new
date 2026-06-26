@@ -1073,6 +1073,40 @@ export default function TimerScreen() {
         </View>
       )}
 
+      {/* ── Passport card / Registration banner ────────────────────────────── */}
+      {citizen ? (
+        <View style={styles.passportCard}>
+          <View style={styles.passportLeft}>
+            <View style={styles.passportAvatar}>
+              <Text style={styles.passportAvatarText}>{citizen.name.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View>
+              <Text style={styles.passportName}>{citizen.name}</Text>
+              <Text style={styles.passportId}>ID #{citizen.id} · {citizen.phone}</Text>
+            </View>
+          </View>
+          <View style={styles.passportRight}>
+            <Text style={styles.passportRankLabel}>Ранг</Text>
+            <Text style={styles.passportRank}>{citizen.rank ?? "Странник"}</Text>
+          </View>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={styles.regBanner}
+          onPress={() => router.push("/register")}
+          activeOpacity={0.8}
+        >
+          <View style={styles.regBannerIcon}>
+            <Feather name="user-plus" size={22} color={colors.primaryForeground} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.regBannerTitle}>Получить гражданство</Text>
+            <Text style={styles.regBannerSub}>Зарегистрируйся и получи 60 Д</Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={colors.primary} />
+        </TouchableOpacity>
+      )}
+
       {/* ── Mode toggle ────────────────────────────────────────────────────── */}
       <View style={styles.modeToggle}>
         <TouchableOpacity
@@ -1269,6 +1303,23 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     stopBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.destructiveForeground, letterSpacing: 2 },
     listSection: { flex: 1, paddingHorizontal: 20, paddingTop: 14 },
     listTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 12 },
+    // Passport card
+    passportCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: 20, marginBottom: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary + "55", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 },
+    passportLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+    passportAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primary + "22", borderWidth: 1, borderColor: colors.primary + "66", alignItems: "center", justifyContent: "center" },
+    passportAvatarText: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.primary },
+    passportName: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground },
+    passportId: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 1 },
+    passportRight: { alignItems: "flex-end" },
+    passportRankLabel: { fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 },
+    passportRank: { fontSize: 12, fontFamily: "Inter_700Bold", color: colors.primary },
+
+    // Registration banner
+    regBanner: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 20, marginBottom: 10, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
+    regBannerIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+    regBannerTitle: { fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground },
+    regBannerSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 2 },
+
     registerPrompt: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary, borderRadius: 12, padding: 16, marginBottom: 16 },
     registerPromptText: { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium", color: colors.foreground },
     emptyState: { alignItems: "center", paddingTop: 40, gap: 8 },
