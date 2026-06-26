@@ -121,7 +121,9 @@ export function Time() {
   const [notifGranted, setNotifGranted] = useState(false);
   const alarmRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioUnlocked = useRef(false);
   const alarmSoundRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
   const lastFiredKey = useRef("");
 
   // Request notification permission on mount
@@ -135,36 +137,72 @@ export function Time() {
     setNotifGranted(perm === "granted");
   };
 
-  // Web Audio beep: plays a repeating 880Hz + 440Hz alarm tone
-  const playAlarmSound = useCallback(() => {
-    const AudioCtxClass = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  // ── Unlock AudioContext in a user-gesture handler (critical for mobile) ──
+  const unlockAudio = useCallback(async () => {
+    const AudioCtxClass = window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtxClass) return;
     if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
       audioCtxRef.current = new AudioCtxClass();
     }
+    if (audioCtxRef.current.state === "suspended") {
+      await audioCtxRef.current.resume();
+    }
+    // Play a silent buffer — unlocks audio on iOS and Android Chrome
+    const buf = audioCtxRef.current.createBuffer(1, 1, 22050);
+    const src = audioCtxRef.current.createBufferSource();
+    src.buffer = buf;
+    src.connect(audioCtxRef.current.destination);
+    src.start(0);
+    audioUnlocked.current = true;
+  }, []);
+
+  // ── Acquire Screen Wake Lock (keeps screen on while alarm is armed) ───────
+  const acquireWakeLock = useCallback(async () => {
+    if (!("wakeLock" in navigator)) return;
+    try {
+      wakeLockRef.current = await (navigator as unknown as { wakeLock: { request: (t: string) => Promise<{ release: () => Promise<void> }> } }).wakeLock.request("screen");
+    } catch { /* not available */ }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    void wakeLockRef.current?.release().catch(() => {});
+    wakeLockRef.current = null;
+  }, []);
+
+  // ── Play repeating alarm beep ─────────────────────────────────────────────
+  const playAlarmSound = useCallback(() => {
     const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    if (ctx.state === "suspended") { void ctx.resume(); }
+
+    // Vibrate pattern on mobile
+    if ("vibrate" in navigator) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
 
     let beat = 0;
     const playBeat = () => {
+      if (!audioCtxRef.current || audioCtxRef.current.state === "closed") return;
+      if (audioCtxRef.current.state === "suspended") { void audioCtxRef.current.resume(); }
       const freq = beat % 2 === 0 ? 880 : 660;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      const osc = audioCtxRef.current.createOscillator();
+      const gain = audioCtxRef.current.createGain();
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(audioCtxRef.current.destination);
       osc.type = "sine";
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      gain.gain.setValueAtTime(0.5, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.35);
+      osc.frequency.setValueAtTime(freq, audioCtxRef.current.currentTime);
+      gain.gain.setValueAtTime(0.6, audioCtxRef.current.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtxRef.current.currentTime + 0.4);
+      osc.start(audioCtxRef.current.currentTime);
+      osc.stop(audioCtxRef.current.currentTime + 0.45);
       beat++;
     };
     playBeat();
-    alarmSoundRef.current = setInterval(playBeat, 600);
+    alarmSoundRef.current = setInterval(playBeat, 700);
   }, []);
 
   const stopAlarmSound = useCallback(() => {
     if (alarmSoundRef.current) { clearInterval(alarmSoundRef.current); alarmSoundRef.current = null; }
+    if ("vibrate" in navigator) navigator.vibrate(0);
   }, []);
 
   const dismissAlarm = useCallback(() => {
@@ -184,9 +222,24 @@ export function Time() {
     return { h, m: get("minute"), weekday };
   };
 
+  // ── Fire alarm ────────────────────────────────────────────────────────────
+  const fireAlarm = useCallback(() => {
+    setAlarmFiring(true);
+    playAlarmSound();
+    if (notifGranted && "Notification" in window && Notification.permission === "granted") {
+      new Notification("⏰ Суверенный Будильник — TimeNation", {
+        body: `Доброе утро, ${citizen?.name ?? "Гражданин"}! ${String(alarmHour).padStart(2,"0")}:${String(alarmMinute).padStart(2,"0")} по Фамагусте.`,
+        icon: "/favicon.ico",
+        requireInteraction: true,
+      });
+    }
+  }, [playAlarmSound, notifGranted, citizen?.name, alarmHour, alarmMinute]);
+
+  // ── Interval check ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!alarmActive) {
       if (alarmRef.current) { clearInterval(alarmRef.current); alarmRef.current = null; }
+      releaseWakeLock();
       return;
     }
     const check = () => {
@@ -194,20 +247,29 @@ export function Time() {
       const fireKey = `${h}:${m}:${weekday}`;
       if (h === alarmHour && m === alarmMinute && alarmDays.has(weekday) && lastFiredKey.current !== fireKey) {
         lastFiredKey.current = fireKey;
-        setAlarmFiring(true);
-        playAlarmSound();
-        // Push notification for background tabs
-        if (notifGranted && Notification.permission === "granted") {
-          new Notification("⏰ Суверенный Будильник — TimeNation", {
-            body: `Доброе утро, ${citizen?.name ?? "Гражданин"}! ${String(alarmHour).padStart(2,"0")}:${String(alarmMinute).padStart(2,"0")} по Фамагусте.`,
-            icon: "/favicon.ico",
-          });
-        }
+        fireAlarm();
       }
     };
+    check();
     alarmRef.current = setInterval(check, 5_000);
     return () => { if (alarmRef.current) { clearInterval(alarmRef.current); alarmRef.current = null; } };
-  }, [alarmActive, alarmHour, alarmMinute, alarmDays, citizen?.name, notifGranted, playAlarmSound]);
+  }, [alarmActive, alarmHour, alarmMinute, alarmDays, fireAlarm, releaseWakeLock]);
+
+  // ── Re-check when tab becomes visible again (catches throttled interval) ──
+  useEffect(() => {
+    if (!alarmActive) return;
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      const { h, m, weekday } = getNicosiaHMS();
+      const fireKey = `${h}:${m}:${weekday}`;
+      if (h === alarmHour && m === alarmMinute && alarmDays.has(weekday) && lastFiredKey.current !== fireKey) {
+        lastFiredKey.current = fireKey;
+        fireAlarm();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [alarmActive, alarmHour, alarmMinute, alarmDays, fireAlarm]);
 
   const toggleDay = (d: number) => {
     setAlarmDays(prev => {
@@ -445,8 +507,16 @@ export function Time() {
             <button
               onClick={() => {
                 const next = !alarmActive;
+                if (next) {
+                  // MUST unlock audio inside a user-gesture handler on mobile
+                  void unlockAudio();
+                  void acquireWakeLock();
+                } else {
+                  stopAlarmSound();
+                  setAlarmFiring(false);
+                  releaseWakeLock();
+                }
                 setAlarmActive(next);
-                if (!next) { stopAlarmSound(); setAlarmFiring(false); }
               }}
               className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg font-semibold border transition-colors ${
                 alarmActive
