@@ -120,9 +120,6 @@ export function Time() {
   const [alarmFiring, setAlarmFiring] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
   const [notifGranted, setNotifGranted] = useState(false);
-  const alarmRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const alarmSoundRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
   const lastFiredKey = useRef("");
   // Refs that shadow state — avoids stale closures inside setInterval
@@ -161,25 +158,29 @@ export function Time() {
     return { h, m, weekday };
   };
 
-  // ── Unlock AudioContext (MUST be called inside user-gesture handler) ───────
-  const unlockAndPrepareAudio = useCallback(async () => {
-    const AudioCtxClass = window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtxClass) return;
-    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
-      audioCtxRef.current = new AudioCtxClass();
+  // ── HTML Audio element (MP3) — created once, reused ──────────────────────
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const getAudioEl = useCallback((): HTMLAudioElement => {
+    if (!audioElRef.current) {
+      const a = new window.Audio("/alarm.mp3");
+      a.loop = true;
+      a.preload = "auto";
+      audioElRef.current = a;
     }
-    if (audioCtxRef.current.state === "suspended") {
-      await audioCtxRef.current.resume();
-    }
-    // Silent buffer — permanently unlocks audio on iOS/Android Chrome
-    const buf = audioCtxRef.current.createBuffer(1, 1, 22050);
-    const src = audioCtxRef.current.createBufferSource();
-    src.buffer = buf;
-    src.connect(audioCtxRef.current.destination);
-    src.start(0);
-    setAudioReady(true);
+    return audioElRef.current;
   }, []);
+
+  // ── Unlock audio on user gesture (mobile browsers require this) ───────────
+  const unlockAndPrepareAudio = useCallback(async () => {
+    const a = getAudioEl();
+    // Play then immediately pause — this "unlocks" the audio element on mobile
+    try {
+      await a.play();
+      a.pause();
+      a.currentTime = 0;
+    } catch { /* already unlocked or not needed */ }
+    setAudioReady(true);
+  }, [getAudioEl]);
 
   // ── Wake Lock ─────────────────────────────────────────────────────────────
   const acquireWakeLock = useCallback(async () => {
@@ -196,32 +197,18 @@ export function Time() {
     wakeLockRef.current = null;
   }, []);
 
-  // ── Beep via Web Audio (uses refs — no stale closure) ────────────────────
-  const playBeat = useCallback((beat: number) => {
-    const ctx = audioCtxRef.current;
-    if (!ctx || ctx.state === "closed") return;
-    if (ctx.state === "suspended") { void ctx.resume(); }
-    const freq = beat % 2 === 0 ? 880 : 660;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(freq, ctx.currentTime);
-    gain.gain.setValueAtTime(0.6, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.45);
-  }, []);
-
+  // ── Play / stop alarm sound via HTML Audio ────────────────────────────────
   const playAlarmSound = useCallback(() => {
     if ("vibrate" in navigator) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
-    let beat = 0;
-    playBeat(beat++);
-    alarmSoundRef.current = setInterval(() => playBeat(beat++), 700);
-  }, [playBeat]);
+    const a = getAudioEl();
+    a.loop = true;
+    a.currentTime = 0;
+    void a.play().catch(() => { /* blocked if user hasn't interacted — handled by unlockAndPrepareAudio */ });
+  }, [getAudioEl]);
 
   const stopAlarmSound = useCallback(() => {
-    if (alarmSoundRef.current) { clearInterval(alarmSoundRef.current); alarmSoundRef.current = null; }
+    const a = audioElRef.current;
+    if (a) { a.pause(); a.currentTime = 0; }
     if ("vibrate" in navigator) navigator.vibrate(0);
   }, []);
 
@@ -563,13 +550,17 @@ export function Time() {
               {alarmActive ? "Будильник активен — выключить" : "Включить будильник"}
             </button>
 
-            {/* Test sound button — plays beep in user gesture context */}
+            {/* Test sound button */}
             {!alarmActive && (
               <button
                 onClick={async () => {
-                  await unlockAndPrepareAudio();
-                  playAlarmSound();
-                  setTimeout(() => stopAlarmSound(), 3000);
+                  const a = getAudioEl();
+                  a.loop = false;
+                  a.currentTime = 0;
+                  try { await a.play(); } catch { /* blocked */ }
+                  // stop after 3 s using the same element reference
+                  setTimeout(() => { a.pause(); a.currentTime = 0; a.loop = true; }, 3000);
+                  setAudioReady(true);
                 }}
                 className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
               >

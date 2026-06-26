@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
+import { Audio } from "expo-av";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { LogoBrand } from "@/components/LogoBrand";
@@ -174,11 +175,52 @@ export default function TimeUtilsScreen() {
   // ── Alarm ───────────────────────────────────────────────────────────────────
   const [alarmHour, setAlarmHour] = useState(7);
   const [alarmMinute, setAlarmMinute] = useState(0);
-  const [alarmDays, setAlarmDays] = useState<Set<number>>(new Set([1, 2, 3, 4, 5]));
+  const [alarmDays, setAlarmDays] = useState<Set<number>>(new Set([0, 1, 2, 3, 4, 5, 6]));
   const [alarmActive, setAlarmActive] = useState(false);
+  const [alarmFiring, setAlarmFiring] = useState(false);
   // Web-only fallback refs (native uses scheduled system notifications)
   const alarmRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastFiredKey = useRef<string>("");
+  // expo-av Sound ref
+  const soundRef = useRef<Audio.Sound | null>(null);
+
+  // ── Load alarm sound once ──────────────────────────────────────────────────
+  useEffect(() => {
+    void Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+    });
+  }, []);
+
+  const playAlarmSound = useCallback(async () => {
+    try {
+      if (soundRef.current) {
+        await soundRef.current.stopAsync().catch(() => {});
+        await soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
+      const { sound } = await Audio.Sound.createAsync(
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require("../../assets/alarm.mp3"),
+        { shouldPlay: true, isLooping: true, volume: 1.0 }
+      );
+      soundRef.current = sound;
+    } catch { /* file might not exist on web fallback */ }
+  }, []);
+
+  const stopAlarmSound = useCallback(async () => {
+    if (soundRef.current) {
+      await soundRef.current.stopAsync().catch(() => {});
+      await soundRef.current.unloadAsync().catch(() => {});
+      soundRef.current = null;
+    }
+  }, []);
+
+  const dismissAlarm = useCallback(() => {
+    setAlarmFiring(false);
+    void stopAlarmSound();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [stopAlarmSound]);
 
   const toggleDay = (d: number) => {
     setAlarmDays((prev) => {
@@ -299,18 +341,15 @@ export default function TimeUtilsScreen() {
       const fireKey = `${h}:${m}:${weekday}`;
       if (h === alarmHour && m === alarmMinute && alarmDays.has(weekday) && lastFiredKey.current !== fireKey) {
         lastFiredKey.current = fireKey;
+        setAlarmFiring(true);
+        void playAlarmSound();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert(
-          "⏰ Суверенный Будильник",
-          `Доброе утро, ${citizen?.name ?? "Гражданин"}!\n\n${String(alarmHour).padStart(2,"0")}:${String(alarmMinute).padStart(2,"0")} по TimeNation (Фамагуста).`,
-          [{ text: "Проснуться в TimeNation 🌅" }]
-        );
       }
     };
     check();
-    alarmRef.current = setInterval(check, 10_000);
+    alarmRef.current = setInterval(check, 5_000);
     return () => { if (alarmRef.current) clearInterval(alarmRef.current); };
-  }, [alarmActive, alarmHour, alarmMinute, alarmDays, citizen?.name, syncScheduledAlarms]);
+  }, [alarmActive, alarmHour, alarmMinute, alarmDays, citizen?.name, syncScheduledAlarms, playAlarmSound]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -486,34 +525,66 @@ export default function TimeUtilsScreen() {
               ))}
             </View>
 
-            {/* Activate */}
+            {/* Firing banner */}
+            {alarmFiring && (
+              <View style={[st.firingBanner, { backgroundColor: colors.primary + "22", borderColor: colors.primary }]}>
+                <Text style={st.firingEmoji}>⏰</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[st.firingTitle, { color: colors.primary }]}>Суверенный Будильник!</Text>
+                  <Text style={[st.firingSub, { color: colors.primary + "bb" }]}>
+                    {String(alarmHour).padStart(2,"0")}:{String(alarmMinute).padStart(2,"0")} · Фамагуста
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[st.firingDismiss, { backgroundColor: colors.primary }]}
+                  onPress={dismissAlarm}
+                >
+                  <Text style={[st.firingDismissText, { color: colors.primaryForeground }]}>Выключить</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Enable / disable */}
             <TouchableOpacity
-              style={[st.alarmToggleBtn, alarmActive && st.alarmToggleBtnActive]}
+              style={[st.alarmToggleBtn, alarmActive ? st.alarmToggleBtnActive : { backgroundColor: colors.primary }]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setAlarmActive((a) => {
-                  if (!a) {
-                    Alert.alert(
-                      "Будильник активирован",
-                      `Сработает в ${String(alarmHour).padStart(2, "0")}:${String(alarmMinute).padStart(2, "0")} по времени Фамагусты. Приложение должно оставаться открытым.`
-                    );
-                  }
-                  return !a;
-                });
+                if (alarmActive) {
+                  void stopAlarmSound();
+                  setAlarmFiring(false);
+                  setAlarmActive(false);
+                } else {
+                  setAlarmActive(true);
+                }
               }}
             >
-              <Feather name={alarmActive ? "bell-off" : "bell"} size={18} color={alarmActive ? colors.primaryForeground : colors.mutedForeground} />
-              <Text style={[st.alarmToggleBtnText, alarmActive && st.alarmToggleBtnTextActive]}>
+              <Feather name={alarmActive ? "bell-off" : "bell"} size={18} color={colors.primaryForeground} />
+              <Text style={[st.alarmToggleBtnText, st.alarmToggleBtnTextActive]}>
                 {alarmActive ? "Будильник активен — выключить" : "Включить будильник"}
               </Text>
             </TouchableOpacity>
 
-            {alarmActive && (
+            {/* Test sound */}
+            {!alarmActive && (
+              <TouchableOpacity
+                style={[st.testSoundBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+                onPress={async () => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  await playAlarmSound();
+                  setTimeout(() => void stopAlarmSound(), 3000);
+                }}
+              >
+                <Feather name="volume-2" size={16} color={colors.mutedForeground} />
+                <Text style={[st.testSoundText, { color: colors.mutedForeground }]}>Проверить звук (3 сек)</Text>
+              </TouchableOpacity>
+            )}
+
+            {alarmActive && !alarmFiring && (
               <View style={[st.alarmActiveCard, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "44" }]}>
                 <Feather name="bell" size={16} color={colors.primary} />
                 <Text style={[st.alarmActiveText, { color: colors.primary }]}>
                   Сработает в {String(alarmHour).padStart(2, "0")}:{String(alarmMinute).padStart(2, "0")} по Фамагусте
-                  {alarmDays.size < 7 ? ` · ${[...alarmDays].sort().map((d) => DAYS[d]).join(", ")}` : " · каждый день"}
+                  {alarmDays.size === 7 ? " · каждый день" : ` · ${[...alarmDays].sort((a,b)=>a-b).map((d) => DAYS[d]).join(", ")}`}
                 </Text>
               </View>
             )}
@@ -521,7 +592,7 @@ export default function TimeUtilsScreen() {
             <View style={st.infoBox}>
               <Feather name="info" size={14} color={colors.mutedForeground} />
               <Text style={st.infoText}>
-                Будильник работает пока приложение открыто. При срабатывании — вибрация и уведомление на экране.
+                Приложение должно оставаться открытым. Нажми «Проверить звук» чтобы убедиться в работе аудио.
               </Text>
             </View>
           </View>
@@ -751,5 +822,36 @@ function styles(colors: ReturnType<typeof useColors>) {
       borderWidth: 1,
     },
     alarmActiveText: { flex: 1, fontSize: 13, fontWeight: "600" },
+
+    // Firing banner
+    firingBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      padding: 14,
+      borderRadius: 14,
+      borderWidth: 2,
+    },
+    firingEmoji: { fontSize: 28 },
+    firingTitle: { fontSize: 15, fontWeight: "700" },
+    firingSub: { fontSize: 12, marginTop: 2 },
+    firingDismiss: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 10,
+    },
+    firingDismissText: { fontSize: 13, fontWeight: "700" },
+
+    // Test sound
+    testSoundBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingVertical: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+    },
+    testSoundText: { fontSize: 13, fontWeight: "600" },
   });
 }
