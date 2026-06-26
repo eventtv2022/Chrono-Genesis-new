@@ -115,18 +115,25 @@ export function Time() {
   // ── Alarm ──────────────────────────────────────────────────────────────────
   const [alarmHour, setAlarmHour] = useState(7);
   const [alarmMinute, setAlarmMinute] = useState(0);
-  const [alarmDays, setAlarmDays] = useState<Set<number>>(new Set([1, 2, 3, 4, 5]));
+  const [alarmDays, setAlarmDays] = useState<Set<number>>(new Set([0, 1, 2, 3, 4, 5, 6]));
   const [alarmActive, setAlarmActive] = useState(false);
   const [alarmFiring, setAlarmFiring] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
   const [notifGranted, setNotifGranted] = useState(false);
   const alarmRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const audioUnlocked = useRef(false);
   const alarmSoundRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
   const lastFiredKey = useRef("");
+  // Refs that shadow state — avoids stale closures inside setInterval
+  const alarmHourRef = useRef(alarmHour);
+  const alarmMinuteRef = useRef(alarmMinute);
+  const alarmDaysRef = useRef(alarmDays);
+  const alarmActiveRef = useRef(false);
+  alarmHourRef.current = alarmHour;
+  alarmMinuteRef.current = alarmMinute;
+  alarmDaysRef.current = alarmDays;
 
-  // Request notification permission on mount
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "granted") setNotifGranted(true);
   }, []);
@@ -137,8 +144,25 @@ export function Time() {
     setNotifGranted(perm === "granted");
   };
 
-  // ── Unlock AudioContext in a user-gesture handler (critical for mobile) ──
-  const unlockAudio = useCallback(async () => {
+  // ── Get Nicosia time — BUG FIX: weekday via Intl, not local Date ──────────
+  const getNicosiaHMS = (): { h: number; m: number; weekday: number } => {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Nicosia",
+      hour: "2-digit", minute: "2-digit", weekday: "short", hour12: false,
+    }).formatToParts(now);
+    const get = (t: string) => parts.find(p => p.type === t)?.value ?? "";
+    let h = parseInt(get("hour"), 10); if (h === 24) h = 0;
+    const m = parseInt(get("minute"), 10);
+    // weekday from Intl — always in Nicosia timezone
+    const weekdayStr = get("weekday"); // "Sun","Mon","Tue",...
+    const weekdayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    const weekday = weekdayMap[weekdayStr] ?? 0;
+    return { h, m, weekday };
+  };
+
+  // ── Unlock AudioContext (MUST be called inside user-gesture handler) ───────
+  const unlockAndPrepareAudio = useCallback(async () => {
     const AudioCtxClass = window.AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtxClass) return;
@@ -148,21 +172,23 @@ export function Time() {
     if (audioCtxRef.current.state === "suspended") {
       await audioCtxRef.current.resume();
     }
-    // Play a silent buffer — unlocks audio on iOS and Android Chrome
+    // Silent buffer — permanently unlocks audio on iOS/Android Chrome
     const buf = audioCtxRef.current.createBuffer(1, 1, 22050);
     const src = audioCtxRef.current.createBufferSource();
     src.buffer = buf;
     src.connect(audioCtxRef.current.destination);
     src.start(0);
-    audioUnlocked.current = true;
+    setAudioReady(true);
   }, []);
 
-  // ── Acquire Screen Wake Lock (keeps screen on while alarm is armed) ───────
+  // ── Wake Lock ─────────────────────────────────────────────────────────────
   const acquireWakeLock = useCallback(async () => {
     if (!("wakeLock" in navigator)) return;
     try {
-      wakeLockRef.current = await (navigator as unknown as { wakeLock: { request: (t: string) => Promise<{ release: () => Promise<void> }> } }).wakeLock.request("screen");
-    } catch { /* not available */ }
+      wakeLockRef.current = await (navigator as unknown as {
+        wakeLock: { request: (t: string) => Promise<{ release: () => Promise<void> }> }
+      }).wakeLock.request("screen");
+    } catch { /* unavailable */ }
   }, []);
 
   const releaseWakeLock = useCallback(() => {
@@ -170,35 +196,29 @@ export function Time() {
     wakeLockRef.current = null;
   }, []);
 
-  // ── Play repeating alarm beep ─────────────────────────────────────────────
-  const playAlarmSound = useCallback(() => {
+  // ── Beep via Web Audio (uses refs — no stale closure) ────────────────────
+  const playBeat = useCallback((beat: number) => {
     const ctx = audioCtxRef.current;
-    if (!ctx) return;
+    if (!ctx || ctx.state === "closed") return;
     if (ctx.state === "suspended") { void ctx.resume(); }
-
-    // Vibrate pattern on mobile
-    if ("vibrate" in navigator) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
-
-    let beat = 0;
-    const playBeat = () => {
-      if (!audioCtxRef.current || audioCtxRef.current.state === "closed") return;
-      if (audioCtxRef.current.state === "suspended") { void audioCtxRef.current.resume(); }
-      const freq = beat % 2 === 0 ? 880 : 660;
-      const osc = audioCtxRef.current.createOscillator();
-      const gain = audioCtxRef.current.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtxRef.current.destination);
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(freq, audioCtxRef.current.currentTime);
-      gain.gain.setValueAtTime(0.6, audioCtxRef.current.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtxRef.current.currentTime + 0.4);
-      osc.start(audioCtxRef.current.currentTime);
-      osc.stop(audioCtxRef.current.currentTime + 0.45);
-      beat++;
-    };
-    playBeat();
-    alarmSoundRef.current = setInterval(playBeat, 700);
+    const freq = beat % 2 === 0 ? 880 : 660;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(0.6, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.45);
   }, []);
+
+  const playAlarmSound = useCallback(() => {
+    if ("vibrate" in navigator) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
+    let beat = 0;
+    playBeat(beat++);
+    alarmSoundRef.current = setInterval(() => playBeat(beat++), 700);
+  }, [playBeat]);
 
   const stopAlarmSound = useCallback(() => {
     if (alarmSoundRef.current) { clearInterval(alarmSoundRef.current); alarmSoundRef.current = null; }
@@ -210,66 +230,59 @@ export function Time() {
     stopAlarmSound();
   }, [stopAlarmSound]);
 
-  const getNicosiaHMS = (): { h: number; m: number; weekday: number } => {
-    const now = new Date();
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Nicosia", year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hour12: false,
-    }).formatToParts(now);
-    const get = (t: string) => parseInt(parts.find(p => p.type === t)?.value ?? "0", 10);
-    let h = get("hour"); if (h === 24) h = 0;
-    const weekday = new Date(get("year"), get("month") - 1, get("day")).getDay();
-    return { h, m: get("minute"), weekday };
-  };
-
   // ── Fire alarm ────────────────────────────────────────────────────────────
   const fireAlarm = useCallback(() => {
     setAlarmFiring(true);
     playAlarmSound();
+    const h = alarmHourRef.current;
+    const m = alarmMinuteRef.current;
     if (notifGranted && "Notification" in window && Notification.permission === "granted") {
       new Notification("⏰ Суверенный Будильник — TimeNation", {
-        body: `Доброе утро, ${citizen?.name ?? "Гражданин"}! ${String(alarmHour).padStart(2,"0")}:${String(alarmMinute).padStart(2,"0")} по Фамагусте.`,
+        body: `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")} по Фамагусте`,
         icon: "/favicon.ico",
         requireInteraction: true,
       });
     }
-  }, [playAlarmSound, notifGranted, citizen?.name, alarmHour, alarmMinute]);
+  }, [playAlarmSound, notifGranted]);
 
-  // ── Interval check ────────────────────────────────────────────────────────
+  // ── Single persistent interval — reads from refs, no stale closure ────────
   useEffect(() => {
-    if (!alarmActive) {
-      if (alarmRef.current) { clearInterval(alarmRef.current); alarmRef.current = null; }
-      releaseWakeLock();
-      return;
-    }
-    const check = () => {
+    const tick = setInterval(() => {
+      if (!alarmActiveRef.current) return;
       const { h, m, weekday } = getNicosiaHMS();
       const fireKey = `${h}:${m}:${weekday}`;
-      if (h === alarmHour && m === alarmMinute && alarmDays.has(weekday) && lastFiredKey.current !== fireKey) {
+      if (
+        h === alarmHourRef.current &&
+        m === alarmMinuteRef.current &&
+        alarmDaysRef.current.has(weekday) &&
+        lastFiredKey.current !== fireKey
+      ) {
+        lastFiredKey.current = fireKey;
+        fireAlarm();
+      }
+    }, 5_000);
+    return () => clearInterval(tick);
+  }, [fireAlarm]); // stable — fireAlarm only changes when notifGranted changes
+
+  // ── Visibility change — re-check on tab focus (catches throttled interval) ─
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || !alarmActiveRef.current) return;
+      const { h, m, weekday } = getNicosiaHMS();
+      const fireKey = `${h}:${m}:${weekday}`;
+      if (
+        h === alarmHourRef.current &&
+        m === alarmMinuteRef.current &&
+        alarmDaysRef.current.has(weekday) &&
+        lastFiredKey.current !== fireKey
+      ) {
         lastFiredKey.current = fireKey;
         fireAlarm();
       }
     };
-    check();
-    alarmRef.current = setInterval(check, 5_000);
-    return () => { if (alarmRef.current) { clearInterval(alarmRef.current); alarmRef.current = null; } };
-  }, [alarmActive, alarmHour, alarmMinute, alarmDays, fireAlarm, releaseWakeLock]);
-
-  // ── Re-check when tab becomes visible again (catches throttled interval) ──
-  useEffect(() => {
-    if (!alarmActive) return;
-    const onVisibility = () => {
-      if (document.visibilityState !== "visible") return;
-      const { h, m, weekday } = getNicosiaHMS();
-      const fireKey = `${h}:${m}:${weekday}`;
-      if (h === alarmHour && m === alarmMinute && alarmDays.has(weekday) && lastFiredKey.current !== fireKey) {
-        lastFiredKey.current = fireKey;
-        fireAlarm();
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [alarmActive, alarmHour, alarmMinute, alarmDays, fireAlarm]);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [fireAlarm]);
 
   const toggleDay = (d: number) => {
     setAlarmDays(prev => {
@@ -492,26 +505,48 @@ export function Time() {
               </div>
             </div>
 
-            {/* Notification permission request */}
+            {/* Notification permission */}
             {"Notification" in window && Notification.permission === "default" && (
               <button
                 onClick={() => void requestNotifPermission()}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm border border-dashed border-border text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Bell className="w-4 h-4" />
                 Разрешить уведомления (для фоновой работы)
               </button>
             )}
 
-            {/* Activate */}
+            {/* Firing banner — shown ABOVE the button so it's always visible */}
+            {alarmFiring && (
+              <div className="flex items-center justify-between gap-3 p-4 rounded-xl border-2 border-primary bg-primary/10 animate-pulse">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">⏰</span>
+                  <div>
+                    <p className="font-bold text-primary text-base">Суверенный Будильник!</p>
+                    <p className="text-sm text-primary/80">
+                      {String(alarmHour).padStart(2,"0")}:{String(alarmMinute).padStart(2,"0")} · Фамагуста
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={dismissAlarm}
+                  className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-sm hover:bg-primary/80 transition-colors"
+                >
+                  Выключить
+                </button>
+              </div>
+            )}
+
+            {/* Enable / disable — onClick is async: awaits audio unlock BEFORE setting state */}
             <button
-              onClick={() => {
+              onClick={async () => {
                 const next = !alarmActive;
                 if (next) {
-                  // MUST unlock audio inside a user-gesture handler on mobile
-                  void unlockAudio();
-                  void acquireWakeLock();
+                  await unlockAndPrepareAudio(); // ← fix: await, not void
+                  await acquireWakeLock();
+                  alarmActiveRef.current = true;
                 } else {
+                  alarmActiveRef.current = false;
                   stopAlarmSound();
                   setAlarmFiring(false);
                   releaseWakeLock();
@@ -521,49 +556,51 @@ export function Time() {
               className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg font-semibold border transition-colors ${
                 alarmActive
                   ? "bg-primary/10 border-primary/40 text-primary hover:bg-primary/20"
-                  : "bg-card border-border text-muted-foreground hover:text-foreground"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
               }`}
             >
               <Bell className="w-4 h-4" />
               {alarmActive ? "Будильник активен — выключить" : "Включить будильник"}
             </button>
 
-            {alarmActive && !alarmFiring && (
-              <div className="flex items-center gap-3 p-3 rounded-lg border bg-primary/10 border-primary/40">
-                <Bell className="w-4 h-4 text-primary shrink-0" />
-                <p className="text-sm text-primary">
-                  Сработает в {String(alarmHour).padStart(2, "0")}:{String(alarmMinute).padStart(2, "0")} по Фамагусте
-                  {alarmDays.size < 7
-                    ? ` · ${[...alarmDays].sort().map(d => DAYS[d]).join(", ")}`
-                    : " · каждый день"}
-                </p>
-              </div>
+            {/* Test sound button — plays beep in user gesture context */}
+            {!alarmActive && (
+              <button
+                onClick={async () => {
+                  await unlockAndPrepareAudio();
+                  playAlarmSound();
+                  setTimeout(() => stopAlarmSound(), 3000);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
+                <Bell className="w-4 h-4" />
+                Проверить звук (3 сек)
+              </button>
             )}
 
-            {/* Firing banner */}
-            {alarmFiring && (
-              <div className="flex items-center justify-between gap-3 p-4 rounded-lg border-2 border-primary bg-primary/10 animate-pulse">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">⏰</span>
-                  <div>
-                    <p className="font-bold text-primary">Суверенный Будильник!</p>
-                    <p className="text-sm text-primary/80">
-                      {String(alarmHour).padStart(2,"0")}:{String(alarmMinute).padStart(2,"0")} · Фамагуста
-                    </p>
-                  </div>
+            {/* Audio ready indicator */}
+            {audioReady && !alarmActive && (
+              <p className="text-center text-xs text-green-500">✓ Звук разблокирован</p>
+            )}
+
+            {alarmActive && !alarmFiring && (
+              <div className="flex items-center gap-3 p-3 rounded-lg border bg-primary/10 border-primary/40">
+                <Bell className="w-4 h-4 text-primary shrink-0 animate-pulse" />
+                <div>
+                  <p className="text-sm font-semibold text-primary">
+                    Сработает в {String(alarmHour).padStart(2, "0")}:{String(alarmMinute).padStart(2, "0")} по Фамагусте
+                  </p>
+                  <p className="text-xs text-primary/70 mt-0.5">
+                    {alarmDays.size === 7 ? "Каждый день" : [...alarmDays].sort((a,b)=>a-b).map(d => DAYS[d]).join(", ")}
+                    {audioReady ? " · 🔊 звук готов" : " · ⚠️ нажми «Проверить звук»"}
+                  </p>
                 </div>
-                <button
-                  onClick={dismissAlarm}
-                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/80 transition-colors"
-                >
-                  Выключить
-                </button>
               </div>
             )}
 
             <div className="flex items-start gap-2 p-3 rounded-lg bg-muted text-xs text-muted-foreground">
               <Info className="w-4 h-4 shrink-0 mt-0.5" />
-              Будильник воспроизводит звуковой сигнал и показывает баннер. Разреши уведомления — тогда сработает даже если вкладка свёрнута. Страница должна быть открыта.
+              Страница должна быть открыта. Звук работает только если ты нажал «Включить» или «Проверить звук» — браузеры требуют нажатия перед воспроизведением.
             </div>
           </div>
         )}
