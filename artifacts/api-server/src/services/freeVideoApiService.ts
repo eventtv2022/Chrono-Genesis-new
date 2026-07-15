@@ -365,22 +365,23 @@ export async function generateAIBackground(
   const dir = tmpDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "tn-aibg-"));
   const ownsTmpDir = !tmpDir;
 
-  // Provider 1: HuggingFace text-to-video
+  // Provider 1: HuggingFace text-to-video (uses prompt → actual video)
   const hfPath = await generateViaHuggingFace(prompt, dir, signal);
   if (hfPath) {
     return { videoPath: hfPath, ownsTmpDir, tmpDir: dir };
   }
 
-  // Provider 2: Picsum Photos slideshow (reliable, no auth, no rate limits)
-  const picsumPath = await generateViaPicsumSlideshow(prompt, dir, signal);
-  if (picsumPath) {
-    return { videoPath: picsumPath, ownsTmpDir, tmpDir: dir };
-  }
-
-  // Provider 3: Pollinations AI slideshow (may be rate-limited on shared IPs)
+  // Provider 2: Pollinations AI slideshow (uses prompt → AI-generated images matching content)
+  // Placed before Picsum so backgrounds actually reflect the citizen's thought
   const slidePath = await generateViaPollinationsSlideshow(prompt, dir, signal);
   if (slidePath) {
     return { videoPath: slidePath, ownsTmpDir, tmpDir: dir };
+  }
+
+  // Provider 3: Picsum Photos slideshow (reliable fallback — ignores prompt, random photos)
+  const picsumPath = await generateViaPicsumSlideshow(prompt, dir, signal);
+  if (picsumPath) {
+    return { videoPath: picsumPath, ownsTmpDir, tmpDir: dir };
   }
 
   // Total failure — caller will use solid-color fallback
