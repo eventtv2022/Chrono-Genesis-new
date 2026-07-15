@@ -43,6 +43,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "clock.badge", selected: "clock.badge.fill" }} />
         <Label>Время</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="language-clock">
+        <Icon sf={{ default: "globe.americas", selected: "globe.americas.fill" }} />
+        <Label>Циферблат</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -130,6 +134,13 @@ function ClassicTabLayout() {
         options={{
           title: "Время",
           tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="language-clock"
+        options={{
+          title: "Циферблат",
+          tabBarIcon: ({ color }) => <Feather name="globe" size={22} color={color} />,
         }}
       />
     </Tabs>
