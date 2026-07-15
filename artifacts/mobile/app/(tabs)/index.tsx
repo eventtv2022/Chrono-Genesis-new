@@ -938,7 +938,7 @@ function escrowStyles(colors: ReturnType<typeof useColors>) {
 export default function TimerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { citizen, refreshCitizen } = useCitizen();
+  const { citizen, refreshCitizen, setCitizen } = useCitizen();
   const router = useRouter();
   const queryClient = useQueryClient();
   const walletGuide = useContextualGuide("wallet");
@@ -1080,14 +1080,33 @@ export default function TimerScreen() {
             <View style={styles.passportAvatar}>
               <Text style={styles.passportAvatarText}>{citizen.name.charAt(0).toUpperCase()}</Text>
             </View>
-            <View>
-              <Text style={styles.passportName}>{citizen.name}</Text>
-              <Text style={styles.passportId}>ID #{citizen.id} · {citizen.phone}</Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.passportName} numberOfLines={1}>{citizen.name}</Text>
+              <Text style={styles.passportId}>ID #{citizen.id}</Text>
+              <Text style={[styles.passportRank, { marginTop: 2 }]}>{citizen.rank ?? "Гражданин"}</Text>
             </View>
           </View>
-          <View style={styles.passportRight}>
-            <Text style={styles.passportRankLabel}>Ранг</Text>
-            <Text style={styles.passportRank}>{citizen.rank ?? "Гражданин"}</Text>
+          <View style={styles.passportActions}>
+            <TouchableOpacity
+              style={styles.passportRefresh}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void refreshCitizen(); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Feather name="refresh-cw" size={15} color={colors.mutedForeground} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.passportLogout, { borderColor: colors.destructive + "55", backgroundColor: colors.destructive + "15" }]}
+              onPress={() => {
+                Alert.alert("Выйти из аккаунта", "Данные гражданина будут удалены с устройства.", [
+                  { text: "Отмена", style: "cancel" },
+                  { text: "Выйти", style: "destructive", onPress: () => { setCitizen(null); } },
+                ]);
+              }}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <Feather name="log-out" size={13} color={colors.destructive} />
+              <Text style={[styles.passportLogoutText, { color: colors.destructive }]}>Выйти</Text>
+            </TouchableOpacity>
           </View>
         </View>
       ) : (
@@ -1304,15 +1323,19 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     listSection: { flex: 1, paddingHorizontal: 20, paddingTop: 14 },
     listTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 12 },
     // Passport card
-    passportCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: 20, marginBottom: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary + "55", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 },
-    passportLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
-    passportAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primary + "22", borderWidth: 1, borderColor: colors.primary + "66", alignItems: "center", justifyContent: "center" },
+    passportCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: 20, marginBottom: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary + "55", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, gap: 10 },
+    passportLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 },
+    passportAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primary + "22", borderWidth: 1, borderColor: colors.primary + "66", alignItems: "center", justifyContent: "center", flexShrink: 0 },
     passportAvatarText: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.primary },
     passportName: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground },
     passportId: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 1 },
-    passportRight: { alignItems: "flex-end" },
     passportRankLabel: { fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 },
-    passportRank: { fontSize: 12, fontFamily: "Inter_700Bold", color: colors.primary },
+    passportRank: { fontSize: 11, fontFamily: "Inter_700Bold", color: colors.primary },
+    passportActions: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 },
+    passportRefresh: { padding: 6, borderRadius: 8 },
+    passportLogout: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+    passportLogoutText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+    passportRight: { alignItems: "flex-end" },
 
     // Registration banner
     regBanner: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 20, marginBottom: 10, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },

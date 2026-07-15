@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeNation - Мультиязычный Циферблат</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* Стилизация циферблата */
+        .clock-face {
+            border: 6px double #f39c12;
+            background: radial-gradient(circle, #1a1a1a 0%, #0a0a0a 100%);
+            box-shadow: 0 0 35px rgba(243, 156, 18, 0.35);
+        }
+        
+        /* Плавное движение стрелки */
+        .clock-hand {
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-origin: bottom center;
+        }
+
+        /* Мягкое свечение активных элементов */
+        .active-hour {
+            box-shadow: 0 0 15px #f39c12;
+            background-color: #f39c12 !important;
+            border-color: #ffffff !important;
+        }
+    </style>
+</head>
+<body class="bg-[#09090b] text-white min-h-screen flex flex-col items-center justify-center p-4 transition-all duration-300">
+
+    <div class="max-w-md w-full text-center flex flex-col items-center">
+        <h1 id="app-welcome" class="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-500 mb-2">
+            Добро пожаловать в TimeNation
+        </h1>
+        
+        <p class="text-zinc-400 text-sm mb-8">
+            <span id="app-select-hour">Выберите ваш час</span>: 
+            <span id="current-lang-name" class="text-amber-500 font-bold">Русский (1:00)</span>
+        </p>
+
+        <div id="clock" class="clock-face relative w-[340px] height w-[340px] h-[340px] rounded-full flex items-center justify-center my-6">
+            
+            <div class="absolute w-3.5 h-3.5 bg-amber-500 rounded-full z-10 shadow-[0_0_10px_#f39c12]"></div>
+            
+            <div id="clock-hand" class="clock-hand absolute w-1 h-[115px] bg-red-500 rounded-full z-5" style="top: calc(50% - 115px); left: calc(50% - 2px); transform: rotate(15deg);"></div>
+
+            <div id="hours-container" class="absolute inset-0 w-full h-full"></div>
+        </div>
+
+        <div class="mt-4 p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl w-full">
+            <p id="app-status-text" class="text-zinc-300 text-sm">
+                Время — это общий язык, который объединяет все нации мира на одном циферблате.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Данные всех 24 языков по часам
+        const LANGUAGES_24 = [
+            { hour: 24, label: "O'zbek (Узбекский)", code: "uz", rtl: false },
+            { hour: 1, label: "Русский", code: "ru", rtl: false },
+            { hour: 2, label: "English (Английский)", code: "en", rtl: false },
+            { hour: 3, label: "中文 (Китайский)", code: "zh", rtl: false },
+            { hour: 4, label: "हिन्दी (Хинди)", code: "hi", rtl: false },
+            { hour: 5, label: "Español (Испанский)", code: "es", rtl: false },
+            { hour: 6, label: "Français (Французский)", code: "fr", rtl: false },
+            { hour: 7, label: "العربية (Арабский)", code: "ar", rtl: true },
+            { hour: 8, label: "বাংলা (Бенгальский)", code: "bn", rtl: false },
+            { hour: 9, label: "Português (Португальский)", code: "pt", rtl: false },
+            { hour: 10, label: "اردو (Урду)", code: "ur", rtl: true },
+            { hour: 11, label: "Indonesian (Индонезийский)", code: "id", rtl: false },
+            { hour: 12, label: "Deutsch (Немецкий)", code: "de", rtl: false },
+            { hour: 13, label: "日本語 (Японский)", code: "ja", rtl: false },
+            { hour: 14, label: "Türkçe (Турецкий)", code: "tr", rtl: false },
+            { hour: 15, label: "Tiếng Việt (Вьетнамский)", code: "vi", rtl: false },
+            { hour: 16, label: "עברית (Иврит)", code: "he", rtl: true },
+            { hour: 17, label: "Farsi (Персидский)", code: "fa", rtl: true },
+            { hour: 18, label: "한국어 (Корейский)", code: "ko", rtl: false },
+            { hour: 19, label: "Italiano (Итальянский)", code: "it", rtl: false },
+            { hour: 20, label: "Polski (Польский)", code: "pl", rtl: false },
+            { hour: 21, label: "Українська (Украинский)", code: "uk", rtl: false },
+            { hour: 22, label: "Nederlands (Нидерландский)", code: "nl", rtl: false },
+            { hour: 23, label: "Қазақша (Казахский)", code: "kk", rtl: false }
+        ];
+
+        // Словари переводов интерфейса
+        const translations = {
+            ru: { welcome: "Добро пожаловать в TimeNation", select: "Выберите ваш час", status: "Время — это общий язык, который объединяет все нации мира на одном циферблате." },
+            en: { welcome: "Welcome to TimeNation", select: "Choose your hour", status: "Time is a common language that unites all nations of the world on one dial." },
+            zh: { welcome: "欢迎来到 TimeNation", select: "选择你的时间", status: "时间是连接世界上所有国家的通用语言。" },
+            hi: { welcome: "TimeNation में आपका स्वागत है", select: "अपना घंटा चुनें", status: "समय एक साझा भाषा है जो दुनिया के सभी देशों को एक डायल पर जोड़ती है।" },
+            es: { welcome: "Bienvenido a TimeNation", select: "Elige tu hora", status: "El tiempo es un idioma común que une a todas las naciones del mundo en un solo cuadrante." },
+            fr: { welcome: "Bienvenue à TimeNation", select: "Choisissez votre heure", status: "Le temps est une langue commune qui unit toutes les nations du monde sur un seul cadran." },
+            ar: { welcome: "مرحباً بكم في TimeNation", select: "اختر ساعتك", status: "الوقت لغة مشتركة توحد جميع أمم العالم على قرص واحد." },
+            bn: { welcome: "TimeNation-এ স্বাগতম", select: "আপনার ঘন্টা চয়ন করুন", status: "সময় একটি সাধারণ ভাষা যা বিশ্বের সমস্ত জাতিকে একটি ডায়ালে একত্রিত করে।" },
+            pt: { welcome: "Bem-vindo ao TimeNation", select: "Escolha sua hora", status: "O tempo é uma linguagem comum que une todas as nações do mundo num único mostrador." },
+            ur: { welcome: "TimeNation میں خوش آمدید", select: "اپنا گھنٹہ منتخب کریں", status: "وقت ایک ایسی عام زبان ہے جو دنیا کی تمام قوموں کو ایک ڈائل پر متحد کرتی ہے۔" },
+            id: { welcome: "Selamat Datang di TimeNation", select: "Pilih jam Anda", status: "Waktu adalah bahasa universal yang menyatukan semua bangsa di dunia dalam satu dial." },
+            de: { welcome: "Willkommen bei TimeNation", select: "Wählen Sie Ihre Stunde", status: "Zeit ist eine gemeinsame Sprache, die alle Nationen der Welt auf einem Zifferblatt vereint." },
+            ja: { welcome: "TimeNationへようこそ", select: "あなたの時間を選択してください", status: "時間は、世界中のすべての国を1つの文字盤で結びつける共通の言語です。" },
+            tr: { welcome: "TimeNation'a Hoş Geldiniz", select: "Saatinizi seçin", status: "Zaman, dünyadaki tüm ulusları tek bir kadranda birleştiren ortak bir dildir." },
+            vi: { welcome: "Chào mừng đến với TimeNation", select: "Chọn giờ của bạn", status: "Thời gian là ngôn ngữ chung gắn kết tất cả các quốc gia trên thế giới trên một mặt số." },
+            he: { welcome: "ברוכים הבאים ל-TimeNation", select: "בחר את השעה שלך", status: "הזמן הוא שפה משותפת המאחדת את כל אומות העולם על חוגה אחת." },
+            fa: { welcome: "به TimeNation خوش آمدید", select: "ساعت خود را انتخاب کنید", status: "زمان زبان مشترکی است که همه ملت‌های جهان را روی یک صفحه ساعت متحد می‌کند." },
+            ko: { welcome: "TimeNation에 오신 것을 환영합니다", select: "시간을 선택하세요", status: "시간은 세계의 모든 국가를 하나의 다이얼로 연결하는 공통 언어입니다." },
+            it: { welcome: "Benvenuto in TimeNation", select: "Scegli la tua ora", status: "Il tempo è una lingua comune che unisce tutte le nazioni del mondo su un unico quadrante." },
+            pl: { welcome: "Witaj w TimeNation", select: "Wybierz swoją godzinę", status: "Czas to wspólny język, który jednoczy wszystkie narody świata na jednej tarczy." },
+            uk: { welcome: "Ласкаво просимо до TimeNation", select: "Оберіть вашу годину", status: "Час — це спільна мова, яка об'єднує всі нації світу на одному циферблаті." },
+            nl: { welcome: "Welkom bij TimeNation", select: "Kies uw uur", status: "Tijd is een gemeenschappelijke taal die alle naties van de wereld op één wijzerplaat verenigt." },
+            kk: { welcome: "TimeNation-қа қош келдіңіз", select: "Сағатыңызды таңдаңыз", status: "Уақыт — бүкіл әлем халықтарын бір циферблатта біріктіретін ортақ тіл." },
+            uz: { welcome: "TimeNation-ga xush kelibsiz", select: "Soatingizni tanlang", status: "Vaqt — dunyodagi barcha millatlarni bir siferblatda birlashtiradigan umumiy tildir." }
+        };
+
+        let activeHour = 1;
+
+        function initClock() {
+            const container = document.getElementById('hours-container');
+            const hand = document.getElementById('clock-hand');
+            const radius = 130; // Радиус позиционирования точек
+            const centerX = 170; // Координаты центра циферблата
+            const centerY = 170;
+
+            // Генерируем 24 часовые кнопки
+            LANGUAGES_24.forEach((item) => {
+                // Высчитываем тригонометрические координаты для каждого часа
+                const angle = (item.hour * 15 * Math.PI) / 180 - Math.PI / 2;
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+
+                const btn = document.createElement('button');
+                btn.id = `hour-${item.hour}`;
+                btn.innerText = item.hour;
+                btn.className = "absolute w-6 h-6 rounded-full bg-zinc-800 text-[10px] font-bold text-zinc-300 border border-zinc-700 hover:border-amber-500 hover:text-white flex items-center justify-center transition-all duration-200 z-10 cursor-pointer";
+                btn.style.left = `${x - 12}px`; // Центрирование
+                btn.style.top = `${y - 12}px`;
+
+                btn.addEventListener('click', () => changeHour(item.hour));
+                container.appendChild(btn);
+            });
+
+            // Показываем начальный статус (Русский, 1:00)
+            changeHour(1);
+        }
+
+        function changeHour(hour) {
+            // Снимаем класс активности с прошлой кнопки
+            document.getElementById(`hour-${activeHour}`)?.classList.remove('active-hour');
+            
+            activeHour = hour;
+            const item = LANGUAGES_24.find(l => l.hour === hour);
+            
+            // Включаем активную кнопку
+            const activeBtn = document.getElementById(`hour-${hour}`);
+            if (activeBtn) activeBtn.classList.add('active-hour');
+
+            // Поворачиваем стрелку часов (360 градусов / 24 деления = 15 градусов на час)
+            const hand = document.getElementById('clock-hand');
+            hand.style.transform = `rotate(${hour * 15}deg)`;
+
+            // Подставляем переводы
+            const t = translations[item.code] || translations['ru'];
+            document.getElementById('app-welcome').innerText = t.welcome;
+            document.getElementById('app-select-hour').innerText = t.select;
+            document.getElementById('app-status-text').innerText = t.status;
+            document.getElementById('current-lang-name').innerText = `${item.label} (${hour}:00)`;
+
+            // Поддержка направления письма справа налево (RTL) для Иврита, Арабского, Урду и Фарси
+            if (item.rtl) {
+                document.body.dir = 'rtl';
+                document.body.style.textAlign = 'right';
+            } else {
+                document.body.dir = 'ltr';
+                document.body.style.textAlign = 'center';
+            }
+        }
+
+        // Запуск
+        document.addEventListener('DOMContentLoaded', initClock);
+    </script>
+</body>
+</html>

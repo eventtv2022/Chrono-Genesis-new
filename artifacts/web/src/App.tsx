@@ -14,6 +14,7 @@ import { Register } from "./pages/Register";
 import { PassportLookup } from "./pages/PassportLookup";
 import { LaborDashboard } from "./pages/LaborDashboard";
 import { Time } from "./pages/Time";
+import { Clock } from "./pages/Clock";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/passport-lookup" component={PassportLookup} />
       <Route path="/time" component={Time} />
+      <Route path="/clock" component={Clock} />
       <Route path="/government/labor-dashboard" component={LaborDashboard} />
       <Route component={NotFound} />
     </Switch>

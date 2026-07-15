@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock } from "lucide-react";
+import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe } from "lucide-react";
 import { SystemClock } from "./SystemClock";
 import { useCitizen } from "@/context/CitizenContext";
 
@@ -44,17 +44,18 @@ function CitizenWidget() {
           <div className="flex gap-1 shrink-0">
             <button
               onClick={() => void refreshCitizen()}
-              className="text-muted-foreground hover:text-foreground p-1 rounded-sm transition-colors"
-              title="Обновить"
+              className="text-muted-foreground hover:text-foreground p-1.5 rounded transition-colors"
+              title="Обновить данные"
             >
-              <RefreshCw className="w-3 h-3" />
+              <RefreshCw className="w-4 h-4" />
             </button>
             <button
               onClick={() => setCitizen(null)}
-              className="text-muted-foreground hover:text-destructive p-1 rounded-sm transition-colors"
-              title="Выйти"
+              className="flex items-center gap-1 px-2 py-1 rounded bg-destructive/10 hover:bg-destructive/20 text-destructive text-[11px] font-mono font-semibold transition-colors border border-destructive/20"
+              title="Выйти из аккаунта"
             >
               <LogOut className="w-3 h-3" />
+              Выйти
             </button>
           </div>
         </div>
@@ -98,6 +99,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/register", label: "Стать гражданином", icon: UserPlus },
     { href: "/passport-lookup", label: "Мой паспорт", icon: Search },
     { href: "/time", label: "Время", icon: Clock },
+    { href: "/clock", label: "Циферблат народов", icon: Globe },
   ];
 
   return (
