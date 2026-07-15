@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { tvSlotsTable, tvCapsulesTable, citizensTable } from "@workspace/db";
+import { tvSlotsTable, tvCapsulesTable, citizensTable, transactionsTable } from "@workspace/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
@@ -22,6 +22,9 @@ import {
   RENDER_JOB_TIMEOUT_HEAVY_MS,
 } from "../services/renderQueue";
 import { calcTreasuryTax, TREASURY_CITIZEN_ID } from "../services/videoStorage";
+import { logTransactionToSheets } from "../lib/googleSheets";
+import { sendTransactionNotification } from "../services/telegramService";
+import { applyMeritAfterSession } from "../services/meritocracyService";
 import {
   isCryptomusConfigured,
   createCryptoPayment,
@@ -293,8 +296,53 @@ router.post("/tv/slots/book", async (req, res): Promise<void> => {
       })
       .where(eq(tvSlotsTable.id, slotId));
 
-    req.log.info({ citizenId, slotId, burnCost, treasuryTax, totalCost }, "TV slot booked via TiMETR burn");
-    res.status(201).json({ ok: true, slotId, burnCost, treasuryTax, totalCost, paymentType: "timeltr" });
+    // ── Запись транзакции ────────────────────────────────────────────────────
+    // sessionId=0 — sentinel для TV-транзакций (без реальной TiMETR-сессии)
+    const [txRecord] = await db
+      .insert(transactionsTable)
+      .values({
+        sessionId: 0,
+        fromCitizenId: citizenId,
+        toCitizenId: TREASURY_CITIZEN_ID,
+        fromCitizenName: citizen.name,
+        toCitizenName: "TimeNation-TV",
+        minutesTransferred: totalCost,
+        durationSeconds: 0,
+      })
+      .returning();
+
+    // Google Sheets
+    await logTransactionToSheets({
+      sessionId: txRecord.id,
+      fromCitizenId: txRecord.fromCitizenId,
+      toCitizenId: txRecord.toCitizenId,
+      fromCitizenName: txRecord.fromCitizenName,
+      toCitizenName: txRecord.toCitizenName,
+      minutesTransferred: txRecord.minutesTransferred,
+      durationSeconds: txRecord.durationSeconds,
+      createdAt: txRecord.createdAt.toISOString(),
+    }).catch((err) => req.log.warn({ err }, "TV tx Sheets log failed"));
+
+    // Merit Score за сожжённые Дармины
+    const meritResult = await applyMeritAfterSession(citizenId, totalCost).catch((err) => {
+      req.log.error({ err }, "TV merit calculation failed");
+      return null;
+    });
+
+    // Telegram
+    const taxNote = `\n🏦 Налог Казначейства: *${treasuryTax.toFixed(2)} Д* (2%)`;
+    const rankMessage = meritResult
+      ? meritResult.newRank !== meritResult.oldRank
+        ? `\n\n📜 *Статус изменён!* Вы теперь *${meritResult.newRank}*. Ваше влияние в TimeNation растёт.`
+        : `\n\nВес +${meritResult.meritGained.toFixed(2)}. Текущий ранг: *${meritResult.newRank}* (${meritResult.newScore} Merit)`
+      : "";
+    await sendTransactionNotification(
+      citizenId,
+      `📺 *TimeNation-TV*\n\nСлот забронирован: *${burnCost.toFixed(2)} Д* + налог *${treasuryTax.toFixed(2)} Д*.${taxNote}${rankMessage}\n\n💰 Остаток: *${(citizen.balanceMinutes - totalCost).toFixed(2)} Д*`
+    ).catch((err) => req.log.warn({ err }, "TV tx Telegram notify failed"));
+
+    req.log.info({ citizenId, slotId, burnCost, treasuryTax, totalCost, txId: txRecord.id }, "TV slot booked via TiMETR burn");
+    res.status(201).json({ ok: true, slotId, burnCost, treasuryTax, totalCost, paymentType: "timeltr", transactionId: txRecord.id });
     return;
   }
 
