@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Layout } from "@/components/Layout";
+import { useLanguage } from "@/context/LanguageContext";
+import type { UIStrings } from "@/i18n/ui";
 import {
   useGetTvSlots,
   useGetTvSchedule,
@@ -77,12 +79,29 @@ const SLOT_TYPE_COLORS: Record<string, string> = {
   apex: "bg-rose-500/30 border-rose-400/50",
 };
 
-const TYPE_LABELS: Record<string, string> = {
-  citizen: "Минута",
-  quarter: "Четверть",
-  half: "Половина",
-  apex: "Ровно",
-};
+function getTypeLabel(t: UIStrings, slotType: string): string {
+  const map: Record<string, string> = {
+    citizen: t.tv_type_citizen,
+    quarter: t.tv_type_quarter,
+    half: t.tv_type_half,
+    apex: t.tv_type_apex,
+  };
+  return map[slotType] ?? slotType;
+}
+
+function getRenderStageLabel(t: UIStrings, stage: string): string {
+  const map: Record<string, string> = {
+    generating_prompt:  t.tv_render_prompt,
+    generating_tts:     t.tv_render_tts,
+    generating_scenes:  t.tv_render_scenes,
+    fetching_scenes:    t.tv_render_fetching,
+    compositing:        t.tv_render_compositing,
+    fetching_video:     t.tv_render_video,
+    encoding:           t.tv_render_encoding,
+    done:               t.tv_render_done,
+  };
+  return map[stage] ?? stage;
+}
 
 const SLOT_TYPE_BADGE: Record<string, string> = {
   citizen: "bg-primary/20 text-primary border-primary/40",
@@ -112,12 +131,12 @@ const FIAT_PRICES: Record<string, string> = {
   apex: "24.99€",
 };
 
-const VISUAL_STYLES = [
-  { value: "space",     label: "Космос",    desc: "Глубокий космос, туманности",     color: "#0D1B2A" },
-  { value: "cyberpunk", label: "Киберпанк", desc: "Неон, город будущего",            color: "#0A0014" },
-  { value: "abstract",  label: "Абстракт",  desc: "Геометрические формы, паттерны", color: "#1A0A2E" },
-  { value: "nature",    label: "Природа",   desc: "Органические текстуры, земля",   color: "#0F1B0F" },
-  { value: "minimal",   label: "Минимал",   desc: "Чистые линии, монохром",         color: "#111111" },
+const VISUAL_STYLE_DEFS = [
+  { value: "space",     labelKey: "tv_style_space" as const,     descKey: "tv_style_space_desc" as const,     color: "#0D1B2A" },
+  { value: "cyberpunk", labelKey: "tv_style_cyberpunk" as const, descKey: "tv_style_cyberpunk_desc" as const, color: "#0A0014" },
+  { value: "abstract",  labelKey: "tv_style_abstract" as const,  descKey: "tv_style_abstract_desc" as const,  color: "#1A0A2E" },
+  { value: "nature",    labelKey: "tv_style_nature" as const,    descKey: "tv_style_nature_desc" as const,    color: "#0F1B0F" },
+  { value: "minimal",   labelKey: "tv_style_minimal" as const,   descKey: "tv_style_minimal_desc" as const,   color: "#111111" },
 ] as const;
 
 const RENDER_STAGES = [
@@ -130,17 +149,6 @@ const RENDER_STAGES = [
   "encoding",
   "done",
 ] as const;
-
-const RENDER_STAGE_LABELS: Record<string, string> = {
-  generating_prompt:  "Генерация промпта",
-  generating_tts:     "Синтез голоса",
-  generating_scenes:  "Генерация сцен",
-  fetching_scenes:    "Загрузка сцен",
-  compositing:        "Композитинг",
-  fetching_video:     "Загрузка видео",
-  encoding:           "Кодирование",
-  done:               "Готово",
-};
 
 const PROGRESS_PCT: Record<string, number> = {
   generating_prompt: 10,
@@ -203,6 +211,7 @@ interface LiveSlotInfo {
 }
 
 function ChronosLivePlayer({ date }: { date: string }) {
+  const { t } = useLanguage();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentMinute, setCurrentMinute] = useState<number>(() => {
     const now = new Date();
@@ -273,7 +282,7 @@ function ChronosLivePlayer({ date }: { date: string }) {
         <div className="flex items-center gap-3 flex-wrap">
           <span className="flex items-center gap-1.5 text-orange-400 font-mono text-xs font-bold uppercase tracking-widest">
             <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse shrink-0" />
-            В ЭФИРЕ
+            {t.tv_live}
           </span>
           <span className="font-mono text-sm font-bold text-primary tabular-nums">{hh}:{mm}</span>
           {slot?.hasContent ? (
@@ -281,13 +290,13 @@ function ChronosLivePlayer({ date }: { date: string }) {
               <span className="text-border/60 select-none">|</span>
               {slot.slotType && (
                 <Badge variant="outline" className={`text-[10px] font-mono ${SLOT_TYPE_BADGE[slot.slotType] ?? ""}`}>
-                  {TYPE_LABELS[slot.slotType] ?? slot.slotType}
+                  {getTypeLabel(t, slot.slotType)}
                 </Badge>
               )}
               <span className="text-sm text-foreground/80 truncate max-w-[200px]">{slot.ownerName}</span>
             </>
           ) : (
-            <span className="text-xs text-muted-foreground font-mono">Слот пуст — ожидание эфира</span>
+            <span className="text-xs text-muted-foreground font-mono">{t.tv_slot_empty}</span>
           )}
         </div>
         <span className="text-[10px] font-mono text-muted-foreground/60 tabular-nums shrink-0">{utcClock}</span>
@@ -299,7 +308,7 @@ function ChronosLivePlayer({ date }: { date: string }) {
             <div className="text-center">
               <div className="font-mono text-xl font-bold text-primary/40 tracking-[0.3em] uppercase">TN·TV</div>
               <div className="font-mono text-[11px] text-muted-foreground/50 uppercase tracking-widest mt-1 animate-pulse">
-                Эфир ожидает · слот {hh}:{mm}
+                {t.tv_slot_empty} · {hh}:{mm}
               </div>
             </div>
           </div>
@@ -336,6 +345,7 @@ export function Tv() {
   const schedule = scheduleData?.schedule ?? [];
 
   const { citizen, refreshCitizen } = useCitizen();
+  const { t } = useLanguage();
 
   // ── Terminal form state
   const [selectedSlot, setSelectedSlot] = useState<SlotLike | null>(null);
@@ -367,8 +377,8 @@ export function Tv() {
 
   // Debounce seedText for preview
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSeed(seedText), 600);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebouncedSeed(seedText), 600);
+    return () => clearTimeout(timer);
   }, [seedText]);
 
   // Build 24×60 matrix
@@ -415,7 +425,7 @@ export function Tv() {
           if (data.mediaUrl) {
             setRenderResult({ mediaUrl: data.mediaUrl, catcastUrl: data.catcastUrl ?? null, manifestoWords: 0 });
           } else if (current === "failed") {
-            setRenderError("Рендер завершился с ошибкой. Попробуйте снова.");
+            setRenderError(t.tv_err_render);
           }
           await qc.invalidateQueries({ queryKey: getGetTvSlotsQueryKey({ date }) });
           await qc.invalidateQueries({ queryKey: getGetTvScheduleQueryKey({ date }) });
@@ -492,7 +502,7 @@ export function Tv() {
         manifestoWords?: number; error?: string; jobId?: string; timeoutMs?: number;
       };
       if (!res.ok) {
-        setRenderError(data.error ?? "Ошибка рендера");
+        setRenderError(data.error ?? t.tv_err_render_generic);
         setRendering(false);
         return;
       }
@@ -513,7 +523,7 @@ export function Tv() {
       setRenderStartedAt(Date.now());
       setIsPolling(true);
     } catch {
-      setRenderError("Ошибка соединения с сервером");
+      setRenderError(t.tv_err_connection);
       setRendering(false);
     }
   }
@@ -552,7 +562,7 @@ export function Tv() {
           body: JSON.stringify({ slotId: selectedSlot.id, citizenId: citizen.id, successUrl: `${origin}/tv?booked=1` }),
         });
         const data = (await res.json()) as { paymentUrl?: string; error?: string };
-        if (!res.ok) { setBookingError(data.error ?? "Ошибка крипто-шлюза"); return; }
+        if (!res.ok) { setBookingError(data.error ?? t.tv_err_crypto); return; }
         if (data.paymentUrl) window.location.href = data.paymentUrl;
         return;
       }
@@ -566,7 +576,7 @@ export function Tv() {
         }),
       });
       const data = (await res.json()) as BookingResult & { error?: string };
-      if (!res.ok) { setBookingError(data.error ?? "Ошибка бронирования"); return; }
+      if (!res.ok) { setBookingError(data.error ?? t.tv_err_booking); return; }
       if (paymentType === "fiat" && data.checkoutUrl) { window.location.href = data.checkoutUrl; return; }
 
       // TiMETR — create capsule immediately
@@ -590,9 +600,9 @@ export function Tv() {
         setBookedSlotId(slotIdForRender);
         setRenderResult(null);
         setRenderError(null);
-        setBookingResult({ message: "Слот забронирован и капсула создана." });
+        setBookingResult({ message: t.tv_booked_capsule });
       } else {
-        setBookingResult({ message: "Слот забронирован. Создайте капсулу позже." });
+        setBookingResult({ message: t.tv_booked_later });
       }
 
       await qc.invalidateQueries({ queryKey: getGetTvSlotsQueryKey({ date }) });
@@ -600,7 +610,7 @@ export function Tv() {
       setSelectedSlot(null);
       setSeedText("");
     } catch {
-      setBookingError("Ошибка соединения с сервером");
+      setBookingError(t.tv_err_connection);
     } finally {
       setBooking(false);
     }
@@ -618,7 +628,7 @@ export function Tv() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">TimeNation-TV</h1>
             <p className="text-muted-foreground font-mono text-sm mt-1">
-              1440 слотов · суверенный эфир
+              {t.tv_subtitle}
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -647,10 +657,10 @@ export function Tv() {
             {scheduleData && (
               <div className="flex gap-3 text-xs font-mono">
                 <span className="text-muted-foreground">
-                  Свободно: <span className="text-foreground">{scheduleData.freeSlots}</span>
+                  {t.tv_free_label} <span className="text-foreground">{scheduleData.freeSlots}</span>
                 </span>
                 <span className="text-muted-foreground">
-                  Занято: <span className="text-primary">{scheduleData.bookedSlots}</span>
+                  {t.tv_taken_label} <span className="text-primary">{scheduleData.bookedSlots}</span>
                 </span>
               </div>
             )}
@@ -662,13 +672,13 @@ export function Tv() {
 
         {/* Legend — цвета состояний */}
         <div className="flex flex-wrap gap-4 text-xs font-mono text-muted-foreground">
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-white/10 border border-white/15 inline-block" />Свободно</div>
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-white border border-white inline-block" />Сейчас</div>
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-green-500 border border-green-400 inline-block" />Выбрано</div>
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-yellow-400 border border-yellow-300 inline-block" />Забронировано</div>
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500 border border-orange-400 inline-block" />В эфире / Архив</div>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-white/10 border border-white/15 inline-block" />{t.tv_free_slot}</div>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-white border border-white inline-block" />{t.tv_legend_current}</div>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-green-500 border border-green-400 inline-block" />{t.tv_legend_selected}</div>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-yellow-400 border border-yellow-300 inline-block" />{t.tv_booked_slot}</div>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500 border border-orange-400 inline-block" />{t.tv_legend_on_air}</div>
           <span className="text-muted-foreground/60 border-l border-border/40 pl-4">
-            Четверть (:15/:45) 5 Д / 4.99 € · Половина (:30) 10 Д / 9.99 € · Ровно (:00) 25 Д / 24.99 €
+            {t.tv_type_quarter} (:15/:45) 5 Д / 4.99 € · {t.tv_type_half} (:30) 10 Д / 9.99 € · {t.tv_type_apex} (:00) 25 Д / 24.99 €
           </span>
         </div>
 
@@ -679,7 +689,7 @@ export function Tv() {
           <Card className="bg-card border-border overflow-hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-mono text-muted-foreground uppercase tracking-widest">
-                Сетка эфира (Chronos Grid)
+                {t.tv_grid_title}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -721,16 +731,16 @@ export function Tv() {
                                       ? "bg-white/6 border-white/10 hover:bg-green-500/20 hover:border-green-500/40"
                                       : "bg-white/12 border-white/15";
                             const statusLabel = isCurMin
-                              ? "Сейчас"
+                              ? t.tv_legend_current
                               : isFree
-                                ? "Свободно"
+                                ? t.tv_free_slot
                                 : isBroadcast
-                                  ? `${slot.ownerName ?? "Занято"} · В ЭФИРЕ`
-                                  : (slot.ownerName ?? "Занято");
+                                  ? `${slot.ownerName ?? t.tv_booked_slot} · ${t.tv_live}`
+                                  : (slot.ownerName ?? t.tv_booked_slot);
                             return (
                               <div
                                 key={min}
-                                title={`${slot.hourLabel}:${slot.minLabel} — ${TYPE_LABELS[slot.slotType] ?? slot.slotType} · ${statusLabel}`}
+                                title={`${slot.hourLabel}:${slot.minLabel} — ${getTypeLabel(t, slot.slotType)} · ${statusLabel}`}
                                 onClick={() => isFree && handleSlotClick(slot)}
                                 className={[
                                   "flex-1 basis-0 min-w-0 h-4 border rounded-[2px] transition-colors",
@@ -768,7 +778,7 @@ export function Tv() {
                         {selectedSlot.hourLabel}:{selectedSlot.minLabel}
                       </span>
                       <Badge variant="outline" className={`ml-2 text-[10px] font-mono ${SLOT_TYPE_BADGE[selectedSlot.slotType] ?? ""}`}>
-                        {TYPE_LABELS[selectedSlot.slotType] ?? selectedSlot.slotType}
+                        {getTypeLabel(t, selectedSlot.slotType)}
                         {RENDER_PATH_BY_SLOT[selectedSlot.slotType] === "heavy" && (
                           <span className="ml-1 text-rose-400">⚡ HEAVY</span>
                         )}
@@ -778,14 +788,14 @@ export function Tv() {
                   </div>
                 ) : (
                   <div className="p-2.5 border border-dashed border-border/60 rounded-sm text-center">
-                    <p className="text-muted-foreground text-xs font-mono">Кликните свободный слот на сетке</p>
+                    <p className="text-muted-foreground text-xs font-mono">{t.tv_click_free}</p>
                   </div>
                 )}
 
                 {/* Citizen status */}
                 {!citizen && (
                   <div className="p-2.5 bg-yellow-400/10 border border-yellow-400/30 rounded-sm">
-                    <p className="text-xs text-yellow-300 font-mono">Войдите в аккаунт в боковом меню, чтобы забронировать слот</p>
+                    <p className="text-xs text-yellow-300 font-mono">{t.tv_login_to_book}</p>
                   </div>
                 )}
                 {citizen && (
@@ -797,9 +807,9 @@ export function Tv() {
 
                 {/* Seed of Thought */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Зерно мысли</Label>
+                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{t.tv_seed_label}</Label>
                   <Textarea
-                    placeholder="Идея, тезис или манифест для AI-обработки…"
+                    placeholder={t.tv_seed_ph}
                     value={seedText}
                     onChange={e => setSeedText(e.target.value)}
                     maxLength={500}
@@ -811,41 +821,41 @@ export function Tv() {
 
                 {/* Mode A / B */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Режим обработки</Label>
+                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{t.tv_mode_label}</Label>
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       onClick={() => setMode("a")}
                       className={`flex items-center gap-1.5 p-2 rounded-sm border text-xs font-mono transition-colors ${mode === "a" ? "border-primary/60 bg-primary/15 text-primary" : "border-border text-muted-foreground hover:border-border/80"}`}
                     >
                       <Zap className="w-3 h-3 shrink-0" />
-                      <span><span className="font-bold">A</span> AI-упаковка</span>
+                      <span><span className="font-bold">A</span> {t.tv_mode_a}</span>
                     </button>
                     <button
                       onClick={() => setMode("b")}
                       className={`flex items-center gap-1.5 p-2 rounded-sm border text-xs font-mono transition-colors ${mode === "b" ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-400" : "border-border text-muted-foreground hover:border-border/80"}`}
                     >
                       <Shield className="w-3 h-3 shrink-0" />
-                      <span><span className="font-bold">B</span> Дословно</span>
+                      <span><span className="font-bold">B</span> {t.tv_mode_b}</span>
                     </button>
                   </div>
                   <p className="text-[10px] text-muted-foreground font-mono">
-                    {mode === "a" ? "LLM расширит зерно до 60-секундного кинематического манифеста" : "Текст передаётся без изменений, символ за символом"}
+                    {mode === "a" ? t.tv_mode_a_desc : t.tv_mode_b_desc}
                   </p>
                 </div>
 
                 {/* Visual style with AI previews */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Визуальный стиль</Label>
+                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{t.tv_style_label ?? "Style"}</Label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                    {VISUAL_STYLES.map(s => (
+                    {VISUAL_STYLE_DEFS.map(s => (
                       <button
                         key={s.value}
                         onClick={() => setVisualStyle(s.value)}
                         className={`flex flex-col gap-1.5 p-2 rounded-sm border text-left transition-colors ${visualStyle === s.value ? "border-primary/70 bg-primary/15" : "border-border hover:border-border/80"}`}
                       >
                         <StylePreview styleValue={s.value} seed={debouncedSeed} color={s.color} />
-                        <span className={`text-[11px] font-mono font-semibold leading-tight ${visualStyle === s.value ? "text-primary" : "text-muted-foreground"}`}>{s.label}</span>
-                        <span className="text-[9px] text-muted-foreground/60 leading-tight hidden sm:block">{s.desc}</span>
+                        <span className={`text-[11px] font-mono font-semibold leading-tight ${visualStyle === s.value ? "text-primary" : "text-muted-foreground"}`}>{t[s.labelKey]}</span>
+                        <span className="text-[9px] text-muted-foreground/60 leading-tight hidden sm:block">{t[s.descKey]}</span>
                       </button>
                     ))}
                   </div>
@@ -853,7 +863,7 @@ export function Tv() {
 
                 {/* Payment type */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Оплата</Label>
+                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{t.tv_payment_label}</Label>
                   <div className="grid grid-cols-3 gap-1.5">
                     <button
                       onClick={() => setPaymentType("timeltr")}
@@ -901,7 +911,7 @@ export function Tv() {
                             <div className="flex items-center gap-2">
                               <Loader className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
                               <span className="text-xs font-mono text-primary font-semibold flex-1">
-                                {RENDER_STAGE_LABELS[renderProgress] ?? renderProgress}
+                                {getRenderStageLabel(t, renderProgress)}
                               </span>
                               {countdownSec !== null && !renderTimedOut && (
                                 <span className="text-[10px] font-mono text-muted-foreground tabular-nums">
@@ -929,7 +939,7 @@ export function Tv() {
                                   <div key={stage} className="flex items-center gap-1.5">
                                     <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isDone ? "bg-primary" : isCur ? "bg-primary/50 animate-pulse" : "bg-border"}`} />
                                     <span className={`text-[9px] font-mono ${isDone || isCur ? "text-foreground/80" : "text-muted-foreground/50"}`}>
-                                      {RENDER_STAGE_LABELS[stage]}
+                                      {getRenderStageLabel(t, stage)}
                                     </span>
                                   </div>
                                 );
@@ -939,7 +949,7 @@ export function Tv() {
                             {renderTimedOut && (
                               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
                                 <AlertCircle className="w-3 h-3" />
-                                Рендер продолжается в фоне — обновите страницу позже
+                                {t.tv_render_bg}
                               </div>
                             )}
                           </div>
@@ -960,7 +970,7 @@ export function Tv() {
                               className="w-full font-mono text-sm gap-2 border-primary text-primary hover:bg-primary/10"
                             >
                               <Video className="w-4 h-4" />
-                              Запустить рендер
+                              {t.tv_start_render}
                             </Button>
                           </>
                         )}
@@ -972,27 +982,27 @@ export function Tv() {
                       <div className="p-3 bg-primary/10 border border-primary/40 rounded-sm space-y-2">
                         <div className="flex items-center gap-2 text-xs text-primary font-mono">
                           <CheckCircle className="w-3.5 h-3.5" />
-                          <span>Готово{renderResult.manifestoWords > 0 ? ` · ${renderResult.manifestoWords} слов` : ""}</span>
+                          <span>{t.tv_render_done}{renderResult.manifestoWords > 0 ? ` · ${renderResult.manifestoWords}` : ""}</span>
                         </div>
                         {renderResult.mediaUrl && (
                           <a href={renderResult.mediaUrl} target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1.5 text-xs text-primary underline font-mono hover:opacity-80"
                           >
-                            <ExternalLink className="w-3 h-3" />Открыть MP4
+                            <ExternalLink className="w-3 h-3" />{t.tv_open_mp4}
                           </a>
                         )}
                         {renderResult.catcastUrl && (
                           <a href={renderResult.catcastUrl} target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1.5 text-xs text-blue-400 underline font-mono hover:opacity-80"
                           >
-                            <ExternalLink className="w-3 h-3" />Открыть на Catcast.tv
+                            <ExternalLink className="w-3 h-3" />{t.tv_open_catcast}
                           </a>
                         )}
                         <Button onClick={handleRender} disabled={rendering} variant="ghost" size="sm"
                           className="w-full font-mono text-xs text-muted-foreground gap-1.5 h-7"
                         >
                           <Video className="w-3 h-3" />
-                          {rendering ? "Рендер…" : "Перерендерить"}
+                          {rendering ? t.tv_rendering : t.tv_rerender}
                         </Button>
                       </div>
                     )}
@@ -1001,14 +1011,14 @@ export function Tv() {
 
                 {/* Book button */}
                 <Button onClick={handleBook} disabled={!canBook} className="w-full font-mono text-sm gap-2">
-                  {booking ? "Бронирование…" : (<>Забронировать слот<ChevronRight className="w-4 h-4" /></>)}
+                  {booking ? t.tv_booking : (<>{t.tv_book_cta}<ChevronRight className="w-4 h-4" /></>)}
                 </Button>
 
                 {paymentType === "fiat" && selectedSlot && (
-                  <p className="text-[10px] text-muted-foreground font-mono text-center">Редирект на Stripe — карта, Apple Pay, Google Pay</p>
+                  <p className="text-[10px] text-muted-foreground font-mono text-center">{t.tv_stripe_note}</p>
                 )}
                 {paymentType === "crypto" && selectedSlot && (
-                  <p className="text-[10px] text-muted-foreground font-mono text-center">Редирект на Cryptomus — USDT/USDC (Polygon / Solana / Arbitrum)</p>
+                  <p className="text-[10px] text-muted-foreground font-mono text-center">{t.tv_crypto_note}</p>
                 )}
               </CardContent>
             </Card>
@@ -1019,7 +1029,7 @@ export function Tv() {
                 <CardHeader className="pb-2 pt-4">
                   <CardTitle className="text-sm font-mono text-muted-foreground uppercase tracking-widest flex items-center gap-2">
                     <Clock className="w-3.5 h-3.5 text-primary" />
-                    Мои слоты · {date}
+                    {t.tv_my_slots} · {date}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 pb-4">
@@ -1042,14 +1052,14 @@ export function Tv() {
                             {slot.hourLabel}:{slot.minLabel}
                           </span>
                           <span className={`ml-2 font-mono text-[10px] ${SLOT_TYPE_BADGE[slot.slotType] ?? ""} px-1.5 py-0.5 rounded border`}>
-                            {TYPE_LABELS[slot.slotType] ?? slot.slotType}
+                            {getTypeLabel(t, slot.slotType)}
                           </span>
-                          {slot.isRetro && <span className="ml-1 text-[10px] text-muted-foreground font-mono">РЕТРО</span>}
+                          {slot.isRetro && <span className="ml-1 text-[10px] text-muted-foreground font-mono">{t.tv_retro}</span>}
                         </div>
                         <div className="flex items-center gap-2">
                           {isBroadcast && (
                             <span className="flex items-center gap-1 text-[10px] text-orange-400 font-mono uppercase font-bold">
-                              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse inline-block" />В ЭФИРЕ
+                              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse inline-block" />{t.tv_live}
                             </span>
                           )}
                           {isBooked && (
@@ -1059,7 +1069,7 @@ export function Tv() {
                               className="flex items-center gap-1 text-[10px] font-mono text-yellow-400 border border-yellow-400/40 rounded px-2 py-0.5 hover:bg-yellow-400/10 transition-colors disabled:opacity-50"
                             >
                               <Radio className="w-3 h-3" />
-                              {slot.isRetro ? "РЕТРО в эфир" : "В эфир"}
+                              {slot.isRetro ? t.tv_retro_air : t.tv_on_air_btn}
                             </button>
                           )}
                         </div>
@@ -1077,7 +1087,7 @@ export function Tv() {
           <CardHeader>
             <CardTitle className="text-lg font-medium flex items-center gap-2">
               <Clock className="w-4 h-4 text-primary" />
-              Расписание эфира · {date}
+              {t.tv_schedule_title} · {date}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -1085,7 +1095,7 @@ export function Tv() {
               <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-14 bg-secondary" />)}</div>
             ) : schedule.length === 0 ? (
               <p className="text-muted-foreground text-sm py-4 text-center font-mono">
-                На {date} нет забронированных слотов
+                {t.tv_no_schedule.replace("{date}", date)}
               </p>
             ) : (
               <div className="space-y-3">
@@ -1103,16 +1113,16 @@ export function Tv() {
                           {entry.hourLabel}:{entry.minLabel}
                         </span>
                         <Badge variant="outline" className={`text-[10px] font-mono ${SLOT_TYPE_BADGE[entry.slotType] ?? ""}`}>
-                          {TYPE_LABELS[entry.slotType] ?? entry.slotType}
+                          {getTypeLabel(t, entry.slotType)}
                         </Badge>
                         <span className="text-sm text-foreground/80">{entry.ownerName ?? "—"}</span>
-                        {entry.isRetro && <span className="text-[10px] font-mono text-muted-foreground uppercase">РЕТРО</span>}
+                        {entry.isRetro && <span className="text-[10px] font-mono text-muted-foreground uppercase">{t.tv_retro}</span>}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {mp4Url && (
                           <span className="flex items-center gap-1 text-[10px] text-orange-400 font-mono uppercase font-bold">
                             <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse inline-block" />
-                            В ЭФИРЕ
+                            {t.tv_live}
                           </span>
                         )}
                         {mp4Url && (

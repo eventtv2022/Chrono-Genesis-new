@@ -1488,7 +1488,7 @@ function ChronosGrid({
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
         {([
           ["#ffffff", t.tv_today],
-          ["#22c55e", "Выбрано"],
+          ["#22c55e", t.tv_selected],
           ["#EAB308", t.tab_timer],
           ["#f97316", t.tv_live],
           [colors.mutedForeground + "40", t.tv_booked_slot],
