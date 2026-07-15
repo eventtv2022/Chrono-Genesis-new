@@ -24,6 +24,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ChronopediaMap, { type ChronopediaMapHandle } from "@/components/ChronopediaMap";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { LogoBrand } from "@/components/LogoBrand";
 // @ts-expect-error — no types for this package
 import { OpenLocationCode } from "open-location-code";
@@ -120,6 +121,7 @@ function EventCard({
   onDelete?: (id: number) => void;
   colors: ReturnType<typeof useColors>;
 }) {
+  const { t } = useLanguage();
   const st = getStyles(colors);
   const isOwn = event.authorId === myId;
   const statusColor = event.status === "disputed" ? "#f59e0b" : colors.mutedForeground;
@@ -133,10 +135,10 @@ function EventCard({
           </View>
           <View>
             <Text style={[st.authorName, { color: colors.foreground }]}>
-              {event.authorName ?? "Гражданин"}
+              {event.authorName ?? t.login}
             </Text>
             <Text style={[st.authorRank, { color: colors.mutedForeground }]}>
-              {event.authorRank ?? "Гражданин"}
+              {event.authorRank ?? t.login}
             </Text>
           </View>
         </View>
@@ -155,7 +157,7 @@ function EventCard({
       <Text style={[st.eventTitle, { color: colors.foreground }]}>{event.title}</Text>
       <Text style={[st.eventDesc, { color: colors.mutedForeground }]}>{event.description}</Text>
       <Text style={[st.eventDate, { color: colors.mutedForeground }]}>
-        {new Date(event.createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" })}
+        {new Date(event.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
       </Text>
     </View>
   );
@@ -172,6 +174,7 @@ function FeedEventCard({
   onAddOpinion?: (slotId: number) => void;
   colors: ReturnType<typeof useColors>;
 }) {
+  const { t } = useLanguage();
   const st = getStyles(colors);
   return (
     <TouchableOpacity
@@ -188,7 +191,7 @@ function FeedEventCard({
           <Text style={[st.feedTime, { color: colors.mutedForeground }]}>· {event.timeMarker}</Text>
         </View>
         <Text style={[st.feedAuthorRank, { color: colors.mutedForeground }]}>
-          {event.authorRank ?? "Гражданин"}
+          {event.authorRank ?? t.login}
         </Text>
       </View>
       <Text style={[st.feedTitle, { color: colors.foreground }]} numberOfLines={1}>{event.title}</Text>
@@ -200,7 +203,7 @@ function FeedEventCard({
           hitSlop={4}
         >
           <Feather name="plus" size={12} color={colors.primary} />
-          <Text style={[st.feedAddBtnText, { color: colors.primary }]}>Добавить мнение</Text>
+          <Text style={[st.feedAddBtnText, { color: colors.primary }]}>{t.chrono_add_opinion}</Text>
         </TouchableOpacity>
       )}
     </TouchableOpacity>
@@ -241,6 +244,7 @@ function AddModal({
   visible, mode, slotInfo, pendingLat, pendingLng,
   onClose, onSubmit, saving, colors, placeSearch,
 }: AddModalProps) {
+  const { t } = useLanguage();
   const st = getStyles(colors);
   const [locationName, setLocationName] = useState("");
   const [timeMarker, setTimeMarker] = useState(
@@ -297,20 +301,17 @@ function AddModal({
   }, [placeSearch.query, placeSearch.selected, mode]);
 
   const handleSubmit = () => {
-    if (!title.trim()) { Alert.alert("Ошибка", "Введите заголовок"); return; }
-    if (!description.trim()) { Alert.alert("Ошибка", "Введите описание"); return; }
-    if (mode === "slot" && !locationName.trim()) { Alert.alert("Ошибка", "Введите название места"); return; }
-    if (mode === "slot" && !timeMarker.trim()) { Alert.alert("Ошибка", "Введите дату/время"); return; }
+    if (!title.trim()) { Alert.alert(t.error, t.tl_enter_coords); return; }
+    if (!description.trim()) { Alert.alert(t.error, t.tl_enter_coords); return; }
+    if (mode === "slot" && !locationName.trim()) { Alert.alert(t.error, t.chrono_search_place); return; }
+    if (mode === "slot" && !timeMarker.trim()) { Alert.alert(t.error, t.tl_code_placeholder); return; }
 
     const lat = parseFloat(manualLat) || 0;
     const lng = parseFloat(manualLng) || 0;
 
     // Require real coordinates — from map tap, place search, Plus Code, or manual entry
     if (mode === "slot" && lat === 0 && lng === 0) {
-      Alert.alert(
-        "Координаты не указаны",
-        "Введите Plus Code (например: 4WHF+GW5), выберите место из поиска или тапните на карте."
-      );
+      Alert.alert(t.error, t.tl_enter_coords);
       return;
     }
 
@@ -336,7 +337,7 @@ function AddModal({
           <View style={st.modalHandle} />
           <View style={st.modalHeader}>
             <Text style={[st.modalTitle, { color: colors.foreground }]}>
-              {mode === "slot" ? "📍 Новая точка" : "💬 Добавить мнение"}
+              {mode === "slot" ? `📍 ${t.chrono_new_point}` : `💬 ${t.chrono_add_opinion}`}
             </Text>
             <TouchableOpacity onPress={onClose} hitSlop={8}>
               <Feather name="x" size={22} color={colors.mutedForeground} />
@@ -355,12 +356,12 @@ function AddModal({
 
             {mode === "slot" && (
               <>
-                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Поиск места</Text>
+                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>{t.chrono_search_place}</Text>
                 <View style={[st.searchRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <Feather name="search" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
                   <TextInput
                     style={[st.searchInput, { color: colors.foreground }]}
-                    placeholder="Адрес или Plus Code (4WHF+GW5)…"
+                    placeholder={t.chrono_search_place}
                     placeholderTextColor={colors.mutedForeground}
                     value={placeSearch.query}
                     onChangeText={placeSearch.setQuery}
@@ -389,21 +390,21 @@ function AddModal({
                   </View>
                 )}
 
-                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Название места</Text>
+                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>{t.chrono_search_place}</Text>
                 <TextInput
                   style={[st.field, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
-                  placeholder="Москва, Красная площадь…"
+                  placeholder={t.chrono_search_place}
                   placeholderTextColor={colors.mutedForeground}
                   value={locationName}
                   onChangeText={setLocationName}
                 />
 
-                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Координаты (широта, долгота)</Text>
+                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>{t.tl_enter_coords}</Text>
                 {manualLat && manualLng && placeSearch.query.includes("+") && tryDecodePlusCode(placeSearch.query) && (
                   <View style={[st.plusCodeBadge, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "55" }]}>
                     <Feather name="check-circle" size={13} color={colors.primary} />
                     <Text style={[st.plusCodeBadgeText, { color: colors.primary }]}>
-                      Plus Code распознан: {extractPlusCode(placeSearch.query)}
+                      Plus Code: {extractPlusCode(placeSearch.query)}
                     </Text>
                   </View>
                 )}
@@ -426,10 +427,10 @@ function AddModal({
                   />
                 </View>
 
-                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Дата / время события</Text>
+                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>{t.tl_code_placeholder}</Text>
                 <TextInput
                   style={[st.field, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
-                  placeholder="2026-06-14 или «22 июня 1941»"
+                  placeholder={t.tl_code_placeholder}
                   placeholderTextColor={colors.mutedForeground}
                   value={timeMarker}
                   onChangeText={setTimeMarker}
@@ -437,20 +438,20 @@ function AddModal({
               </>
             )}
 
-            <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Заголовок мнения</Text>
+            <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>{t.chrono_add_opinion}</Text>
             <TextInput
               style={[st.field, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
-              placeholder="Кратко — в чём суть?"
+              placeholder={t.chrono_add_opinion}
               placeholderTextColor={colors.mutedForeground}
               value={title}
               onChangeText={setTitle}
               maxLength={200}
             />
 
-            <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>Ваше мнение / описание</Text>
+            <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>{t.tx_desc_placeholder}</Text>
             <TextInput
               style={[st.field, st.fieldMulti, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
-              placeholder="Что произошло по вашему мнению?"
+              placeholder={t.tx_desc_placeholder}
               placeholderTextColor={colors.mutedForeground}
               value={description}
               onChangeText={setDescription}
@@ -467,7 +468,7 @@ function AddModal({
               {saving
                 ? <ActivityIndicator color="#fff" />
                 : <Text style={st.submitBtnText}>
-                    {mode === "slot" ? "Создать точку" : "Добавить мнение"}
+                    {mode === "slot" ? t.chrono_create_point : t.chrono_add_opinion}
                   </Text>
               }
             </TouchableOpacity>
@@ -484,6 +485,7 @@ export default function ChronopediaScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { citizen } = useCitizen();
+  const { t } = useLanguage();
   const qc = useQueryClient();
   const st = getStyles(colors);
   const chronoGuide = useContextualGuide("chronopedia");
@@ -529,7 +531,7 @@ export default function ChronopediaScreen() {
       const res = await fetch(
         `${BASE_URL}/api/chronopedia/slots${citizen ? `?citizenId=${citizen.id}` : ""}`
       );
-      if (!res.ok) throw new Error("Ошибка загрузки точек");
+      if (!res.ok) throw new Error("Error loading slots");
       return res.json();
     },
     refetchInterval: 30000,
@@ -543,7 +545,7 @@ export default function ChronopediaScreen() {
     queryKey: ["chronopediaSlot", selectedSlotId],
     queryFn: async () => {
       const res = await fetch(`${BASE_URL}/api/chronopedia/slots/${selectedSlotId}`);
-      if (!res.ok) throw new Error("Ошибка загрузки слота");
+      if (!res.ok) throw new Error("Error loading slot");
       return res.json();
     },
     enabled: selectedSlotId !== null,
@@ -553,7 +555,7 @@ export default function ChronopediaScreen() {
     queryKey: ["chronopediaFeed"],
     queryFn: async () => {
       const res = await fetch(`${BASE_URL}/api/chronopedia/feed?limit=50`);
-      if (!res.ok) throw new Error("Ошибка ленты");
+      if (!res.ok) throw new Error("Error loading feed");
       return res.json();
     },
     enabled: viewMode === "feed",
@@ -592,7 +594,7 @@ export default function ChronopediaScreen() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? "Ошибка создания");
+        throw new Error(err.error ?? "Error");
       }
       return res.json() as Promise<{ ok: boolean; slotId: number; eventId: number }>;
     },
@@ -619,7 +621,7 @@ export default function ChronopediaScreen() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? "Ошибка добавления");
+        throw new Error(err.error ?? "Error");
       }
       return res.json();
     },
@@ -641,7 +643,7 @@ export default function ChronopediaScreen() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? "Ошибка удаления");
+        throw new Error(err.error ?? "Error");
       }
     },
     onSuccess: () => {
@@ -649,19 +651,19 @@ export default function ChronopediaScreen() {
       qc.invalidateQueries({ queryKey: ["chronopediaSlots"] });
       qc.invalidateQueries({ queryKey: ["chronopediaFeed"] });
     },
-    onError: (e: Error) => Alert.alert("Ошибка", e.message),
+    onError: (e: Error) => Alert.alert(t.error, e.message),
   });
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleAddOpinion = () => {
-    if (!citizen) { Alert.alert("Войдите", "Необходим аккаунт гражданина"); return; }
+    if (!citizen) { Alert.alert(t.login, t.citizen_not_found); return; }
     setAddMode("event");
     setShowAddModal(true);
   };
 
   const handleNewSlot = () => {
-    if (!citizen) { Alert.alert("Войдите", "Необходим аккаунт гражданина"); return; }
+    if (!citizen) { Alert.alert(t.login, t.citizen_not_found); return; }
     chronoGuide.trigger(() => {
       setAddMode("slot");
       setShowAddModal(true);
@@ -693,9 +695,9 @@ export default function ChronopediaScreen() {
   };
 
   const handleDeleteEvent = (eventId: number) => {
-    Alert.alert("Удалить мнение?", "Это действие необратимо.", [
-      { text: "Отмена", style: "cancel" },
-      { text: "Удалить", style: "destructive", onPress: () => deleteEventMutation.mutate(eventId) },
+    Alert.alert(t.chrono_add_opinion, "", [
+      { text: t.cancel, style: "cancel" },
+      { text: t.close, style: "destructive", onPress: () => deleteEventMutation.mutate(eventId) },
     ]);
   };
 
@@ -709,7 +711,7 @@ export default function ChronopediaScreen() {
   };
 
   const handleFeedAddOpinion = useCallback((slotId: number, locationName: string, timeMarker: string) => {
-    if (!citizen) { Alert.alert("Войдите", "Необходим аккаунт гражданина"); return; }
+    if (!citizen) { Alert.alert(t.login, t.citizen_not_found); return; }
     setSelectedSlotId(slotId);
     setFeedSlotInfo({ locationName, timeMarker });
     setAddMode("event");
@@ -721,7 +723,7 @@ export default function ChronopediaScreen() {
     const url = isReal
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(slot.locationName)}&query_place_id=${slot.placeId}`
       : `https://www.google.com/maps/search/?api=1&query=${slot.geoLat},${slot.geoLng}`;
-    Linking.openURL(url).catch(() => Alert.alert("Ошибка", "Не удалось открыть Google Maps"));
+    Linking.openURL(url).catch(() => Alert.alert(t.error, "Google Maps"));
   }, []);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -732,7 +734,7 @@ export default function ChronopediaScreen() {
       {/* Header */}
       <View style={[st.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <LogoBrand size={20} />
-        <Text style={[st.headerTitle, { color: colors.foreground }]}>Хронопедия</Text>
+        <Text style={[st.headerTitle, { color: colors.foreground }]}>{t.tab_chronopedia}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -753,7 +755,7 @@ export default function ChronopediaScreen() {
               color={viewMode === mode ? colors.primary : colors.mutedForeground}
             />
             <Text style={[st.toggleBtnText, { color: viewMode === mode ? colors.primary : colors.mutedForeground }]}>
-              {mode === "map" ? "Карта" : "Лента"}
+              {mode === "map" ? t.tl_open_timeline : t.stats_recent_tx}
             </Text>
           </TouchableOpacity>
         ))}
@@ -803,7 +805,7 @@ export default function ChronopediaScreen() {
                     </Text>
                   </View>
                   <Text style={[st.panelTime, { color: colors.mutedForeground }]}>
-                    {slotDetail.slot.timeMarker} · {slotDetail.events.length} мнений
+                    {slotDetail.slot.timeMarker} · {slotDetail.events.length}
                   </Text>
                 </View>
 
@@ -825,7 +827,7 @@ export default function ChronopediaScreen() {
                     showsVerticalScrollIndicator={false}
                     ListEmptyComponent={
                       <Text style={[st.emptyHint, { color: colors.mutedForeground }]}>
-                        Нет мнений. Будьте первым!
+                        {t.emb_empty}
                       </Text>
                     }
                     style={st.eventsList}
@@ -838,7 +840,7 @@ export default function ChronopediaScreen() {
                     onPress={handleAddOpinion}
                   >
                     <Feather name="plus" size={15} color={colors.primary} />
-                    <Text style={[st.addOpinionBtnText, { color: colors.primary }]}>Добавить мнение</Text>
+                    <Text style={[st.addOpinionBtnText, { color: colors.primary }]}>{t.chrono_add_opinion}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[st.mapsBtn, { borderColor: colors.border }]}
@@ -855,7 +857,7 @@ export default function ChronopediaScreen() {
                 {pendingLat !== null ? (
                   <>
                     <Feather name="crosshair" size={24} color={colors.primary} />
-                    <Text style={[st.mapHintTitle, { color: colors.foreground }]}>Точка выбрана</Text>
+                    <Text style={[st.mapHintTitle, { color: colors.foreground }]}>{t.chrono_search_place}</Text>
                     <Text style={[st.mapHintSub, { color: colors.mutedForeground }]}>
                       {pendingLat.toFixed(4)}, {pendingLng?.toFixed(4)}
                     </Text>
@@ -864,15 +866,15 @@ export default function ChronopediaScreen() {
                       onPress={handleNewSlot}
                     >
                       <Feather name="plus" size={16} color="#fff" />
-                      <Text style={st.createBtnText}>Создать точку здесь</Text>
+                      <Text style={st.createBtnText}>{t.chrono_create_point}</Text>
                     </TouchableOpacity>
                   </>
                 ) : (
                   <>
                     <Text style={[st.mapHintIcon]}>🌍</Text>
-                    <Text style={[st.mapHintTitle, { color: colors.foreground }]}>Хронопедия</Text>
+                    <Text style={[st.mapHintTitle, { color: colors.foreground }]}>{t.tab_chronopedia}</Text>
                     <Text style={[st.mapHintSub, { color: colors.mutedForeground }]}>
-                      Нажмите маркер, чтобы прочитать мнения.{"\n"}Нажмите пустое место на карте, чтобы создать точку.
+                      {t.chrono_create_point}
                     </Text>
                   </>
                 )}
@@ -902,7 +904,7 @@ export default function ChronopediaScreen() {
               <View style={st.feedEmpty}>
                 <Text style={[st.feedEmptyIcon]}>🌐</Text>
                 <Text style={[st.feedEmptyText, { color: colors.mutedForeground }]}>
-                  Нет записей. Откройте карту и добавьте первую точку!
+                  {t.emb_empty}
                 </Text>
               </View>
             }
@@ -952,9 +954,9 @@ export default function ChronopediaScreen() {
         onClose={chronoGuide.close}
         onConfirm={chronoGuide.confirm}
         icon="🗺️"
-        title="Добавить веху в Chronopedia"
-        explanation={"Добавление смыслов и привязка к карте — всегда бесплатны. Вектор истории модерируется экспертами и ИИ по принципу Википедии.\n\nЗа подтверждённый факт ты заработаешь Darmin, а в твоём паспорте накопится Мерит, приближающий тебя к новому рангу. Спам и дезинформация блокируют накопление Меритов."}
-        ctaLabel="Выбрать геолокацию и зафиксировать время"
+        title={t.chrono_create_point}
+        explanation={t.chrono_new_point}
+        ctaLabel={t.chrono_search_place}
       />
     </View>
   );

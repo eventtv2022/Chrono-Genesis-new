@@ -109,7 +109,7 @@ function nodeStatusColor(s: string) {
 }
 function nodeStatusLabel(s: string) {
   if (s === 'online')                return 'ONLINE';
-  if (s === 'pending_verification')  return 'ПРОВЕРКА';
+  if (s === 'pending_verification')  return 'PENDING';
   return 'OFFLINE';
 }
 
@@ -119,6 +119,7 @@ export default function EmbassiesScreen() {
   const colors  = useColors();
   const insets  = useSafeAreaInsets();
   const { citizen } = useCitizen();
+  const { t } = useLanguage();
   const qc      = useQueryClient();
   const [showForm,   setShowForm]   = useState(false);
   const [showVerify, setShowVerify] = useState<Embassy | null>(null);
@@ -140,16 +141,14 @@ export default function EmbassiesScreen() {
     refetchInterval: 30_000,
   });
 
-  // My embassy (for verification panel)
   const myEmbassy = citizen ? embassies.find(e => e.citizenId === citizen.id) : null;
 
-  // Node token query — only fetches when verify modal is open
   const { data: nodeToken, isLoading: tokenLoading, refetch: refetchToken } = useQuery<NodeToken>({
     queryKey: ['node-token', showVerify?.id],
     queryFn: async () => {
       const res = await fetch(`${BASE_URL}/api/embassies/${showVerify!.id}/node-token`);
       const d = await res.json() as NodeToken & { error?: string };
-      if (!res.ok) throw new Error(d.error ?? 'Ошибка');
+      if (!res.ok) throw new Error(d.error ?? 'Error');
       return d;
     },
     enabled: !!showVerify,
@@ -159,7 +158,7 @@ export default function EmbassiesScreen() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (!coords) throw new Error('Не удалось распознать координаты');
+      if (!coords) throw new Error('Cannot resolve coordinates');
       const res = await fetch(`${BASE_URL}/api/embassies`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ citizenId: citizen!.id, gpsLat: coords.lat, gpsLng: coords.lng, address: address.trim() || undefined }),
@@ -171,12 +170,10 @@ export default function EmbassiesScreen() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['embassies'] });
       setShowForm(false); setLocation(''); setAddress('');
-      Alert.alert('🏛 Посольство зарегистрировано', 'Статус «Посол» активирован. NFT-сертификат выпущен.');
+      Alert.alert('🏛', t.emb_submit);
     },
-    onError: (err: Error) => Alert.alert('Ошибка', err.message),
+    onError: (err: Error) => Alert.alert('Error', err.message),
   });
-
-  // ── Proof-of-Location verify ──────────────────────────────────────────────
 
   const handleVerifyLocation = useCallback(async () => {
     if (!nodeToken || !showVerify) return;
@@ -184,7 +181,7 @@ export default function EmbassiesScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Нет доступа к GPS', 'Разреши приложению использовать геолокацию в настройках');
+        Alert.alert('GPS', t.emb_verify_gps);
         return;
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation });
@@ -197,28 +194,26 @@ export default function EmbassiesScreen() {
       const data = await res.json() as { success?: boolean; message?: string; error?: string; distanceM?: number };
 
       if (!res.ok) {
-        Alert.alert('Верификация не пройдена', data.error ?? 'Ошибка');
+        Alert.alert('Error', data.error ?? 'Error');
         return;
       }
 
       qc.invalidateQueries({ queryKey: ['embassies'] });
       setShowVerify(null);
-      Alert.alert('✅ Нода активирована!', data.message ?? 'Аптайм-майнинг запущен.');
-    } catch (err) {
-      Alert.alert('Ошибка', 'Не удалось получить GPS. Проверь интернет и разрешения.');
+      Alert.alert('✅', data.message ?? t.emb_verified);
+    } catch {
+      Alert.alert('Error', t.connection_error);
     } finally {
       setVerifying(false);
     }
-  }, [nodeToken, showVerify, qc]);
-
-  // ─────────────────────────────────────────────────────────────────────────
+  }, [nodeToken, showVerify, qc, t]);
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
       <View style={styles.header}>
         <View style={styles.headerBrand}>
           <LogoBrand size={28} />
-          <Text style={styles.headerTitle}>ПОСОЛЬСТВА</Text>
+          <Text style={styles.headerTitle}>{t.tab_embassies.toUpperCase()}</Text>
         </View>
         {citizen && (
           <TouchableOpacity style={styles.addBtn} onPress={() => setShowForm(true)} activeOpacity={0.8}>
@@ -229,12 +224,9 @@ export default function EmbassiesScreen() {
 
       <View style={styles.infoCard}>
         <Feather name="map-pin" size={16} color={colors.primary} />
-        <Text style={styles.infoText}>
-          Предоставь 1 м² под ноду — получай Дармины за аптайм. Верификация: Посол + QR Proof-of-Location.
-        </Text>
+        <Text style={styles.infoText}>{t.emb_info}</Text>
       </View>
 
-      {/* My node panel */}
       {myEmbassy && (
         <View style={[styles.myNodePanel, { borderColor: nodeStatusColor(myEmbassy.nodeStatus) + '66' }]}>
           <View style={styles.myNodeRow}>
@@ -245,29 +237,27 @@ export default function EmbassiesScreen() {
             {myEmbassy.isHardwareVerified && (
               <View style={styles.verifiedBadge}>
                 <Feather name="shield" size={11} color="#22c55e" />
-                <Text style={styles.verifiedText}>ВЕРИФИЦИРОВАНО</Text>
+                <Text style={styles.verifiedText}>{t.emb_verified.toUpperCase()}</Text>
               </View>
             )}
           </View>
           {!myEmbassy.isHardwareVerified && (
             <View style={{ gap: 8 }}>
-              {/* Native QR-scanner — full camera experience */}
               <TouchableOpacity
                 style={styles.verifyBtn}
                 onPress={() => router.push('/embassy/verify')}
                 activeOpacity={0.8}
               >
                 <Feather name="camera" size={14} color={colors.primaryForeground} />
-                <Text style={styles.verifyBtnText}>Сканировать QR ноды (камера)</Text>
+                <Text style={styles.verifyBtnText}>{t.emb_scan_qr}</Text>
               </TouchableOpacity>
-              {/* Fallback: GPS-only (no QR camera, token from modal) */}
               <TouchableOpacity
                 style={[styles.verifyBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}
                 onPress={() => setShowVerify(myEmbassy)}
                 activeOpacity={0.8}
               >
                 <Feather name="navigation" size={14} color={colors.primary} />
-                <Text style={[styles.verifyBtnText, { color: colors.primary }]}>Верифицировать через GPS (без камеры)</Text>
+                <Text style={[styles.verifyBtnText, { color: colors.primary }]}>{t.emb_verify_gps}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -284,8 +274,8 @@ export default function EmbassiesScreen() {
           !isLoading ? (
             <View style={styles.empty}>
               <Feather name="globe" size={40} color={colors.mutedForeground} />
-              <Text style={styles.emptyText}>Нет зарегистрированных посольств</Text>
-              <Text style={styles.emptySub}>Стань первым Послом TimeNation</Text>
+              <Text style={styles.emptyText}>{t.emb_empty}</Text>
+              <Text style={styles.emptySub}>{t.emb_empty_sub}</Text>
             </View>
           ) : null
         }
@@ -296,7 +286,7 @@ export default function EmbassiesScreen() {
                 <Text style={styles.avatarText}>{(item.citizenName ?? '?').charAt(0)}</Text>
               </View>
               <View style={styles.cardInfo}>
-                <Text style={styles.cardName}>{item.citizenName ?? 'Неизвестный'}</Text>
+                <Text style={styles.cardName}>{item.citizenName ?? '—'}</Text>
                 <Text style={styles.cardAddr}>
                   {item.address ?? `${item.gpsLat.toFixed(4)}, ${item.gpsLng.toFixed(4)}`}
                 </Text>
@@ -311,8 +301,8 @@ export default function EmbassiesScreen() {
             <View style={styles.cardFooter}>
               <Feather name="award" size={12} color={colors.primary} />
               <Text style={styles.cardNft}>
-                NFT Посол · Аптайм: {item.uptimeScore.toFixed(1)}%
-                {item.lastPingMs ? `  · Пинг: ${item.lastPingMs}ms` : ''}
+                NFT · {item.uptimeScore.toFixed(1)}%
+                {item.lastPingMs ? `  · ${item.lastPingMs}ms` : ''}
                 {item.isHardwareVerified ? '  · ✓ PoL' : ''}
               </Text>
             </View>
@@ -320,16 +310,16 @@ export default function EmbassiesScreen() {
         )}
       />
 
-      {/* ── Registration Modal ──────────────────────────────────────────────── */}
+      {/* Registration Modal */}
       <Modal visible={showForm} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalSheet} contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
-            <Text style={styles.modalTitle}>🏛 Зарегистрировать посольство</Text>
-            <Text style={styles.modalSub}>Введи координаты или Google Plus Code площадки под ноду</Text>
-            <Text style={styles.inputLabel}>Местоположение / Plus Code</Text>
+            <Text style={styles.modalTitle}>🏛 {t.emb_reg_title}</Text>
+            <Text style={styles.modalSub}>{t.emb_reg_sub}</Text>
+            <Text style={styles.inputLabel}>{t.emb_loc_label}</Text>
             <TextInput
               style={[styles.input, hasInput && !coords && { borderColor: '#ef4444' }, coords && { borderColor: '#22c55e' }]}
-              placeholder="4WHF+GW5 Фамагуста  или  35.1211, 33.9363"
+              placeholder="4WHF+GW5 Famagusta  or  35.1211, 33.9363"
               placeholderTextColor={colors.mutedForeground}
               value={location} onChangeText={setLocation} autoCapitalize="characters" autoCorrect={false}
             />
@@ -341,45 +331,42 @@ export default function EmbassiesScreen() {
             ) : hasInput ? (
               <View style={styles.coordError}>
                 <Feather name="alert-circle" size={14} color="#ef4444" />
-                <Text style={styles.coordErrorText}>Не распознано. Попробуй полный код или «35.12, 33.93»</Text>
+                <Text style={styles.coordErrorText}>{t.connection_error}</Text>
               </View>
             ) : (
               <View style={styles.coordHint}>
                 <Feather name="info" size={13} color={colors.mutedForeground} />
-                <Text style={styles.coordHintText}>Google Plus Code (короткий/полный) или «широта, долгота»</Text>
+                <Text style={styles.coordHintText}>Google Plus Code or «lat, lng»</Text>
               </View>
             )}
             <TextInput
-              style={[styles.input, { marginTop: 4 }]} placeholder="Адрес (необязательно)"
+              style={[styles.input, { marginTop: 4 }]} placeholder={t.emb_addr_ph}
               placeholderTextColor={colors.mutedForeground} value={address} onChangeText={setAddress}
             />
             <View style={styles.nftNote}>
               <Feather name="award" size={14} color={colors.primary} />
-              <Text style={styles.nftNoteText}>NFT-сертификат «Посол TimeNation» выпускается автоматически. После регистрации — пройди Proof-of-Location чтобы активировать аптайм.</Text>
+              <Text style={styles.nftNoteText}>{t.emb_nft_note}</Text>
             </View>
             <TouchableOpacity
               style={[styles.submitBtn, (createMutation.isPending || !coords) && { opacity: 0.5 }]}
               onPress={() => createMutation.mutate()} disabled={createMutation.isPending || !coords} activeOpacity={0.8}
             >
-              {createMutation.isPending ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.submitBtnText}>Зарегистрировать</Text>}
+              {createMutation.isPending ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.submitBtnText}>{t.emb_submit}</Text>}
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowForm(false); setLocation(''); setAddress(''); }} activeOpacity={0.8}>
-              <Text style={styles.cancelBtnText}>Отмена</Text>
+              <Text style={styles.cancelBtnText}>{t.cancel}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* ── Proof-of-Location Modal ─────────────────────────────────────────── */}
+      {/* Proof-of-Location Modal */}
       <Modal visible={!!showVerify} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalSheet} contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
             <Text style={styles.modalTitle}>📡 Proof of Location</Text>
-            <Text style={styles.modalSub}>
-              Находясь в радиусе 1 метра от оборудования ноды, нажми кнопку — система считает твой GPS и верифицирует присутствие.
-            </Text>
+            <Text style={styles.modalSub}>{t.emb_pol_sub}</Text>
 
-            {/* QR code display */}
             {tokenLoading ? (
               <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
             ) : nodeToken ? (
@@ -389,10 +376,10 @@ export default function EmbassiesScreen() {
                   style={styles.qrImage}
                   resizeMode="contain"
                 />
-                <Text style={styles.qrCaption}>QR-код для сканирования другим устройством</Text>
+                <Text style={styles.qrCaption}>QR</Text>
                 <View style={styles.tokenBox}>
                   <Text style={styles.tokenExpiry}>
-                    Действителен 10 минут · истекает в {new Date(nodeToken.expiresAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(nodeToken.expiresAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
               </View>
@@ -400,9 +387,9 @@ export default function EmbassiesScreen() {
 
             <View style={styles.polSteps}>
               {[
-                { icon: 'map-pin', text: 'Находишься рядом с оборудованием ноды' },
-                { icon: 'wifi',    text: 'GPS-сигнал активен на смартфоне' },
-                { icon: 'shield',  text: 'Разреши доступ к геолокации при запросе' },
+                { icon: 'map-pin', text: t.emb_pol_sub },
+                { icon: 'wifi',    text: 'GPS' },
+                { icon: 'shield',  text: t.emb_verify_gps },
               ].map((step, i) => (
                 <View key={i} style={styles.polStep}>
                   <View style={styles.polStepIcon}><Feather name={step.icon as 'map-pin'} size={14} color={colors.primary} /></View>
@@ -422,13 +409,13 @@ export default function EmbassiesScreen() {
               ) : (
                 <>
                   <Feather name="navigation" size={16} color={colors.primaryForeground} />
-                  <Text style={styles.submitBtnText}>  Верифицировать моё присутствие</Text>
+                  <Text style={styles.submitBtnText}>  {t.emb_verify_presence}</Text>
                 </>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowVerify(null); refetchToken(); }} activeOpacity={0.8}>
-              <Text style={styles.cancelBtnText}>Закрыть</Text>
+              <Text style={styles.cancelBtnText}>{t.close}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -453,48 +440,49 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     verifiedBadge:    { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(34,197,94,0.1)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 'auto' },
     verifiedText:     { fontSize: 9, fontFamily: 'Inter_700Bold', color: '#22c55e', letterSpacing: 1 },
     verifyBtn:        { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: 10, padding: 12, justifyContent: 'center' },
-    verifyBtnText:    { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: colors.primaryForeground },
+    verifyBtnText:    { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: colors.primaryForeground },
     empty:            { alignItems: 'center', paddingTop: 60, gap: 10 },
     emptyText:        { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: colors.mutedForeground },
     emptySub:         { fontSize: 13, fontFamily: 'Inter_400Regular', color: colors.mutedForeground },
     card:             { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 16, marginBottom: 10 },
-    cardHeader:       { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    avatar:           { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+    cardHeader:       { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+    avatar:           { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.goldGlow, borderWidth: 1, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
     avatarText:       { fontSize: 16, fontFamily: 'Inter_700Bold', color: colors.primary },
     cardInfo:         { flex: 1 },
-    cardName:         { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: colors.foreground },
+    cardName:         { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: colors.foreground },
     cardAddr:         { fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.mutedForeground, marginTop: 2 },
-    nodeBadge:        { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 },
+    nodeBadge:        { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
     nodeDot:          { width: 6, height: 6, borderRadius: 3 },
     nodeText:         { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
-    cardFooter:       { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
+    cardFooter:       { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
     cardNft:          { fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.mutedForeground },
     modalOverlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-    modalSheet:       { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%' },
+    modalSheet:       { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
     modalTitle:       { fontSize: 20, fontFamily: 'Inter_700Bold', color: colors.foreground, marginBottom: 6 },
-    modalSub:         { fontSize: 14, fontFamily: 'Inter_400Regular', color: colors.mutedForeground, marginBottom: 20, lineHeight: 20 },
-    inputLabel:       { fontSize: 12, fontFamily: 'Inter_500Medium', color: colors.mutedForeground, marginBottom: 6, letterSpacing: 0.4 },
-    input:            { borderWidth: 1.5, borderColor: colors.border, borderRadius: 10, padding: 14, fontSize: 15, fontFamily: 'Inter_400Regular', color: colors.foreground, backgroundColor: colors.card, marginBottom: 8 },
-    coordPreview:     { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, backgroundColor: 'rgba(34,197,94,0.08)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34,197,94,0.3)', marginBottom: 12 },
-    coordPreviewText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#4ade80' },
-    coordError:       { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 10, backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', marginBottom: 12 },
-    coordErrorText:   { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', color: '#f87171', lineHeight: 17 },
-    coordHint:        { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 10, marginBottom: 12 },
-    coordHintText:    { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.mutedForeground, lineHeight: 17 },
-    nftNote:          { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: colors.goldGlow, borderWidth: 1, borderColor: colors.primary, borderRadius: 10, padding: 12, marginBottom: 20 },
+    modalSub:         { fontSize: 14, fontFamily: 'Inter_400Regular', color: colors.mutedForeground, marginBottom: 20 },
+    inputLabel:       { fontSize: 12, fontFamily: 'Inter_500Medium', color: colors.mutedForeground, marginBottom: 6 },
+    input:            { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 14, fontSize: 15, fontFamily: 'Inter_400Regular', color: colors.foreground, backgroundColor: colors.card, marginBottom: 8 },
+    coordPreview:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+    coordPreviewText: { fontSize: 13, fontFamily: 'Inter_500Medium', color: '#22c55e' },
+    coordError:       { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+    coordErrorText:   { fontSize: 13, fontFamily: 'Inter_400Regular', color: '#ef4444' },
+    coordHint:        { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+    coordHintText:    { fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.mutedForeground },
+    nftNote:          { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: colors.goldGlow, borderWidth: 1, borderColor: colors.primary, borderRadius: 10, padding: 12, marginBottom: 20, marginTop: 4 },
     nftNoteText:      { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular', color: colors.primary, lineHeight: 18 },
-    submitBtn:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: 12, padding: 16, marginBottom: 10 },
+    submitBtn:        { flexDirection: 'row', backgroundColor: colors.primary, borderRadius: 12, padding: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
     submitBtnText:    { fontSize: 16, fontFamily: 'Inter_700Bold', color: colors.primaryForeground },
     cancelBtn:        { alignItems: 'center', padding: 12 },
     cancelBtnText:    { fontSize: 15, fontFamily: 'Inter_400Regular', color: colors.mutedForeground },
-    qrSection:        { alignItems: 'center', gap: 12, marginBottom: 20 },
-    qrImage:          { width: 200, height: 200, borderRadius: 12, backgroundColor: '#fff' },
-    qrCaption:        { fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.mutedForeground, textAlign: 'center' },
-    tokenBox:         { backgroundColor: colors.card, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: colors.border },
-    tokenExpiry:      { fontSize: 12, fontFamily: 'Inter_500Medium', color: colors.mutedForeground, textAlign: 'center' },
+    qrSection:        { alignItems: 'center', marginVertical: 16, gap: 8 },
+    qrImage:          { width: 200, height: 200, borderRadius: 12 },
+    qrCaption:        { fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.mutedForeground },
+    tokenBox:         { backgroundColor: colors.card, borderRadius: 8, padding: 10 },
+    tokenExpiry:      { fontSize: 12, fontFamily: 'Inter_500Medium', color: colors.mutedForeground },
     polSteps:         { gap: 10, marginBottom: 20 },
-    polStep:          { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    polStepIcon:      { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.goldGlow, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.primary },
-    polStepText:      { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular', color: colors.foreground, lineHeight: 18 },
+    polStep:          { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    polStepIcon:      { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.goldGlow, alignItems: 'center', justifyContent: 'center' },
+    polStepText:      { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular', color: colors.foreground },
+    surface:          { backgroundColor: colors.background },
   });
 }

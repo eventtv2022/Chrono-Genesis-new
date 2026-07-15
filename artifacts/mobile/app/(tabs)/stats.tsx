@@ -57,17 +57,26 @@ interface Stats {
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
-  return m > 0 ? `${m}м ${s}с` : `${s}с`;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, lang: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "только что";
-  if (mins < 60) return `${mins}м назад`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}ч назад`;
-  return `${Math.floor(hours / 24)}д назад`;
+  try {
+    const rtf = new Intl.RelativeTimeFormat(lang, { numeric: "auto" });
+    if (mins < 1) return rtf.format(0, "minutes");
+    if (mins < 60) return rtf.format(-mins, "minutes");
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return rtf.format(-hours, "hours");
+    return rtf.format(-Math.floor(hours / 24), "days");
+  } catch {
+    if (mins < 1) return "now";
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h`;
+    return `${Math.floor(hours / 24)}d`;
+  }
 }
 
 // ── Discount calculator (same tiers as shop.tsx) ─────────────────────────────
@@ -80,15 +89,16 @@ const TIERS = [
   { label: "500–999 Д",       discount: 6,  from: 500   },
   { label: "1 000–4 999 Д",   discount: 7,  from: 1000  },
   { label: "5 000–10 000 Д",  discount: 8,  from: 5000  },
-  { label: "свыше 10 000 Д",  discount: 10, from: 10001 },
+  { label: "> 10 000 Д",      discount: 10, from: 10001 },
 ];
 
 function calcDiscount(amt: number): number {
-  const tier = [...TIERS].reverse().find(t => amt >= t.from);
+  const tier = [...TIERS].reverse().find(tr => amt >= tr.from);
   return tier?.discount ?? 0;
 }
 
 function CalcWidget({ colors }: { colors: ReturnType<typeof useColors> }) {
+  const { t } = useLanguage();
   const [input, setInput]       = useState("100");
   const [expanded, setExpanded] = useState(false);
   const amount  = Math.max(0, parseInt(input.replace(/\D/g, ""), 10) || 0);
@@ -106,7 +116,7 @@ function CalcWidget({ colors }: { colors: ReturnType<typeof useColors> }) {
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Feather name="shopping-cart" size={16} color={colors.primary} />
           <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground, letterSpacing: 0.5 }}>
-            КАЛЬКУЛЯТОР ДАРМИНОВ
+            {t.stats_calc_title}
           </Text>
         </View>
         <Feather name={expanded ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
@@ -135,42 +145,42 @@ function CalcWidget({ colors }: { colors: ReturnType<typeof useColors> }) {
             <TextInput
               style={{ flex: 1, borderWidth: 1.5, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 18, fontFamily: "Inter_700Bold", color: colors.foreground, backgroundColor: colors.background, textAlign: "center" }}
               value={input}
-              onChangeText={t => setInput(t.replace(/\D/g, ""))}
+              onChangeText={v => setInput(v.replace(/\D/g, ""))}
               keyboardType="numeric"
-              placeholder="Кол-во Д"
+              placeholder={t.stats_darmin_amount}
               placeholderTextColor={colors.mutedForeground}
             />
-            <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>Дарминов</Text>
+            <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>Д</Text>
           </View>
 
           {/* Result */}
           <View style={{ backgroundColor: colors.background, borderRadius: 10, padding: 14, gap: 8 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>Базовая цена</Text>
+              <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{t.stats_base_price}</Text>
               <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{(amount * RATE_EUR).toFixed(2)} €</Text>
             </View>
             {disc > 0 && (
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: "#4ade80" }}>Скидка −{disc}%</Text>
+                <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: "#4ade80" }}>−{disc}%</Text>
                 <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#4ade80" }}>−{saved.toFixed(2)} €</Text>
               </View>
             )}
             <View style={{ flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }}>
-              <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.foreground }}>Итого</Text>
+              <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.foreground }}>{t.stats_total}</Text>
               <Text style={{ fontSize: 20, fontFamily: "Inter_700Bold", color: colors.primary }}>{total.toFixed(2)} €</Text>
             </View>
           </View>
 
           {/* Tier table */}
           <View style={{ gap: 4 }}>
-            <Text style={{ fontSize: 10, fontFamily: "Inter_500Medium", color: colors.mutedForeground, letterSpacing: 1, marginBottom: 4 }}>ШКАЛА СКИДОК</Text>
+            <Text style={{ fontSize: 10, fontFamily: "Inter_500Medium", color: colors.mutedForeground, letterSpacing: 1, marginBottom: 4 }}>{t.stats_discount_table}</Text>
             {TIERS.map((tier, i) => {
               const active = calcDiscount(amount) === tier.discount && amount >= tier.from;
               return (
                 <View key={i} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4, paddingHorizontal: 8, backgroundColor: active ? colors.goldGlow : "transparent", borderRadius: 6 }}>
                   <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: active ? colors.primary : colors.mutedForeground }}>{tier.label}</Text>
                   <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: tier.discount > 0 ? (active ? colors.primary : "#4ade80") : colors.mutedForeground }}>
-                    {tier.discount > 0 ? `−${tier.discount}%` : "нет скидки"}
+                    {tier.discount > 0 ? `−${tier.discount}%` : t.stats_no_discount}
                   </Text>
                 </View>
               );
@@ -187,6 +197,7 @@ export default function StatsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { citizen } = useCitizen();
+  const { t, lang } = useLanguage();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : 0;
 
@@ -219,7 +230,7 @@ export default function StatsScreen() {
       <View style={styles.header}>
         <View style={styles.headerBrand}>
           <LogoBrand size={28} />
-          <Text style={styles.headerTitle}>КАЗНАЧЕЙСТВО</Text>
+          <Text style={styles.headerTitle}>{t.tab_economy.toUpperCase()}</Text>
         </View>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <TouchableOpacity
@@ -228,7 +239,7 @@ export default function StatsScreen() {
             activeOpacity={0.8}
           >
             <Feather name="users" size={13} color={colors.foreground} />
-            <Text style={[styles.topupBtnText, { color: colors.foreground }]}>Реестр</Text>
+            <Text style={[styles.topupBtnText, { color: colors.foreground }]}>{t.stats_registry}</Text>
           </TouchableOpacity>
           {citizen && (
             <TouchableOpacity
@@ -237,7 +248,7 @@ export default function StatsScreen() {
               activeOpacity={0.8}
             >
               <Feather name="clock" size={13} color={colors.primary} />
-              <Text style={[styles.topupBtnText, { color: colors.primary }]}>Банк</Text>
+              <Text style={[styles.topupBtnText, { color: colors.primary }]}>{t.stats_bank}</Text>
             </TouchableOpacity>
           )}
           {citizen && (
@@ -247,7 +258,7 @@ export default function StatsScreen() {
               activeOpacity={0.8}
             >
               <Feather name="plus" size={13} color={colors.primaryForeground} />
-              <Text style={styles.topupBtnText}>Пополнить</Text>
+              <Text style={styles.topupBtnText}>{t.stats_topup}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
@@ -256,7 +267,7 @@ export default function StatsScreen() {
             activeOpacity={0.8}
           >
             <Feather name="cpu" size={13} color={colors.primary} />
-            <Text style={[styles.topupBtnText, { color: colors.primary }]}>Аудит</Text>
+            <Text style={[styles.topupBtnText, { color: colors.primary }]}>{t.stats_audit}</Text>
           </TouchableOpacity>
           {citizen && (
             <TouchableOpacity
@@ -265,7 +276,7 @@ export default function StatsScreen() {
               activeOpacity={0.8}
             >
               <Feather name="briefcase" size={13} color={colors.primary} />
-              <Text style={[styles.topupBtnText, { color: colors.primary }]}>Депозит</Text>
+              <Text style={[styles.topupBtnText, { color: colors.primary }]}>{t.stats_deposit}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -273,10 +284,10 @@ export default function StatsScreen() {
 
       <View style={styles.metricsGrid}>
         {[
-          { icon: "users", num: data?.totalCitizens ?? 0, label: "граждан", color: colors.primary },
-          { icon: "activity", num: data?.activeCitizens ?? 0, label: "активных", color: colors.success },
-          { icon: "repeat", num: data?.totalTransactions ?? 0, label: "транзакций", color: colors.primary },
-          { icon: "clock", num: data?.totalMinutesCirculated ?? 0, label: "Д в обороте", color: colors.primary },
+          { icon: "users",    num: data?.totalCitizens ?? 0,          label: t.stats_citizens,       color: colors.primary  },
+          { icon: "activity", num: data?.activeCitizens ?? 0,         label: t.stats_active,         color: colors.success  },
+          { icon: "repeat",   num: data?.totalTransactions ?? 0,      label: t.stats_transactions,   color: colors.primary  },
+          { icon: "clock",    num: data?.totalMinutesCirculated ?? 0, label: t.stats_in_circulation, color: colors.primary  },
         ].map((m) => (
           <View key={m.label} style={styles.metricCard}>
             <Feather name={m.icon as keyof typeof Feather.glyphMap} size={18} color={m.color} />
@@ -288,7 +299,7 @@ export default function StatsScreen() {
 
       {(data?.topGivers.length ?? 0) > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>ТОП ДАРИТЕЛЕЙ</Text>
+          <Text style={styles.sectionTitle}>{t.stats_top_givers.toUpperCase()}</Text>
           {data!.topGivers.map((c, i) => (
             <View key={c.id} style={styles.rankRow}>
               <Text style={styles.rankNum}>#{i + 1}</Text>
@@ -302,15 +313,15 @@ export default function StatsScreen() {
 
       {(data?.recentTransactions.length ?? 0) > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>ПОСЛЕДНИЕ ТРАНЗАКЦИИ</Text>
-          {data!.recentTransactions.map((t) => (
-            <View key={t.id} style={styles.txRow}>
+          <Text style={styles.sectionTitle}>{t.stats_recent_tx.toUpperCase()}</Text>
+          {data!.recentTransactions.map((tx) => (
+            <View key={tx.id} style={styles.txRow}>
               <View style={styles.txLeft}>
-                <Text style={styles.txNames}>{t.fromCitizenName} → {t.toCitizenName}</Text>
-                <Text style={styles.txTime}>{formatDuration(t.durationSeconds)} · {timeAgo(t.createdAt)}</Text>
+                <Text style={styles.txNames}>{tx.fromCitizenName} → {tx.toCitizenName}</Text>
+                <Text style={styles.txTime}>{formatDuration(tx.durationSeconds)} · {timeAgo(tx.createdAt, lang)}</Text>
               </View>
               <View style={styles.txAmount}>
-                <Text style={styles.txAmountText}>+{t.minutesTransferred.toFixed(2)}</Text>
+                <Text style={styles.txAmountText}>+{tx.minutesTransferred.toFixed(2)}</Text>
                 <Text style={styles.txAmountUnit}>Д</Text>
               </View>
             </View>
@@ -321,8 +332,8 @@ export default function StatsScreen() {
       {data?.totalTransactions === 0 && (
         <View style={styles.emptyState}>
           <Feather name="bar-chart-2" size={40} color={colors.mutedForeground} />
-          <Text style={styles.emptyText}>Нет транзакций</Text>
-          <Text style={styles.emptySubtext}>Начни первую TiMETR сессию</Text>
+          <Text style={styles.emptyText}>{t.stats_no_tx}</Text>
+          <Text style={styles.emptySubtext}>{t.stats_start_hint}</Text>
         </View>
       )}
 

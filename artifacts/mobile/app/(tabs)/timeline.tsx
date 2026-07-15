@@ -20,6 +20,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { LogoBrand } from "@/components/LogoBrand";
 
 const BASE_URL = getBaseUrl();
@@ -38,12 +39,23 @@ function makeCoord(year: number, month: number, day: number, hour: number, minut
 }
 function daysInMonth(year: number, month: number) { return new Date(year, month, 0).getDate(); }
 
-const MONTH_NAMES = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+function getMonthNames(lang: string): string[] {
+  try {
+    return Array.from({ length: 12 }, (_, i) =>
+      new Intl.DateTimeFormat(lang, { month: "short" }).format(new Date(2000, i, 1))
+    );
+  } catch {
+    return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  }
+}
 
 export default function TimelineScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { citizen } = useCitizen();
+  const { t, lang } = useLanguage();
+
+  const MONTH_NAMES = getMonthNames(lang);
 
   const [zoom, setZoom] = useState<ZoomLevel>(1);
   const [selectedCentury, setSelectedCentury] = useState<number>(21);
@@ -99,7 +111,7 @@ export default function TimelineScreen() {
   }, [zoom, selectedYear, selectedMonth, selectedDay, fetchOccupied]);
 
   const doAnchor = useCallback(async (coord: string) => {
-    if (!citizen) { setAnchorResult({ ok: false, msg: "Зарегистрируйтесь как гражданин" }); return; }
+    if (!citizen) { setAnchorResult({ ok: false, msg: t.citizen_not_found }); return; }
     setConfirmCoord(null);
     setAnchoring(coord);
     setAnchorResult(null);
@@ -111,24 +123,24 @@ export default function TimelineScreen() {
       });
       const data = await res.json() as { error?: string; newBalance?: number };
       if (!res.ok) {
-        setAnchorResult({ ok: false, msg: data.error ?? "Не удалось закрепить координату" });
+        setAnchorResult({ ok: false, msg: data.error ?? t.connection_error });
       } else {
-        setAnchorResult({ ok: true, msg: `Зафиксировано! Остаток: ${data.newBalance} Д` });
+        setAnchorResult({ ok: true, msg: `✓ ${data.newBalance} Д` });
         await fetchOccupied(selectedYear, selectedMonth, selectedDay);
         void refetchMyAnchors();
       }
     } catch {
-      setAnchorResult({ ok: false, msg: "Ошибка соединения с сервером" });
+      setAnchorResult({ ok: false, msg: t.connection_error });
     } finally {
       setAnchoring(null);
     }
-  }, [citizen, selectedYear, selectedMonth, selectedDay, fetchOccupied]);
+  }, [citizen, selectedYear, selectedMonth, selectedDay, fetchOccupied, t]);
 
   const jumpToDate = useCallback(() => {
     const y = parseInt(jumpYear, 10);
     const m = parseInt(jumpMonth || "1", 10);
     const d = parseInt(jumpDay || "1", 10);
-    if (!y || y < 1 || y > 9999) { setAnchorResult({ ok: false, msg: "Год должен быть от 1 до 9999" }); return; }
+    if (!y || y < 1 || y > 9999) { setAnchorResult({ ok: false, msg: "1–9999" }); return; }
     setSelectedCentury(Math.ceil(y / 100));
     setSelectedYear(y);
     setSelectedMonth(Math.min(Math.max(m, 1), 12));
@@ -140,9 +152,9 @@ export default function TimelineScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const getBreadcrumb = () => {
-    if (zoom === 1) return "Таймлайн";
-    if (zoom === 2) return `${selectedCentury} век`;
-    if (zoom === 3) return `${selectedYear} г. — ${MONTH_NAMES[selectedMonth - 1]}`;
+    if (zoom === 1) return t.tab_timeline;
+    if (zoom === 2) return `${selectedCentury}`;
+    if (zoom === 3) return `${selectedYear} — ${MONTH_NAMES[selectedMonth - 1]}`;
     if (zoom === 4) return `${pad2(selectedDay)}.${pad2(selectedMonth)}.${selectedYear}`;
     return `${pad2(selectedDay)}.${pad2(selectedMonth)}.${selectedYear} ${pad2(selectedHour)}:__`;
   };
@@ -157,7 +169,7 @@ export default function TimelineScreen() {
             </TouchableOpacity>
           )}
           <LogoBrand size={24} />
-          <Text style={styles.headerTitle}>Таймлайн</Text>
+          <Text style={styles.headerTitle}>{t.tab_timeline.toUpperCase()}</Text>
           <Text style={styles.breadcrumb}>{getBreadcrumb()}</Text>
           {citizen && (
             <TouchableOpacity
@@ -172,12 +184,12 @@ export default function TimelineScreen() {
           )}
         </View>
         <View style={styles.jumpRow}>
-          <TextInput style={styles.jumpInput} placeholder="Год" placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpYear} onChangeText={setJumpYear} maxLength={4} />
-          <TextInput style={styles.jumpInput} placeholder="Мес" placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpMonth} onChangeText={setJumpMonth} maxLength={2} />
-          <TextInput style={styles.jumpInput} placeholder="День" placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpDay} onChangeText={setJumpDay} maxLength={2} />
+          <TextInput style={styles.jumpInput} placeholder={t.tl_year_ph} placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpYear} onChangeText={setJumpYear} maxLength={4} />
+          <TextInput style={styles.jumpInput} placeholder={t.tl_month_ph} placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpMonth} onChangeText={setJumpMonth} maxLength={2} />
+          <TextInput style={styles.jumpInput} placeholder={t.tl_day_ph} placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpDay} onChangeText={setJumpDay} maxLength={2} />
           <TouchableOpacity style={styles.jumpBtn} onPress={jumpToDate}>
             <Feather name="navigation" size={14} color={colors.background} />
-            <Text style={styles.jumpBtnText}>Перейти</Text>
+            <Text style={styles.jumpBtnText}>{t.tl_jump}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -185,7 +197,7 @@ export default function TimelineScreen() {
       {loadingOccupied && (
         <View style={styles.loadingBar}>
           <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={styles.loadingText}>Загрузка...</Text>
+          <Text style={styles.loadingText}>{t.loading}</Text>
         </View>
       )}
 
@@ -197,7 +209,7 @@ export default function TimelineScreen() {
           contentContainerStyle={styles.gridContainer}
           renderItem={({ item: c }) => (
             <TouchableOpacity style={[styles.gridCell, styles.centuryCell]} onPress={() => { setSelectedCentury(c); setZoom(2); }}>
-              <Text style={styles.centuryCellText}>{c} в.</Text>
+              <Text style={styles.centuryCellText}>{c}</Text>
               <Text style={styles.centuryYearHint}>{(c - 1) * 100 + 1}–{c * 100}</Text>
             </TouchableOpacity>
           )}
@@ -241,7 +253,7 @@ export default function TimelineScreen() {
       )}
       {zoom === 4 && (
         <ScrollView contentContainerStyle={styles.hoursContainer}>
-          <Text style={styles.minuteTitle}>{pad2(selectedDay)}.{pad2(selectedMonth)}.{selectedYear} — выберите час</Text>
+          <Text style={styles.minuteTitle}>{pad2(selectedDay)}.{pad2(selectedMonth)}.{selectedYear} — {t.tl_choose_hour}</Text>
           <View style={styles.hoursGrid}>
             {Array.from({ length: 24 }, (_, h) => h).map((h) => {
               const prefix = `${padYear(selectedYear)}${pad2(selectedMonth)}${pad2(selectedDay)}${pad2(h)}`;
@@ -265,7 +277,7 @@ export default function TimelineScreen() {
       {zoom === 5 && (
         <ScrollView contentContainerStyle={styles.minuteContainer}>
           <Text style={styles.minuteTitle}>
-            {pad2(selectedDay)}.{pad2(selectedMonth)}.{selectedYear} {pad2(selectedHour)}:00 — {pad2(selectedHour)}:59 — выберите минуту
+            {pad2(selectedDay)}.{pad2(selectedMonth)}.{selectedYear} {pad2(selectedHour)}:00 — {pad2(selectedHour)}:59 — {t.tl_choose_minute}
           </Text>
           <View style={styles.minuteGrid}>
             {Array.from({ length: 60 }, (_, min) => {
@@ -304,26 +316,24 @@ export default function TimelineScreen() {
             })}
           </View>
 
-          {/* Inline confirm panel — shown when a free minute is tapped */}
           {confirmCoord && (
             <View style={styles.confirmPanel}>
-              <Text style={styles.confirmTitle}>⏳ Закрепить координату</Text>
+              <Text style={styles.confirmTitle}>{t.tl_anchor_title}</Text>
               <Text style={styles.confirmMsg}>
                 {`${confirmCoord.slice(6,8)}.${confirmCoord.slice(4,6)}.${parseInt(confirmCoord.slice(0,4),10)} ${confirmCoord.slice(8,10)}:${confirmCoord.slice(10,12)}`}
-                {"\n"}Навсегда за вашим родом · Стоимость: 1 Дармин
+                {"\n"}{t.tl_anchor_cost}
               </Text>
               <View style={styles.confirmBtns}>
                 <Pressable style={[styles.confirmBtn, styles.confirmBtnCancel]} onPress={() => setConfirmCoord(null)}>
-                  <Text style={styles.confirmBtnCancelText}>Отмена</Text>
+                  <Text style={styles.confirmBtnCancelText}>{t.cancel}</Text>
                 </Pressable>
                 <Pressable style={[styles.confirmBtn, styles.confirmBtnOk]} onPress={() => doAnchor(confirmCoord)}>
-                  <Text style={styles.confirmBtnOkText}>Закрепить</Text>
+                  <Text style={styles.confirmBtnOkText}>{t.tl_anchor_btn}</Text>
                 </Pressable>
               </View>
             </View>
           )}
 
-          {/* Result message */}
           {anchorResult && (
             <Pressable onPress={() => setAnchorResult(null)}>
               <View style={[styles.resultPanel, anchorResult.ok ? styles.resultOk : styles.resultErr]}>
@@ -334,14 +344,12 @@ export default function TimelineScreen() {
         </ScrollView>
       )}
 
-      {/* ── Anchor Action Sheet ──────────────────────────────────────────── */}
+      {/* Anchor Action Sheet */}
       <Modal visible={showAnchorActions} transparent animationType="slide" onRequestClose={() => setShowAnchorActions(false)}>
         <Pressable style={styles.asOverlay} onPress={() => setShowAnchorActions(false)}>
           <Pressable style={[styles.asSheet, { backgroundColor: colors.card }]} onPress={() => {}}>
-            {/* drag handle */}
             <View style={[styles.asHandle, { backgroundColor: colors.border }]} />
 
-            {/* coord label */}
             {selectedAnchor && (() => {
               const c = selectedAnchor.timelineCoord;
               const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)}  ${c.slice(8,10)}:${c.slice(10,12)}`;
@@ -354,7 +362,6 @@ export default function TimelineScreen() {
               );
             })()}
 
-            {/* action 1 — navigate */}
             <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() => {
               if (!selectedAnchor) return;
               const c = selectedAnchor.timelineCoord;
@@ -371,12 +378,11 @@ export default function TimelineScreen() {
                 <Feather name="navigation" size={18} color={colors.primary} />
               </View>
               <View style={styles.asRowText}>
-                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>Перейти к минуте</Text>
-                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>Открыть в таймлайне</Text>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_go_to_minute}</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_open_timeline}</Text>
               </View>
             </TouchableOpacity>
 
-            {/* action 2 — capsule */}
             <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() => {
               setShowAnchorActions(false);
               setTimeout(() => { setCapsuleText(""); setShowCapsule(true); }, 350);
@@ -385,12 +391,11 @@ export default function TimelineScreen() {
                 <Feather name="box" size={18} color="#7c3aed" />
               </View>
               <View style={styles.asRowText}>
-                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>Создать смысловую капсулу</Text>
-                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>Вложить текст в координату времени</Text>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_create_capsule}</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_capsule_sub}</Text>
               </View>
             </TouchableOpacity>
 
-            {/* action 3 — auction */}
             <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() => {
               setShowAnchorActions(false);
               setShowMyAnchors(false);
@@ -400,54 +405,51 @@ export default function TimelineScreen() {
                 <Feather name="tag" size={18} color="#e69522" />
               </View>
               <View style={styles.asRowText}>
-                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>Выставить на аукцион</Text>
-                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>Продать минуту на P2P-рынке за Дармины</Text>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_to_auction}</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_to_auction_sub}</Text>
               </View>
             </TouchableOpacity>
 
-            {/* action 4 — swap free */}
             <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() =>
-              Alert.alert("Скоро", "Обмен на свободную минуту будет доступен в следующем обновлении.")
+              Alert.alert(t.soon, t.tl_swap_free_sub)
             }>
               <View style={[styles.asIconBox, { backgroundColor: "#0ea5e922" }]}>
                 <Feather name="refresh-cw" size={18} color="#0ea5e9" />
               </View>
               <View style={styles.asRowText}>
-                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>Обменять на свободную минуту</Text>
-                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>Переместить якорь на незанятую координату</Text>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_swap_free}</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_swap_free_sub}</Text>
               </View>
-              <View style={styles.asSoon}><Text style={styles.asSoonText}>Скоро</Text></View>
+              <View style={styles.asSoon}><Text style={styles.asSoonText}>{t.soon}</Text></View>
             </TouchableOpacity>
 
-            {/* action 5 — swap occupied */}
             <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() =>
-              Alert.alert("Скоро", "Обмен с другим гражданином будет доступен в следующем обновлении.")
+              Alert.alert(t.soon, t.tl_swap_occ_sub)
             }>
               <View style={[styles.asIconBox, { backgroundColor: "#e6394622" }]}>
                 <Feather name="users" size={18} color="#e63946" />
               </View>
               <View style={styles.asRowText}>
-                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>Обменять на занятую минуту</Text>
-                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>Договорной своп с другим гражданином</Text>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_swap_occ}</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_swap_occ_sub}</Text>
               </View>
-              <View style={styles.asSoon}><Text style={styles.asSoonText}>Скоро</Text></View>
+              <View style={styles.asSoon}><Text style={styles.asSoonText}>{t.soon}</Text></View>
             </TouchableOpacity>
 
-            {/* cancel */}
             <TouchableOpacity style={styles.asCancel} onPress={() => setShowAnchorActions(false)}>
-              <Text style={[styles.asCancelText, { color: colors.mutedForeground }]}>Отмена</Text>
+              <Text style={[styles.asCancelText, { color: colors.mutedForeground }]}>{t.cancel}</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* ── Capsule Creation Modal ────────────────────────────────────────── */}
+      {/* Capsule Creation Modal */}
       <Modal visible={showCapsule} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCapsule(false)}>
         <View style={[styles.capModal, { backgroundColor: colors.background }]}>
           <View style={[styles.capHeader, { borderBottomColor: colors.border }]}>
             <View style={styles.capHeaderLeft}>
               <Feather name="box" size={18} color="#7c3aed" />
-              <Text style={[styles.capHeaderTitle, { color: colors.foreground }]}>Смысловая капсула</Text>
+              <Text style={[styles.capHeaderTitle, { color: colors.foreground }]}>{t.tl_capsule_modal_title}</Text>
             </View>
             <TouchableOpacity onPress={() => setShowCapsule(false)} style={styles.maClose}>
               <Feather name="x" size={22} color={colors.foreground} />
@@ -465,12 +467,12 @@ export default function TimelineScreen() {
             );
           })()}
 
-          <Text style={[styles.capLabel, { color: colors.foreground }]}>Смысл этой минуты</Text>
+          <Text style={[styles.capLabel, { color: colors.foreground }]}>{t.tl_capsule_sub}</Text>
           <TextInput
             style={[styles.capInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             multiline
             numberOfLines={6}
-            placeholder="Опишите, что значит для вас эта минута…"
+            placeholder={t.tl_capsule_sub}
             placeholderTextColor={colors.mutedForeground}
             value={capsuleText}
             onChangeText={setCapsuleText}
@@ -493,13 +495,13 @@ export default function TimelineScreen() {
                 });
                 if (res.ok) {
                   setShowCapsule(false);
-                  Alert.alert("Готово", "Капсула сохранена в вашей координатe времени.");
+                  Alert.alert("✓", t.save);
                 } else {
                   const d = await res.json() as { error?: string };
-                  Alert.alert("Ошибка", d.error ?? "Не удалось сохранить капсулу");
+                  Alert.alert("Error", d.error ?? t.connection_error);
                 }
               } catch {
-                Alert.alert("Ошибка", "Ошибка соединения с сервером");
+                Alert.alert("Error", t.connection_error);
               } finally {
                 setCapsuleSaving(false);
               }
@@ -507,12 +509,12 @@ export default function TimelineScreen() {
           >
             {capsuleSaving
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.capSaveBtnText}>Сохранить капсулу</Text>}
+              : <Text style={styles.capSaveBtnText}>{t.save}</Text>}
           </TouchableOpacity>
         </View>
       </Modal>
 
-      {/* ── My Anchors Modal ─────────────────────────────────────────────── */}
+      {/* My Anchors Modal */}
       <Modal visible={showMyAnchors} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowMyAnchors(false)}>
         <View style={[styles.maModal, { backgroundColor: colors.background }]}>
           <View style={[styles.maHeader, { borderBottomColor: colors.border }]}>
@@ -531,10 +533,8 @@ export default function TimelineScreen() {
           {myAnchors.length === 0 ? (
             <View style={styles.maEmpty}>
               <Feather name="clock" size={40} color={colors.mutedForeground} />
-              <Text style={[styles.maEmptyTitle, { color: colors.foreground }]}>Нет закреплённых координат</Text>
-              <Text style={[styles.maEmptyText, { color: colors.mutedForeground }]}>
-                Перейдите к нужной минуте в таймлайне и нажмите на неё — стоимость 1 Д
-              </Text>
+              <Text style={[styles.maEmptyTitle, { color: colors.foreground }]}>{t.tl_anchor_title}</Text>
+              <Text style={[styles.maEmptyText, { color: colors.mutedForeground }]}>{t.tl_anchor_cost}</Text>
             </View>
           ) : (
             <FlatList
@@ -565,7 +565,11 @@ export default function TimelineScreen() {
       </Modal>
 
       <View style={[styles.legend, { paddingBottom: insets.bottom + 80 }]}>
-        {[{ color: colors.primary, label: "Мои" }, { color: "#e63946", label: "Занято" }, { color: colors.card, label: "Свободно" }].map((item) => (
+        {[
+          { color: colors.primary, label: t.tl_anchor_btn },
+          { color: "#e63946",      label: t.tl_swap_occ  },
+          { color: colors.card,    label: t.tl_swap_free },
+        ].map((item) => (
           <View key={item.label} style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: item.color }]} />
             <Text style={styles.legendText}>{item.label}</Text>
@@ -584,6 +588,8 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     backBtn: { padding: 4 },
     headerTitle: { fontSize: 18, fontWeight: "700", color: colors.primary },
     breadcrumb: { fontSize: 13, color: colors.mutedForeground, marginLeft: "auto" },
+    myAnchorsBtn: { borderWidth: 1, borderRadius: 16, padding: 6, flexDirection: "row", alignItems: "center", gap: 4 },
+    myAnchorsBadge: { fontSize: 12, fontWeight: "700" },
     jumpRow: { flexDirection: "row", gap: 6, paddingBottom: 6 },
     jumpInput: { flex: 1, height: 34, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, color: colors.foreground, paddingHorizontal: 8, fontSize: 13, textAlign: "center" },
     jumpBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.primary, paddingHorizontal: 10, borderRadius: 8, height: 34 },
@@ -614,73 +620,65 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     hourCellText: { fontSize: 18, fontFamily: "Inter_700Bold", color: colors.foreground },
     hourCellSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 4 },
     minuteGrid: { flexDirection: "row" as const, flexWrap: "wrap" as const },
-    minuteCell: { width: "10%" as const, aspectRatio: 1, padding: 3, borderRadius: 6, backgroundColor: colors.card, alignItems: "center" as const, justifyContent: "center" as const, borderWidth: 1, borderColor: colors.border },
-    minuteText: { color: colors.mutedForeground, fontSize: 11, fontFamily: "Inter_500Medium" },
-    confirmPanel: { marginTop: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.primary + "55", backgroundColor: colors.card, padding: 16 },
-    confirmTitle: { color: colors.foreground, fontSize: 15, fontWeight: "700", marginBottom: 6 },
-    confirmMsg: { color: colors.mutedForeground, fontSize: 13, lineHeight: 20, marginBottom: 14 },
-    confirmBtns: { flexDirection: "row" as const, gap: 10 },
-    confirmBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: "center" as const },
-    confirmBtnCancel: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+    minuteCell: { width: "14.28%", aspectRatio: 1, borderWidth: 1, borderColor: colors.border, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: colors.card },
+    minuteText: { fontSize: 11, color: colors.foreground, fontWeight: "500" },
+    confirmPanel: { margin: 12, backgroundColor: colors.card, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: colors.primary + "66" },
+    confirmTitle: { fontSize: 15, fontWeight: "700", color: colors.foreground, marginBottom: 6 },
+    confirmMsg: { fontSize: 13, color: colors.mutedForeground, marginBottom: 14, lineHeight: 19 },
+    confirmBtns: { flexDirection: "row", gap: 10 },
+    confirmBtn: { flex: 1, borderRadius: 10, padding: 12, alignItems: "center" },
+    confirmBtnCancel: { backgroundColor: colors.muted },
     confirmBtnOk: { backgroundColor: colors.primary },
-    confirmBtnCancelText: { color: colors.foreground, fontSize: 14, fontWeight: "600" },
-    confirmBtnOkText: { color: colors.background, fontSize: 14, fontWeight: "700" },
-    resultPanel: { marginTop: 12, borderRadius: 10, padding: 12 },
-    resultOk: { backgroundColor: "#1a3a2a", borderWidth: 1, borderColor: "#2d6a4f" },
-    resultErr: { backgroundColor: "#3a1a1a", borderWidth: 1, borderColor: "#e63946" },
-    resultText: { color: colors.foreground, fontSize: 13 },
-    legend: { flexDirection: "row", justifyContent: "center", gap: 20, paddingTop: 8, paddingHorizontal: 16 },
-    legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-    legendDot: { width: 10, height: 10, borderRadius: 5 },
-    legendText: { color: colors.mutedForeground, fontSize: 12 },
-    // My Anchors button (header)
-    myAnchorsBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, borderWidth: 1, marginLeft: "auto" },
-    myAnchorsBadge: { fontSize: 12, fontWeight: "700" },
-    // Action Sheet
+    confirmBtnCancelText: { color: colors.foreground, fontWeight: "600" },
+    confirmBtnOkText: { color: colors.primaryForeground, fontWeight: "700" },
+    resultPanel: { margin: 12, borderRadius: 10, padding: 14 },
+    resultOk: { backgroundColor: "#dcfce7" },
+    resultErr: { backgroundColor: "#fee2e2" },
+    resultText: { fontSize: 13, fontWeight: "600", color: "#111" },
     asOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-    asSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 34, paddingTop: 10 },
-    asHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 12 },
-    asCoordBox: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1 },
-    asCoordText: { fontSize: 16, fontWeight: "700", fontVariant: ["tabular-nums"] },
-    asCoordRaw: { fontSize: 11, marginLeft: 4, letterSpacing: 1 },
-    asRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+    asSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 32 },
+    asHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginVertical: 12 },
+    asCoordBox: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginBottom: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
+    asCoordText: { fontSize: 14, fontWeight: "600" },
+    asCoordRaw: { fontSize: 11, marginLeft: "auto" },
+    asRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1 },
     asIconBox: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
     asRowText: { flex: 1 },
     asRowTitle: { fontSize: 15, fontWeight: "600" },
     asRowSub: { fontSize: 12, marginTop: 2 },
-    asSoon: { backgroundColor: "#0ea5e933", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
-    asSoonText: { fontSize: 10, fontWeight: "700", color: "#0ea5e9" },
-    asCancel: { marginTop: 8, paddingVertical: 14, alignItems: "center" },
-    asCancelText: { fontSize: 16, fontWeight: "500" },
-    // Capsule modal
+    asSoon: { backgroundColor: "#f1f5f9", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+    asSoonText: { fontSize: 10, fontWeight: "700", color: "#64748b" },
+    asCancel: { alignItems: "center", padding: 16 },
+    asCancelText: { fontSize: 16 },
     capModal: { flex: 1, padding: 20 },
     capHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 16, borderBottomWidth: 1, marginBottom: 16 },
     capHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
     capHeaderTitle: { fontSize: 18, fontWeight: "700" },
-    capCoordBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, marginBottom: 20 },
+    capCoordBadge: { flexDirection: "row", alignItems: "center", gap: 6, padding: 10, borderRadius: 10, borderWidth: 1, marginBottom: 16 },
     capCoordBadgeText: { fontSize: 12 },
     capLabel: { fontSize: 14, fontWeight: "600", marginBottom: 8 },
-    capInput: { borderWidth: 1, borderRadius: 12, padding: 14, fontSize: 15, minHeight: 140, marginBottom: 6 },
-    capCount: { fontSize: 11, textAlign: "right", marginBottom: 24 },
-    capSaveBtn: { borderRadius: 14, paddingVertical: 16, alignItems: "center" },
+    capInput: { borderWidth: 1, borderRadius: 12, padding: 14, fontSize: 15, minHeight: 120, marginBottom: 6 },
+    capCount: { fontSize: 11, textAlign: "right", marginBottom: 16 },
+    capSaveBtn: { borderRadius: 12, padding: 16, alignItems: "center" },
     capSaveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-    // My Anchors modal
     maModal: { flex: 1 },
-    maHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },
+    maHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, borderBottomWidth: 1 },
     maHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
     maHeaderTitle: { fontSize: 18, fontWeight: "700" },
-    maCount: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
+    maCount: { borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 },
     maCountText: { color: "#fff", fontSize: 12, fontWeight: "700" },
     maClose: { padding: 4 },
     maEmpty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 40 },
-    maEmptyTitle: { fontSize: 17, fontWeight: "700", textAlign: "center" },
-    maEmptyText: { fontSize: 13, textAlign: "center", lineHeight: 20 },
-    maList: { padding: 16, gap: 10 },
-    maRow: { flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, padding: 14, gap: 12 },
-    maRowLeft: { flex: 1, gap: 3 },
-    maCoordLabel: { fontSize: 16, fontWeight: "600", fontVariant: ["tabular-nums"] },
-    maCoordRaw: { fontSize: 11, fontFamily: "Inter_400Regular", letterSpacing: 1 },
-    maGoBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
-    maGoBtnText: { fontSize: 13, fontWeight: "600" },
+    maEmptyTitle: { fontSize: 18, fontWeight: "600", textAlign: "center" },
+    maEmptyText: { fontSize: 13, textAlign: "center", lineHeight: 19 },
+    maList: { padding: 16, gap: 8 },
+    maRow: { flexDirection: "row", alignItems: "center", borderRadius: 12, padding: 14, borderWidth: 1 },
+    maRowLeft: { flex: 1 },
+    maCoordLabel: { fontSize: 15, fontWeight: "600" },
+    maCoordRaw: { fontSize: 11, marginTop: 2 },
+    legend: { flexDirection: "row", justifyContent: "center", gap: 20, paddingTop: 8, paddingHorizontal: 16 },
+    legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+    legendDot: { width: 10, height: 10, borderRadius: 5 },
+    legendText: { fontSize: 11, color: colors.mutedForeground },
   });
 }

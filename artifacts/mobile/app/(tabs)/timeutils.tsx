@@ -16,6 +16,7 @@ import * as Notifications from "expo-notifications";
 import { Audio } from "expo-av";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { LogoBrand } from "@/components/LogoBrand";
 
 const BASE_URL = getBaseUrl();
@@ -30,22 +31,21 @@ const ZONES = [
   { label: "New York", city: "Нью-Йорк", tz: "America/New_York", flag: "🇺🇸" },
 ] as const;
 
-function getTimeInZone(tz: string): { time: string; date: string; offset: string } {
+function getTimeInZone(tz: string, lang: string): { time: string; date: string; offset: string } {
   const now = new Date();
-  const time = new Intl.DateTimeFormat("ru-RU", {
+  const time = new Intl.DateTimeFormat(lang, {
     timeZone: tz,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
   }).format(now);
-  const date = new Intl.DateTimeFormat("ru-RU", {
+  const date = new Intl.DateTimeFormat(lang, {
     timeZone: tz,
     weekday: "short",
     day: "numeric",
     month: "short",
   }).format(now);
-  // Offset label
   const offsetMs = new Date(now.toLocaleString("en-US", { timeZone: tz })).getTime()
     - new Date(now.toLocaleString("en-US", { timeZone: "UTC" })).getTime();
   const offsetH = offsetMs / 3600000;
@@ -54,22 +54,19 @@ function getTimeInZone(tz: string): { time: string; date: string; offset: string
   return { time, date, offset };
 }
 
-// ── Pomodoro presets ──────────────────────────────────────────────────────────
+// ── Pomodoro preset seconds (labels computed inside component) ────────────────
 
-const PRESETS = [
-  { label: "12 мин", seconds: 12 * 60 },
-  { label: "24 мин", seconds: 24 * 60 },
-  { label: "25 мин", seconds: 25 * 60 },
-  { label: "36 мин", seconds: 36 * 60 },
-  { label: "48 мин", seconds: 48 * 60 },
-  { label: "50 мин", seconds: 50 * 60 },
-  { label: "60 мин", seconds: 60 * 60 },
-  { label: "90 мин", seconds: 90 * 60 },
-];
+const PRESET_SECONDS_CONST = [12, 24, 25, 36, 48, 50, 60, 90];
 
-// ── Alarm days ────────────────────────────────────────────────────────────────
+// ── Alarm days (computed inside component via Intl) ───────────────────────────
 
-const DAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+function getDayNames(lang: string): string[] {
+  // Build Sun→Sat short names using a known Sunday (2021-01-03)
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(2021, 0, 3 + i); // 2021-01-03 is Sunday
+    return new Intl.DateTimeFormat(lang, { weekday: "narrow" }).format(d);
+  });
+}
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
@@ -77,7 +74,10 @@ export default function TimeUtilsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { citizen } = useCitizen();
+  const { t, lang } = useLanguage();
   const st = styles(colors);
+  const DAYS = getDayNames(lang);
+  const PRESET_SECONDS = [12, 24, 25, 36, 48, 50, 60, 90].map((m) => ({ label: `${m}m`, seconds: m * 60 }));
 
   // ── Section toggle ──────────────────────────────────────────────────────────
   const [section, setSection] = useState<"clock" | "timer" | "alarm">("clock");
@@ -91,11 +91,11 @@ export default function TimeUtilsScreen() {
 
   // ── Pomodoro timer ──────────────────────────────────────────────────────────
   const [preset, setPreset] = useState(0);
-  const [remaining, setRemaining] = useState(PRESETS[0]!.seconds);
+  const [remaining, setRemaining] = useState(PRESET_SECONDS_CONST[0]! * 60);
   const [running, setRunning] = useState(false);
   const [completed, setCompleted] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const sessionDurationRef = useRef(PRESETS[0]!.seconds);
+  const sessionDurationRef = useRef(PRESET_SECONDS_CONST[0]! * 60);
 
   const stopInterval = useCallback(() => {
     if (intervalRef.current) {
@@ -123,9 +123,9 @@ export default function TimeUtilsScreen() {
       } catch { /* silent — offline is fine */ }
     }
     Alert.alert(
-      "⏱ Фокус-сессия завершена!",
-      `Ты инвестировал ${Math.round(sessionDurationRef.current / 60)} минут концентрации. ИИ-Аудитор зачислит их в профиль активности.`,
-      [{ text: "Отлично!", onPress: () => setCompleted(false) }]
+      t.time_session_done,
+      `${Math.round(sessionDurationRef.current / 60)} min · ${t.time_pomodoro}`,
+      [{ text: "OK", onPress: () => setCompleted(false) }]
     );
   }, [citizen?.id, stopInterval]);
 
@@ -151,8 +151,8 @@ export default function TimeUtilsScreen() {
     setRunning(false);
     setCompleted(false);
     setPreset(i);
-    setRemaining(PRESETS[i]!.seconds);
-    sessionDurationRef.current = PRESETS[i]!.seconds;
+    setRemaining(PRESET_SECONDS_CONST[i]! * 60);
+    sessionDurationRef.current = PRESET_SECONDS_CONST[i]! * 60;
   };
 
   const handleStartPause = () => {
@@ -165,12 +165,12 @@ export default function TimeUtilsScreen() {
     stopInterval();
     setRunning(false);
     setCompleted(false);
-    setRemaining(PRESETS[preset]!.seconds);
+    setRemaining(PRESET_SECONDS_CONST[preset]! * 60);
   };
 
   const timerMinutes = Math.floor(remaining / 60);
   const timerSeconds = remaining % 60;
-  const progress = remaining / PRESETS[preset]!.seconds;
+  const progress = remaining / (PRESET_SECONDS_CONST[preset]! * 60);
 
   // ── Alarm ───────────────────────────────────────────────────────────────────
   const [alarmHour, setAlarmHour] = useState(7);
@@ -262,9 +262,9 @@ export default function TimeUtilsScreen() {
       const permStatus = (perms as unknown as { status?: string }).status;
       if (permStatus !== "granted") {
         Alert.alert(
-          "⛔ Уведомления отключены",
-          "Для работы будильника в фоне разреши уведомления в настройках телефона.",
-          [{ text: "Понятно" }]
+          `⛔ ${t.time_alarm_tab}`,
+          t.time_alarm,
+          [{ text: "OK" }]
         );
       }
     };
@@ -295,8 +295,8 @@ export default function TimeUtilsScreen() {
         Notifications.scheduleNotificationAsync({
           identifier: `tn-alarm-day-${jsDay}`,
           content: {
-            title: "⏰ Суверенный Будильник",
-            body: `${HH}:${MM} по TimeNation · ${citizen?.name ?? "Гражданин"}, доброе утро!`,
+            title: `⏰ ${t.time_alarm}`,
+            body: `${HH}:${MM} · ${citizen?.name ?? "TimeNation"}`,
             sound: true,
             data: { type: "tn-alarm" },
           },
@@ -358,7 +358,7 @@ export default function TimeUtilsScreen() {
       {/* Header */}
       <View style={st.header}>
         <LogoBrand size={28} />
-        <Text style={st.headerTitle}>Время</Text>
+        <Text style={st.headerTitle}>{t.tab_time}</Text>
         <View style={{ width: 28 }} />
       </View>
 
@@ -376,7 +376,7 @@ export default function TimeUtilsScreen() {
               color={section === s ? colors.primaryForeground : colors.mutedForeground}
             />
             <Text style={[st.sectionBtnText, section === s && st.sectionBtnTextActive]}>
-              {s === "clock" ? "Часовые пояса" : s === "timer" ? "Таймер" : "Будильник"}
+              {s === "clock" ? t.time_zones_tab : s === "timer" ? t.time_timer_tab : t.time_alarm_tab}
             </Text>
           </TouchableOpacity>
         ))}
@@ -390,10 +390,10 @@ export default function TimeUtilsScreen() {
         {/* ── World Clock ── */}
         {section === "clock" && (
           <View style={st.section}>
-            <Text style={st.sectionTitle}>🌍 Мировые часы</Text>
-            <Text style={st.sectionSub}>Суверенное время TimeNation — Фамагуста, Кипр</Text>
+            <Text style={st.sectionTitle}>{t.time_world_clock}</Text>
+            <Text style={st.sectionSub}>TimeNation · Famagusta, Cyprus</Text>
             {ZONES.map((z) => {
-              const { time, date, offset } = getTimeInZone(z.tz);
+              const { time, date, offset } = getTimeInZone(z.tz, lang);
               const isMain = z.label === "TimeNation";
               return (
                 <View key={z.label} style={[st.clockCard, isMain && st.clockCardMain]}>
@@ -417,12 +417,12 @@ export default function TimeUtilsScreen() {
         {/* ── Pomodoro Timer ── */}
         {section === "timer" && (
           <View style={st.section}>
-            <Text style={st.sectionTitle}>⏱ Таймер фокусировки</Text>
-            <Text style={st.sectionSub}>Завершённая сессия засчитывается ИИ-Аудитором</Text>
+            <Text style={st.sectionTitle}>{t.time_pomodoro}</Text>
+            <Text style={st.sectionSub}>{t.timer_ai_checker}</Text>
 
             {/* Preset buttons */}
             <View style={st.presetRow}>
-              {PRESETS.map((p, i) => (
+              {PRESET_SECONDS.map((p, i) => (
                 <TouchableOpacity
                   key={i}
                   style={[st.presetBtn, preset === i && st.presetBtnActive]}
@@ -443,7 +443,7 @@ export default function TimeUtilsScreen() {
                   {String(timerMinutes).padStart(2, "0")}:{String(timerSeconds).padStart(2, "0")}
                 </Text>
                 <Text style={st.timerLabel}>
-                  {completed ? "Сессия завершена!" : running ? "Фокусируйся…" : "Готов к старту"}
+                  {completed ? t.time_session_done : running ? t.time_focusing : t.time_ready}
                 </Text>
               </View>
 
@@ -457,23 +457,21 @@ export default function TimeUtilsScreen() {
             <View style={st.timerControls}>
               <TouchableOpacity style={st.controlBtnSecondary} onPress={handleReset}>
                 <Feather name="rotate-ccw" size={20} color={colors.mutedForeground} />
-                <Text style={st.controlBtnSecondaryText}>Сброс</Text>
+                <Text style={st.controlBtnSecondaryText}>{t.time_reset_btn}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[st.controlBtnPrimary, running && st.controlBtnPause]}
                 onPress={handleStartPause}
               >
                 <Feather name={running ? "pause" : "play"} size={22} color={colors.primaryForeground} />
-                <Text style={st.controlBtnPrimaryText}>{running ? "Пауза" : "Старт"}</Text>
+                <Text style={st.controlBtnPrimaryText}>{running ? t.time_pause_btn : t.time_start_btn}</Text>
               </TouchableOpacity>
             </View>
 
             {/* Info box */}
             <View style={st.infoBox}>
               <Feather name="info" size={14} color={colors.mutedForeground} />
-              <Text style={st.infoText}>
-                При завершении таймер отправит отчёт в профиль — ИИ-Аудитор учтёт минуты концентрации при оценке производительности.
-              </Text>
+              <Text style={st.infoText}>{t.timer_ai_checker}</Text>
             </View>
           </View>
         )}
@@ -481,8 +479,8 @@ export default function TimeUtilsScreen() {
         {/* ── Alarm ── */}
         {section === "alarm" && (
           <View style={st.section}>
-            <Text style={st.sectionTitle}>⏰ Суверенный будильник</Text>
-            <Text style={st.sectionSub}>Работает по времени Фамагусты (Asia/Nicosia)</Text>
+            <Text style={st.sectionTitle}>{t.time_alarm}</Text>
+            <Text style={st.sectionSub}>Asia/Nicosia</Text>
 
             {/* Time picker */}
             <View style={st.alarmTimeRow}>
@@ -511,7 +509,7 @@ export default function TimeUtilsScreen() {
 
             {/* Day toggles */}
             <Text style={[st.fieldLabel, { color: colors.mutedForeground, marginBottom: 8 }]}>
-              Дни недели
+              {t.time_alarm_tab}
             </Text>
             <View style={st.daysRow}>
               {DAYS.map((d, i) => (
@@ -530,16 +528,16 @@ export default function TimeUtilsScreen() {
               <View style={[st.firingBanner, { backgroundColor: colors.primary + "22", borderColor: colors.primary }]}>
                 <Text style={st.firingEmoji}>⏰</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={[st.firingTitle, { color: colors.primary }]}>Суверенный Будильник!</Text>
+                  <Text style={[st.firingTitle, { color: colors.primary }]}>{t.time_alarm}!</Text>
                   <Text style={[st.firingSub, { color: colors.primary + "bb" }]}>
-                    {String(alarmHour).padStart(2,"0")}:{String(alarmMinute).padStart(2,"0")} · Фамагуста
+                    {String(alarmHour).padStart(2,"0")}:{String(alarmMinute).padStart(2,"0")} · Famagusta
                   </Text>
                 </View>
                 <TouchableOpacity
                   style={[st.firingDismiss, { backgroundColor: colors.primary }]}
                   onPress={dismissAlarm}
                 >
-                  <Text style={[st.firingDismissText, { color: colors.primaryForeground }]}>Выключить</Text>
+                  <Text style={[st.firingDismissText, { color: colors.primaryForeground }]}>{t.time_stop_alarm}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -560,7 +558,7 @@ export default function TimeUtilsScreen() {
             >
               <Feather name={alarmActive ? "bell-off" : "bell"} size={18} color={colors.primaryForeground} />
               <Text style={[st.alarmToggleBtnText, st.alarmToggleBtnTextActive]}>
-                {alarmActive ? "Будильник активен — выключить" : "Включить будильник"}
+                {alarmActive ? t.time_stop_alarm : t.time_alarm_tab}
               </Text>
             </TouchableOpacity>
 
@@ -575,7 +573,7 @@ export default function TimeUtilsScreen() {
                 }}
               >
                 <Feather name="volume-2" size={16} color={colors.mutedForeground} />
-                <Text style={[st.testSoundText, { color: colors.mutedForeground }]}>Проверить звук (3 сек)</Text>
+                <Text style={[st.testSoundText, { color: colors.mutedForeground }]}>{t.time_start_btn} · 3s</Text>
               </TouchableOpacity>
             )}
 
@@ -583,17 +581,15 @@ export default function TimeUtilsScreen() {
               <View style={[st.alarmActiveCard, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "44" }]}>
                 <Feather name="bell" size={16} color={colors.primary} />
                 <Text style={[st.alarmActiveText, { color: colors.primary }]}>
-                  Сработает в {String(alarmHour).padStart(2, "0")}:{String(alarmMinute).padStart(2, "0")} по Фамагусте
-                  {alarmDays.size === 7 ? " · каждый день" : ` · ${[...alarmDays].sort((a,b)=>a-b).map((d) => DAYS[d]).join(", ")}`}
+                  {String(alarmHour).padStart(2, "0")}:{String(alarmMinute).padStart(2, "0")} · Famagusta
+                  {alarmDays.size === 7 ? "" : ` · ${[...alarmDays].sort((a,b)=>a-b).map((d) => DAYS[d]).join(", ")}`}
                 </Text>
               </View>
             )}
 
             <View style={st.infoBox}>
               <Feather name="info" size={14} color={colors.mutedForeground} />
-              <Text style={st.infoText}>
-                Приложение должно оставаться открытым. Нажми «Проверить звук» чтобы убедиться в работе аудио.
-              </Text>
+              <Text style={st.infoText}>{t.time_alarm} · Asia/Nicosia</Text>
             </View>
           </View>
         )}

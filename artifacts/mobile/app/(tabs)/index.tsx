@@ -98,18 +98,19 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  open:           { label: "Открыта",                   color: "#4CAF50" },
-  accepted:       { label: "Принята исполнителем",      color: "#2196F3" },
-  proof_submitted:{ label: "Ожидает подписания Акта",   color: "#FF9800" },
-  completed:      { label: "Завершена ✓",               color: "#C9A84C" },
-  declined:       { label: "Доказательство отклонено",  color: "#F44336" },
-  disputed:       { label: "В арбитраже Минтруда ⚖️",   color: "#9C27B0" },
-  cancelled:      { label: "Отменена",                  color: "#607D8B" },
+const STATUS_COLORS: Record<string, string> = {
+  open: "#4CAF50",
+  accepted: "#2196F3",
+  proof_submitted: "#FF9800",
+  completed: "#C9A84C",
+  declined: "#F44336",
+  disputed: "#9C27B0",
+  cancelled: "#607D8B",
 };
 
 // ─── AI Rate Widget ───────────────────────────────────────────────────────────
 function RateWidget({ recipient, colors }: { recipient: Citizen; colors: ReturnType<typeof useColors> }) {
+  const { t } = useLanguage();
   const [rate, setRate] = useState<RateInfo | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -136,25 +137,25 @@ function RateWidget({ recipient, colors }: { recipient: Citizen; colors: ReturnT
     <View style={[rateStyles.container, { borderColor: colors.primary, backgroundColor: "rgba(201,168,76,0.07)" }]}>
       <View style={rateStyles.header}>
         <Feather name="shield" size={14} color={colors.primary} />
-        <Text style={[rateStyles.title, { color: colors.primary }]}>Проверка ИИ-Аудитора</Text>
+        <Text style={[rateStyles.title, { color: colors.primary }]}>{t.timer_ai_checker}</Text>
         {rate.skillsAuditedAt && (
-          <Text style={[rateStyles.badge, { color: colors.mutedForeground }]}>подтверждено</Text>
+          <Text style={[rateStyles.badge, { color: colors.mutedForeground }]}>{t.timer_confirmed}</Text>
         )}
       </View>
       <View style={rateStyles.row}>
         <View style={rateStyles.stat}>
           <Text style={[rateStyles.statVal, { color: colors.primary }]}>{rate.calculatedMinuteRate.toFixed(2)} Д</Text>
-          <Text style={[rateStyles.statLbl, { color: colors.mutedForeground }]}>за минуту</Text>
+          <Text style={[rateStyles.statLbl, { color: colors.mutedForeground }]}>{t.timer_per_minute}</Text>
         </View>
         <View style={rateStyles.divider} />
         <View style={rateStyles.stat}>
           <Text style={[rateStyles.statVal, { color: colors.primary }]}>{rate.calculatedHourRate.toFixed(0)} Д</Text>
-          <Text style={[rateStyles.statLbl, { color: colors.mutedForeground }]}>за час работы</Text>
+          <Text style={[rateStyles.statLbl, { color: colors.mutedForeground }]}>{t.timer_per_hour}</Text>
         </View>
         <View style={rateStyles.divider} />
         <View style={rateStyles.stat}>
           <Text style={[rateStyles.statVal, { color: colors.primary }]}>{rate.reviewScoreCount}</Text>
-          <Text style={[rateStyles.statLbl, { color: colors.mutedForeground }]}>отзывов</Text>
+          <Text style={[rateStyles.statLbl, { color: colors.mutedForeground }]}>{t.timer_reviews}</Text>
         </View>
       </View>
       {rate.professionalSkills ? (
@@ -186,6 +187,16 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
   colors: ReturnType<typeof useColors>;
   refreshCitizen: () => Promise<void>;
 }) {
+  const { t } = useLanguage();
+  const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+    open:            { label: t.deal_status_open,      color: STATUS_COLORS.open },
+    accepted:        { label: t.deal_status_accepted,  color: STATUS_COLORS.accepted },
+    proof_submitted: { label: t.deal_status_proof,     color: STATUS_COLORS.proof_submitted },
+    completed:       { label: t.deal_status_done,      color: STATUS_COLORS.completed },
+    declined:        { label: t.deal_status_declined,  color: STATUS_COLORS.declined },
+    disputed:        { label: t.deal_status_disputed,  color: STATUS_COLORS.disputed },
+    cancelled:       { label: t.deal_status_cancelled, color: STATUS_COLORS.cancelled },
+  };
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -241,7 +252,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       body: JSON.stringify(body),
     });
     const data = await r.json();
-    if (!r.ok) throw new Error((data as { error?: string }).error ?? "Ошибка сервера");
+    if (!r.ok) throw new Error((data as { error?: string }).error ?? "Error");
     return data as Deal;
   };
 
@@ -258,7 +269,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
 
   const handleAudit = async () => {
     if (description.trim().length < 5) {
-      Alert.alert("Ошибка", "Опиши задачу подробнее (минимум 5 символов)");
+      Alert.alert(t.error, t.deal_task_label);
       return;
     }
     setAuditing(true);
@@ -269,7 +280,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
         body: JSON.stringify({ description: description.trim() }),
       });
       const data = await r.json() as { suggestedAmount?: number; summary?: string; breakdown?: string[]; error?: string };
-      if (!r.ok) throw new Error(data.error ?? "Ошибка аудита");
+      if (!r.ok) throw new Error(data.error ?? t.error);
       setAuditResult({
         suggestedAmount: data.suggestedAmount ?? 1,
         summary: data.summary ?? "",
@@ -281,7 +292,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       setCreateStep("audit");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: unknown) {
-      Alert.alert("ИИ-Аудитор", (e as Error).message);
+      Alert.alert(t.timer_ai_checker, (e as Error).message);
     }
     setAuditing(false);
   };
@@ -289,8 +300,8 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
   const handleCreate = async () => {
     if (!selRecipient) { setRecipientError(true); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); return; }
     const amt = parseInt(amount, 10);
-    if (isNaN(amt) || amt < 1) { Alert.alert("Ошибка", "Укажи сумму в Дарминах (минимум 1)"); return; }
-    if (description.trim().length < 5) { Alert.alert("Ошибка", "ТЗ должно быть не менее 5 символов"); return; }
+    if (isNaN(amt) || amt < 1) { Alert.alert(t.error, t.deal_amount_label); return; }
+    if (description.trim().length < 5) { Alert.alert(t.error, t.deal_task_label); return; }
 
     setCreating(true);
     try {
@@ -308,9 +319,9 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       if (available < amt) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert(
-          "Недостаточно Дарминов",
-          `Недостаточно Дарминов на Вашем счету для совершения сделки.\n\nДоступно: ${available.toFixed(2)} Д\nНеобходимо: ${amt} Д`,
-          [{ text: "Понятно" }]
+          t.insufficient_funds,
+          `${available.toFixed(2)} Д < ${amt} Д`,
+          [{ text: "OK" }]
         );
         setCreating(false);
         return;
@@ -322,11 +333,11 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       await Promise.all([loadDeals(), refreshCitizen()]);
     } catch (e: unknown) {
       const msg = (e as Error).message;
-      if (msg.toLowerCase().includes("недостаточно")) {
+      if (msg.toLowerCase().includes("недостаточно") || msg.toLowerCase().includes("insufficient")) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert("Недостаточно Дарминов", "Недостаточно Дарминов на Вашем счету для совершения сделки.", [{ text: "Понятно" }]);
+        Alert.alert(t.insufficient_funds, msg, [{ text: "OK" }]);
       } else {
-        Alert.alert("Ошибка создания сделки", msg);
+        Alert.alert(t.error, msg);
       }
     }
     setCreating(false);
@@ -337,12 +348,12 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       await apiPost(`/api/deals/${deal.id}/accept-task`, { citizenId: citizen.id });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await loadDeals();
-    } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+    } catch (e: unknown) { Alert.alert(t.error, (e as Error).message); }
   };
 
   const handleProofSubmit = async () => {
     if (!proofDeal) return;
-    if (proofText.trim().length < 5) { Alert.alert("Ошибка", "Опиши выполненную работу (мин. 5 символов)"); return; }
+    if (proofText.trim().length < 5) { Alert.alert(t.error, t.deal_proof_label); return; }
     setSubmittingProof(true);
     try {
       await apiPost(`/api/deals/${proofDeal.id}/proof`, { receiverId: citizen.id, proofText: proofText.trim() });
@@ -350,24 +361,24 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       setProofDeal(null);
       setProofText("");
       await loadDeals();
-    } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+    } catch (e: unknown) { Alert.alert(t.error, (e as Error).message); }
     setSubmittingProof(false);
   };
 
   const handleComplete = async (deal: Deal) => {
     Alert.alert(
-      "Подписать Акт выполненных работ",
-      `Подтвердить получение ${deal.amount} Д от исполнителя? Дармины будут переведены исполнителю.`,
+      t.deal_complete,
+      `${deal.amount} Д?`,
       [
-        { text: "Отмена", style: "cancel" },
+        { text: t.cancel, style: "cancel" },
         {
-          text: "Подписать ✓",
+          text: t.confirm,
           onPress: async () => {
             try {
               await apiPost(`/api/deals/${deal.id}/complete`, { citizenId: citizen.id });
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               await loadDeals();
-            } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+            } catch (e: unknown) { Alert.alert(t.error, (e as Error).message); }
           },
         },
       ]
@@ -376,18 +387,18 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
 
   const handleDecline = async (deal: Deal) => {
     Alert.alert(
-      "Отклонить доказательство",
-      "Доказательство не принято. Эскроу остаётся заморожен. Далее — арбитраж или отмена.",
+      t.deal_decline,
+      `${deal.id}`,
       [
-        { text: "Отмена", style: "cancel" },
+        { text: t.cancel, style: "cancel" },
         {
-          text: "Отклонить",
+          text: t.deal_decline,
           style: "destructive",
           onPress: async () => {
             try {
               await apiPost(`/api/deals/${deal.id}/decline`, { citizenId: citizen.id });
               await loadDeals();
-            } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+            } catch (e: unknown) { Alert.alert(t.error, (e as Error).message); }
           },
         },
       ]
@@ -401,12 +412,12 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       setCancelConfirmId(null);
       await loadDeals();
       void refreshCitizen();
-    } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+    } catch (e: unknown) { Alert.alert(t.error, (e as Error).message); }
   };
 
   const handleDisputeSubmit = async () => {
     if (!disputeDeal) return;
-    if (claimText.trim().length < 10) { Alert.alert("Ошибка", "Опишите суть претензии подробнее (мин. 10 символов)"); return; }
+    if (claimText.trim().length < 10) { Alert.alert(t.error, t.deal_claim_label); return; }
     setDisputing(true);
     try {
       const updated = await apiPost(`/api/deals/${disputeDeal.id}/dispute`, { citizenId: citizen.id, claimText: claimText.trim() });
@@ -417,7 +428,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       if (updated.aiVerdict) {
         setTimeout(() => setVerdictDeal(updated), 300);
       }
-    } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+    } catch (e: unknown) { Alert.alert(t.error, (e as Error).message); }
     setDisputing(false);
   };
 
@@ -439,18 +450,18 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
     return (
       <View style={s.dealCard}>
         <View style={s.dealHeader}>
-          <Text style={s.dealId}>Сделка #{deal.id}</Text>
+          <Text style={s.dealId}>#{deal.id}</Text>
           <View style={[s.statusBadge, { backgroundColor: info.color + "22", borderColor: info.color }]}>
             <Text style={[s.statusText, { color: info.color }]}>{info.label}</Text>
           </View>
         </View>
-        <Text style={s.dealRole}>{isSender ? "👤 Вы: Заказчик" : "🔧 Вы: Исполнитель"}</Text>
-        <Text style={s.dealAmount}>💎 {deal.amount} Дарминов заморожено</Text>
+        <Text style={s.dealRole}>{isSender ? `👤 ${t.deal_customer}` : `🔧 ${t.deal_executor}`}</Text>
+        <Text style={s.dealAmount}>💎 {deal.amount} {t.deal_frozen}</Text>
         <Text style={s.dealDesc} numberOfLines={3}>{deal.description}</Text>
 
         {deal.proofText ? (
           <View style={s.proofBlock}>
-            <Text style={s.proofLabel}>Доказательство исполнителя:</Text>
+            <Text style={s.proofLabel}>{t.deal_proof_label}:</Text>
             <Text style={s.proofText}>{deal.proofText}</Text>
           </View>
         ) : null}
@@ -458,7 +469,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
         {deal.aiVerdict ? (
           <TouchableOpacity style={s.verdictBtn} onPress={() => setVerdictDeal(deal)}>
             <Feather name="cpu" size={12} color={colors.primary} />
-            <Text style={s.verdictBtnText}>Заключение ИИ-Арбитра</Text>
+            <Text style={s.verdictBtnText}>{t.deal_verdict}</Text>
           </TouchableOpacity>
         ) : null}
 
@@ -470,61 +481,59 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
               activeOpacity={0.8}
             >
               <Feather name="message-circle" size={13} color={colors.primary} />
-              <Text style={[s.actionBtnText, { color: colors.primary }]}>Обсудить{deal.totalTrackedMinutes > 0 ? ` · ${deal.totalTrackedMinutes} мин` : ""}</Text>
+              <Text style={[s.actionBtnText, { color: colors.primary }]}>{t.deal_discuss}{deal.totalTrackedMinutes > 0 ? ` · ${deal.totalTrackedMinutes}m` : ""}</Text>
             </TouchableOpacity>
           )}
           {canAccept && (
             <TouchableOpacity style={[s.actionBtn, s.actionBtnBlue]} onPress={() => handleAccept(deal)}>
-              <Text style={s.actionBtnText}>Принять задачу</Text>
+              <Text style={s.actionBtnText}>{t.deal_accept}</Text>
             </TouchableOpacity>
           )}
           {canProof && (
             <TouchableOpacity style={[s.actionBtn, s.actionBtnBlue]} onPress={() => { setProofDeal(deal); setProofText(""); }}>
-              <Text style={s.actionBtnText}>Сдать работу</Text>
+              <Text style={s.actionBtnText}>{t.deal_proof}</Text>
             </TouchableOpacity>
           )}
           {canComplete && (
             <TouchableOpacity style={[s.actionBtn, s.actionBtnGreen]} onPress={() => handleComplete(deal)}>
               <Feather name="check-circle" size={13} color="#fff" />
-              <Text style={s.actionBtnText}>Подписать Акт</Text>
+              <Text style={s.actionBtnText}>{t.deal_complete}</Text>
             </TouchableOpacity>
           )}
           {canDecline && (
             <TouchableOpacity style={[s.actionBtn, s.actionBtnRed]} onPress={() => handleDecline(deal)}>
-              <Text style={s.actionBtnText}>Отклонить</Text>
+              <Text style={s.actionBtnText}>{t.deal_decline}</Text>
             </TouchableOpacity>
           )}
           {canDispute && (
             <TouchableOpacity style={[s.actionBtn, s.actionBtnPurple]} onPress={() => { setDisputeDeal(deal); setClaimText(""); }}>
               <Feather name="alert-triangle" size={12} color="#fff" />
-              <Text style={s.actionBtnText}>Апелляция в Минтруд</Text>
+              <Text style={s.actionBtnText}>{t.deal_dispute}</Text>
             </TouchableOpacity>
           )}
           {canCancel && cancelConfirmId !== deal.id && (
             <TouchableOpacity style={[s.actionBtn, s.actionBtnGray]} onPress={() => setCancelConfirmId(deal.id)}>
-              <Text style={s.actionBtnText}>Отменить сделку</Text>
+              <Text style={s.actionBtnText}>{t.deal_cancel_deal}</Text>
             </TouchableOpacity>
           )}
           {canCancel && cancelConfirmId === deal.id && (
             <View style={{ width: "100%", backgroundColor: "#E0525222", borderRadius: 10, padding: 10, marginTop: 4, gap: 8 }}>
               <Text style={{ color: "#E05252", fontSize: 12, fontFamily: "Inter_600SemiBold", textAlign: "center" }}>
-                {deal.status === "accepted"
-                  ? `Исполнитель уже принял задачу. Отменить и вернуть ${deal.amount} Д?`
-                  : `Вернуть ${deal.amount} Д на баланс и отменить сделку?`}
+                {deal.amount} Д?
               </Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <TouchableOpacity
                   style={[s.actionBtn, s.actionBtnGray, { flex: 1, marginTop: 0 }]}
                   onPress={() => setCancelConfirmId(null)}
                 >
-                  <Text style={s.actionBtnText}>Нет, оставить</Text>
+                  <Text style={s.actionBtnText}>{t.cancel}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[s.actionBtn, s.actionBtnRed, { flex: 1, marginTop: 0 }]}
                   onPress={() => handleCancel(deal)}
                 >
                   <Feather name="x-circle" size={13} color="#fff" />
-                  <Text style={s.actionBtnText}>Да, отменить</Text>
+                  <Text style={s.actionBtnText}>{t.deal_cancel_deal}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -538,21 +547,21 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
     <View style={{ flex: 1 }}>
       {/* Header */}
       <View style={s.escrowHeader}>
-        <Text style={s.escrowTitle}>Эскроу-сделки</Text>
+        <Text style={s.escrowTitle}>{t.escrow_title}</Text>
         <TouchableOpacity style={s.createBtn} onPress={() => setShowCreate(true)} activeOpacity={0.8}>
           <Feather name="plus" size={14} color={colors.primaryForeground} />
-          <Text style={s.createBtnText}>Создать сделку</Text>
+          <Text style={s.createBtnText}>{t.escrow_new_deal}</Text>
         </TouchableOpacity>
       </View>
-      <Text style={s.escrowSub}>Дармины замораживаются. Релиз — после подписания Акта.</Text>
+      <Text style={s.escrowSub}>{t.deal_no_deals_sub}</Text>
 
       {loading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />
       ) : deals.length === 0 ? (
         <View style={s.empty}>
           <Feather name="lock" size={32} color={colors.mutedForeground} />
-          <Text style={s.emptyText}>Нет активных сделок</Text>
-          <Text style={s.emptySub}>Создай сделку — Дармины будут заморожены до подписания Акта</Text>
+          <Text style={s.emptyText}>{t.deal_no_deals}</Text>
+          <Text style={s.emptySub}>{t.deal_no_deals_sub}</Text>
         </View>
       ) : (
         <FlatList
@@ -594,18 +603,18 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
             <>
               <View style={s.modalHeader}>
                 <View>
-                  <Text style={[s.modalTitle, { color: colors.foreground }]}>Новая Эскроу-сделка</Text>
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }}>Шаг 1 из 2 — Описание задачи</Text>
+                  <Text style={[s.modalTitle, { color: colors.foreground }]}>{t.escrow_new_deal}</Text>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }}>{t.deal_step1}</Text>
                 </View>
                 <TouchableOpacity onPress={resetCreateModal}>
                   <Feather name="x" size={22} color={colors.mutedForeground} />
                 </TouchableOpacity>
               </View>
 
-              <Text style={[s.label, { color: colors.mutedForeground }]}>ТЕХНИЧЕСКОЕ ЗАДАНИЕ</Text>
+              <Text style={[s.label, { color: colors.mutedForeground }]}>{t.deal_task_label}</Text>
               <TextInput
                 style={[s.input, s.inputMulti, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
-                placeholder="Подробно опиши, что должен сделать исполнитель: что именно, в каком объёме, какой результат..."
+                placeholder={t.deal_task_label}
                 placeholderTextColor={colors.mutedForeground}
                 value={description}
                 onChangeText={setDescription}
@@ -634,12 +643,12 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
                 {auditing ? (
                   <>
                     <ActivityIndicator color={colors.primaryForeground} size="small" />
-                    <Text style={[s.submitBtnText, { color: colors.primaryForeground }]}>Аудитор анализирует...</Text>
+                    <Text style={[s.submitBtnText, { color: colors.primaryForeground }]}>{t.loading}</Text>
                   </>
                 ) : (
                   <>
                     <Feather name="cpu" size={16} color={colors.primaryForeground} />
-                    <Text style={[s.submitBtnText, { color: colors.primaryForeground }]}>Оценить задачу</Text>
+                    <Text style={[s.submitBtnText, { color: colors.primaryForeground }]}>{t.deal_audit_btn}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -651,8 +660,8 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
             <>
               <View style={s.modalHeader}>
                 <View>
-                  <Text style={[s.modalTitle, { color: colors.foreground }]}>Оценка ИИ-Аудитора</Text>
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }}>Шаг 2 из 2 — Подтверждение сделки</Text>
+                  <Text style={[s.modalTitle, { color: colors.foreground }]}>{t.timer_ai_checker}</Text>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }}>{t.deal_step2}</Text>
                 </View>
                 <TouchableOpacity onPress={resetCreateModal}>
                   <Feather name="x" size={22} color={colors.mutedForeground} />
@@ -669,7 +678,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
                   <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular", lineHeight: 18, marginBottom: 10 }}>
                     {auditResult.summary}
                   </Text>
-                  <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: colors.mutedForeground, marginBottom: 6, letterSpacing: 0.5 }}>РАЗБИВКА ПО ЭТАПАМ</Text>
+                  <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: colors.mutedForeground, marginBottom: 6, letterSpacing: 0.5 }}>{t.deal_breakdown}</Text>
                   {auditResult.breakdown.map((line, i) => (
                     <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginBottom: 4 }}>
                       <Text style={{ color: colors.primary, fontSize: 11, fontFamily: "Inter_700Bold", marginTop: 1 }}>•</Text>
@@ -677,7 +686,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
                     </View>
                   ))}
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.primary + "33" }}>
-                    <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.mutedForeground }}>Рекомендуемая сумма</Text>
+                    <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.mutedForeground }}>{t.deal_recommended}</Text>
                     <Text style={{ fontSize: 18, fontFamily: "Inter_700Bold", color: colors.primary }}>{auditResult.suggestedAmount} Д</Text>
                   </View>
                 </View>
@@ -685,7 +694,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
 
               {/* ТЗ summary (readonly) */}
               <View style={{ backgroundColor: colors.card, borderRadius: 8, padding: 10, marginBottom: 16, borderWidth: 1, borderColor: colors.border }}>
-                <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.mutedForeground, marginBottom: 4, letterSpacing: 0.5 }}>ТЕХНИЧЕСКОЕ ЗАДАНИЕ</Text>
+                <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.mutedForeground, marginBottom: 4, letterSpacing: 0.5 }}>{t.deal_task_label}</Text>
                 <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular", lineHeight: 17 }} numberOfLines={4}>{description}</Text>
                 <TouchableOpacity onPress={() => setCreateStep("describe")} style={{ marginTop: 6 }}>
                   <Text style={{ fontSize: 11, color: colors.primary, fontFamily: "Inter_700Bold" }}>✎ Изменить задачу</Text>
@@ -695,10 +704,10 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
               {/* Recipient */}
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <Text style={[s.label, { color: recipientError && !selRecipient ? "#E05252" : colors.mutedForeground, marginBottom: 0 }]}>
-                  ИСПОЛНИТЕЛЬ <Text style={{ color: "#E05252" }}>*</Text>
+                  {t.deal_executor_label} <Text style={{ color: "#E05252" }}>*</Text>
                 </Text>
                 {recipientError && !selRecipient && (
-                  <Text style={{ fontSize: 11, color: "#E05252", fontFamily: "Inter_400Regular" }}>↑ Выбери исполнителя</Text>
+                  <Text style={{ fontSize: 11, color: "#E05252", fontFamily: "Inter_400Regular" }}>↑</Text>
                 )}
               </View>
               {others.map((c) => (
@@ -725,15 +734,15 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
 
               {/* Amount (pre-filled, editable) */}
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 16, marginBottom: 8 }}>
-                <Text style={[s.label, { color: colors.mutedForeground, marginBottom: 0 }]}>СУММА (ДАРМИНЫ)</Text>
+                <Text style={[s.label, { color: colors.mutedForeground, marginBottom: 0 }]}>{t.deal_amount_label}</Text>
                 <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>
-                  Доступно: <Text style={{ color: colors.primary, fontFamily: "Inter_700Bold" }}>{Math.max(0, Number(citizen.balanceMinutes) - 1).toFixed(0)} Д</Text>
+                  <Text style={{ color: colors.primary, fontFamily: "Inter_700Bold" }}>{Math.max(0, Number(citizen.balanceMinutes) - 1).toFixed(0)} Д</Text>
                 </Text>
               </View>
               <TextInput
                 style={[s.input, { borderColor: colors.primary + "88", color: colors.foreground, backgroundColor: colors.card, borderWidth: 1.5 }]}
                 keyboardType="number-pad"
-                placeholder="Количество Дарминов"
+                placeholder={t.deal_amount_label}
                 placeholderTextColor={colors.mutedForeground}
                 value={amount}
                 onChangeText={setAmount}
@@ -762,7 +771,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
                   <>
                     <Feather name={!selRecipient ? "user" : "lock"} size={16} color={!selRecipient ? colors.mutedForeground : colors.primaryForeground} />
                     <Text style={[s.submitBtnText, { color: !selRecipient ? colors.mutedForeground : colors.primaryForeground }]}>
-                      {!selRecipient ? "Сначала выбери исполнителя ↑" : "Заморозить Дармины и создать сделку"}
+                      {!selRecipient ? `${t.deal_executor_label} ↑` : t.deal_create_btn}
                     </Text>
                   </>
                 )}
@@ -776,16 +785,16 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       <Modal visible={!!proofDeal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setProofDeal(null)}>
         <View style={[s.modal, { backgroundColor: colors.background }]}>
           <View style={s.modalHeader}>
-            <Text style={[s.modalTitle, { color: colors.foreground }]}>Сдача работы</Text>
+            <Text style={[s.modalTitle, { color: colors.foreground }]}>{t.deal_proof}</Text>
             <TouchableOpacity onPress={() => setProofDeal(null)}>
               <Feather name="x" size={22} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
-          {proofDeal && <Text style={[s.proofDealDesc, { color: colors.mutedForeground }]}>ТЗ: {proofDeal.description}</Text>}
-          <Text style={[s.label, { color: colors.mutedForeground }]}>ОПИСАНИЕ ВЫПОЛНЕННОЙ РАБОТЫ</Text>
+          {proofDeal && <Text style={[s.proofDealDesc, { color: colors.mutedForeground }]}>{proofDeal.description}</Text>}
+          <Text style={[s.label, { color: colors.mutedForeground }]}>{t.deal_proof_label}</Text>
           <TextInput
             style={[s.input, s.inputMulti, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
-            placeholder="Опиши, что было сделано..."
+            placeholder={t.deal_proof_label}
             placeholderTextColor={colors.mutedForeground}
             value={proofText}
             onChangeText={setProofText}
@@ -802,7 +811,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
             {submittingProof ? <ActivityIndicator color="#fff" /> : (
               <>
                 <Feather name="send" size={16} color="#fff" />
-                <Text style={[s.submitBtnText, { color: "#fff" }]}>Отправить доказательство</Text>
+                <Text style={[s.submitBtnText, { color: "#fff" }]}>{t.deal_send_proof}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -813,18 +822,18 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       <Modal visible={!!disputeDeal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setDisputeDeal(null)}>
         <View style={[s.modal, { backgroundColor: colors.background }]}>
           <View style={s.modalHeader}>
-            <Text style={[s.modalTitle, { color: colors.foreground }]}>Апелляция в Минтруд</Text>
+            <Text style={[s.modalTitle, { color: colors.foreground }]}>{t.deal_dispute}</Text>
             <TouchableOpacity onPress={() => setDisputeDeal(null)}>
               <Feather name="x" size={22} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
           <Text style={[s.disputeInfo, { color: colors.mutedForeground }]}>
-            ИИ-Арбитр Министерства Труда изучит ТЗ, доказательства и вашу претензию. Вердикт будет записан в дело.
+            {t.timer_ai_checker}
           </Text>
-          <Text style={[s.label, { color: colors.mutedForeground }]}>СУТЬ ПРЕТЕНЗИИ</Text>
+          <Text style={[s.label, { color: colors.mutedForeground }]}>{t.deal_claim_label}</Text>
           <TextInput
             style={[s.input, s.inputMulti, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
-            placeholder="Подробно опиши, в чём нарушение со стороны другой стороны..."
+            placeholder={t.deal_claim_label}
             placeholderTextColor={colors.mutedForeground}
             value={claimText}
             onChangeText={setClaimText}
@@ -841,12 +850,12 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
             {disputing ? (
               <>
                 <ActivityIndicator color="#fff" />
-                <Text style={[s.submitBtnText, { color: "#fff" }]}>ИИ-Арбитр анализирует…</Text>
+                <Text style={[s.submitBtnText, { color: "#fff" }]}>{t.loading}</Text>
               </>
             ) : (
               <>
                 <Feather name="alert-triangle" size={16} color="#fff" />
-                <Text style={[s.submitBtnText, { color: "#fff" }]}>Подать апелляцию</Text>
+                <Text style={[s.submitBtnText, { color: "#fff" }]}>{t.deal_send_claim}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -860,20 +869,20 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
             <View style={s.modalHeader}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Feather name="cpu" size={18} color={colors.primary} />
-                <Text style={[s.modalTitle, { color: colors.primary }]}>Заключение ИИ-Арбитра</Text>
+                <Text style={[s.modalTitle, { color: colors.primary }]}>{t.deal_ai_verdict}</Text>
               </View>
               <TouchableOpacity onPress={() => setVerdictDeal(null)}>
                 <Feather name="x" size={20} color={colors.mutedForeground} />
               </TouchableOpacity>
             </View>
             <Text style={[s.disputeInfo, { color: colors.mutedForeground, marginBottom: 4 }]}>
-              Министерство Труда · Сделка #{verdictDeal?.id}
+              #{verdictDeal?.id}
             </Text>
             <ScrollView style={{ maxHeight: 340 }}>
               <Text style={[s.verdictText, { color: colors.foreground }]}>{verdictDeal?.aiVerdict}</Text>
             </ScrollView>
             <TouchableOpacity style={[s.submitBtn, { backgroundColor: colors.primary, marginTop: 16 }]} onPress={() => setVerdictDeal(null)}>
-              <Text style={[s.submitBtnText, { color: colors.primaryForeground }]}>Принято к сведению</Text>
+              <Text style={[s.submitBtnText, { color: colors.primaryForeground }]}>{t.confirm}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -986,23 +995,22 @@ export default function TimerScreen() {
     refreshCitizen();
     const mins = data.transaction.minutesTransferred;
     const secs = data.transaction.durationSeconds;
-    const sheetsStatus = data.sheetsLogged ? "Записано в Казначейство" : "Ошибка записи";
-    Alert.alert("Сессия завершена", `Передано: ${mins} Д\nДлительность: ${formatTime(secs)}\n${sheetsStatus}`);
+    Alert.alert(ui.timer_session_active, `${mins} Д · ${formatTime(secs)}`);
   };
 
   const [sessionLoading, setSessionLoading] = useState(false);
   const handleStart = useCallback(async () => {
     if (!citizen) { router.push("/register"); return; }
-    if (!selectedRecipient) { Alert.alert("Выбери получателя", "Нажми на гражданина ниже"); return; }
+    if (!selectedRecipient) { Alert.alert(ui.timer_pick_recipient, ""); return; }
     setSessionLoading(true);
-    try { await startSession(); } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+    try { await startSession(); } catch (e: unknown) { Alert.alert(ui.error, (e as Error).message); }
     setSessionLoading(false);
   }, [citizen, selectedRecipient]);
 
   const handleStop = useCallback(async () => {
     if (!activeSession) return;
     setSessionLoading(true);
-    try { await stopSession(); } catch (e: unknown) { Alert.alert("Ошибка", (e as Error).message); }
+    try { await stopSession(); } catch (e: unknown) { Alert.alert(ui.error, (e as Error).message); }
     setSessionLoading(false);
   }, [activeSession]);
 
@@ -1032,7 +1040,7 @@ export default function TimerScreen() {
         {citizen && (
           <View style={styles.headerRight}>
             <View style={styles.rankPill}>
-              <Text style={styles.rankText}>{citizen.rank ?? "Гражданин"}</Text>
+              <Text style={styles.rankText}>{citizen.rank ?? ui.login}</Text>
             </View>
             <View style={styles.balancePill}>
               <Feather name="clock" size={12} color={colors.primary} />
@@ -1058,7 +1066,7 @@ export default function TimerScreen() {
               ) : (
                 <>
                   <Feather name="link" size={11} color={colors.primary} />
-                  <Text style={styles.walletBtnText}>Кошелёк</Text>
+                  <Text style={styles.walletBtnText}>{ui.timer_wallet}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -1071,7 +1079,7 @@ export default function TimerScreen() {
           <Feather name="star" size={11} color={colors.primary} />
           <Text style={styles.meritText}>Merit: {(citizen.meritScore ?? 0).toFixed(2)}</Text>
           <Text style={styles.meritSep}>·</Text>
-          <Text style={styles.meritText}>Отдано: {citizen.totalGiven.toFixed(2)} Д</Text>
+          <Text style={styles.meritText}>{citizen.totalGiven.toFixed(2)} Д</Text>
         </View>
       )}
 
@@ -1085,7 +1093,7 @@ export default function TimerScreen() {
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.passportName} numberOfLines={1}>{citizen.name}</Text>
               <Text style={styles.passportId}>ID #{citizen.id}</Text>
-              <Text style={[styles.passportRank, { marginTop: 2 }]}>{citizen.rank ?? "Гражданин"}</Text>
+              <Text style={[styles.passportRank, { marginTop: 2 }]}>{citizen.rank ?? ui.login}</Text>
             </View>
           </View>
           <View style={styles.passportActions}>
@@ -1121,8 +1129,8 @@ export default function TimerScreen() {
             <Feather name="user-plus" size={22} color={colors.primaryForeground} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.regBannerTitle}>Получить гражданство</Text>
-            <Text style={styles.regBannerSub}>Зарегистрируйся и получи 60 Д</Text>
+            <Text style={styles.regBannerTitle}>{ui.timer_get_citizenship}</Text>
+            <Text style={styles.regBannerSub}>{ui.timer_get_60d}</Text>
           </View>
           <Feather name="chevron-right" size={18} color={colors.primary} />
         </TouchableOpacity>
@@ -1136,7 +1144,7 @@ export default function TimerScreen() {
           activeOpacity={0.8}
         >
           <Feather name="play-circle" size={13} color={mode === "transfer" ? colors.primaryForeground : colors.mutedForeground} />
-          <Text style={[styles.modeBtnText, mode === "transfer" && styles.modeBtnTextActive]}>Перевод</Text>
+          <Text style={[styles.modeBtnText, mode === "transfer" && styles.modeBtnTextActive]}>{ui.timer_transfer}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.modeBtn, mode === "escrow" && styles.modeBtnActive]}
@@ -1144,7 +1152,7 @@ export default function TimerScreen() {
           activeOpacity={0.8}
         >
           <Feather name="lock" size={13} color={mode === "escrow" ? colors.primaryForeground : colors.mutedForeground} />
-          <Text style={[styles.modeBtnText, mode === "escrow" && styles.modeBtnTextActive]}>Эскроу</Text>
+          <Text style={[styles.modeBtnText, mode === "escrow" && styles.modeBtnTextActive]}>{ui.timer_escrow_tab}</Text>
         </TouchableOpacity>
       </View>
 
@@ -1157,14 +1165,14 @@ export default function TimerScreen() {
                 <AnimatedHourglass active={true} size={36} />
                 <Text style={styles.timerLabel}>→ {recipientCitizen?.name ?? "..."}</Text>
                 <Text style={styles.timerDisplay}>{formatTime(elapsed)}</Text>
-                <Text style={styles.timerSub}>~{Math.max(1, Math.ceil(elapsed / 60))} Д будет передано</Text>
+                <Text style={styles.timerSub}>~{Math.max(1, Math.ceil(elapsed / 60))} Д</Text>
                 <TouchableOpacity style={styles.stopBtn} onPress={handleStop} disabled={sessionLoading} activeOpacity={0.75}>
                   {sessionLoading ? (
                     <ActivityIndicator color={colors.destructiveForeground} />
                   ) : (
                     <>
                       <Feather name="square" size={20} color={colors.destructiveForeground} />
-                      <Text style={styles.stopBtnText}>СТОП</Text>
+                      <Text style={styles.stopBtnText}>{ui.timer_stop}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -1172,7 +1180,7 @@ export default function TimerScreen() {
             ) : (
               <>
                 <Text style={styles.timerDisplay}>00:00</Text>
-                <Text style={styles.timerSub}>{selectedRecipient ? `→ ${selectedRecipient.name}` : "Выбери получателя"}</Text>
+                <Text style={styles.timerSub}>{selectedRecipient ? `→ ${selectedRecipient.name}` : ui.timer_pick_recipient}</Text>
                 <TouchableOpacity
                   style={[styles.startBtn, !selectedRecipient && styles.startBtnDisabled]}
                   onPress={handleStart}
@@ -1184,7 +1192,7 @@ export default function TimerScreen() {
                   ) : (
                     <>
                       <Feather name="play" size={20} color={colors.primaryForeground} />
-                      <Text style={styles.startBtnText}>СТАРТ</Text>
+                      <Text style={styles.startBtnText}>{ui.timer_start}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -1198,11 +1206,11 @@ export default function TimerScreen() {
           )}
 
           <View style={styles.listSection}>
-            <Text style={styles.listTitle}>{activeSession ? "Идёт передача" : "Выбери получателя"}</Text>
+            <Text style={styles.listTitle}>{activeSession ? ui.timer_session_active : ui.timer_pick_recipient}</Text>
             {!citizen && (
               <TouchableOpacity style={styles.registerPrompt} onPress={() => router.push("/register")} activeOpacity={0.8}>
                 <Feather name="user-plus" size={20} color={colors.primary} />
-                <Text style={styles.registerPromptText}>Зарегистрируйся как гражданин</Text>
+                <Text style={styles.registerPromptText}>{ui.timer_get_citizenship}</Text>
                 <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
               </TouchableOpacity>
             )}
@@ -1210,8 +1218,8 @@ export default function TimerScreen() {
             {!loadingCitizens && others.length === 0 && citizen && (
               <View style={styles.emptyState}>
                 <Feather name="users" size={32} color={colors.mutedForeground} />
-                <Text style={styles.emptyText}>Нет других граждан</Text>
-                <Text style={styles.emptySubtext}>Пригласи участников в TimeNation</Text>
+                <Text style={styles.emptyText}>{ui.timer_no_citizens}</Text>
+                <Text style={styles.emptySubtext}>{ui.timer_invite_hint}</Text>
               </View>
             )}
             <FlatList
@@ -1268,10 +1276,10 @@ export default function TimerScreen() {
       {mode === "escrow" && !citizen && (
         <View style={styles.emptyState}>
           <Feather name="lock" size={32} color={colors.mutedForeground} />
-          <Text style={styles.emptyText}>Нужна регистрация</Text>
+          <Text style={styles.emptyText}>{ui.timer_get_citizenship}</Text>
           <TouchableOpacity onPress={() => router.push("/register")} activeOpacity={0.8}>
             <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 14, marginTop: 8 }}>
-              Зарегистрироваться →
+              {ui.timer_get_citizenship} →
             </Text>
           </TouchableOpacity>
         </View>
@@ -1282,9 +1290,9 @@ export default function TimerScreen() {
         onClose={walletGuide.close}
         onConfirm={walletGuide.confirm}
         icon="💰"
-        title="Баланс Darmin / Кошелёк"
-        explanation={"Darmin — государственная валюта. Она зарабатывается исключительно за полезные социальные и исторические действия (успешная модерация, создание ИИ-кино), а не покупается за фиат.\n\nМериты — это цифровой след репутации, который накапливается в паспорте гражданина и автоматически повышает ранг."}
-        ctaLabel="Посмотри историю транзакций и начислений"
+        title={ui.timer_wallet}
+        explanation={ui.timer_wallet}
+        ctaLabel={ui.stats_recent_tx}
       />
     </View>
   );

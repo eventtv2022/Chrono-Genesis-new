@@ -27,18 +27,19 @@ interface Auction {
   createdAt: string;
 }
 
-function timeLeft(endsAt: string): string {
+function timeLeft(endsAt: string, finished: string): string {
   const diff = new Date(endsAt).getTime() - Date.now();
-  if (diff <= 0) return "Завершён";
+  if (diff <= 0) return finished;
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
-  return h > 0 ? `${h}ч ${m}м` : `${m}м`;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 export default function AuctionsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { citizen, isLoading: citizenLoading } = useCitizen();
+  const { t } = useLanguage();
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [bidModal, setBidModal] = useState<Auction | null>(null);
@@ -78,9 +79,9 @@ export default function AuctionsScreen() {
       qc.invalidateQueries({ queryKey: ["auctions"] });
       setShowCreate(false);
       setAmount(""); setPrice(""); setHours("24");
-      Alert.alert("✅ Лот создан", "Дармины заблокированы. Аукцион активен.");
+      Alert.alert("✅", t.auc_submit);
     },
-    onError: (err: Error) => Alert.alert("Ошибка", err.message),
+    onError: (err: Error) => Alert.alert("Error", err.message),
   });
 
   const bidMutation = useMutation({
@@ -98,9 +99,9 @@ export default function AuctionsScreen() {
       qc.invalidateQueries({ queryKey: ["auctions"] });
       setBidModal(null);
       setBidAmount("");
-      Alert.alert("✅ Ставка принята");
+      Alert.alert("✅", t.auc_bid_confirm);
     },
-    onError: (err: Error) => Alert.alert("Ошибка", err.message),
+    onError: (err: Error) => Alert.alert("Error", err.message),
   });
 
   if (citizenLoading) {
@@ -108,7 +109,7 @@ export default function AuctionsScreen() {
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={{ color: colors.mutedForeground, marginTop: 10, fontFamily: "Inter_400Regular" }}>
-          Загрузка реестра аукционов...
+          {t.loading}
         </Text>
       </View>
     );
@@ -119,7 +120,7 @@ export default function AuctionsScreen() {
       <View style={styles.header}>
         <View style={styles.headerBrand}>
           <LogoBrand size={28} />
-          <Text style={styles.headerTitle}>АУКЦИОН</Text>
+          <Text style={styles.headerTitle}>{t.tab_auction.toUpperCase()}</Text>
         </View>
         {citizen && (
           <TouchableOpacity style={styles.addBtn} onPress={() => setShowCreate(true)} activeOpacity={0.8}>
@@ -130,9 +131,7 @@ export default function AuctionsScreen() {
 
       <View style={styles.infoCard}>
         <Feather name="tag" size={16} color={colors.primary} />
-        <Text style={styles.infoText}>
-          P2P-рынок Дарминов. Платформа берёт 2% комиссии с завершённых сделок. Фиатные деньги в систему не входят.
-        </Text>
+        <Text style={styles.infoText}>{t.auc_info}</Text>
       </View>
 
       {isLoading && <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />}
@@ -145,8 +144,8 @@ export default function AuctionsScreen() {
           !isLoading ? (
             <View style={styles.empty}>
               <Feather name="tag" size={40} color={colors.mutedForeground} />
-              <Text style={styles.emptyText}>Нет активных лотов</Text>
-              <Text style={styles.emptySub}>Выставь Дармины на продажу</Text>
+              <Text style={styles.emptyText}>{t.auc_empty}</Text>
+              <Text style={styles.emptySub}>{t.auc_empty_sub}</Text>
             </View>
           ) : null
         }
@@ -158,17 +157,17 @@ export default function AuctionsScreen() {
               <View style={styles.cardTop}>
                 <View style={styles.lotInfo}>
                   <Text style={styles.lotAmount}>{item.amountDarmins} Д</Text>
-                  <Text style={styles.lotSeller}>{item.sellerName ?? "Аноним"}{isOwn ? " (мой)" : ""}</Text>
+                  <Text style={styles.lotSeller}>{item.sellerName ?? "—"}{isOwn ? ` (${t.auc_own})` : ""}</Text>
                 </View>
                 <View style={styles.priceBlock}>
-                  <Text style={styles.priceLabel}>Ставка</Text>
+                  <Text style={styles.priceLabel}>{t.auc_bid_label}</Text>
                   <Text style={styles.priceValue}>{currentPrice.toFixed(2)} Д</Text>
                 </View>
               </View>
               <View style={styles.cardBottom}>
                 <View style={styles.timerRow}>
                   <Feather name="clock" size={12} color={colors.mutedForeground} />
-                  <Text style={styles.timerText}>{timeLeft(item.endsAt)}</Text>
+                  <Text style={styles.timerText}>{timeLeft(item.endsAt, t.auc_finished)}</Text>
                 </View>
                 {!isOwn && citizen && (
                   <TouchableOpacity
@@ -176,7 +175,7 @@ export default function AuctionsScreen() {
                     onPress={() => { setBidModal(item); setBidAmount(String(currentPrice + 1)); }}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.bidBtnText}>Сделать ставку</Text>
+                    <Text style={styles.bidBtnText}>{t.auc_bid_btn}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -185,21 +184,21 @@ export default function AuctionsScreen() {
         }}
       />
 
-      {/* Создать лот */}
+      {/* Create lot modal */}
       <Modal visible={showCreate} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalSheet} contentContainerStyle={{ padding: 24 }}>
-            <Text style={styles.modalTitle}>💰 Новый лот</Text>
-            <Text style={styles.modalSub}>Заблокированные Дармины будут переданы победителю аукциона</Text>
-            <TextInput style={styles.input} placeholder="Количество Дарминов" placeholderTextColor={colors.mutedForeground}
+            <Text style={styles.modalTitle}>💰 {t.auc_new_lot}</Text>
+            <Text style={styles.modalSub}>{t.auc_lot_sub}</Text>
+            <TextInput style={styles.input} placeholder={t.auc_amount_ph} placeholderTextColor={colors.mutedForeground}
               value={amount} onChangeText={setAmount} keyboardType="number-pad" />
-            <TextInput style={styles.input} placeholder="Начальная ставка (в Дарминах)" placeholderTextColor={colors.mutedForeground}
+            <TextInput style={styles.input} placeholder={t.auc_price_ph} placeholderTextColor={colors.mutedForeground}
               value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
-            <TextInput style={styles.input} placeholder="Длительность (часы, 1–168)" placeholderTextColor={colors.mutedForeground}
+            <TextInput style={styles.input} placeholder={t.auc_duration_ph} placeholderTextColor={colors.mutedForeground}
               value={hours} onChangeText={setHours} keyboardType="number-pad" />
             <View style={styles.feeNote}>
               <Feather name="percent" size={13} color={colors.primary} />
-              <Text style={styles.feeNoteText}>Комиссия платформы: 2% от финальной цены (округление вверх)</Text>
+              <Text style={styles.feeNoteText}>{t.auc_fee_note}</Text>
             </View>
             <TouchableOpacity
               style={[styles.submitBtn, createMutation.isPending && { opacity: 0.6 }]}
@@ -209,23 +208,23 @@ export default function AuctionsScreen() {
             >
               {createMutation.isPending
                 ? <ActivityIndicator color={colors.primaryForeground} />
-                : <Text style={styles.submitBtnText}>Выставить на аукцион</Text>}
+                : <Text style={styles.submitBtnText}>{t.auc_submit}</Text>}
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowCreate(false)} activeOpacity={0.8}>
-              <Text style={styles.cancelBtnText}>Отмена</Text>
+              <Text style={styles.cancelBtnText}>{t.cancel}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* Ставка */}
+      {/* Bid modal */}
       <Modal visible={!!bidModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { padding: 24 }]}>
-            <Text style={styles.modalTitle}>🎯 Ставка</Text>
-            <Text style={styles.modalSub}>{bidModal?.amountDarmins} Д от {bidModal?.sellerName}</Text>
-            <Text style={styles.bidCurrentLabel}>Текущая ставка: {(bidModal?.currentBid ?? bidModal?.startingPrice ?? 0).toFixed(2)} Д</Text>
-            <TextInput style={styles.input} placeholder="Ваша ставка" placeholderTextColor={colors.mutedForeground}
+            <Text style={styles.modalTitle}>🎯 {t.auc_bid_title}</Text>
+            <Text style={styles.modalSub}>{bidModal?.amountDarmins} Д · {bidModal?.sellerName}</Text>
+            <Text style={styles.bidCurrentLabel}>{t.auc_current_bid}: {(bidModal?.currentBid ?? bidModal?.startingPrice ?? 0).toFixed(2)} Д</Text>
+            <TextInput style={styles.input} placeholder={t.auc_bid_ph} placeholderTextColor={colors.mutedForeground}
               value={bidAmount} onChangeText={setBidAmount} keyboardType="decimal-pad" />
             <TouchableOpacity
               style={[styles.submitBtn, bidMutation.isPending && { opacity: 0.6 }]}
@@ -235,10 +234,10 @@ export default function AuctionsScreen() {
             >
               {bidMutation.isPending
                 ? <ActivityIndicator color={colors.primaryForeground} />
-                : <Text style={styles.submitBtnText}>Подтвердить ставку</Text>}
+                : <Text style={styles.submitBtnText}>{t.auc_bid_confirm}</Text>}
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancelBtn} onPress={() => setBidModal(null)} activeOpacity={0.8}>
-              <Text style={styles.cancelBtnText}>Отмена</Text>
+              <Text style={styles.cancelBtnText}>{t.cancel}</Text>
             </TouchableOpacity>
           </View>
         </View>

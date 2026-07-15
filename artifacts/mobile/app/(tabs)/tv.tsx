@@ -25,6 +25,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
+import { useLanguage } from "@/context/LanguageContext";
 import { LogoBrand } from "@/components/LogoBrand";
 import { ContextualGuideModal } from "@/components/ContextualGuideModal";
 import { useContextualGuide } from "@/hooks/useContextualGuide";
@@ -353,6 +354,7 @@ interface AgeGateModalProps {
 }
 
 function AgeGateModal({ citizenId, onVerified, onCancel, colors }: AgeGateModalProps) {
+  const { t } = useLanguage();
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -367,10 +369,10 @@ function AgeGateModal({ citizenId, onVerified, onCancel, colors }: AgeGateModalP
       if (res.ok) {
         onVerified();
       } else {
-        Alert.alert("Ошибка", "Не удалось подтвердить возраст");
+        Alert.alert(t.error, t.tv_age_gate_body);
       }
     } catch {
-      Alert.alert("Ошибка", "Нет соединения с сервером");
+      Alert.alert(t.error, t.no_internet);
     } finally {
       setLoading(false);
     }
@@ -382,10 +384,10 @@ function AgeGateModal({ citizenId, onVerified, onCancel, colors }: AgeGateModalP
         <View style={[ageGateStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[ageGateStyles.icon]}>🔞</Text>
           <Text style={[ageGateStyles.title, { color: colors.foreground }]}>
-            Подтверждение возраста
+            {t.tv_age_gate_title}
           </Text>
           <Text style={[ageGateStyles.body, { color: colors.mutedForeground }]}>
-            Функция AI-генерации видео доступна только для пользователей 18 лет и старше (COPPA / EU DSA).
+            {t.tv_age_gate_body}
           </Text>
           <TouchableOpacity
             style={ageGateStyles.checkRow}
@@ -398,7 +400,7 @@ function AgeGateModal({ citizenId, onVerified, onCancel, colors }: AgeGateModalP
               {confirmed && <Feather name="check" size={11} color="#fff" />}
             </View>
             <Text style={[ageGateStyles.checkLabel, { color: colors.foreground }]}>
-              Мне исполнилось 18 лет
+              {t.tv_age_confirm}
             </Text>
           </TouchableOpacity>
           <View style={ageGateStyles.btnRow}>
@@ -406,7 +408,7 @@ function AgeGateModal({ citizenId, onVerified, onCancel, colors }: AgeGateModalP
               style={[ageGateStyles.cancelBtn, { borderColor: colors.border }]}
               onPress={onCancel}
             >
-              <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Отмена</Text>
+              <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>{t.cancel}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[ageGateStyles.confirmBtn, {
@@ -418,7 +420,7 @@ function AgeGateModal({ citizenId, onVerified, onCancel, colors }: AgeGateModalP
             >
               {loading
                 ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>Подтвердить</Text>
+                : <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>{t.confirm}</Text>
               }
             </TouchableOpacity>
           </View>
@@ -453,6 +455,7 @@ interface CapsuleModalProps {
 }
 
 function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVerify }: CapsuleModalProps) {
+  const { t } = useLanguage();
   const qc = useQueryClient();
   const { citizen } = useCitizen();
   const styles = getStyles(colors);
@@ -485,7 +488,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
     queryFn: async () => {
       const res = await fetch(`${BASE_URL}/api/tv/capsule/${slot.id}`);
       if (res.status === 404) return null as unknown as TvCapsule;
-      if (!res.ok) throw new Error("Ошибка загрузки капсулы");
+      if (!res.ok) throw new Error("Capsule load error");
       const data = await res.json() as TvCapsule;
       setSeedText(data.seedText ?? "");
       setBroadcastPolicy(data.broadcastPolicy);
@@ -596,14 +599,14 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? "Ошибка создания капсулы");
+        throw new Error(err.error ?? "Create error");
       }
       return res.json() as Promise<TvCapsule>;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tvCapsule", slot.id] });
     },
-    onError: (e: Error) => Alert.alert("Ошибка", e.message),
+    onError: (e: Error) => Alert.alert(t.error, e.message),
   });
 
   // Update capsule
@@ -621,14 +624,14 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? "Ошибка обновления капсулы");
+        throw new Error(err.error ?? "Update error");
       }
       return res.json() as Promise<TvCapsule>;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tvCapsule", slot.id] });
     },
-    onError: (e: Error) => Alert.alert("Ошибка", e.message),
+    onError: (e: Error) => Alert.alert(t.error, e.message),
   });
 
   // Air capsule manually (for retro slots)
@@ -641,7 +644,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? "Ошибка выхода в эфир");
+        throw new Error(err.error ?? "Broadcast error");
       }
       return res.json() as Promise<{ ok: boolean; mediaUrl: string }>;
     },
@@ -649,7 +652,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
       qc.invalidateQueries({ queryKey: ["tvSlots"] });
       qc.invalidateQueries({ queryKey: ["tvCapsule", slot.id] });
     },
-    onError: (e: Error) => Alert.alert("Ошибка", e.message),
+    onError: (e: Error) => Alert.alert(t.error, e.message),
   });
 
   // Render capsule — returns 202 immediately; poll capsule status for progress
@@ -666,7 +669,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
           onNeedAgeVerify();
           throw new Error("age_gate");
         }
-        throw new Error(err.error ?? "Ошибка рендера");
+        throw new Error(err.error ?? "Render error");
       }
       return res.json() as Promise<{ ok: boolean; status: string; slotId: number; jobId?: string; timeoutMs?: number }>;
     },
@@ -687,7 +690,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
       qc.invalidateQueries({ queryKey: ["tvCapsule", slot.id] });
     },
     onError: (e: Error) => {
-      if (e.message !== "age_gate") Alert.alert("Ошибка рендера", e.message);
+      if (e.message !== "age_gate") Alert.alert(t.error, e.message);
     },
   });
 
@@ -743,7 +746,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
             <Text style={styles.modalTitle}>
               {slotLabel(slot)} — {SLOT_TYPE_LABELS[slot.slotType] ?? slot.slotType}
             </Text>
-            <Text style={styles.modalSubtitle}>{slot.date}{slot.isRetro ? " · Ретро" : ""}</Text>
+            <Text style={styles.modalSubtitle}>{slot.date}{slot.isRetro ? ` · ${t.tv_retro_slot}` : ""}</Text>
           </View>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
             <Feather name="x" size={22} color={colors.foreground} />
@@ -765,18 +768,18 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                     color={capsule.mediaUrl ? colors.primary : colors.mutedForeground}
                   />
                   <Text style={[styles.statusBadgeText, { color: capsule.mediaUrl ? colors.primary : colors.mutedForeground }]}>
-                    {capsule.mediaUrl ? "Отрендерено" : "Капсула создана"}
+                    {capsule.mediaUrl ? t.tv_create_capsule : t.tv_ai_preview}
                   </Text>
                 </View>
               )}
 
               {/* ── Seed text ── */}
-              <Text style={styles.sectionLabel}>Seed-текст (необязательно)</Text>
+              <Text style={styles.sectionLabel}>{t.tv_manifesto_label}</Text>
               <TextInput
                 style={[styles.textInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
                 value={seedText}
                 onChangeText={setSeedText}
-                placeholder="Идея, тема или текст для AI-манифеста…"
+                placeholder={t.tv_vision_ph}
                 placeholderTextColor={colors.mutedForeground}
                 multiline
                 numberOfLines={4}
@@ -786,7 +789,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
               <Text style={styles.charCount}>{seedText.length}/500</Text>
 
               {/* ── Broadcast policy ── */}
-              <Text style={styles.sectionLabel}>Режим вещания</Text>
+              <Text style={styles.sectionLabel}>{t.tv_policy_label}</Text>
               <View style={styles.segmentRow}>
                 {(["echo", "noise", "private"] as const).map((p) => (
                   <TouchableOpacity
@@ -798,7 +801,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                     onPress={() => setBroadcastPolicy(p)}
                   >
                     <Text style={[styles.segmentText, { color: broadcastPolicy === p ? "#fff" : colors.foreground }]}>
-                      {p === "echo" ? "Эхо" : p === "noise" ? "Шум" : "Приват"}
+                      {p === "echo" ? t.tv_booked_slot : p === "noise" ? t.tv_free_slot : t.tv_retro_slot}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -806,9 +809,9 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
               <Text style={styles.hintText}>{BROADCAST_LABELS[broadcastPolicy]}</Text>
 
               {/* ── Visual style (Shariah/anti-Gharar: choose BEFORE paying/rendering) ── */}
-              <Text style={styles.sectionLabel}>Визуальный стиль</Text>
+              <Text style={styles.sectionLabel}>{t.tv_style_label}</Text>
               <Text style={[styles.hintText, { marginBottom: 8 }]}>
-                Выберите тему до рендера — итоговый результат будет именно таким
+                {t.tv_ai_preview}
               </Text>
               <View style={styles.styleGrid}>
                 {VISUAL_STYLES.map((s) => (
@@ -849,7 +852,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                   {hasSovereignLink && <Feather name="check" size={12} color="#fff" />}
                 </View>
                 <Text style={[styles.toggleLabel, { color: colors.foreground }]}>Sovereign Link</Text>
-                <Text style={[styles.toggleHint, { color: colors.mutedForeground }]}>  уникальный URL в Таймлайне</Text>
+                <Text style={[styles.toggleHint, { color: colors.mutedForeground }]}>{t.tl_open_timeline}</Text>
               </TouchableOpacity>
 
               {/* ── Save button ── */}
@@ -860,7 +863,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
               >
                 {isSaving
                   ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={styles.primaryBtnText}>{hasCapsule ? "Сохранить изменения" : "Создать капсулу"}</Text>
+                  : <Text style={styles.primaryBtnText}>{hasCapsule ? t.save : t.tv_create_capsule}</Text>
                 }
               </TouchableOpacity>
 
@@ -868,7 +871,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
               {hasCapsule && (
                 <>
                   <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                  <Text style={styles.sectionLabel}>AI-рендер</Text>
+                  <Text style={styles.sectionLabel}>{t.tv_ai_preview}</Text>
 
                   {!citizenAgeVerified && (
                     <TouchableOpacity
@@ -877,13 +880,13 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                     >
                       <Feather name="alert-circle" size={15} color={colors.primary} />
                       <Text style={[styles.ageGateText, { color: colors.primary }]}>
-                        Требуется подтверждение возраста 18+
+                        {t.tv_age_gate_title}
                       </Text>
                     </TouchableOpacity>
                   )}
 
                   <Text style={[styles.hintText, { marginBottom: 12 }]}>
-                    LLM генерирует манифест → ElevenLabs озвучивает → FFmpeg собирает MP4 с водяным знаком TimeNation AI
+                    {t.tv_manifesto_label}
                   </Text>
 
                   {/* ── Global User Contract Gate ── */}
@@ -899,10 +902,10 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                       {legalConsent && <Feather name="check" size={10} color="#fff" />}
                     </View>
                     <Text style={[styles.legalText, { color: colors.mutedForeground }]}>
-                      Я соглашаюсь с{" "}
-                      <Text style={{ color: colors.primary, textDecorationLine: "underline" }}>Условиями использования</Text>
+                      {t.tos_title}{" "}
+                      <Text style={{ color: colors.primary, textDecorationLine: "underline" }}>{t.tos_short}</Text>
                       {". "}
-                      Подтверждаю, что мне исполнилось 18 лет; данная транзакция является покупкой технической вычислительной услуги; я несу единоличную правовую ответственность за текст и результирующее AI-видео согласно US Section 230, законодательству ЕС, ФЗ-152 РФ и местным законам. TimeNation действует исключительно как поставщик вычислительной инфраструктуры. Коммерческая реклама, нацеленная на конкретные юрисдикции без соответствующей регистрации, запрещена. Трансграничная передача данных инициируется пользователем самостоятельно.
+                      {t.tv_age_confirm}
                     </Text>
                   </TouchableOpacity>
 
@@ -914,13 +917,13 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                     {renderMutation.isPending ? (
                       <View style={styles.renderBtnInner}>
                         <ActivityIndicator color={colors.primary} size="small" />
-                        <Text style={[styles.renderBtnText, { color: colors.primary }]}>Запуск…</Text>
+                        <Text style={[styles.renderBtnText, { color: colors.primary }]}>{t.loading}</Text>
                       </View>
                     ) : (
                       <View style={styles.renderBtnInner}>
                         <Feather name="film" size={16} color={colors.primary} />
                         <Text style={[styles.renderBtnText, { color: colors.primary }]}>
-                          {activeRenderResult ? "Перерендерить" : "Запустить рендер"}
+                          {activeRenderResult ? t.tv_ai_preview : t.tv_create_capsule}
                         </Text>
                       </View>
                     )}
@@ -934,10 +937,10 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                         <ActivityIndicator color={colors.primary} size="small" />
                         <Text style={[styles.renderProgressText, { color: colors.primary }]}>
                           {jobStatusData?.status === "queued"
-                            ? "Ожидание в очереди…"
+                            ? t.loading
                             : capsule?.renderProgress
-                              ? (RENDER_PROGRESS_LABELS[capsule.renderProgress] ?? "Рендер…")
-                              : "Инициализация рендера…"}
+                              ? (RENDER_PROGRESS_LABELS[capsule.renderProgress] ?? t.loading)
+                              : t.loading}
                         </Text>
                       </View>
 
@@ -946,7 +949,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                         <View style={[styles.queueBadge, { backgroundColor: colors.muted }]}>
                           <Feather name="clock" size={12} color={colors.mutedForeground} />
                           <Text style={[styles.queueBadgeText, { color: colors.mutedForeground }]}>
-                            {`Ваш рендер в очереди · ожидает ${queueStats.queued} ${queueStats.queued === 1 ? "задание" : "заданий"} перед ним`}
+                            {`${t.loading} · ${queueStats.queued}`}
                           </Text>
                         </View>
                       )}
@@ -1004,21 +1007,19 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                         <View style={[styles.timedOutBadge, { backgroundColor: colors.muted }]}>
                           <Feather name="alert-circle" size={13} color={colors.mutedForeground} />
                           <Text style={[styles.timedOutText, { color: colors.mutedForeground }]}>
-                            Рендер затянулся — ждём финального результата…
+                            {t.loading}
                           </Text>
                         </View>
                       ) : countdownSec !== null ? (
                         <View style={styles.countdownRow}>
                           <Feather name="clock" size={13} color={colors.primary} />
                           <Text style={[styles.countdownText, { color: colors.primary }]}>
-                            {`${Math.floor(countdownSec / 60)}:${String(countdownSec % 60).padStart(2, "0")} осталось`}
+                            {`${Math.floor(countdownSec / 60)}:${String(countdownSec % 60).padStart(2, "0")}`}
                           </Text>
                         </View>
                       ) : (
                         <Text style={[styles.renderProgressHint, { color: colors.mutedForeground }]}>
-                          {renderTimeoutMs && renderTimeoutMs >= 300_000
-                            ? `До ${Math.round(renderTimeoutMs / 60_000)} минут для вашего премиум-слота. Не закрывайте экран.`
-                            : `AI-рендер занимает до ${renderTimeoutMs ? Math.round(renderTimeoutMs / 60_000) : 2} мин. Не закрывайте экран.`}
+                          {`${t.tv_ai_preview} · ${renderTimeoutMs ? Math.round(renderTimeoutMs / 60_000) : 2} min`}
                         </Text>
                       )}
                     </View>
@@ -1029,10 +1030,10 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                     <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                       <View style={styles.resultHeader}>
                         <Feather name="check-circle" size={16} color={colors.primary} />
-                        <Text style={[styles.resultTitle, { color: colors.foreground }]}>Готово</Text>
+                        <Text style={[styles.resultTitle, { color: colors.foreground }]}>{t.confirm}</Text>
                         {renderResult && renderResult.manifestoWords > 0 && (
                           <Text style={[styles.resultMeta, { color: colors.mutedForeground }]}>
-                            {renderResult.manifestoWords} слов
+                            {renderResult.manifestoWords}
                           </Text>
                         )}
                       </View>
@@ -1042,7 +1043,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                         onPress={openVideo}
                       >
                         <Feather name="play-circle" size={16} color="#fff" />
-                        <Text style={styles.mediaBtnText}>Открыть MP4</Text>
+                        <Text style={styles.mediaBtnText}>{t.tv_ai_preview} MP4</Text>
                       </TouchableOpacity>
 
                       {activeRenderResult.catcastUrl ? (
@@ -1051,13 +1052,13 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                           onPress={() => openCatcast(activeRenderResult.catcastUrl!)}
                         >
                           <Feather name="tv" size={14} color="#00AAFF" />
-                          <Text style={[styles.catcastBtnText, { color: "#00AAFF" }]}>Открыть на Catcast.tv</Text>
+                          <Text style={[styles.catcastBtnText, { color: "#00AAFF" }]}>Catcast.tv</Text>
                         </TouchableOpacity>
                       ) : (
                         <View style={[styles.catcastBtnDisabled, { borderColor: colors.border }]}>
                           <Feather name="tv" size={14} color={colors.mutedForeground} />
                           <Text style={[styles.catcastBtnText, { color: colors.mutedForeground }]}>
-                            Catcast недоступен (требуется self-hosted)
+                            Catcast.tv
                           </Text>
                         </View>
                       )}
@@ -1078,7 +1079,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                             <Feather name="radio" size={14} color="#F59E0B" />
                           )}
                           <Text style={[styles.catcastBtnText, { color: "#F59E0B" }]}>
-                            {slot.isRetro ? "Выйти в эфир (ретро)" : "Выйти в эфир сейчас"}
+                            {slot.isRetro ? `${t.tv_retro_slot}` : t.tv_create_capsule}
                           </Text>
                         </TouchableOpacity>
                       )}
@@ -1125,6 +1126,7 @@ const FIAT_PRICES: Record<string, string> = {
 };
 
 function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooked }: BookSlotModalProps) {
+  const { t } = useLanguage();
   const qc = useQueryClient();
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
   const [typeFilter, setTypeFilter] = useState<SlotTypeFilter>("all");
@@ -1147,7 +1149,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
 
   const bookMutation = useMutation({
     mutationFn: async () => {
-      if (!selected) throw new Error("Выберите слот");
+      if (!selected) throw new Error("No slot selected");
       const res = await fetch(`${BASE_URL}/api/tv/slots/book`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1160,7 +1162,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
         }),
       });
       const json = await res.json() as { error?: string; ok?: boolean; url?: string };
-      if (!res.ok) throw new Error(json.error ?? "Ошибка бронирования");
+      if (!res.ok) throw new Error(json.error ?? "Booking error");
       return json;
     },
     onSuccess: async (data) => {
@@ -1172,12 +1174,12 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
         onClose();
         return;
       }
-      Alert.alert("✅ Слот забронирован", "Вернитесь в список и настройте капсулу.");
+      Alert.alert("✅", t.tv_booked_slot);
       setSelectedSlotId(null);
       onBooked();
       onClose();
     },
-    onError: (e: Error) => Alert.alert("Отказ", e.message),
+    onError: (e: Error) => Alert.alert(t.error, e.message),
   });
 
   const renderSlotItem = ({ item: s }: { item: TvSlot }) => {
@@ -1219,7 +1221,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
             {cost} Д
           </Text>
           {!affordable && (
-            <Text style={{ fontSize: 10, color: colors.destructive, marginTop: 2 }}>нехватка</Text>
+            <Text style={{ fontSize: 10, color: colors.destructive, marginTop: 2 }}>{t.insufficient_funds}</Text>
           )}
         </View>
       </Pressable>
@@ -1233,7 +1235,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
 
           {/* Header */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
-            <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }}>Выбрать слот · {date}</Text>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }}>{t.tv_free_slot} · {date}</Text>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Feather name="x" size={22} color={colors.foreground} />
             </TouchableOpacity>
@@ -1241,8 +1243,8 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
 
           {/* Balance row */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.muted }}>
-            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Баланс:</Text>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground }}>{transferable} Д доступно</Text>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{t.eco_balance}:</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground }}>{transferable} Д</Text>
           </View>
 
           {/* Type filter tabs */}
@@ -1252,13 +1254,13 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
             style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
             contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, gap: 6 }}
           >
-            {SLOT_TYPE_KEYS.map((t) => {
-              const cnt = countByType(t);
-              const active = typeFilter === t;
+            {SLOT_TYPE_KEYS.map((key) => {
+              const cnt = countByType(key);
+              const active = typeFilter === key;
               return (
                 <Pressable
-                  key={t}
-                  onPress={() => { setTypeFilter(t); setSelectedSlotId(null); }}
+                  key={key}
+                  onPress={() => { setTypeFilter(key); setSelectedSlotId(null); }}
                   style={{
                     paddingHorizontal: 12,
                     paddingVertical: 6,
@@ -1270,7 +1272,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
                   }}
                 >
                   <Text style={{ fontSize: 12, fontWeight: "700", color: active ? "#fff" : colors.foreground }}>
-                    {FILTER_LABELS[t]}
+                    {FILTER_LABELS[key]}
                   </Text>
                   <Text style={{ fontSize: 10, color: active ? "#ffffffaa" : colors.mutedForeground }}>
                     {cnt}
@@ -1285,8 +1287,8 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
               <Feather name="tv" size={40} color={colors.mutedForeground} />
               <Text style={{ color: colors.mutedForeground, marginTop: 12, textAlign: "center" }}>
                 {allFreeSlots.length === 0
-                  ? `Нет свободных слотов на ${date}`
-                  : "Нет слотов этого типа"}
+                  ? `${t.emb_empty} ${date}`
+                  : t.emb_empty}
               </Text>
             </View>
           ) : (
@@ -1300,7 +1302,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
               ListFooterComponent={
                 typeFilter === "all" && allFreeSlots.length > 120 ? (
                   <Text style={{ textAlign: "center", fontSize: 11, color: colors.mutedForeground, paddingVertical: 8 }}>
-                    Показаны ближайшие 2 ч · Выберите тип слота для полного списка
+                    {t.tv_free_slot}
                   </Text>
                 ) : null
               }
@@ -1343,7 +1345,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
             {selected && (
               <View style={{ flexDirection: "row", justifyContent: "space-between", paddingTop: 4 }}>
                 <Text style={{ fontSize: 13, color: colors.mutedForeground }}>
-                  Слот {selected.hourLabel}:{selected.minLabel} · {SLOT_TYPE_LABELS[selected.slotType]}
+                  {selected.hourLabel}:{selected.minLabel} · {SLOT_TYPE_LABELS[selected.slotType]}
                 </Text>
                 {paymentType === "timeltr" ? (
                   <Text style={{ fontSize: 13, fontWeight: "700", color: canAfford ? colors.foreground : colors.destructive }}>
@@ -1376,20 +1378,20 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
               ) : (
                 <Text style={{ color: selected ? "#fff" : colors.mutedForeground, fontWeight: "700", fontSize: 15 }}>
                   {!selected
-                    ? "Выберите слот"
+                    ? t.tv_free_slot
                     : paymentType === "fiat"
-                    ? `Оплатить ${FIAT_PRICES[selected.slotType] ?? ""} через Stripe`
+                    ? `${FIAT_PRICES[selected.slotType] ?? ""} Stripe`
                     : canAfford
-                    ? `Забронировать за ${totalCost} Д`
-                    : "Недостаточно Дарминов"
+                    ? `${t.tv_booked_slot} ${totalCost} Д`
+                    : t.insufficient_funds
                   }
                 </Text>
               )}
             </Pressable>
             <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center" }}>
               {paymentType === "timeltr"
-                ? "Стоимость включает 2% государственную пошлину. Родовая минута защищена."
-                : "Stripe · безопасный платёж. Дармины зачислятся автоматически."}
+                ? t.tx_desc_placeholder
+                : "Stripe"}
             </Text>
           </View>
         </Pressable>
@@ -1415,6 +1417,7 @@ function ChronosGrid({
   selectedSlotId?: number | null;
   onTapSlot: (slot: TvSlot | null, minuteIndex: number) => void;
 }) {
+  const { t } = useLanguage();
   const { width: sw } = useWindowDimensions();
   const LABEL_W = 28;
   const CELL_W = Math.max(4, Math.floor((sw - LABEL_W - 36) / 60));
@@ -1460,11 +1463,11 @@ function ChronosGrid({
       {/* Legend */}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
         {([
-          [colors.primary, "Мой"],
-          ["#f97316", "Эфир"],
-          [colors.mutedForeground + "45", "Занят"],
-          [colors.border + "70", "Свободен"],
-          ["#ffffff", "Сейчас"],
+          [colors.primary, t.tab_timer],
+          ["#f97316", t.tv_live],
+          [colors.mutedForeground + "45", t.tv_booked_slot],
+          [colors.border + "70", t.tv_free_slot],
+          ["#ffffff", t.tv_today],
         ] as [string, string][]).map(([col, lbl]) => (
           <View key={lbl} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
             <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: col }} />
@@ -1523,6 +1526,7 @@ interface CalendarBookingSheetProps {
 type BookStep = "date" | "grid";
 
 function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialSlot, colors, onBooked }: CalendarBookingSheetProps) {
+  const { t } = useLanguage();
   const qc = useQueryClient();
   const insets = useSafeAreaInsets();
   // If we have a pre-selected slot, start on "grid"; otherwise start on "date"
@@ -1553,7 +1557,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
     queryKey: ["tvSlots", bookDate],
     queryFn: async () => {
       const res = await fetch(`${BASE_URL}/api/tv/slots?date=${bookDate}`);
-      if (!res.ok) throw new Error("Ошибка загрузки");
+      if (!res.ok) throw new Error("Load error");
       return res.json();
     },
     enabled: step === "grid",
@@ -1569,7 +1573,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
 
   const bookMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedSlot) throw new Error("Слот не выбран");
+      if (!selectedSlot) throw new Error("No slot selected");
       const res = await fetch(`${BASE_URL}/api/tv/slots/book`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1582,7 +1586,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
         }),
       });
       const json = await res.json() as { error?: string; ok?: boolean; url?: string };
-      if (!res.ok) throw new Error(json.error ?? "Ошибка");
+      if (!res.ok) throw new Error(json.error ?? "Error");
       return json;
     },
     onSuccess: async (data) => {
@@ -1647,11 +1651,11 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
           </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>
-              {step === "date" ? "СЕТКА ЭФИРА · выберите дату" : `СЕТКА ЭФИРА · ${bookDate}`}
+              {step === "date" ? `${t.tab_tv} · ${t.tv_free_slot}` : `${t.tab_tv} · ${bookDate}`}
             </Text>
             {step === "grid" && (
               <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>
-                {slotsLoading ? "Загрузка…" : `${freeSlots.length} свободных из 1440`}
+                {slotsLoading ? t.loading : `${freeSlots.length} / 1440`}
               </Text>
             )}
           </View>
@@ -1721,7 +1725,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
             {/* Hint */}
             <View style={{ marginTop: 20, padding: 14, backgroundColor: colors.card, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}>
               <Text style={{ fontSize: 12, color: colors.mutedForeground, lineHeight: 18 }}>
-                Выберите любую будущую дату — вы увидите сетку всех 1440 слотов. Нажмите на свободный слот, чтобы забронировать.
+                {t.tv_free_slot} · 1440
               </Text>
             </View>
           </ScrollView>
@@ -1733,7 +1737,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
             {slotsLoading ? (
               <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 12 }}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>Загрузка сетки…</Text>
+                <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>{t.loading}</Text>
               </View>
             ) : (
               <ChronosGrid
@@ -1814,10 +1818,10 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
                   ) : (
                     <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15, fontFamily: "Inter_700Bold" }}>
                       {paymentType === "fiat"
-                        ? `Оплатить ${FIAT_PRICES[selectedSlot.slotType] ?? ""} через Stripe`
+                        ? `${FIAT_PRICES[selectedSlot.slotType] ?? ""} Stripe`
                         : canAfford
-                        ? `Забронировать за ${totalCost} Д`
-                        : "Недостаточно Дарминов"}
+                        ? `${t.tv_booked_slot} ${totalCost} Д`
+                        : t.insufficient_funds}
                     </Text>
                   )}
                 </Pressable>
@@ -1849,6 +1853,7 @@ interface LiveSlotInfo {
 }
 
 function ChronosLivePulse({ date, colors }: { date: string; colors: ReturnType<typeof useColors> }) {
+  const { t } = useLanguage();
   const [currentMinute, setCurrentMinute] = useState(() => {
     const n = new Date();
     return n.getUTCHours() * 60 + n.getUTCMinutes();
@@ -1930,7 +1935,7 @@ function ChronosLivePulse({ date, colors }: { date: string; colors: ReturnType<t
           shadowOpacity: 0.8,
           shadowOffset: { width: 0, height: 0 },
         }} />
-        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#f97316", letterSpacing: 1.5 }}>В ЭФИРЕ</Text>
+        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#f97316", letterSpacing: 1.5 }}>{t.tv_live}</Text>
       </View>
       <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.primary, fontVariant: ["tabular-nums"] }}>
         {hh}:{mm2}
@@ -1949,7 +1954,7 @@ function ChronosLivePulse({ date, colors }: { date: string; colors: ReturnType<t
           </View>
         ) : (
           <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
-            Эфир ожидает · слот {hh}:{mm2}
+            {t.tv_awaiting} · {hh}:{mm2}
           </Text>
         )}
       </View>
@@ -1959,7 +1964,7 @@ function ChronosLivePulse({ date, colors }: { date: string; colors: ReturnType<t
         activeOpacity={0.8}
       >
         <Feather name="radio" size={11} color="#fff" />
-        <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#fff" }}>Эфир</Text>
+        <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#fff" }}>{t.tab_tv}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -1968,6 +1973,7 @@ function ChronosLivePulse({ date, colors }: { date: string; colors: ReturnType<t
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function TvScreen() {
+  const { t } = useLanguage();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { citizen } = useCitizen();
@@ -1990,7 +1996,7 @@ export default function TvScreen() {
     queryKey: ["tvSlots", date],
     queryFn: async () => {
       const res = await fetch(`${BASE_URL}/api/tv/slots?date=${date}`);
-      if (!res.ok) throw new Error("Ошибка загрузки слотов");
+      if (!res.ok) throw new Error("Slots load error");
       return res.json();
     },
     enabled: !!citizen,
@@ -2043,7 +2049,7 @@ export default function TvScreen() {
         <Text style={[styles.slotTime, { color: colors.foreground }]}>{slotLabel(item)}</Text>
         <Text style={[styles.slotType, { color: colors.mutedForeground }]}>
           {SLOT_TYPE_LABELS[item.slotType] ?? item.slotType}
-          {item.isRetro ? " · Ретро" : ""}
+          {item.isRetro ? ` · ${t.tv_retro_slot}` : ""}
         </Text>
       </View>
       <View style={styles.slotCardRight}>
@@ -2058,7 +2064,7 @@ export default function TvScreen() {
             color={colors.primary}
           />
           <Text style={[styles.slotBadgeText, { color: colors.primary }]}>
-            {item.status === "broadcast" ? "Вышел в эфир" : "Мой слот"}
+            {item.status === "broadcast" ? t.tv_booked_slot : t.tv_free_slot}
           </Text>
         </View>
         <Feather name="chevron-right" size={16} color={colors.mutedForeground} style={{ marginLeft: 8 }} />
@@ -2126,7 +2132,7 @@ export default function TvScreen() {
               onPress={() => setViewMode("list")}
             >
               <Text style={{ fontSize: 11, fontWeight: "600", color: viewMode === "list" ? colors.primary : colors.mutedForeground }}>
-                Список
+                {t.timeline_list}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -2138,7 +2144,7 @@ export default function TvScreen() {
               onPress={() => setViewMode("grid")}
             >
               <Text style={{ fontSize: 11, fontWeight: "600", color: viewMode === "grid" ? colors.primary : colors.mutedForeground }}>
-                Сетка
+                {t.tv_schedule}
               </Text>
             </TouchableOpacity>
           </View>
@@ -2150,7 +2156,7 @@ export default function TvScreen() {
               activeOpacity={0.75}
             >
               <Feather name="calendar" size={12} color={colors.primary} />
-              <Text style={[styles.bookSlotBtnText, { color: colors.primary }]}>Забронировать</Text>
+              <Text style={[styles.bookSlotBtnText, { color: colors.primary }]}>{t.tv_book_slot}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => refetch()} disabled={isRefetching}>
               <Feather
@@ -2167,7 +2173,7 @@ export default function TvScreen() {
       {!citizen && (
         <View style={styles.emptyState}>
           <Feather name="user-x" size={40} color={colors.mutedForeground} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Войдите в аккаунт для доступа к TV</Text>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t.pls_login}</Text>
         </View>
       )}
 
@@ -2175,7 +2181,7 @@ export default function TvScreen() {
       {isLoading && (
         <View style={styles.emptyState}>
           <ActivityIndicator color={colors.primary} size="large" />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Загрузка слотов…</Text>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{t.loading}</Text>
         </View>
       )}
 
@@ -2183,13 +2189,13 @@ export default function TvScreen() {
       {!isLoading && viewMode === "list" && citizen && mySlots.length === 0 && (
         <View style={styles.emptyState}>
           <Feather name="tv" size={44} color={colors.mutedForeground} />
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Нет забронированных слотов</Text>
+          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t.tv_free_slot}</Text>
           <TouchableOpacity
             onPress={() => tvGuide.trigger(() => { setShowCalBooking(true); })}
             style={{ marginTop: 8, backgroundColor: colors.primary + "22", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: colors.primary + "55" }}
           >
             <Text style={{ color: colors.primary, fontWeight: "600", textAlign: "center" }}>
-              Открыть календарь бронирования
+              {t.tv_book_slot}
             </Text>
           </TouchableOpacity>
         </View>
@@ -2205,7 +2211,7 @@ export default function TvScreen() {
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           ListHeaderComponent={
             <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>
-              Нажмите на слот чтобы управлять капсулой
+              {t.tv_capsule_title}
             </Text>
           }
         />
@@ -2295,9 +2301,9 @@ export default function TvScreen() {
         onClose={tvGuide.close}
         onConfirm={tvGuide.confirm}
         icon="📺"
-        title="Забронировать TV-слот"
-        explanation={"Бронирование эфира. Твой текст станет промтом, а бесплатный ИИ-движок отрендерит уникальное кино. Трансляция сильных смыслов ускоряет накопление Меритов в системе.\n\nДоступны слоты :00, :15, :30, :45 каждого часа."}
-        ctaLabel="Написать сильный смысл и выбрать визуальный стиль"
+        title={t.tv_book_slot}
+        explanation={t.tv_guide_text}
+        ctaLabel={t.tv_create_capsule}
       />
     </View>
   );
