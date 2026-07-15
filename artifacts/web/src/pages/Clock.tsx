@@ -87,8 +87,8 @@ export function Clock() {
   const active = LANGUAGES_24.find((l) => l.hour === activeHour) ?? LANGUAGES_24[1]!;
   const t = TRANSLATIONS[active.code] ?? TRANSLATIONS["ru"]!;
 
-  // degrees: 0h = top (−90°), each hour = +15°
-  const handDeg = activeHour * 15 - 90;
+  // degrees: each hour = +15°, hour=24 at top (0°=up in CSS rotate)
+  const handDeg = activeHour * 15;
 
   useEffect(() => {
     document.title = "Циферблат народов | TimeNation";
