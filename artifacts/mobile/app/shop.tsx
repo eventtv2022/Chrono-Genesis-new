@@ -19,7 +19,9 @@ import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
+import { useLanguage } from "@/context/LanguageContext";
 import { LogoBrand } from "@/components/LogoBrand";
+import type { UIStrings } from "@/lib/i18n";
 
 const BASE_URL = getBaseUrl();
 
@@ -44,14 +46,16 @@ function calcPrice(amount: number) {
 
 const QUICK_AMOUNTS = [100, 500, 1000, 5000] as const;
 
-const TIERS = [
-  { label: "1–99 Д",          discount: 0,  from: 1     },
-  { label: "100–499 Д",       discount: 5,  from: 100   },
-  { label: "500–999 Д",       discount: 6,  from: 500   },
-  { label: "1 000–4 999 Д",   discount: 7,  from: 1000  },
-  { label: "5 000–10 000 Д",  discount: 8,  from: 5000  },
-  { label: "свыше 10 000 Д",  discount: 10, from: 10001 },
-] as const;
+function getTiers(t: UIStrings) {
+  return [
+    { label: "1–99 Д",                             discount: 0,  from: 1     },
+    { label: "100–499 Д",                           discount: 5,  from: 100   },
+    { label: "500–999 Д",                           discount: 6,  from: 500   },
+    { label: "1 000–4 999 Д",                       discount: 7,  from: 1000  },
+    { label: "5 000–10 000 Д",                      discount: 8,  from: 5000  },
+    { label: `${t.shop_tier_above} 10 000 Д`,       discount: 10, from: 10001 },
+  ];
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -60,10 +64,13 @@ export default function ShopScreen() {
   const insets  = useSafeAreaInsets();
   const { citizen, refreshCitizen } = useCitizen();
   const router  = useRouter();
+  const { t }   = useLanguage();
 
   const [amountStr, setAmountStr] = useState("100");
   const [loading,   setLoading]   = useState(false);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  const TIERS = useMemo(() => getTiers(t), [t]);
 
   const amount = useMemo(() => {
     const n = parseInt(amountStr, 10);
@@ -72,17 +79,17 @@ export default function ShopScreen() {
 
   const price = useMemo(() => (amount > 0 ? calcPrice(amount) : null), [amount]);
 
-  const activeTierIdx = TIERS.findLastIndex(t => amount >= t.from);
+  const activeTierIdx = TIERS.findLastIndex(tier => amount >= tier.from);
 
   const styles = getStyles(colors);
 
   async function handleBuy() {
     if (!citizen) {
-      Alert.alert("Нужна авторизация", "Зарегистрируйся как гражданин");
+      Alert.alert(t.shop_need_auth, t.shop_register_cta);
       return;
     }
     if (amount < 1) {
-      Alert.alert("Ошибка", "Введи количество Дарминов (минимум 1)");
+      Alert.alert(t.error, t.shop_enter_min_error);
       return;
     }
     setLoading(true);
@@ -102,7 +109,7 @@ export default function ShopScreen() {
       const data = await res.json() as { url?: string; error?: string };
 
       if (!res.ok || !data.url) {
-        Alert.alert("Ошибка", data.error ?? "Не удалось создать сессию оплаты");
+        Alert.alert(t.error, data.error ?? t.shop_payment_error);
         return;
       }
 
@@ -117,7 +124,7 @@ export default function ShopScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch {
-      Alert.alert("Ошибка соединения", "Проверь интернет и попробуй снова");
+      Alert.alert(t.connection_error, t.no_internet);
     } finally {
       setLoading(false);
     }
@@ -141,12 +148,12 @@ export default function ShopScreen() {
         {/* Header */}
         <View style={styles.headerSection}>
           <LogoBrand size={64} />
-          <Text style={styles.title}>Казначейство</Text>
-          <Text style={styles.subtitle}>1 Дармин = 1 € · прогрессивные скидки</Text>
+          <Text style={styles.title}>{t.shop_title}</Text>
+          <Text style={styles.subtitle}>{t.shop_subtitle}</Text>
           {citizen && (
             <View style={styles.balanceBadge}>
               <Feather name="clock" size={14} color={colors.primary} />
-              <Text style={styles.balanceBadgeText}>Баланс: {citizen.balanceMinutes} Д</Text>
+              <Text style={styles.balanceBadgeText}>{t.eco_balance}: {citizen.balanceMinutes} Д</Text>
             </View>
           )}
         </View>
@@ -154,14 +161,14 @@ export default function ShopScreen() {
         {!citizen && (
           <View style={styles.authWarn}>
             <Feather name="alert-circle" size={18} color={colors.primary} />
-            <Text style={styles.authWarnText}>Зарегистрируйся, чтобы купить Дармины</Text>
+            <Text style={styles.authWarnText}>{t.shop_register_hint}</Text>
           </View>
         )}
 
         {/* Calculator card */}
         <View style={styles.calcCard}>
           {/* Input label */}
-          <Text style={styles.inputLabel}>Количество Дарминов</Text>
+          <Text style={styles.inputLabel}>{t.shop_amount_label}</Text>
 
           {/* Text input */}
           <TextInput
@@ -169,7 +176,7 @@ export default function ShopScreen() {
             value={amountStr}
             onChangeText={setAmountStr}
             keyboardType="number-pad"
-            placeholder="Например: 250"
+            placeholder={t.shop_amount_placeholder}
             placeholderTextColor={colors.mutedForeground}
             selectTextOnFocus
           />
@@ -201,7 +208,7 @@ export default function ShopScreen() {
             <>
               <View style={styles.priceRow}>
                 <View style={[styles.priceBox, { borderColor: colors.border }]}>
-                  <Text style={styles.priceBoxLabel}>Базовая цена</Text>
+                  <Text style={styles.priceBoxLabel}>{t.stats_base_price}</Text>
                   <Text style={[styles.priceBoxValue, { color: colors.foreground }]}>
                     {price.baseEur.toFixed(2)} €
                   </Text>
@@ -212,25 +219,25 @@ export default function ShopScreen() {
                     ? { borderColor: "#22c55e55", backgroundColor: "#052e1680" }
                     : { borderColor: colors.border },
                 ]}>
-                  <Text style={styles.priceBoxLabel}>Скидка</Text>
+                  <Text style={styles.priceBoxLabel}>{t.shop_discount_label}</Text>
                   <Text style={[
                     styles.priceBoxValue,
                     { color: price.discountPct > 0 ? "#4ade80" : colors.mutedForeground },
                   ]}>
-                    {price.discountPct > 0 ? `−${price.discountPct}%` : "нет"}
+                    {price.discountPct > 0 ? `−${price.discountPct}%` : t.shop_no_discount_val}
                   </Text>
                 </View>
               </View>
 
               <View style={[styles.totalBox, { borderColor: colors.primary + "55", backgroundColor: colors.goldGlow }]}>
                 <View>
-                  <Text style={styles.totalLabel}>Итого к оплате</Text>
+                  <Text style={styles.totalLabel}>{t.shop_total_label}</Text>
                   <Text style={[styles.totalValue, { color: colors.primary }]}>
                     {price.totalEur.toFixed(2)} €
                   </Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.totalLabel}>Цена за 1 Д</Text>
+                  <Text style={styles.totalLabel}>{t.shop_per_darmin_label}</Text>
                   <Text style={[styles.perDarminValue, { color: colors.mutedForeground }]}>
                     {price.eurPerDarmin.toFixed(2)} €/Д
                   </Text>
@@ -249,7 +256,7 @@ export default function ShopScreen() {
                   <>
                     <Feather name="credit-card" size={18} color={colors.primaryForeground} />
                     <Text style={[styles.buyBtnText, { color: colors.primaryForeground }]}>
-                      Купить {amount} Д за {price.totalEur.toFixed(2)} €
+                      {amount} Д — {price.totalEur.toFixed(2)} €
                     </Text>
                   </>
                 )}
@@ -258,7 +265,7 @@ export default function ShopScreen() {
           ) : (
             <View style={[styles.emptyHint, { borderColor: colors.border }]}>
               <Text style={[styles.emptyHintText, { color: colors.mutedForeground }]}>
-                Введите количество Дарминов (минимум 1)
+                {t.shop_empty_hint}
               </Text>
             </View>
           )}
@@ -269,7 +276,7 @@ export default function ShopScreen() {
           <View style={styles.tiersHeader}>
             <Feather name="zap" size={13} color={colors.mutedForeground} />
             <Text style={[styles.tiersTitle, { color: colors.mutedForeground }]}>
-              Прогрессивные скидки
+              {t.shop_progressive_discounts}
             </Text>
           </View>
           <View style={styles.tiersGrid}>
@@ -291,7 +298,9 @@ export default function ShopScreen() {
                     styles.tierDiscount,
                     { color: tier.discount > 0 ? (active ? colors.primary : "#4ade80") : colors.mutedForeground },
                   ]}>
-                    {tier.discount > 0 ? `скидка ${tier.discount}%` : "без скидки"}
+                    {tier.discount > 0
+                      ? `${t.shop_tier_discount_prefix} ${tier.discount}%`
+                      : t.shop_tier_no_discount}
                   </Text>
                 </View>
               );
@@ -303,13 +312,13 @@ export default function ShopScreen() {
         <View style={styles.legalSection}>
           <Feather name="shield" size={13} color={colors.mutedForeground} />
           <Text style={[styles.legalText, { color: colors.mutedForeground }]}>
-            Оплата через Stripe (EUR). Дармины — внутриигровые баллы, неисключительная лицензия на использование в платформе TimeNation. Не являются электронными деньгами или ценными бумагами.
+            {t.shop_legal}
           </Text>
         </View>
         <View style={styles.webhookNote}>
           <Feather name="info" size={13} color={colors.mutedForeground} />
           <Text style={[styles.legalText, { color: colors.mutedForeground }]}>
-            После оплаты баланс обновится автоматически через Stripe Webhook. Если Дармины не зачислились — закрой и снова открой приложение.
+            {t.shop_webhook_note}
           </Text>
         </View>
       </ScrollView>

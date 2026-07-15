@@ -26,6 +26,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/context/LanguageContext";
+import type { UIStrings } from "@/lib/i18n";
 import { LogoBrand } from "@/components/LogoBrand";
 import { ContextualGuideModal } from "@/components/ContextualGuideModal";
 import { useContextualGuide } from "@/hooks/useContextualGuide";
@@ -64,16 +65,18 @@ interface TvCapsule {
   isReported: boolean;
 }
 
-const RENDER_PROGRESS_LABELS: Record<string, string> = {
-  generating_prompt: "Создание манифеста…",
-  generating_tts: "Генерация озвучки…",
-  generating_scenes: "Генерация 3 сцен Prime…",
-  fetching_scenes: "Загрузка AI-фонов (3 сцены)…",
-  compositing: "Монтаж сцен xfade…",
-  fetching_video: "Загрузка AI-фона…",
-  encoding: "Сборка MP4…",
-  done: "Готово!",
-};
+function getRenderProgressLabels(t: UIStrings): Record<string, string> {
+  return {
+    generating_prompt: t.tv_render_prompt,
+    generating_tts:    t.tv_render_tts,
+    generating_scenes: t.tv_render_scenes,
+    fetching_scenes:   t.tv_render_fetching_scenes,
+    compositing:       t.tv_render_compositing,
+    fetching_video:    t.tv_render_fetching_video,
+    encoding:          t.tv_render_encoding,
+    done:              t.tv_render_done,
+  };
+}
 
 const RENDER_PROGRESS_STAGES = [
   "generating_prompt",
@@ -107,13 +110,15 @@ interface RenderResult {
 
 type VisualStyle = "space" | "cyberpunk" | "abstract" | "nature" | "minimal";
 
-const VISUAL_STYLES: { value: VisualStyle; label: string; desc: string; preview: string }[] = [
-  { value: "space",     label: "Космос",    desc: "Тёмно-синий, янтарь",    preview: "#0D1B2A" },
-  { value: "cyberpunk", label: "Киберпанк", desc: "Чёрный, неон",           preview: "#0A0014" },
-  { value: "abstract",  label: "Абстракт",  desc: "Фиолетовый, золото",     preview: "#1A0A2E" },
-  { value: "nature",    label: "Природа",   desc: "Тёмно-зелёный, мята",    preview: "#0F1B0F" },
-  { value: "minimal",   label: "Минимал",   desc: "Чёрный, белый",          preview: "#111111" },
-];
+function getVisualStyles(t: UIStrings): { value: VisualStyle; label: string; desc: string; preview: string }[] {
+  return [
+    { value: "space",     label: t.tv_style_space,     desc: t.tv_style_space_desc,     preview: "#0D1B2A" },
+    { value: "cyberpunk", label: t.tv_style_cyberpunk,  desc: t.tv_style_cyberpunk_desc,  preview: "#0A0014" },
+    { value: "abstract",  label: t.tv_style_abstract,   desc: t.tv_style_abstract_desc,   preview: "#1A0A2E" },
+    { value: "nature",    label: t.tv_style_nature,     desc: t.tv_style_nature_desc,     preview: "#0F1B0F" },
+    { value: "minimal",   label: t.tv_style_minimal,    desc: t.tv_style_minimal_desc,    preview: "#111111" },
+  ];
+}
 
 // ── StylePreviewImage ─────────────────────────────────────────────────────────
 // Fetches an AI-generated thumbnail from GET /api/tv/styles/preview.
@@ -188,11 +193,16 @@ function firstDayOfMonth(year: number, month: number): number {
   return d === 0 ? 6 : d - 1; // Monday-first (0=Mon … 6=Sun)
 }
 
-const RU_MONTHS = [
-  "Январь","Февраль","Март","Апрель","Май","Июнь",
-  "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь",
-];
-const RU_DOW = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+function getMonthYearLabel(lang: string, year: number, month: number): string {
+  return new Intl.DateTimeFormat(lang, { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
+}
+
+function getDowLabels(lang: string): string[] {
+  // Jan 6–12 2025 is Mon–Sun
+  return Array.from({ length: 7 }, (_, i) =>
+    new Intl.DateTimeFormat(lang, { weekday: "short" }).format(new Date(2025, 0, 6 + i))
+  );
+}
 
 // ── DatePickerModal ───────────────────────────────────────────────────────────
 
@@ -204,6 +214,7 @@ interface DatePickerModalProps {
 }
 
 function DatePickerModal({ current, onSelect, onClose, colors }: DatePickerModalProps) {
+  const { t, lang } = useLanguage();
   const init = isoToYM(current);
   const [viewYear, setViewYear] = useState(init.year);
   const [viewMonth, setViewMonth] = useState(init.month);
@@ -250,7 +261,7 @@ function DatePickerModal({ current, onSelect, onClose, colors }: DatePickerModal
                 <Feather name="chevron-left" size={20} color={colors.foreground} />
               </TouchableOpacity>
               <Text style={[dpStyles.monthLabel, { color: colors.foreground }]}>
-                {RU_MONTHS[viewMonth - 1]} {viewYear}
+                {getMonthYearLabel(lang, viewYear, viewMonth)}
               </Text>
               <TouchableOpacity onPress={nextMonth} style={dpStyles.arrow}>
                 <Feather name="chevron-right" size={20} color={colors.foreground} />
@@ -259,7 +270,7 @@ function DatePickerModal({ current, onSelect, onClose, colors }: DatePickerModal
 
             {/* Day-of-week row */}
             <View style={dpStyles.dowRow}>
-              {RU_DOW.map(d => (
+              {getDowLabels(lang).map(d => (
                 <Text key={d} style={[dpStyles.dowCell, { color: colors.mutedForeground }]}>{d}</Text>
               ))}
             </View>
@@ -296,10 +307,10 @@ function DatePickerModal({ current, onSelect, onClose, colors }: DatePickerModal
             {/* Footer */}
             <View style={dpStyles.footer}>
               <TouchableOpacity onPress={todayBtn} style={[dpStyles.todayBtn, { borderColor: colors.border }]}>
-                <Text style={[dpStyles.todayText, { color: colors.primary }]}>Сегодня</Text>
+                <Text style={[dpStyles.todayText, { color: colors.primary }]}>{t.today}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={onClose} style={[dpStyles.cancelBtn, { borderColor: colors.border }]}>
-                <Text style={[dpStyles.cancelText, { color: colors.mutedForeground }]}>Закрыть</Text>
+                <Text style={[dpStyles.cancelText, { color: colors.mutedForeground }]}>{t.close}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -331,18 +342,22 @@ function slotLabel(s: TvSlot): string {
   return `${s.hourLabel}:${s.minLabel}`;
 }
 
-const SLOT_TYPE_LABELS: Record<string, string> = {
-  citizen: "Гражданин · 1 Д",
-  quarter: "Четверть · 10 Д",
-  half: "Полчаса · 25 Д",
-  apex: "Апекс · 50 Д",
-};
+function getSlotTypeLabels(t: UIStrings): Record<string, string> {
+  return {
+    citizen: t.tv_slot_citizen,
+    quarter: t.tv_slot_quarter,
+    half:    t.tv_slot_half,
+    apex:    t.tv_slot_apex,
+  };
+}
 
-const BROADCAST_LABELS: Record<string, string> = {
-  echo: "Эхо (публичный)",
-  noise: "Шум (полупубличный)",
-  private: "Приватный",
-};
+function getBroadcastLabels(t: UIStrings): Record<string, string> {
+  return {
+    echo:    t.tv_broadcast_echo,
+    noise:   t.tv_broadcast_noise,
+    private: t.tv_broadcast_private,
+  };
+}
 
 // ── AgeGateModal ─────────────────────────────────────────────────────────────
 
@@ -456,6 +471,10 @@ interface CapsuleModalProps {
 
 function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVerify }: CapsuleModalProps) {
   const { t } = useLanguage();
+  const renderProgressLabels = getRenderProgressLabels(t);
+  const visualStyles = getVisualStyles(t);
+  const slotTypeLabels = getSlotTypeLabels(t);
+  const broadcastLabels = getBroadcastLabels(t);
   const qc = useQueryClient();
   const { citizen } = useCitizen();
   const styles = getStyles(colors);
@@ -744,7 +763,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
         <View style={styles.modalHeader}>
           <View>
             <Text style={styles.modalTitle}>
-              {slotLabel(slot)} — {SLOT_TYPE_LABELS[slot.slotType] ?? slot.slotType}
+              {slotLabel(slot)} — {slotTypeLabels[slot.slotType] ?? slot.slotType}
             </Text>
             <Text style={styles.modalSubtitle}>{slot.date}{slot.isRetro ? ` · ${t.tv_retro_slot}` : ""}</Text>
           </View>
@@ -806,7 +825,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={styles.hintText}>{BROADCAST_LABELS[broadcastPolicy]}</Text>
+              <Text style={styles.hintText}>{broadcastLabels[broadcastPolicy]}</Text>
 
               {/* ── Visual style (Shariah/anti-Gharar: choose BEFORE paying/rendering) ── */}
               <Text style={styles.sectionLabel}>{t.tv_style_label}</Text>
@@ -814,7 +833,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                 {t.tv_ai_preview}
               </Text>
               <View style={styles.styleGrid}>
-                {VISUAL_STYLES.map((s) => (
+                {visualStyles.map((s) => (
                   <TouchableOpacity
                     key={s.value}
                     style={[
@@ -939,7 +958,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                           {jobStatusData?.status === "queued"
                             ? t.loading
                             : capsule?.renderProgress
-                              ? (RENDER_PROGRESS_LABELS[capsule.renderProgress] ?? t.loading)
+                              ? (renderProgressLabels[capsule.renderProgress] ?? t.loading)
                               : t.loading}
                         </Text>
                       </View>
@@ -996,7 +1015,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                                 styles.renderProgressStepLabel,
                                 { color: isDone || isCurrent ? colors.foreground : colors.mutedForeground },
                               ]}>
-                                {RENDER_PROGRESS_LABELS[step]?.replace("…", "") ?? step}
+                                {renderProgressLabels[step]?.replace("…", "") ?? step}
                               </Text>
                             </View>
                           );
@@ -1110,13 +1129,15 @@ interface BookSlotModalProps {
 const SLOT_TYPE_KEYS = ["all", "citizen", "quarter", "half", "apex"] as const;
 type SlotTypeFilter = typeof SLOT_TYPE_KEYS[number];
 
-const FILTER_LABELS: Record<SlotTypeFilter, string> = {
-  all: "Все",
-  citizen: "1 Д",
-  quarter: "10 Д",
-  half: "25 Д",
-  apex: "50 Д",
-};
+function getFilterLabels(t: UIStrings): Record<SlotTypeFilter, string> {
+  return {
+    all:     t.tv_filter_all,
+    citizen: "1 Д",
+    quarter: "10 Д",
+    half:    "25 Д",
+    apex:    "50 Д",
+  };
+}
 
 const FIAT_PRICES: Record<string, string> = {
   citizen: "4.99€",
@@ -1127,6 +1148,8 @@ const FIAT_PRICES: Record<string, string> = {
 
 function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooked }: BookSlotModalProps) {
   const { t } = useLanguage();
+  const slotTypeLabels = getSlotTypeLabels(t);
+  const filterLabels = getFilterLabels(t);
   const qc = useQueryClient();
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
   const [typeFilter, setTypeFilter] = useState<SlotTypeFilter>("all");
@@ -1213,7 +1236,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
             {s.hourLabel}:{s.minLabel}
           </Text>
           <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>
-            {typeFilter === "all" ? (SLOT_TYPE_LABELS[s.slotType] ?? s.slotType) : "UTC"}
+            {typeFilter === "all" ? (slotTypeLabels[s.slotType] ?? s.slotType) : "UTC"}
           </Text>
         </View>
         <View style={{ alignItems: "flex-end" }}>
@@ -1272,7 +1295,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
                   }}
                 >
                   <Text style={{ fontSize: 12, fontWeight: "700", color: active ? "#fff" : colors.foreground }}>
-                    {FILTER_LABELS[key]}
+                    {filterLabels[key]}
                   </Text>
                   <Text style={{ fontSize: 10, color: active ? "#ffffffaa" : colors.mutedForeground }}>
                     {cnt}
@@ -1345,7 +1368,7 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
             {selected && (
               <View style={{ flexDirection: "row", justifyContent: "space-between", paddingTop: 4 }}>
                 <Text style={{ fontSize: 13, color: colors.mutedForeground }}>
-                  {selected.hourLabel}:{selected.minLabel} · {SLOT_TYPE_LABELS[selected.slotType]}
+                  {selected.hourLabel}:{selected.minLabel} · {slotTypeLabels[selected.slotType]}
                 </Text>
                 {paymentType === "timeltr" ? (
                   <Text style={{ fontSize: 13, fontWeight: "700", color: canAfford ? colors.foreground : colors.destructive }}>
@@ -1526,7 +1549,8 @@ interface CalendarBookingSheetProps {
 type BookStep = "date" | "grid";
 
 function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialSlot, colors, onBooked }: CalendarBookingSheetProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const slotTypeLabels = getSlotTypeLabels(t);
   const qc = useQueryClient();
   const insets = useSafeAreaInsets();
   // If we have a pre-selected slot, start on "grid"; otherwise start on "date"
@@ -1675,7 +1699,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
                 <Feather name="chevron-left" size={22} color={colors.foreground} />
               </TouchableOpacity>
               <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground, fontFamily: "Inter_700Bold" }}>
-                {RU_MONTHS[viewMonth - 1]} {viewYear}
+                {getMonthYearLabel(lang, viewYear, viewMonth)}
               </Text>
               <TouchableOpacity onPress={nextMonth} style={{ padding: 8 }}>
                 <Feather name="chevron-right" size={22} color={colors.foreground} />
@@ -1683,7 +1707,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
             </View>
             {/* DOW row */}
             <View style={{ flexDirection: "row", marginBottom: 6 }}>
-              {RU_DOW.map(d => (
+              {getDowLabels(lang).map(d => (
                 <Text key={d} style={{ flex: 1, textAlign: "center", fontSize: 12, fontWeight: "600", color: colors.mutedForeground }}>
                   {d}
                 </Text>
@@ -1763,7 +1787,7 @@ function CalendarBookingSheet({ visible, onClose, citizen, initialDate, initialS
                       {selectedSlot.hourLabel}:{selectedSlot.minLabel} · {bookDate}
                     </Text>
                     <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
-                      {SLOT_TYPE_LABELS[selectedSlot.slotType]}
+                      {slotTypeLabels[selectedSlot.slotType]}
                     </Text>
                   </View>
                   <Pressable onPress={() => setSelectedSlot(null)} style={{ padding: 8 }}>
@@ -1854,6 +1878,7 @@ interface LiveSlotInfo {
 
 function ChronosLivePulse({ date, colors }: { date: string; colors: ReturnType<typeof useColors> }) {
   const { t } = useLanguage();
+  const slotTypeLabels = getSlotTypeLabels(t);
   const [currentMinute, setCurrentMinute] = useState(() => {
     const n = new Date();
     return n.getUTCHours() * 60 + n.getUTCMinutes();
@@ -1945,7 +1970,7 @@ function ChronosLivePulse({ date, colors }: { date: string; colors: ReturnType<t
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             {slot.slotType && (
               <View style={{ backgroundColor: colors.primary + "22", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>
-                <Text style={{ fontSize: 9, fontFamily: "Inter_600SemiBold", color: colors.primary }}>{SLOT_TYPE_LABELS[slot.slotType] ?? slot.slotType}</Text>
+                <Text style={{ fontSize: 9, fontFamily: "Inter_600SemiBold", color: colors.primary }}>{slotTypeLabels[slot.slotType] ?? slot.slotType}</Text>
               </View>
             )}
             <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_500Medium" }} numberOfLines={1}>
@@ -1974,6 +1999,7 @@ function ChronosLivePulse({ date, colors }: { date: string; colors: ReturnType<t
 
 export default function TvScreen() {
   const { t } = useLanguage();
+  const slotTypeLabels = getSlotTypeLabels(t);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { citizen } = useCitizen();
@@ -2048,7 +2074,7 @@ export default function TvScreen() {
       <View style={styles.slotCardLeft}>
         <Text style={[styles.slotTime, { color: colors.foreground }]}>{slotLabel(item)}</Text>
         <Text style={[styles.slotType, { color: colors.mutedForeground }]}>
-          {SLOT_TYPE_LABELS[item.slotType] ?? item.slotType}
+          {slotTypeLabels[item.slotType] ?? item.slotType}
           {item.isRetro ? ` · ${t.tv_retro_slot}` : ""}
         </Text>
       </View>
