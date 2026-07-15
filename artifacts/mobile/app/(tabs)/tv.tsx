@@ -2075,38 +2075,51 @@ export default function TvScreen() {
     return () => { clearInterval(tick); clearInterval(syncTimer); };
   }, []);
 
-  const renderSlotCard = ({ item }: { item: TvSlot }) => (
-    <TouchableOpacity
-      style={[styles.slotCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-      onPress={() => setSelectedSlot(item)}
-      activeOpacity={0.75}
-    >
-      <View style={styles.slotCardLeft}>
-        <Text style={[styles.slotTime, { color: colors.foreground }]}>{slotLabel(item)}</Text>
-        <Text style={[styles.slotType, { color: colors.mutedForeground }]}>
-          {slotTypeLabels[item.slotType] ?? item.slotType}
-          {item.isRetro ? ` · ${t.tv_retro_slot}` : ""}
-        </Text>
-      </View>
-      <View style={styles.slotCardRight}>
-        <View style={[styles.slotBadge, {
-          backgroundColor: item.status === "broadcast"
-            ? colors.primary + "33"
-            : colors.primary + "22",
-        }]}>
-          <Feather
-            name={item.status === "broadcast" ? "film" : "clock"}
-            size={12}
-            color={colors.primary}
-          />
-          <Text style={[styles.slotBadgeText, { color: colors.primary }]}>
-            {item.status === "broadcast" ? t.tv_booked_slot : t.tv_free_slot}
+  const renderSlotCard = ({ item }: { item: TvSlot }) => {
+    const isBroadcast = item.status === "broadcast";
+    const isBooked = item.status === "booked";
+    const badgeBg = isBroadcast
+      ? colors.primary + "33"
+      : isBooked
+      ? "#F59E0B22"
+      : colors.primary + "22";
+    const badgeColor = isBroadcast ? colors.primary : isBooked ? "#F59E0B" : colors.primary;
+    const badgeIcon = isBroadcast ? "film" : isBooked ? "edit-2" : "clock";
+    const badgeText = isBroadcast
+      ? t.tv_booked_slot
+      : isBooked
+      ? t.tv_create_capsule
+      : t.tv_free_slot;
+
+    return (
+      <TouchableOpacity
+        style={[styles.slotCard, {
+          backgroundColor: colors.card,
+          borderColor: isBooked ? "#F59E0B55" : colors.border,
+          borderWidth: isBooked ? 1.5 : StyleSheet.hairlineWidth,
+        }]}
+        onPress={() => setSelectedSlot(item)}
+        activeOpacity={0.75}
+      >
+        <View style={styles.slotCardLeft}>
+          <Text style={[styles.slotTime, { color: colors.foreground }]}>{slotLabel(item)}</Text>
+          <Text style={[styles.slotType, { color: colors.mutedForeground }]}>
+            {slotTypeLabels[item.slotType] ?? item.slotType}
+            {item.isRetro ? ` · ${t.tv_retro_slot}` : ""}
           </Text>
         </View>
-        <Feather name="chevron-right" size={16} color={colors.mutedForeground} style={{ marginLeft: 8 }} />
-      </View>
-    </TouchableOpacity>
-  );
+        <View style={styles.slotCardRight}>
+          <View style={[styles.slotBadge, { backgroundColor: badgeBg }]}>
+            <Feather name={badgeIcon} size={12} color={badgeColor} />
+            <Text style={[styles.slotBadgeText, { color: badgeColor, fontWeight: isBooked ? "700" : "500" }]}>
+              {badgeText}
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={16} color={isBooked ? "#F59E0B" : colors.mutedForeground} style={{ marginLeft: 8 }} />
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={[styles.container, { paddingTop: topPad, backgroundColor: colors.background }]}>
@@ -2331,7 +2344,7 @@ export default function TvScreen() {
           initialDate={gridTappedSlot?.date ?? date}
           initialSlot={gridTappedSlot}
           colors={colors}
-          onBooked={(bookedDate) => { setGridTappedSlot(null); setDate(bookedDate); }}
+          onBooked={(bookedDate) => { setGridTappedSlot(null); setDate(bookedDate); void refetch(); }}
         />
       )}
 
