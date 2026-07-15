@@ -386,9 +386,11 @@ export async function renderLightVideo(
       "-i", finalAudioPath,
       "-vf", vf,
       "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+      "-pix_fmt", "yuv420p",
       "-c:a", "aac", "-b:a", "128k",
       "-map", "0:v:0", "-map", "1:a:0",
       "-t", String(TARGET_DURATION_SEC),
+      "-movflags", "+faststart",
       ...metadataArgs,
       "-y", outputPath,
     ]);
@@ -709,9 +711,11 @@ async function renderWithAIBackground(
       "-i", finalAudioPath,
       "-vf", vf,
       "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+      "-pix_fmt", "yuv420p",
       "-c:a", "aac", "-b:a", "128k",
       "-map", "0:v:0", "-map", "1:a:0",
       "-t", String(TARGET_DURATION_SEC),
+      "-movflags", "+faststart",
       ...metadataArgs,
       "-y", outputPath,
     ]);
@@ -914,9 +918,11 @@ async function renderPrimeVideo(
       "-i", primeFinalAudio,
       "-vf", vf,
       "-c:v", "libx264", "-preset", "fast", "-crf", "24",
+      "-pix_fmt", "yuv420p",
       "-c:a", "aac", "-b:a", "192k",
       "-map", "0:v:0", "-map", "1:a:0",
       "-t", String(TARGET_DURATION_SEC),
+      "-movflags", "+faststart",
       ...metadataArgs, "-y", outputPath,
     ]);
 

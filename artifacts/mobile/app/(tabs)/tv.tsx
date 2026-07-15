@@ -2257,10 +2257,9 @@ export default function TvScreen() {
           keyExtractor={(s) => String(s.id)}
           renderItem={renderSlotCard}
           style={{ flex: 1 }}
-          contentContainerStyle={[styles.listContent, { paddingBottom: 24 }]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 80 }]}
           showsVerticalScrollIndicator={true}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-          onContentSizeChange={() => slotListRef.current?.scrollToEnd({ animated: false })}
           ListHeaderComponent={
             <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>
               {t.tv_capsule_title}
