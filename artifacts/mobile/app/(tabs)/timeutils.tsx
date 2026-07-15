@@ -105,13 +105,13 @@ const CITY_NAMES: Record<string, Record<string, string>> = {
     fa: "نورونها",        ko: "노로냐",                it: "Noronha",      pl: "Noronha",
     uk: "Норонья",       nl: "Noronha",              kk: "Норонья",      uz: "Noronha",
   },
-  azores: {
-    ru: "Азоры",         en: "Azores",               zh: "亚速尔群岛",    hi: "अज़ोरेस",
-    es: "Azores",        fr: "Açores",               ar: "جزر الأزور",   bn: "আজোরেস",
-    pt: "Açores",        ur: "ازور",                 id: "Azores",       de: "Azoren",
-    ja: "アゾレス諸島",   tr: "Azorlar",              vi: "Azores",       he: "האיים האזוריים",
-    fa: "جزایر آزور",     ko: "아조레스",              it: "Azzorre",      pl: "Azory",
-    uk: "Азори",         nl: "Azoren",               kk: "Азор аралдары", uz: "Azor orollari",
+  praia: {
+    ru: "Прая",          en: "Praia",                zh: "普拉亚",        hi: "प्रaia",
+    es: "Praia",         fr: "Praia",                ar: "براييا",       bn: "প্রাইয়া",
+    pt: "Praia",         ur: "پرایا",                id: "Praia",        de: "Praia",
+    ja: "プライア",       tr: "Praia",                vi: "Praia",        he: "פריאה",
+    fa: "پرایا",          ko: "프라이아",              it: "Praia",        pl: "Praia",
+    uk: "Прая",          nl: "Praia",                kk: "Прая",         uz: "Praia",
   },
   london: {
     ru: "Лондон",        en: "London",               zh: "伦敦",          hi: "लंदन",
@@ -230,7 +230,7 @@ const ZONES: Array<{ key: string; tz: string; flag: string }> = [
   { key: "santiago",    tz: "America/Santiago",      flag: "🇨🇱" }, // UTC-4
   { key: "sao_paulo",   tz: "America/Sao_Paulo",     flag: "🇧🇷" }, // UTC-3
   { key: "noronha",     tz: "America/Noronha",       flag: "🇧🇷" }, // UTC-2
-  { key: "azores",      tz: "Atlantic/Azores",       flag: "🇵🇹" }, // UTC-1
+  { key: "praia",       tz: "Atlantic/Cape_Verde",   flag: "🇨🇻" }, // UTC-1
   { key: "london",      tz: "Europe/London",         flag: "🇬🇧" }, // UTC+0
   { key: "paris",       tz: "Europe/Paris",          flag: "🇫🇷" }, // UTC+1
   { key: "cairo",       tz: "Africa/Cairo",          flag: "🇪🇬" }, // UTC+2
