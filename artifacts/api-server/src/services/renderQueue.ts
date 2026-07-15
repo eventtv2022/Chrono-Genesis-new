@@ -4,6 +4,12 @@ import { tvSlotsTable, tvCapsulesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { renderCapsule, renderLightVideo } from "./renderService";
 import { sendTransactionNotification } from "./telegramService";
+import {
+  publishVideoToTelegram,
+  buildTVCaption,
+  getThreadIdForSlotType,
+} from "./tvPublishService";
+import { citizensTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 
 // ── Render Queue ───────────────────────────────────────────────────────────────
@@ -131,6 +137,60 @@ export function enqueueRender(job: RenderJob): string {
             .set({ status: "broadcast", renderProgress: "done", updatedAt: new Date() })
             .where(eq(tvCapsulesTable.slotId, slotId));
           renderLog.info("Capsule auto-published to broadcast");
+
+          // ── Auto-publish to Telegram TV group ────────────────────────────
+          if (process.env["TELEGRAM_CHAT_ID"] && process.env["TELEGRAM_BOT_TOKEN"]) {
+            void (async () => {
+              try {
+                // Load slot + capsule + citizen for caption
+                const [slot] = await db
+                  .select()
+                  .from(tvSlotsTable)
+                  .where(eq(tvSlotsTable.id, slotId))
+                  .limit(1);
+                const [capsule] = await db
+                  .select()
+                  .from(tvCapsulesTable)
+                  .where(eq(tvCapsulesTable.slotId, slotId))
+                  .limit(1);
+                const [citizen] = await db
+                  .select({ name: citizensTable.name })
+                  .from(citizensTable)
+                  .where(eq(citizensTable.id, citizenId))
+                  .limit(1);
+
+                if (!slot || !capsule?.mediaUrl) return;
+
+                const caption = buildTVCaption({
+                  slotDate:     slot.date,
+                  slotTime:     `${String(Math.floor(slot.minuteIndex / 60)).padStart(2, "0")}:${String(slot.minuteIndex % 60).padStart(2, "0")}`,
+                  citizenName:  citizen?.name ?? `#${citizenId}`,
+                  slotType:     slot.slotType,
+                  seedText:     capsule.seedText,
+                  sovereignUrl: capsule.hasSovereignLink ? capsule.catcastUrl : null,
+                });
+
+                const threadId = getThreadIdForSlotType(slot.slotType);
+                const tgResult = await publishVideoToTelegram(
+                  { videoUrl: capsule.mediaUrl, caption, threadId },
+                );
+
+                if (tgResult.ok) {
+                  renderLog.info(
+                    { messageId: tgResult.messageId, threadId },
+                    "Capsule auto-published to Telegram TV",
+                  );
+                } else {
+                  renderLog.warn(
+                    { errorCode: tgResult.errorCode, description: tgResult.description },
+                    "Telegram TV auto-publish failed",
+                  );
+                }
+              } catch (tgErr) {
+                renderLog.warn({ tgErr }, "Telegram TV auto-publish threw");
+              }
+            })();
+          }
         }
 
         const entry2 = jobStatus.get(jobId);

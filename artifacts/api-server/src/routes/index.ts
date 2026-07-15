@@ -16,6 +16,7 @@ import chronopediaRouter from "./chronopedia";
 import timeBankRouter from "./timeBank";
 import governmentRouter from "./government";
 import reviewsRouter from "./reviews";
+import telegramRouter from "./telegram";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(chronopediaRouter);
 router.use(timeBankRouter);
 router.use(governmentRouter);
 router.use(reviewsRouter);
+router.use(telegramRouter);
 
 export default router;
