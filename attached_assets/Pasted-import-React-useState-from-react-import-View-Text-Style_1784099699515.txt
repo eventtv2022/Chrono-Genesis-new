@@ -1,0 +1,77 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+
+const { width } = Dimensions.get('window');
+const CLOCK_SIZE = width * 0.8; // Адаптивный размер под экран телефона
+const RADIUS = CLOCK_SIZE / 2 - 20;
+
+export default function LanguageClockMobile({ currentLanguage, onLanguageChange, translations }) {
+  const [activeHour, setActiveHour] = useState(1);
+
+  const handleHourPress = (hour, code) => {
+    setActiveHour(hour);
+    onLanguageChange(code); // Передаем событие наверх для переключения всего приложения
+  };
+
+  const handRotation = `${activeHour * 15}deg`;
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.welcomeText}>{translations[currentLanguage]?.welcome || "Welcome"}</Text>
+      <Text style={styles.subText}>
+        {translations[currentLanguage]?.select_hour || "Choose hour"}: {activeHour}:00
+      </Text>
+
+      {/* Циферблат */}
+      <View style={[styles.clockFace, { width: CLOCK_SIZE, height: CLOCK_SIZE }]}>
+        {/* Центр */}
+        <View style={styles.centerDot} />
+
+        {/* Стрелка часов */}
+        <View style={[
+          styles.clockHand, 
+          { 
+            height: CLOCK_SIZE / 2 - 15, 
+            transform: [{ rotate: handRotation }, { translateY: -(CLOCK_SIZE / 4 - 7.5) }] 
+          }
+        ]} />
+
+        {/* 24 Часа по кругу */}
+        {Array.from({ length: 24 }, (_, i) => {
+          const hour = i + 1;
+          const angle = (hour * 15 * Math.PI) / 180 - Math.PI / 2;
+          const x = CLOCK_SIZE / 2 + RADIUS * Math.cos(angle) - 12;
+          const y = CLOCK_SIZE / 2 + RADIUS * Math.sin(angle) - 12;
+
+          const isActive = activeHour === hour;
+
+          return (
+            <TouchableOpacity
+              key={hour}
+              onPress={() => handleHourPress(hour, 'en')} // Здесь передается код соответствующего языка
+              style={[
+                styles.hourButton, 
+                { left: x, top: y },
+                isActive && styles.activeHourButton
+              ]}
+            >
+              <Text style={styles.hourText}>{hour}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#09090b', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  welcomeText: { fontSize: 24, fontWeight: 'bold', color: '#f39c12', marginBottom: 5 },
+  subText: { fontSize: 14, color: '#a1a1aa', marginBottom: 20 },
+  clockFace: { borderRadius: CLOCK_SIZE / 2, borderWidth: 4, borderColor: '#f39c12', backgroundColor: '#18181b', position: 'relative' },
+  centerDot: { position: 'absolute', top: '50%', left: '50%', width: 12, height: 12, borderRadius: 6, backgroundColor: '#f39c12', marginLeft: -6, marginTop: -6, zIndex: 10 },
+  clockHand: { position: 'absolute', top: '50%', left: '50%', width: 3, backgroundColor: '#ef4444', marginLeft: -1.5, zIndex: 5 },
+  hourButton: { position: 'absolute', width: 24, height: 24, borderRadius: 12, backgroundColor: '#27272a', alignItems: 'center', justifyContent: 'center' },
+  activeHourButton: { backgroundColor: '#f39c12' },
+  hourText: { color: '#fff', fontSize: 9, fontWeight: 'bold' }
+});
