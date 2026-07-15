@@ -14,16 +14,14 @@ import { logger } from "../lib/logger";
 const HF_API_URL =
   "https://api-inference.huggingface.co/models/damo-vilab/text-to-video-ms-1.7b";
 
-const HF_TIMEOUT_MS = 120_000; // 120 seconds — model may be loading/queued
+const HF_TIMEOUT_MS = 45_000; // 45 seconds — fast fail on free tier (503 comes quickly)
 
-// Reduced to 5 images: fewer concurrent-ish requests → avoids 429 rate limits
+// Reduced to 5 images: parallel fetches to stay well under job timeout
 const POLLINATIONS_IMAGES = 5;
 const CROSSFADE_DURATION_SEC = 2;
 const TARGET_VIDEO_DURATION_SEC = 60;
 // With N=5, C=2: (60 + 8) / 5 = 13.6s per image
 const PER_IMG_SEC = (TARGET_VIDEO_DURATION_SEC + CROSSFADE_DURATION_SEC * (POLLINATIONS_IMAGES - 1)) / POLLINATIONS_IMAGES;
-// Delay between sequential Pollinations requests to avoid 429 rate limiting
-const POLLINATIONS_REQUEST_DELAY_MS = 1200;
 
 // ── Utility: fetch with AbortController timeout ───────────────────────────────
 async function fetchWithTimeout(
@@ -235,44 +233,36 @@ async function generateViaPollinationsSlideshow(
 ): Promise<string | null> {
   logger.info(
     { prompt: prompt.slice(0, 80), count: POLLINATIONS_IMAGES },
-    "Pollinations slideshow: fetching images"
+    "Pollinations slideshow: fetching images (parallel)"
   );
 
   const encodedPrompt = encodeURIComponent(prompt);
 
-  // Fetch images SEQUENTIALLY with delays to avoid Pollinations 429 rate limiting
-  const imageBuffers: (Buffer | null)[] = [];
-  for (let i = 0; i < POLLINATIONS_IMAGES; i++) {
-    if (signal?.aborted) break;
-    // Small delay before each request (skip before first)
-    if (i > 0) await new Promise<void>((r) => setTimeout(r, POLLINATIONS_REQUEST_DELAY_MS));
-    const url =
-      `https://image.pollinations.ai/prompt/${encodedPrompt}` +
-      `?width=1280&height=720&nologo=true&seed=${i * 13 + 7}`;
-    let buf: Buffer | null = null;
-    // One retry on 429 with extra back-off
-    for (let attempt = 0; attempt < 2; attempt++) {
+  // Fetch images IN PARALLEL — reduces worst-case from ~180s sequential to ~20s
+  const imageBuffers: (Buffer | null)[] = await Promise.all(
+    Array.from({ length: POLLINATIONS_IMAGES }, async (_, i) => {
+      if (signal?.aborted) return null;
+      const url =
+        `https://image.pollinations.ai/prompt/${encodedPrompt}` +
+        `?width=1280&height=720&nologo=true&seed=${i * 13 + 7}`;
       try {
-        const res = await fetchWithTimeout(url, {}, 35_000, signal);
-        if (res.status === 429) {
-          logger.warn({ i, attempt }, "Pollinations 429 — waiting 3s before retry");
-          if (attempt === 0) await new Promise<void>((r) => setTimeout(r, 3_000));
-          continue;
-        }
+        const res = await fetchWithTimeout(url, {}, 20_000, signal);
         if (!res.ok) {
           logger.warn({ status: res.status, i }, "Pollinations image fetch failed");
-          break;
+          return null;
         }
         const raw = Buffer.from(await res.arrayBuffer());
-        if (raw.byteLength >= 1024) { buf = raw; break; }
+        if (raw.byteLength >= 1024) {
+          logger.info({ i, ok: true, bytes: raw.byteLength }, "Pollinations image fetched");
+          return raw as Buffer<ArrayBuffer>;
+        }
+        return null;
       } catch (err) {
         logger.warn({ err, i }, "Pollinations image error");
-        break;
+        return null;
       }
-    }
-    imageBuffers.push(buf);
-    logger.info({ i, ok: buf !== null }, "Pollinations image result");
-  }
+    })
+  );
 
   const validImages = imageBuffers.filter((b): b is Buffer<ArrayBuffer> => b !== null);
   if (validImages.length === 0) {
