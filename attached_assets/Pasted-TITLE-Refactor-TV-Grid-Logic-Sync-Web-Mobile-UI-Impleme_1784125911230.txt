@@ -1,0 +1,26 @@
+TITLE: Refactor TV Grid Logic: Sync Web/Mobile UI, Implement Correct Slot Pricing, and Fix Color States
+
+We need to completely rebuild the logic of our TV Grid (Chronos Grid) and its legend across both Web and Mobile views. The current implementation confuses user citizenship ranks with TV slot tiers. We must separate them entirely and implement a strict pricing and color-state system.
+
+1. Slot Tier & Pricing Structure (Exclude 2% tax in UI display, calculate at checkout)
+TV slots are priced based on their time position within the hour. Update the legend and database pricing to reflect these three distinct tiers:
+- "Четверть / Без четверти" (Quarter past / Quarter to, e.g., XX:15, XX:45): 4.99 € or 5 Darmin (Д)
+- "Половина часа" (Half past, e.g., XX:30): 9.99 € or 10 Darmin (Д)
+- "Ровно" (Top of the hour, e.g., XX:00): 24.99 € or 25 Darmin (Д)
+* Note: All prices displayed in the legend/slots are net (excluding a 2% transaction tax which is added at checkout).
+
+2. Unified Color States (Must be identical on Web and Mobile)
+Refactor the grid rendering engine so that grid squares strictly use the following color codes:
+- EMPTY / FREE (Dark Gray/Black): Available slot.
+- WHITE (Current Time): The grid cell corresponding to the actual current hour and minute. Must glow/display in white on both desktop and mobile.
+- GREEN (First Tap / Selection): When a user taps/clicks any free slot, it immediately turns Green (representing "active selection" before payment).
+- YELLOW (Booked & Paid): Once a slot is successfully booked and paid for, its square turns Yellow.
+- ORANGE (On Air / Archive / Scheduled): Slots that are currently broadcasting, have already aired, or are locked by system scheduling turn Orange.
+
+3. UI & Bottom Sheet Clean-up (Mobile & Web)
+- Remove all mentions of "Citizen ranks" (like "Гражданин", "Квартал", "Апекс" as ranks) from the TV slot legend. 
+- Replace the legend entirely with the updated Slot Tiers, showing their prices in both EUR and Darmin.
+- Update the Mobile Bottom Sheet: When a slot is tapped (turning Green on the grid), the action card must display the correct tier name ("Четверть", "Половина", or "Ровно") and let the user choose between paying in Fiat (EUR) or Darmin (Д) based on the rates above.
+- Ensure the main payment action button dynamically adopts the color scheme of the process.
+
+Please update the database schema for slot configurations, rewrite the frontend legend components, and refactor the state management for grid cell styling to match this spec.

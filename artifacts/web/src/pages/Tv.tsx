@@ -78,10 +78,10 @@ const SLOT_TYPE_COLORS: Record<string, string> = {
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  citizen: "Гражданин",
-  quarter: "Квартал",
+  citizen: "Минута",
+  quarter: "Четверть",
   half: "Половина",
-  apex: "Апекс",
+  apex: "Ровно",
 };
 
 const SLOT_TYPE_BADGE: Record<string, string> = {
@@ -100,16 +100,16 @@ const RENDER_PATH_BY_SLOT: Record<string, "light" | "heavy"> = {
 
 const BURN_COST: Record<string, number> = {
   citizen: 1,
-  quarter: 10,
-  half: 25,
-  apex: 50,
+  quarter: 5,
+  half: 10,
+  apex: 25,
 };
 
 const FIAT_PRICES: Record<string, string> = {
-  citizen: "4.99€",
-  quarter: "9.99€",
-  half: "24.99€",
-  apex: "49.99€",
+  citizen: "1.99€",
+  quarter: "4.99€",
+  half: "9.99€",
+  apex: "24.99€",
 };
 
 const VISUAL_STYLES = [
@@ -379,6 +379,21 @@ export function Tv() {
   // My slots (I own)
   const mySlots = slots.filter(s => citizen && s.ownerId === citizen.id);
 
+  // Current UTC minute for "white" indicator
+  const [curMin, setCurMin] = useState(() => {
+    const n = new Date();
+    return n.getUTCHours() * 60 + n.getUTCMinutes();
+  });
+  const isToday = date === todayDate();
+  useEffect(() => {
+    const t = setInterval(() => {
+      const n = new Date();
+      const m = n.getUTCHours() * 60 + n.getUTCMinutes();
+      setCurMin(m);
+    }, 4000);
+    return () => clearInterval(t);
+  }, []);
+
   // ── Capsule polling effect
   useEffect(() => {
     if (!isPolling || !bookedSlotId) return;
@@ -645,16 +660,16 @@ export function Tv() {
         {/* ── Chronos Live Player ── */}
         <ChronosLivePlayer date={date} />
 
-        {/* Legend */}
+        {/* Legend — цвета состояний */}
         <div className="flex flex-wrap gap-4 text-xs font-mono text-muted-foreground">
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-secondary/80 border border-border inline-block" />Свободно</div>
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-primary/30 border border-primary/50 inline-block" />Гражданин · <Zap className="w-3 h-3 inline text-primary" /> 1 Д / 4.99 €</div>
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-500/30 border border-blue-400/50 inline-block" />Квартал · 10 Д / 9.99 €</div>
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-purple-500/30 border border-purple-400/50 inline-block" />Половина · 25 Д / 24.99 €</div>
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-500/30 border border-rose-400/50 inline-block" />Апекс · 50 Д / 49.99 €</div>
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500 border border-orange-400 inline-block" />В эфире</div>
-          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-yellow-400 border border-yellow-300 inline-block" />Выбрано</div>
-          <span className="text-muted-foreground/60">← кликните свободный слот</span>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-white/10 border border-white/15 inline-block" />Свободно</div>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-white border border-white inline-block" />Сейчас</div>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-green-500 border border-green-400 inline-block" />Выбрано</div>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-yellow-400 border border-yellow-300 inline-block" />Забронировано</div>
+          <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500 border border-orange-400 inline-block" />В эфире / Архив</div>
+          <span className="text-muted-foreground/60 border-l border-border/40 pl-4">
+            Четверть (:15/:45) 5 Д / 4.99 € · Половина (:30) 10 Д / 9.99 € · Ровно (:00) 25 Д / 24.99 €
+          </span>
         </div>
 
         {/* Two-column layout: Grid + Terminal */}
@@ -687,24 +702,31 @@ export function Tv() {
                             if (!slot) return (
                               <div key={min} className="flex-1 basis-0 min-w-0 h-4 bg-white/5 border border-white/8 rounded-[2px]" />
                             );
+                            const idx = hour * 60 + min;
+                            const isCurMin = isToday && idx === curMin;
                             const isSel = selectedSlot?.id === slot.id;
                             const isFree = slot.status === "free";
                             const isBroadcast = slot.status === "broadcast";
-                            const isMine = citizen && slot.ownerId === citizen.id;
-                            const color = isSel
-                              ? "bg-yellow-400 border-yellow-300 ring-1 ring-yellow-200"
-                              : isBroadcast
-                                ? "bg-orange-500 border-orange-400 opacity-100"
-                                : isMine && !isFree
-                                  ? "bg-primary border-primary/70"
-                                  : isFree
-                                    ? "bg-white/8 border-white/12 hover:bg-primary/30 hover:border-primary/50"
-                                    : (SLOT_TYPE_COLORS[slot.slotType] ?? "bg-primary/30 border-primary/50");
-                            const statusLabel = isFree
-                              ? "Свободно"
-                              : isBroadcast
-                                ? `${slot.ownerName ?? "Занято"} · В ЭФИРЕ`
-                                : (slot.ownerName ?? "Занято");
+                            const isMine = !!(citizen && slot.ownerId === citizen.id);
+                            // Color priority: current > selected > broadcast > mine > others-booked > free
+                            const color = isCurMin
+                              ? "bg-white border-white shadow-[0_0_4px_rgba(255,255,255,0.6)]"
+                              : isSel
+                                ? "bg-green-500 border-green-400 ring-1 ring-green-300"
+                                : isBroadcast
+                                  ? slot.isRetro ? "bg-orange-500/60 border-orange-400/60" : "bg-orange-500 border-orange-400"
+                                  : isMine && !isFree
+                                    ? "bg-yellow-400 border-yellow-300"
+                                    : isFree
+                                      ? "bg-white/6 border-white/10 hover:bg-green-500/20 hover:border-green-500/40"
+                                      : "bg-white/12 border-white/15";
+                            const statusLabel = isCurMin
+                              ? "Сейчас"
+                              : isFree
+                                ? "Свободно"
+                                : isBroadcast
+                                  ? `${slot.ownerName ?? "Занято"} · В ЭФИРЕ`
+                                  : (slot.ownerName ?? "Занято");
                             return (
                               <div
                                 key={min}

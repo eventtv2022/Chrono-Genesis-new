@@ -23,14 +23,19 @@ export function getSlotType(minuteIndex: number): SlotType {
 }
 
 // ── Burn Matrix ───────────────────────────────────────────────────────────────
+// Pricing reflects time-position tiers (not citizen ranks):
+//   Минута  (:other) →  1 Д /  1.99 €
+//   Четверть (:15/:45) → 5 Д /  4.99 €
+//   Половина (:30)    → 10 Д /  9.99 €
+//   Ровно    (:00)    → 25 Д / 24.99 €
 export const BURN_MATRIX: Record<
   SlotType,
   { eur: number; priceEurCents: number; timeltr: number; label: string }
 > = {
-  citizen: { eur: 4.99,  priceEurCents: 499,  timeltr: 1,  label: "Citizen Minute" },
-  quarter: { eur: 9.99,  priceEurCents: 999,  timeltr: 10, label: "Quarter Minute (:15/:45)" },
-  half:    { eur: 24.99, priceEurCents: 2499, timeltr: 25, label: "Half Minute (:30)" },
-  apex:    { eur: 49.99, priceEurCents: 4999, timeltr: 50, label: "Apex Minute (:00)" },
+  citizen: { eur: 1.99,  priceEurCents: 199,  timeltr: 1,  label: "Минута (:other)" },
+  quarter: { eur: 4.99,  priceEurCents: 499,  timeltr: 5,  label: "Четверть (:15/:45)" },
+  half:    { eur: 9.99,  priceEurCents: 999,  timeltr: 10, label: "Половина (:30)" },
+  apex:    { eur: 24.99, priceEurCents: 2499, timeltr: 25, label: "Ровно (:00)" },
 };
 
 // ── Fingerprint for anti-consecutive guard ────────────────────────────────────

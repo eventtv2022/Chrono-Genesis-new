@@ -1140,10 +1140,10 @@ function getFilterLabels(t: UIStrings): Record<SlotTypeFilter, string> {
 }
 
 const FIAT_PRICES: Record<string, string> = {
-  citizen: "4.99€",
-  quarter: "9.99€",
-  half: "24.99€",
-  apex: "49.99€",
+  citizen: "1.99€",
+  quarter: "4.99€",
+  half: "9.99€",
+  apex: "24.99€",
 };
 
 function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooked }: BookSlotModalProps) {
@@ -1468,12 +1468,13 @@ function ChronosGrid({
   }, [slots]);
 
   const cellBg = (s: TvSlot | undefined, idx: number): string => {
+    // Priority: current-minute(white) > selected(green) > broadcast(orange) > mine(yellow) > booked-others(dim) > free(dark)
     if (isToday && idx === curMin) return "#ffffff";
     if (!s) return colors.border + "70";
     if (selectedSlotId != null && s.id === selectedSlotId) return "#22c55e";
-    if (s.ownerId != null && s.ownerId === citizenId) return s.isRetro ? colors.primary + "80" : colors.primary;
     if (s.status === "broadcast") return s.isRetro ? "#f9731699" : "#f97316";
-    if (s.status === "booked") return colors.mutedForeground + "45";
+    if (s.ownerId != null && s.ownerId === citizenId) return s.isRetro ? "#EAB30880" : "#EAB308";
+    if (s.status === "booked") return colors.mutedForeground + "40";
     return s.isRetro ? colors.muted + "50" : colors.border + "70";
   };
 
@@ -1486,11 +1487,12 @@ function ChronosGrid({
       {/* Legend */}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
         {([
-          [colors.primary, t.tab_timer],
-          ["#f97316", t.tv_live],
-          [colors.mutedForeground + "45", t.tv_booked_slot],
-          [colors.border + "70", t.tv_free_slot],
           ["#ffffff", t.tv_today],
+          ["#22c55e", "Выбрано"],
+          ["#EAB308", t.tab_timer],
+          ["#f97316", t.tv_live],
+          [colors.mutedForeground + "40", t.tv_booked_slot],
+          [colors.border + "70", t.tv_free_slot],
         ] as [string, string][]).map(([col, lbl]) => (
           <View key={lbl} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
             <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: col }} />
