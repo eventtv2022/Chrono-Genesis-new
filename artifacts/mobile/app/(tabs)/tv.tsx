@@ -2031,6 +2031,15 @@ export default function TvScreen() {
   const mySlots = (data?.slots ?? []).filter((s) => s.ownerId === citizen?.id);
   const freeCount = (data?.slots ?? []).filter((s) => s.status === "free").length;
 
+  // Авто-скролл к последнему слоту когда список обновляется
+  useEffect(() => {
+    if (mySlots.length > 0 && viewMode === "list") {
+      setTimeout(() => {
+        slotListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [mySlots.length, viewMode]);
+
   const handlePrevDay = useCallback(() => setDate((d) => stepDate(d, -1)), []);
   const handleNextDay = useCallback(() => setDate((d) => stepDate(d, 1)), []);
 
@@ -2039,6 +2048,7 @@ export default function TvScreen() {
   const [utcTime, setUtcTime] = useState("--:--:--");
   const [clockSynced, setClockSynced] = useState(false);
   const clockOffset = useRef(0);
+  const slotListRef = useRef<FlatList<TvSlot>>(null);
 
   useEffect(() => {
     const sync = async () => {
@@ -2229,12 +2239,15 @@ export default function TvScreen() {
 
       {!isLoading && viewMode === "list" && mySlots.length > 0 && (
         <FlatList
+          ref={slotListRef}
           data={mySlots}
           keyExtractor={(s) => String(s.id)}
           renderItem={renderSlotCard}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
+          style={{ flex: 1 }}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 24 }]}
+          showsVerticalScrollIndicator={true}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+          onContentSizeChange={() => slotListRef.current?.scrollToEnd({ animated: false })}
           ListHeaderComponent={
             <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>
               {t.tv_capsule_title}
