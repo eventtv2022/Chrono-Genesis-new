@@ -21,15 +21,230 @@ import { LogoBrand } from "@/components/LogoBrand";
 
 const BASE_URL = getBaseUrl();
 
-// ── World clock zones ─────────────────────────────────────────────────────────
+// ── World clock zones — 24 UTC offsets ────────────────────────────────────────
 
-const ZONES = [
-  { label: "TimeNation", city: "Фамагуста", tz: "Asia/Nicosia", flag: "🇨🇾" },
-  { label: "Moscow", city: "Москва", tz: "Europe/Moscow", flag: "🇷🇺" },
-  { label: "Dubai", city: "Дубай", tz: "Asia/Dubai", flag: "🇦🇪" },
-  { label: "Tokyo", city: "Токио", tz: "Asia/Tokyo", flag: "🇯🇵" },
-  { label: "New York", city: "Нью-Йорк", tz: "America/New_York", flag: "🇺🇸" },
-] as const;
+/** City names translated into all 24 language-dial languages */
+const CITY_NAMES: Record<string, Record<string, string>> = {
+  pago_pago: {
+    ru: "Паго-Паго",     en: "Pago Pago",          zh: "帕果帕果",      hi: "पागो पागो",
+    es: "Pago Pago",     fr: "Pago Pago",           ar: "باغو باغو",    bn: "পাগো পাগো",
+    pt: "Pago Pago",     ur: "پاگو پاگو",            id: "Pago Pago",    de: "Pago Pago",
+    ja: "パゴパゴ",       tr: "Pago Pago",            vi: "Pago Pago",    he: "פאגו פאגו",
+    fa: "پاگو پاگو",      ko: "파고파고",              it: "Pago Pago",    pl: "Pago Pago",
+    uk: "Паго-Паго",     nl: "Pago Pago",            kk: "Паго-Паго",    uz: "Pago Pago",
+  },
+  honolulu: {
+    ru: "Гонолулу",      en: "Honolulu",             zh: "火奴鲁鲁",      hi: "होनोलूलू",
+    es: "Honolulú",      fr: "Honolulu",             ar: "هونولولو",     bn: "হনলুলু",
+    pt: "Honolulu",      ur: "ہونولولو",              id: "Honolulu",     de: "Honolulu",
+    ja: "ホノルル",       tr: "Honolulu",             vi: "Honolulu",     he: "הונולולו",
+    fa: "هونولولو",       ko: "호놀룰루",              it: "Honolulu",     pl: "Honolulu",
+    uk: "Гонолулу",      nl: "Honolulu",             kk: "Гонолулу",     uz: "Honolulu",
+  },
+  anchorage: {
+    ru: "Анкоридж",      en: "Anchorage",            zh: "安克雷奇",      hi: "एंकरेज",
+    es: "Anchorage",     fr: "Anchorage",            ar: "أنكوريج",      bn: "অ্যাংকরেজ",
+    pt: "Anchorage",     ur: "انکریج",               id: "Anchorage",    de: "Anchorage",
+    ja: "アンカレッジ",   tr: "Anchorage",            vi: "Anchorage",    he: "אנקורג׳",
+    fa: "آنکوریج",        ko: "앵커리지",              it: "Anchorage",    pl: "Anchorage",
+    uk: "Анкоридж",      nl: "Anchorage",            kk: "Анкоридж",     uz: "Anchorage",
+  },
+  los_angeles: {
+    ru: "Лос-Анджелес",  en: "Los Angeles",          zh: "洛杉矶",        hi: "लॉस एंजिल्स",
+    es: "Los Ángeles",   fr: "Los Angeles",          ar: "لوس أنجلوس",   bn: "লস অ্যাঞ্জেলেস",
+    pt: "Los Angeles",   ur: "لاس اینجلیس",           id: "Los Angeles",  de: "Los Angeles",
+    ja: "ロサンゼルス",   tr: "Los Angeles",          vi: "Los Angeles",  he: "לוס אנג'לס",
+    fa: "لوس‌آنجلس",      ko: "로스앤젤레스",           it: "Los Angeles",  pl: "Los Angeles",
+    uk: "Лос-Анджелес",  nl: "Los Angeles",          kk: "Лос-Анджелес", uz: "Los-Anjeles",
+  },
+  denver: {
+    ru: "Денвер",        en: "Denver",               zh: "丹佛",          hi: "डेनवर",
+    es: "Denver",        fr: "Denver",               ar: "دنفر",         bn: "ডেনভার",
+    pt: "Denver",        ur: "ڈینور",                id: "Denver",       de: "Denver",
+    ja: "デンバー",       tr: "Denver",               vi: "Denver",       he: "דנוור",
+    fa: "دنور",           ko: "덴버",                  it: "Denver",       pl: "Denver",
+    uk: "Денвер",        nl: "Denver",               kk: "Денвер",       uz: "Denver",
+  },
+  mexico_city: {
+    ru: "Мехико",        en: "Mexico City",          zh: "墨西哥城",      hi: "मेक्सिको सिटी",
+    es: "Ciudad de México", fr: "Mexico",            ar: "مكسيكو سيتي",  bn: "মেক্সিকো সিটি",
+    pt: "Cidade do México", ur: "میکسیکو سٹی",       id: "Kota Meksiko", de: "Mexiko-Stadt",
+    ja: "メキシコシティ", tr: "Meksiko Şehri",        vi: "Mexico City",  he: "מקסיקו סיטי",
+    fa: "شهر مکزیک",     ko: "멕시코시티",             it: "Città del Messico", pl: "Meksyk",
+    uk: "Мехіко",        nl: "Mexico-Stad",          kk: "Мехико",       uz: "Mexiko shahri",
+  },
+  new_york: {
+    ru: "Нью-Йорк",      en: "New York",             zh: "纽约",          hi: "न्यूयॉर्क",
+    es: "Nueva York",    fr: "New York",             ar: "نيويورك",      bn: "নিউ ইয়র্ক",
+    pt: "Nova Iorque",   ur: "نیویارک",               id: "New York",     de: "New York",
+    ja: "ニューヨーク",   tr: "New York",             vi: "New York",     he: "ניו יורק",
+    fa: "نیویورک",        ko: "뉴욕",                  it: "New York",     pl: "Nowy Jork",
+    uk: "Нью-Йорк",      nl: "New York",             kk: "Нью-Йорк",     uz: "Nyu-York",
+  },
+  santiago: {
+    ru: "Сантьяго",      en: "Santiago",             zh: "圣地亚哥",      hi: "सैंटियागो",
+    es: "Santiago",      fr: "Santiago",             ar: "سانتياغو",     bn: "সান্টিয়াগো",
+    pt: "Santiago",      ur: "سینٹیاگو",              id: "Santiago",     de: "Santiago",
+    ja: "サンティアゴ",   tr: "Santiago",             vi: "Santiago",     he: "סנטיאגו",
+    fa: "سانتیاگو",       ko: "산티아고",              it: "Santiago",     pl: "Santiago",
+    uk: "Сантьяго",      nl: "Santiago",             kk: "Сантьяго",     uz: "Santyago",
+  },
+  sao_paulo: {
+    ru: "Сан-Паулу",     en: "São Paulo",            zh: "圣保罗",        hi: "साओ पाउलो",
+    es: "São Paulo",     fr: "São Paulo",            ar: "ساو باولو",    bn: "সাও পাওলো",
+    pt: "São Paulo",     ur: "ساؤ پاولو",             id: "São Paulo",    de: "São Paulo",
+    ja: "サンパウロ",     tr: "São Paulo",            vi: "São Paulo",    he: "סאו פאולו",
+    fa: "سائوپائولو",     ko: "상파울루",              it: "San Paolo",    pl: "São Paulo",
+    uk: "Сан-Паулу",     nl: "São Paulo",            kk: "Сан-Паулу",    uz: "San-Paulo",
+  },
+  noronha: {
+    ru: "Норонья",       en: "Noronha",              zh: "费尔南多群岛",   hi: "नोरोन्हा",
+    es: "Noronha",       fr: "Noronha",              ar: "نورونيا",      bn: "নোরোনহা",
+    pt: "Fernando de Noronha", ur: "نورونہا",         id: "Noronha",      de: "Noronha",
+    ja: "ノローニャ",     tr: "Noronha",              vi: "Noronha",      he: "נורוניה",
+    fa: "نورونها",        ko: "노로냐",                it: "Noronha",      pl: "Noronha",
+    uk: "Норонья",       nl: "Noronha",              kk: "Норонья",      uz: "Noronha",
+  },
+  azores: {
+    ru: "Азоры",         en: "Azores",               zh: "亚速尔群岛",    hi: "अज़ोरेस",
+    es: "Azores",        fr: "Açores",               ar: "جزر الأزور",   bn: "আজোরেস",
+    pt: "Açores",        ur: "ازور",                 id: "Azores",       de: "Azoren",
+    ja: "アゾレス諸島",   tr: "Azorlar",              vi: "Azores",       he: "האיים האזוריים",
+    fa: "جزایر آزور",     ko: "아조레스",              it: "Azzorre",      pl: "Azory",
+    uk: "Азори",         nl: "Azoren",               kk: "Азор аралдары", uz: "Azor orollari",
+  },
+  london: {
+    ru: "Лондон",        en: "London",               zh: "伦敦",          hi: "लंदन",
+    es: "Londres",       fr: "Londres",              ar: "لندن",         bn: "লন্ডন",
+    pt: "Londres",       ur: "لندن",                 id: "London",       de: "London",
+    ja: "ロンドン",       tr: "Londra",               vi: "Luân Đôn",     he: "לונדון",
+    fa: "لندن",           ko: "런던",                  it: "Londra",       pl: "Londyn",
+    uk: "Лондон",        nl: "Londen",               kk: "Лондон",       uz: "London",
+  },
+  paris: {
+    ru: "Париж",         en: "Paris",                zh: "巴黎",          hi: "पेरिस",
+    es: "París",         fr: "Paris",                ar: "باريس",        bn: "প্যারিস",
+    pt: "Paris",         ur: "پیرس",                 id: "Paris",        de: "Paris",
+    ja: "パリ",           tr: "Paris",                vi: "Pa-ri",        he: "פריז",
+    fa: "پاریس",          ko: "파리",                  it: "Parigi",       pl: "Paryż",
+    uk: "Париж",         nl: "Parijs",               kk: "Париж",        uz: "Paris",
+  },
+  cairo: {
+    ru: "Каир",          en: "Cairo",                zh: "开罗",          hi: "काहिरा",
+    es: "El Cairo",      fr: "Le Caire",             ar: "القاهرة",      bn: "কায়রো",
+    pt: "Cairo",         ur: "قاہرہ",                id: "Kairo",        de: "Kairo",
+    ja: "カイロ",         tr: "Kahire",               vi: "Cairo",        he: "קהיר",
+    fa: "قاهره",          ko: "카이로",                it: "Il Cairo",     pl: "Kair",
+    uk: "Каїр",          nl: "Caïro",                kk: "Каир",         uz: "Qohira",
+  },
+  moscow: {
+    ru: "Москва",        en: "Moscow",               zh: "莫斯科",        hi: "मास्को",
+    es: "Moscú",         fr: "Moscou",               ar: "موسكو",        bn: "মস্কো",
+    pt: "Moscou",        ur: "ماسکو",                id: "Moskow",       de: "Moskau",
+    ja: "モスクワ",       tr: "Moskova",              vi: "Mát-xcơ-va",   he: "מוסקבה",
+    fa: "مسکو",           ko: "모스크바",              it: "Mosca",        pl: "Moskwa",
+    uk: "Москва",        nl: "Moskou",               kk: "Мәскеу",       uz: "Moskva",
+  },
+  dubai: {
+    ru: "Дубай",         en: "Dubai",                zh: "迪拜",          hi: "दुबई",
+    es: "Dubái",         fr: "Dubaï",                ar: "دبي",          bn: "দুবাই",
+    pt: "Dubai",         ur: "دبئی",                 id: "Dubai",        de: "Dubai",
+    ja: "ドバイ",         tr: "Dubai",                vi: "Dubai",        he: "דובאי",
+    fa: "دبی",            ko: "두바이",                it: "Dubai",        pl: "Dubaj",
+    uk: "Дубай",         nl: "Dubai",                kk: "Дубай",        uz: "Dubay",
+  },
+  karachi: {
+    ru: "Карачи",        en: "Karachi",              zh: "卡拉奇",        hi: "कराची",
+    es: "Karachi",       fr: "Karachi",              ar: "كراتشي",       bn: "করাচি",
+    pt: "Carachi",       ur: "کراچی",                id: "Karachi",      de: "Karachi",
+    ja: "カラチ",         tr: "Karaçi",               vi: "Karachi",      he: "קראצ׳י",
+    fa: "کراچی",          ko: "카라치",                it: "Karachi",      pl: "Karaczi",
+    uk: "Карачі",        nl: "Karachi",              kk: "Карачи",       uz: "Karachi",
+  },
+  dhaka: {
+    ru: "Дакка",         en: "Dhaka",                zh: "达卡",          hi: "ढाका",
+    es: "Daca",          fr: "Dacca",                ar: "دكا",          bn: "ঢাকা",
+    pt: "Dacca",         ur: "ڈھاکہ",                id: "Dhaka",        de: "Dhaka",
+    ja: "ダッカ",         tr: "Dakka",                vi: "Dhaka",        he: "דאקה",
+    fa: "داکا",           ko: "다카",                  it: "Dacca",        pl: "Dhaka",
+    uk: "Дакка",         nl: "Dhaka",                kk: "Дакка",        uz: "Dhaka",
+  },
+  bangkok: {
+    ru: "Бангкок",       en: "Bangkok",              zh: "曼谷",          hi: "बैंकॉक",
+    es: "Bangkok",       fr: "Bangkok",              ar: "بانكوك",       bn: "ব্যাংকক",
+    pt: "Banguecoque",   ur: "بینکاک",               id: "Bangkok",      de: "Bangkok",
+    ja: "バンコク",       tr: "Bangkok",              vi: "Bangkok",      he: "בנגקוק",
+    fa: "بانکوک",         ko: "방콕",                  it: "Bangkok",      pl: "Bangkok",
+    uk: "Бангкок",       nl: "Bangkok",              kk: "Бангкок",      uz: "Bangkok",
+  },
+  beijing: {
+    ru: "Пекин",         en: "Beijing",              zh: "北京",          hi: "बीजिंग",
+    es: "Pekín",         fr: "Pékin",                ar: "بكين",         bn: "বেইজিং",
+    pt: "Pequim",        ur: "بیجنگ",                id: "Beijing",      de: "Peking",
+    ja: "北京",           tr: "Pekin",                vi: "Bắc Kinh",     he: "בייג'ינג",
+    fa: "پکن",            ko: "베이징",                it: "Pechino",      pl: "Pekin",
+    uk: "Пекін",         nl: "Peking",               kk: "Пекин",        uz: "Pekin",
+  },
+  tokyo: {
+    ru: "Токио",         en: "Tokyo",                zh: "东京",          hi: "टोक्यो",
+    es: "Tokio",         fr: "Tokyo",                ar: "طوكيو",        bn: "টোকিও",
+    pt: "Tóquio",        ur: "ٹوکیو",                id: "Tokyo",        de: "Tokio",
+    ja: "東京",           tr: "Tokyo",                vi: "Tokyo",        he: "טוקיו",
+    fa: "توکیو",          ko: "도쿄",                  it: "Tokyo",        pl: "Tokio",
+    uk: "Токіо",         nl: "Tokio",                kk: "Токио",        uz: "Tokio",
+  },
+  sydney: {
+    ru: "Сидней",        en: "Sydney",               zh: "悉尼",          hi: "सिडनी",
+    es: "Sídney",        fr: "Sydney",               ar: "سيدني",        bn: "সিডনি",
+    pt: "Sydney",        ur: "سڈنی",                 id: "Sydney",       de: "Sydney",
+    ja: "シドニー",       tr: "Sidney",               vi: "Sydney",       he: "סידני",
+    fa: "سیدنی",          ko: "시드니",                it: "Sydney",       pl: "Sydney",
+    uk: "Сідней",        nl: "Sydney",               kk: "Сидней",       uz: "Sidney",
+  },
+  noumea: {
+    ru: "Нумеа",         en: "Noumea",               zh: "努美阿",        hi: "नूमिया",
+    es: "Numea",         fr: "Nouméa",               ar: "نوميا",        bn: "নুমেয়া",
+    pt: "Nouméa",        ur: "نومیا",                id: "Noumea",       de: "Nouméa",
+    ja: "ヌメア",         tr: "Noumea",               vi: "Nouméa",       he: "נומאה",
+    fa: "نومئا",          ko: "누메아",                it: "Nouméa",       pl: "Numea",
+    uk: "Нумеа",         nl: "Nouméa",               kk: "Нумеа",        uz: "Numea",
+  },
+  auckland: {
+    ru: "Окленд",        en: "Auckland",             zh: "奥克兰",        hi: "ऑकलैंड",
+    es: "Auckland",      fr: "Auckland",             ar: "أوكلاند",      bn: "অকল্যান্ড",
+    pt: "Auckland",      ur: "آکلینڈ",               id: "Auckland",     de: "Auckland",
+    ja: "オークランド",   tr: "Auckland",             vi: "Auckland",     he: "אוקלנד",
+    fa: "اوکلند",         ko: "오클랜드",              it: "Auckland",     pl: "Auckland",
+    uk: "Окленд",        nl: "Auckland",             kk: "Окленд",       uz: "Oklend",
+  },
+};
+
+const ZONES: Array<{ key: string; tz: string; flag: string }> = [
+  { key: "pago_pago",   tz: "Pacific/Pago_Pago",    flag: "🇼🇸" }, // UTC-11
+  { key: "honolulu",    tz: "Pacific/Honolulu",      flag: "🇺🇸" }, // UTC-10
+  { key: "anchorage",   tz: "America/Anchorage",     flag: "🇺🇸" }, // UTC-9
+  { key: "los_angeles", tz: "America/Los_Angeles",   flag: "🇺🇸" }, // UTC-8
+  { key: "denver",      tz: "America/Denver",        flag: "🇺🇸" }, // UTC-7
+  { key: "mexico_city", tz: "America/Mexico_City",   flag: "🇲🇽" }, // UTC-6
+  { key: "new_york",    tz: "America/New_York",      flag: "🇺🇸" }, // UTC-5
+  { key: "santiago",    tz: "America/Santiago",      flag: "🇨🇱" }, // UTC-4
+  { key: "sao_paulo",   tz: "America/Sao_Paulo",     flag: "🇧🇷" }, // UTC-3
+  { key: "noronha",     tz: "America/Noronha",       flag: "🇧🇷" }, // UTC-2
+  { key: "azores",      tz: "Atlantic/Azores",       flag: "🇵🇹" }, // UTC-1
+  { key: "london",      tz: "Europe/London",         flag: "🇬🇧" }, // UTC+0
+  { key: "paris",       tz: "Europe/Paris",          flag: "🇫🇷" }, // UTC+1
+  { key: "cairo",       tz: "Africa/Cairo",          flag: "🇪🇬" }, // UTC+2
+  { key: "moscow",      tz: "Europe/Moscow",         flag: "🇷🇺" }, // UTC+3
+  { key: "dubai",       tz: "Asia/Dubai",            flag: "🇦🇪" }, // UTC+4
+  { key: "karachi",     tz: "Asia/Karachi",          flag: "🇵🇰" }, // UTC+5
+  { key: "dhaka",       tz: "Asia/Dhaka",            flag: "🇧🇩" }, // UTC+6
+  { key: "bangkok",     tz: "Asia/Bangkok",          flag: "🇹🇭" }, // UTC+7
+  { key: "beijing",     tz: "Asia/Shanghai",         flag: "🇨🇳" }, // UTC+8
+  { key: "tokyo",       tz: "Asia/Tokyo",            flag: "🇯🇵" }, // UTC+9
+  { key: "sydney",      tz: "Australia/Sydney",      flag: "🇦🇺" }, // UTC+10
+  { key: "noumea",      tz: "Pacific/Noumea",        flag: "🇳🇨" }, // UTC+11
+  { key: "auckland",    tz: "Pacific/Auckland",      flag: "🇳🇿" }, // UTC+12
+];
 
 function getTimeInZone(tz: string, lang: string): { time: string; date: string; offset: string } {
   const now = new Date();
@@ -394,18 +609,20 @@ export default function TimeUtilsScreen() {
             <Text style={st.sectionSub}>TimeNation · Famagusta, Cyprus</Text>
             {ZONES.map((z) => {
               const { time, date, offset } = getTimeInZone(z.tz, lang);
-              const isMain = z.label === "TimeNation";
+              const cityName = (CITY_NAMES[z.key] as Record<string, string> | undefined)?.[lang]
+                ?? (CITY_NAMES[z.key] as Record<string, string> | undefined)?.["en"]
+                ?? z.key;
               return (
-                <View key={z.label} style={[st.clockCard, isMain && st.clockCardMain]}>
+                <View key={z.key} style={st.clockCard}>
                   <View style={st.clockLeft}>
                     <Text style={st.clockFlag}>{z.flag}</Text>
                     <View>
-                      <Text style={[st.clockCity, isMain && st.clockCityMain]}>{z.city}</Text>
+                      <Text style={st.clockCity}>{cityName}</Text>
                       <Text style={st.clockOffset}>{offset}</Text>
                     </View>
                   </View>
                   <View style={st.clockRight}>
-                    <Text style={[st.clockTime, isMain && st.clockTimeMain]}>{time}</Text>
+                    <Text style={st.clockTime}>{time}</Text>
                     <Text style={st.clockDate}>{date}</Text>
                   </View>
                 </View>
