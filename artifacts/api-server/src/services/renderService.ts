@@ -334,10 +334,17 @@ export async function renderLightVideo(
     const timeline = buildTimeline(durations);
     logger.info({ slotId, durations: durations.map(d => d.toFixed(2)), totalDuration: totalDuration.toFixed(2) }, "LIGHT: per-segment audio ready");
 
-    // ── Step 2: Concat segment audio into master track ────────────────────────
-    const combinedAudioPath = await concatAudioSegments(segFiles, tmpDir);
+    // ── Step 2: Concat + normalize to exactly 60 s ───────────────────────────
+    const rawAudioPath = await concatAudioSegments(segFiles, tmpDir);
+    const finalAudioPath = await normalizeAudioDuration(rawAudioPath, totalDuration, TARGET_DURATION_SEC, tmpDir);
+    // Scale subtitle timestamps so they map onto the normalized 60-second timeline
+    const subScale = TARGET_DURATION_SEC / totalDuration;
+    const scaledTimeline = timeline.map(({ t0, t1 }) => ({
+      t0: t0 * subScale,
+      t1: t1 * subScale,
+    }));
 
-    // ── Step 3: Build drawtext filters using real audio timestamps ────────────
+    // ── Step 3: Build drawtext filters using scaled audio timestamps ──────────
     const titleFilter =
       `drawtext=text='TIMENATION TV':fontsize=18:fontcolor=${style.title}:` +
       `x=(w-text_w)/2:y=48:alpha=0.8`;
@@ -347,7 +354,7 @@ export async function renderLightVideo(
 
     const segFilters: string[] = [];
     segments.forEach((seg, i) => {
-      const { t0, t1 } = timeline[i]!;
+      const { t0, t1 } = scaledTimeline[i]!;
       const lines = wrapLine(seg, 52).slice(0, 4);
       const totalH = lines.length * 42;
       const baseY = Math.round((720 - totalH) / 2);
@@ -372,22 +379,21 @@ export async function renderLightVideo(
       "-metadata", `description=AI Generated / Сгенерировано ИИ / Generated via Artificial Intelligence technologies. Visual style: ${visualStyle ?? "space"}.`,
     ];
 
-    // ── Step 4: Single-pass render: solid color BG + combined audio + drawtext ─
-    // Duration driven by actual TTS length (totalDuration), not a fixed 60s.
+    // ── Step 4: Single-pass render: solid color BG + normalized 60s audio ────
     await onProgress?.("encoding");
     await runFFmpeg([
       "-f", "lavfi", "-i", `color=c=${style.bg}:s=1280x720:r=25`,
-      "-i", combinedAudioPath,
+      "-i", finalAudioPath,
       "-vf", vf,
       "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
       "-c:a", "aac", "-b:a", "128k",
       "-map", "0:v:0", "-map", "1:a:0",
-      "-t", totalDuration.toFixed(3),
+      "-t", String(TARGET_DURATION_SEC),
       ...metadataArgs,
       "-y", outputPath,
     ]);
 
-    logger.info({ slotId, totalDuration: totalDuration.toFixed(2) }, "LIGHT render complete (audio-driven duration)");
+    logger.info({ slotId, rawDuration: totalDuration.toFixed(2), finalDuration: TARGET_DURATION_SEC }, "LIGHT render complete (60s normalized)");
     return `/api/tv/media/slot_${slotId}.mp4`;
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -492,6 +498,51 @@ async function concatAudioSegments(segFiles: string[], tmpDir: string): Promise<
   return outPath;
 }
 
+// ── Normalize audio to exactly TARGET seconds ──────────────────────────────────
+// Uses atempo filter: atempo = totalDuration / target
+//   > 1.0 → speed up (speech was too long)
+//   < 1.0 → slow down (speech was too short)
+// Subtitle timestamps must be scaled by target / totalDuration accordingly.
+const TARGET_DURATION_SEC = 60;
+
+async function normalizeAudioDuration(
+  inputPath: string,
+  totalDuration: number,
+  targetSec: number,
+  tmpDir: string,
+  signal?: AbortSignal
+): Promise<string> {
+  const atempoVal = totalDuration / targetSec;
+  if (Math.abs(atempoVal - 1.0) < 0.005) return inputPath; // close enough
+
+  const outputPath = path.join(tmpDir, "norm_audio.mp3");
+
+  // atempo valid range: 0.5–2.0 per stage; chain for extreme values
+  let atempoFilter: string;
+  if (atempoVal >= 0.5 && atempoVal <= 2.0) {
+    atempoFilter = `atempo=${atempoVal.toFixed(4)}`;
+  } else if (atempoVal > 2.0) {
+    const half = Math.sqrt(atempoVal);
+    atempoFilter = `atempo=${half.toFixed(4)},atempo=${half.toFixed(4)}`;
+  } else {
+    // < 0.5: very slow, chain two stages
+    atempoFilter = `atempo=0.5,atempo=${(atempoVal * 2).toFixed(4)}`;
+  }
+
+  await runFFmpeg([
+    "-i", inputPath,
+    "-af", atempoFilter,
+    "-t", String(targetSec),
+    "-y", outputPath,
+  ], signal);
+
+  logger.info(
+    { atempo: atempoVal.toFixed(4), from: totalDuration.toFixed(2), to: targetSec },
+    "normalizeAudioDuration: audio normalized"
+  );
+  return outputPath;
+}
+
 // ── Build cumulative timeline from durations ───────────────────────────────────
 function buildTimeline(durations: number[]): Array<{ t0: number; t1: number }> {
   const timeline: Array<{ t0: number; t1: number }> = [];
@@ -580,7 +631,7 @@ async function renderWithAIBackground(
       return renderLightVideo(null, manifestoText, slotId, visualStyle);
     }
 
-    // Step 3: Per-segment TTS → real durations → dynamic timeline
+    // Step 3: Per-segment TTS → real durations → normalize to 60s
     const theme = VISUAL_STYLE_THEMES[style];
     const SEG_COUNT = 8;
     const segments = splitSegments(manifestoText, SEG_COUNT);
@@ -589,7 +640,14 @@ async function renderWithAIBackground(
     const { segFiles, durations, totalDuration } = await buildSegmentAudio(segments, tmpDir);
     const timeline = buildTimeline(durations);
     logger.info({ slotId, totalDuration: totalDuration.toFixed(2) }, "AI-BG: per-segment audio ready");
-    const combinedAudioPath = await concatAudioSegments(segFiles, tmpDir);
+    const rawAudioPath = await concatAudioSegments(segFiles, tmpDir);
+    const finalAudioPath = await normalizeAudioDuration(rawAudioPath, totalDuration, TARGET_DURATION_SEC, tmpDir, signal);
+    // Scale subtitle timestamps onto the normalized 60s timeline
+    const subScale = TARGET_DURATION_SEC / totalDuration;
+    const scaledTimeline = timeline.map(({ t0, t1 }) => ({
+      t0: t0 * subScale,
+      t1: t1 * subScale,
+    }));
 
     const titleFilter =
       `drawtext=text='TIMENATION TV':fontsize=18:fontcolor=${theme.title}:` +
@@ -606,7 +664,7 @@ async function renderWithAIBackground(
 
     const segFilters: string[] = [];
     segments.forEach((seg, i) => {
-      const { t0, t1 } = timeline[i]!;
+      const { t0, t1 } = scaledTimeline[i]!;
       const lines = wrapLine(seg, 52).slice(0, 4);
       const totalH = lines.length * 42;
       const baseY = Math.round((720 - totalH) / 2);
@@ -644,21 +702,21 @@ async function renderWithAIBackground(
       "-metadata", `description=AI Generated / Сгенерировано ИИ / AI cinematic background. Visual style: ${style}. Prompt: ${cinematicPrompt.slice(0, 120)}.`,
     ];
 
-    // Single-pass: AI video looped to totalDuration + combined per-segment audio
+    // Single-pass: AI video looped to 60s + normalized 60s audio
     await onProgress?.("encoding");
     await runFFmpeg([
       "-stream_loop", "-1", "-i", aiVideoPath,
-      "-i", combinedAudioPath,
+      "-i", finalAudioPath,
       "-vf", vf,
       "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
       "-c:a", "aac", "-b:a", "128k",
       "-map", "0:v:0", "-map", "1:a:0",
-      "-t", totalDuration.toFixed(3),
+      "-t", String(TARGET_DURATION_SEC),
       ...metadataArgs,
       "-y", outputPath,
     ]);
 
-    logger.info({ slotId, style, totalDuration: totalDuration.toFixed(2), cinematicPrompt: cinematicPrompt.slice(0, 80) }, "AI background render complete (audio-driven duration)");
+    logger.info({ slotId, style, rawDuration: totalDuration.toFixed(2), finalDuration: TARGET_DURATION_SEC, cinematicPrompt: cinematicPrompt.slice(0, 80) }, "AI background render complete (60s normalized)");
     return `/api/tv/media/slot_${slotId}.mp4`;
   } catch (err) {
     logger.error({ err, slotId }, "renderWithAIBackground failed — falling back to solid-color");
@@ -747,16 +805,20 @@ async function renderPrimeVideo(
       }
     }
 
-    // Step 3a — Per-segment TTS (3 segments for 3 scenes) → real audio durations
+    // Step 3a — Per-segment TTS (3 segments for 3 scenes) → normalize to 60s
     await onProgress?.("generating_tts");
     const primeSegments = splitSegments(manifestoText, 3);
     const { segFiles: primeSegFiles, durations: primeDurations, totalDuration: primeTotalDuration } =
       await buildSegmentAudio(primeSegments, tmpDir);
-    const primeCombinedAudio = await concatAudioSegments(primeSegFiles, tmpDir);
+    const primeRawAudio = await concatAudioSegments(primeSegFiles, tmpDir);
+    const primeFinalAudio = await normalizeAudioDuration(primeRawAudio, primeTotalDuration, TARGET_DURATION_SEC, tmpDir, signal);
 
-    // Scene lengths driven by audio; each scene clip = audio duration + 2s for xfade overlap.
-    // Minimum 8s per scene to avoid xfade glitches.
-    const sceneDurations = primeDurations.map(d => Math.max(8, d + 2));
+    // Scale per-scene audio durations proportionally to fill exactly 60s
+    const primeSubScale = TARGET_DURATION_SEC / primeTotalDuration;
+    const scaledPrimeDurations = primeDurations.map(d => d * primeSubScale);
+
+    // Scene video lengths = scaled audio duration + 2s xfade overlap, minimum 8s
+    const sceneDurations = scaledPrimeDurations.map(d => Math.max(8, d + 2));
     const [sd0, sd1, sd2] = [sceneDurations[0]!, sceneDurations[1]!, sceneDurations[2]!];
     // xfade offset = cumulative scene length minus transition overlap (2s)
     const xfadeOffset1 = sd0 - 2;
@@ -766,12 +828,13 @@ async function renderPrimeVideo(
     logger.info({
       slotId,
       primeDurations: primeDurations.map(d => d.toFixed(2)),
+      scaledPrimeDurations: scaledPrimeDurations.map(d => d.toFixed(2)),
       primeTotalDuration: primeTotalDuration.toFixed(2),
       xfadeOffset1: xfadeOffset1.toFixed(2),
       xfadeOffset2: xfadeOffset2.toFixed(2),
-    }, "PRIME: audio-driven xfade offsets computed");
+    }, "PRIME: 60s-normalized xfade offsets computed");
 
-    // Step 3b — Xfade montage with dynamic scene lengths
+    // Step 3b — Xfade montage with normalized scene lengths
     await onProgress?.("compositing");
     const compositePath = path.join(tmpDir, "composite.mp4");
 
@@ -794,13 +857,13 @@ async function renderPrimeVideo(
     ]);
     logger.info({ slotId, compositeTotal: compositeTotal.toFixed(2) }, "PRIME xfade composite assembled");
 
-    // Step 4 — Text overlay + per-segment audio over the composite
-    // Scene text windows align with real TTS durations (2s dissolve is transition buffer)
+    // Step 4 — Text overlay + normalized 60s audio over the composite
     await onProgress?.("encoding");
 
+    // Scene subtitle windows mapped onto the 60s normalized timeline
     const sceneTimes: Array<{ t0: number; t1: number }> = [];
     let timeAccum = 0;
-    for (const d of primeDurations) {
+    for (const d of scaledPrimeDurations) {
       sceneTimes.push({ t0: timeAccum, t1: timeAccum + d });
       timeAccum += d;
     }
@@ -848,18 +911,18 @@ async function renderPrimeVideo(
 
     await runFFmpeg([
       "-i", compositePath,
-      "-i", primeCombinedAudio,
+      "-i", primeFinalAudio,
       "-vf", vf,
       "-c:v", "libx264", "-preset", "fast", "-crf", "24",
       "-c:a", "aac", "-b:a", "192k",
       "-map", "0:v:0", "-map", "1:a:0",
-      "-t", primeTotalDuration.toFixed(3),
+      "-t", String(TARGET_DURATION_SEC),
       ...metadataArgs, "-y", outputPath,
     ]);
 
     logger.info(
-      { slotId, style, primeTotalDuration: primeTotalDuration.toFixed(2), s1: scenePrompts.scene1.slice(0, 40) },
-      "PRIME TIME 3-scene montage render complete (audio-driven duration)"
+      { slotId, style, rawDuration: primeTotalDuration.toFixed(2), finalDuration: TARGET_DURATION_SEC, s1: scenePrompts.scene1.slice(0, 40) },
+      "PRIME TIME 3-scene montage render complete (60s normalized)"
     );
     return `/api/tv/media/slot_${slotId}.mp4`;
 
