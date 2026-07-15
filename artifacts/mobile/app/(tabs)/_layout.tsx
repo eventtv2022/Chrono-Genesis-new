@@ -7,45 +7,47 @@ import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { MobileClockBar } from "@/components/MobileClockBar";
+import { useLanguage } from "@/context/LanguageContext";
 
 function NativeTabLayout() {
+  const { t } = useLanguage();
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "timer", selected: "timer" }} />
-        <Label>TiMETR</Label>
+        <Label>{t.tab_timer}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="timeline">
         <Icon sf={{ default: "timeline.selection", selected: "timeline.selection" }} />
-        <Label>Таймлайн</Label>
+        <Label>{t.tab_timeline}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="stats">
         <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
-        <Label>Экономика</Label>
+        <Label>{t.tab_economy}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="embassies">
         <Icon sf={{ default: "mappin.circle", selected: "mappin.circle.fill" }} />
-        <Label>Посольства</Label>
+        <Label>{t.tab_embassies}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="auctions">
         <Icon sf={{ default: "tag", selected: "tag.fill" }} />
-        <Label>Аукцион</Label>
+        <Label>{t.tab_auction}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="tv">
         <Icon sf={{ default: "play.tv", selected: "play.tv.fill" }} />
-        <Label>TV</Label>
+        <Label>{t.tab_tv}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="chronopedia">
         <Icon sf={{ default: "globe.europe.africa", selected: "globe.europe.africa.fill" }} />
-        <Label>Хронопедия</Label>
+        <Label>{t.tab_chronopedia}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="timeutils">
         <Icon sf={{ default: "clock.badge", selected: "clock.badge.fill" }} />
-        <Label>Время</Label>
+        <Label>{t.tab_time}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="language-clock">
         <Icon sf={{ default: "globe.americas", selected: "globe.americas.fill" }} />
-        <Label>Циферблат</Label>
+        <Label>{t.tab_clock}</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -53,6 +55,7 @@ function NativeTabLayout() {
 
 function ClassicTabLayout() {
   const colors = useColors();
+  const { t } = useLanguage();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
@@ -83,63 +86,63 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "TiMETR",
+          title: t.tab_timer,
           tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="timeline"
         options={{
-          title: "Таймлайн",
+          title: t.tab_timeline,
           tabBarIcon: ({ color }) => <Feather name="grid" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="stats"
         options={{
-          title: "Экономика",
+          title: t.tab_economy,
           tabBarIcon: ({ color }) => <Feather name="bar-chart-2" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="embassies"
         options={{
-          title: "Посольства",
+          title: t.tab_embassies,
           tabBarIcon: ({ color }) => <Feather name="map-pin" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="auctions"
         options={{
-          title: "Аукцион",
+          title: t.tab_auction,
           tabBarIcon: ({ color }) => <Feather name="tag" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="tv"
         options={{
-          title: "TV",
+          title: t.tab_tv,
           tabBarIcon: ({ color }) => <Feather name="tv" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="chronopedia"
         options={{
-          title: "Хронопедия",
+          title: t.tab_chronopedia,
           tabBarIcon: ({ color }) => <Feather name="globe" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="timeutils"
         options={{
-          title: "Время",
+          title: t.tab_time,
           tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="language-clock"
         options={{
-          title: "Циферблат",
+          title: t.tab_clock,
           tabBarIcon: ({ color }) => <Feather name="globe" size={22} color={color} />,
         }}
       />

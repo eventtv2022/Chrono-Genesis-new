@@ -19,6 +19,7 @@ import * as Haptics from "expo-haptics";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useCitizen } from "@/context/CitizenContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
 import { AnimatedHourglass } from "@/components/AnimatedHourglass";
@@ -939,6 +940,7 @@ export default function TimerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { citizen, refreshCitizen, setCitizen } = useCitizen();
+  const { t: ui } = useLanguage();
   const router = useRouter();
   const queryClient = useQueryClient();
   const walletGuide = useContextualGuide("wallet");
@@ -1097,15 +1099,15 @@ export default function TimerScreen() {
             <TouchableOpacity
               style={[styles.passportLogout, { borderColor: colors.destructive + "55", backgroundColor: colors.destructive + "15" }]}
               onPress={() => {
-                Alert.alert("Выйти из аккаунта", "Данные гражданина будут удалены с устройства.", [
-                  { text: "Отмена", style: "cancel" },
-                  { text: "Выйти", style: "destructive", onPress: () => { setCitizen(null); } },
+                Alert.alert(ui.logout_confirm_title, ui.logout_confirm_msg, [
+                  { text: ui.cancel, style: "cancel" },
+                  { text: ui.logout_confirm_yes, style: "destructive", onPress: () => { setCitizen(null); } },
                 ]);
               }}
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
               <Feather name="log-out" size={13} color={colors.destructive} />
-              <Text style={[styles.passportLogoutText, { color: colors.destructive }]}>Выйти</Text>
+              <Text style={[styles.passportLogoutText, { color: colors.destructive }]}>{ui.logout}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
+import { useLanguage } from "@/context/LanguageContext";
+import type { LangCode } from "@/i18n/ui";
 
 const LANGUAGES_24: {
   hour: number;
@@ -68,7 +70,17 @@ const RADIUS = 130;
 const HAND_LENGTH = 105;
 
 export function Clock() {
-  const [activeHour, setActiveHour] = useState(1);
+  const { lang, setLang } = useLanguage();
+  // sync activeHour from global lang on mount
+  const [activeHour, setActiveHour] = useState(() => {
+    const found = LANGUAGES_24.find((l) => l.code === lang);
+    return found ? found.hour : 1;
+  });
+
+  function selectHour(hour: number, code: LangCode) {
+    setActiveHour(hour);
+    setLang(code);
+  }
 
   const active = LANGUAGES_24.find((l) => l.hour === activeHour) ?? LANGUAGES_24[1]!;
   const t = TRANSLATIONS[active.code] ?? TRANSLATIONS["ru"]!;
@@ -123,7 +135,7 @@ export function Clock() {
                 return (
                   <button
                     key={item.hour}
-                    onClick={() => setActiveHour(item.hour)}
+                    onClick={() => selectHour(item.hour, item.code as LangCode)}
                     title={item.native}
                     className="absolute flex items-center justify-center rounded-full text-[9px] font-bold transition-all duration-300"
                     style={{
@@ -196,7 +208,7 @@ export function Clock() {
                 return (
                   <button
                     key={item.hour}
-                    onClick={() => setActiveHour(item.hour)}
+                    onClick={() => selectHour(item.hour, item.code as LangCode)}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-left text-xs transition-all duration-200 border ${
                       isActive
                         ? "bg-amber-500/15 border-amber-500/50 text-amber-400 font-semibold"

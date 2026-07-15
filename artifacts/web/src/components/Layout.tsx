@@ -3,9 +3,11 @@ import { Link, useLocation } from "wouter";
 import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe } from "lucide-react";
 import { SystemClock } from "./SystemClock";
 import { useCitizen } from "@/context/CitizenContext";
+import { useLanguage } from "@/context/LanguageContext";
 
 function CitizenWidget() {
   const { citizen, setCitizen, refreshCitizen } = useCitizen();
+  const { t } = useLanguage();
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,13 +24,13 @@ function CitizenWidget() {
         ? `/api/citizens/${val}`
         : `/api/citizens/by-phone/${encodeURIComponent(val)}`;
       const res = await fetch(url);
-      if (!res.ok) { setError("Гражданин не найден"); setLoading(false); return; }
+      if (!res.ok) { setError(t.citizen_not_found); setLoading(false); return; }
       const citizenData = await res.json() as Record<string, unknown>;
-      if (!citizenData || !citizenData["id"]) { setError("Гражданин не найден"); setLoading(false); return; }
+      if (!citizenData || !citizenData["id"]) { setError(t.citizen_not_found); setLoading(false); return; }
       setCitizen(citizenData as unknown as Parameters<typeof setCitizen>[0]);
       setInput("");
     } catch {
-      setError("Ошибка соединения");
+      setError(t.connection_error);
     }
     setLoading(false);
   }
@@ -45,17 +47,17 @@ function CitizenWidget() {
             <button
               onClick={() => void refreshCitizen()}
               className="text-muted-foreground hover:text-foreground p-1.5 rounded transition-colors"
-              title="Обновить данные"
+              title={t.refresh}
             >
               <RefreshCw className="w-4 h-4" />
             </button>
             <button
               onClick={() => setCitizen(null)}
               className="flex items-center gap-1 px-2 py-1 rounded bg-destructive/10 hover:bg-destructive/20 text-destructive text-[11px] font-mono font-semibold transition-colors border border-destructive/20"
-              title="Выйти из аккаунта"
+              title={t.logout_btn}
             >
               <LogOut className="w-3 h-3" />
-              Выйти
+              {t.logout_btn}
             </button>
           </div>
         </div>
@@ -66,12 +68,12 @@ function CitizenWidget() {
 
   return (
     <div className="px-3 py-3 border-t border-border">
-      <p className="text-[10px] text-muted-foreground font-mono mb-1.5 uppercase tracking-wider">Войти</p>
+      <p className="text-[10px] text-muted-foreground font-mono mb-1.5 uppercase tracking-wider">{t.login_title}</p>
       <form onSubmit={(e) => void handleLogin(e)} className="space-y-1.5">
         <input
           value={input}
           onChange={e => { setInput(e.target.value); setError(null); }}
-          placeholder="ID или телефон"
+          placeholder={t.login_placeholder}
           className="w-full bg-background border border-border rounded-sm px-2 py-1 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60"
         />
         {error && <p className="text-[10px] text-destructive font-mono">{error}</p>}
@@ -80,7 +82,7 @@ function CitizenWidget() {
           disabled={loading || !input.trim()}
           className="w-full bg-primary/90 hover:bg-primary text-primary-foreground rounded-sm py-1 text-xs font-mono transition-colors disabled:opacity-50"
         >
-          {loading ? "…" : "Войти"}
+          {loading ? "…" : t.login_btn}
         </button>
       </form>
     </div>
@@ -89,17 +91,18 @@ function CitizenWidget() {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { t } = useLanguage();
 
   const navItems = [
-    { href: "/", label: "Дашборд", icon: Activity },
-    { href: "/tv", label: "TimeNation-TV", icon: Tv },
-    { href: "/citizens", label: "Реестр", icon: Users },
-    { href: "/timeline", label: "Таймлайн", icon: History },
-    { href: "/shop", label: "Казначейство", icon: ShoppingCart },
-    { href: "/register", label: "Стать гражданином", icon: UserPlus },
-    { href: "/passport-lookup", label: "Мой паспорт", icon: Search },
-    { href: "/time", label: "Время", icon: Clock },
-    { href: "/clock", label: "Циферблат народов", icon: Globe },
+    { href: "/",          label: t.nav_dashboard,       icon: Activity  },
+    { href: "/tv",        label: t.nav_tv,              icon: Tv        },
+    { href: "/citizens",  label: t.nav_registry,        icon: Users     },
+    { href: "/timeline",  label: t.nav_timeline,        icon: History   },
+    { href: "/shop",      label: t.nav_treasury,        icon: ShoppingCart },
+    { href: "/register",  label: t.nav_become_citizen,  icon: UserPlus  },
+    { href: "/passport-lookup", label: t.nav_passport,  icon: Search    },
+    { href: "/time",      label: t.nav_time,            icon: Clock     },
+    { href: "/clock",     label: t.nav_clock,           icon: Globe     },
   ];
 
   return (
@@ -114,7 +117,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div>
               <h1 className="font-bold text-base tracking-tight leading-none">TimeNation</h1>
               <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-mono mt-1">
-                Цифровое государство
+                {t.digital_state}
               </p>
             </div>
           </div>

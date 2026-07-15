@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -7,14 +7,14 @@ import {
   Animated,
   ScrollView,
   useWindowDimensions,
-  Platform,
-  I18nManager,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
+import { useLanguage } from "@/context/LanguageContext";
+import type { LangCode } from "@/lib/i18n";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -44,8 +44,6 @@ const LANGUAGES_24 = [
   { hour: 23, code: "kk", label: "Қазақша",      rtl: false },
   { hour: 24, code: "uz", label: "O'zbek",       rtl: false },
 ] as const;
-
-type LangCode = typeof LANGUAGES_24[number]["code"];
 
 const TRANSLATIONS: Record<LangCode, { welcome: string; select_hour: string; btn_publish: string; status: string }> = {
   ru: { welcome: "Добро пожаловать в TimeNation", select_hour: "Выберите ваш час",          btn_publish: "Опубликовать видео", status: "Время — это общий язык, который объединяет все нации мира." },
@@ -81,8 +79,13 @@ export default function LanguageClockScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  const [activeHour, setActiveHour] = useState(1);
-  const handAnim = useRef(new Animated.Value(15)).current; // degrees: hour 1 = 15°
+  const { lang, setLang } = useLanguage();
+
+  const [activeHour, setActiveHour] = useState<number>(() => {
+    const found = LANGUAGES_24.find((l) => l.code === lang);
+    return found ? found.hour : 1;
+  });
+  const handAnim = useRef(new Animated.Value((LANGUAGES_24.find((l) => l.code === lang)?.hour ?? 1) * 15)).current;
 
   const active = LANGUAGES_24.find((l) => l.hour === activeHour) ?? LANGUAGES_24[0];
   const t = TRANSLATIONS[active.code];
@@ -92,7 +95,7 @@ export default function LanguageClockScreen() {
   const RADIUS = CLOCK_SIZE / 2 - 22;
   const HAND_H = CLOCK_SIZE / 2 - 18;
 
-  function selectHour(hour: number) {
+  function selectHour(hour: number, code: LangCode) {
     const targetDeg = hour * 15;
     Animated.spring(handAnim, {
       toValue: targetDeg,
@@ -101,6 +104,7 @@ export default function LanguageClockScreen() {
       useNativeDriver: true,
     }).start();
     setActiveHour(hour);
+    setLang(code);
   }
 
   const handRotate = handAnim.interpolate({
@@ -166,7 +170,7 @@ export default function LanguageClockScreen() {
             return (
               <TouchableOpacity
                 key={item.hour}
-                onPress={() => selectHour(item.hour)}
+                onPress={() => selectHour(item.hour, item.code as LangCode)}
                 style={[
                   styles.hourBtn,
                   { left: bx, top: by },
@@ -212,7 +216,7 @@ export default function LanguageClockScreen() {
             return (
               <TouchableOpacity
                 key={item.hour}
-                onPress={() => selectHour(item.hour)}
+                onPress={() => selectHour(item.hour, item.code as LangCode)}
                 style={[styles.langItem, isActive && styles.langItemActive]}
                 activeOpacity={0.7}
               >
