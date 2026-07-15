@@ -19,30 +19,30 @@ import type { LangCode } from "@/lib/i18n";
 // ─── Data ────────────────────────────────────────────────────────────────────
 
 const LANGUAGES_24 = [
-  { hour: 1,  code: "ru", label: "Русский",      rtl: false },
-  { hour: 2,  code: "en", label: "English",      rtl: false },
-  { hour: 3,  code: "zh", label: "中文",          rtl: false },
-  { hour: 4,  code: "hi", label: "हिन्दी",        rtl: false },
-  { hour: 5,  code: "es", label: "Español",      rtl: false },
-  { hour: 6,  code: "fr", label: "Français",     rtl: false },
-  { hour: 7,  code: "ar", label: "العربية",      rtl: true  },
-  { hour: 8,  code: "bn", label: "বাংলা",         rtl: false },
-  { hour: 9,  code: "pt", label: "Português",    rtl: false },
-  { hour: 10, code: "ur", label: "اردو",          rtl: true  },
-  { hour: 11, code: "id", label: "Indonesia",    rtl: false },
-  { hour: 12, code: "de", label: "Deutsch",      rtl: false },
-  { hour: 13, code: "ja", label: "日本語",         rtl: false },
-  { hour: 14, code: "tr", label: "Türkçe",       rtl: false },
-  { hour: 15, code: "vi", label: "Tiếng Việt",   rtl: false },
-  { hour: 16, code: "he", label: "עברית",         rtl: true  },
-  { hour: 17, code: "fa", label: "فارسی",         rtl: true  },
-  { hour: 18, code: "ko", label: "한국어",         rtl: false },
-  { hour: 19, code: "it", label: "Italiano",     rtl: false },
-  { hour: 20, code: "pl", label: "Polski",       rtl: false },
-  { hour: 21, code: "uk", label: "Українська",   rtl: false },
-  { hour: 22, code: "nl", label: "Nederlands",   rtl: false },
-  { hour: 23, code: "kk", label: "Қазақша",      rtl: false },
-  { hour: 24, code: "uz", label: "O'zbek",       rtl: false },
+  { hour: 1,  code: "ru", label: "Русский",      rtl: false, flag: "🇷🇺", iso: "RU" },
+  { hour: 2,  code: "en", label: "English",      rtl: false, flag: "🇬🇧", iso: "EN" },
+  { hour: 3,  code: "zh", label: "中文",          rtl: false, flag: "🇨🇳", iso: "ZH" },
+  { hour: 4,  code: "hi", label: "हिन्दी",        rtl: false, flag: "🇮🇳", iso: "HI" },
+  { hour: 5,  code: "es", label: "Español",      rtl: false, flag: "🇪🇸", iso: "ES" },
+  { hour: 6,  code: "fr", label: "Français",     rtl: false, flag: "🇫🇷", iso: "FR" },
+  { hour: 7,  code: "ar", label: "العربية",      rtl: true,  flag: "🇸🇦", iso: "AR" },
+  { hour: 8,  code: "bn", label: "বাংলা",         rtl: false, flag: "🇧🇩", iso: "BN" },
+  { hour: 9,  code: "pt", label: "Português",    rtl: false, flag: "🇵🇹", iso: "PT" },
+  { hour: 10, code: "ur", label: "اردو",          rtl: true,  flag: "🇵🇰", iso: "UR" },
+  { hour: 11, code: "id", label: "Indonesia",    rtl: false, flag: "🇮🇩", iso: "ID" },
+  { hour: 12, code: "de", label: "Deutsch",      rtl: false, flag: "🇩🇪", iso: "DE" },
+  { hour: 13, code: "ja", label: "日本語",         rtl: false, flag: "🇯🇵", iso: "JA" },
+  { hour: 14, code: "tr", label: "Türkçe",       rtl: false, flag: "🇹🇷", iso: "TR" },
+  { hour: 15, code: "vi", label: "Tiếng Việt",   rtl: false, flag: "🇻🇳", iso: "VI" },
+  { hour: 16, code: "he", label: "עברית",         rtl: true,  flag: "🇮🇱", iso: "HE" },
+  { hour: 17, code: "fa", label: "فارسی",         rtl: true,  flag: "🇮🇷", iso: "FA" },
+  { hour: 18, code: "ko", label: "한국어",         rtl: false, flag: "🇰🇷", iso: "KO" },
+  { hour: 19, code: "it", label: "Italiano",     rtl: false, flag: "🇮🇹", iso: "IT" },
+  { hour: 20, code: "pl", label: "Polski",       rtl: false, flag: "🇵🇱", iso: "PL" },
+  { hour: 21, code: "uk", label: "Українська",   rtl: false, flag: "🇺🇦", iso: "UK" },
+  { hour: 22, code: "nl", label: "Nederlands",   rtl: false, flag: "🇳🇱", iso: "NL" },
+  { hour: 23, code: "kk", label: "Қазақша",      rtl: false, flag: "🇰🇿", iso: "KK" },
+  { hour: 24, code: "uz", label: "O'zbek",       rtl: false, flag: "🇺🇿", iso: "UZ" },
 ] as const;
 
 const TRANSLATIONS: Record<LangCode, { welcome: string; select_hour: string; btn_publish: string; status: string }> = {
@@ -137,7 +137,7 @@ export default function LanguageClockScreen() {
         <Text style={styles.subText}>
           {t.select_hour}:{" "}
           <Text style={styles.subHighlight}>
-            {activeHour}:00 · {active.label}
+            {active.flag} {activeHour}:00 · {active.iso} · {active.label}
           </Text>
         </Text>
 
@@ -163,8 +163,8 @@ export default function LanguageClockScreen() {
           {/* 24 hour buttons */}
           {LANGUAGES_24.map((item) => {
             const angleRad = (item.hour * 15 - 90) * (Math.PI / 180);
-            const bx = CLOCK_SIZE / 2 + RADIUS * Math.cos(angleRad) - 14;
-            const by = CLOCK_SIZE / 2 + RADIUS * Math.sin(angleRad) - 14;
+            const bx = CLOCK_SIZE / 2 + RADIUS * Math.cos(angleRad) - 16;
+            const by = CLOCK_SIZE / 2 + RADIUS * Math.sin(angleRad) - 16;
             const isActive = item.hour === activeHour;
 
             return (
@@ -178,9 +178,7 @@ export default function LanguageClockScreen() {
                 ]}
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
-                <Text style={[styles.hourText, isActive && styles.hourTextActive]}>
-                  {item.hour}
-                </Text>
+                <Text style={styles.hourFlag}>{item.flag}</Text>
               </TouchableOpacity>
             );
           })}
@@ -220,8 +218,9 @@ export default function LanguageClockScreen() {
                 style={[styles.langItem, isActive && styles.langItemActive]}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.langHour, isActive && styles.langHourActive]}>
-                  {item.hour}
+                <Text style={styles.langFlag}>{item.flag}</Text>
+                <Text style={[styles.langIso, isActive && styles.langIsoActive]}>
+                  {item.iso}
                 </Text>
                 <Text
                   style={[styles.langLabel, isActive && styles.langLabelActive]}
@@ -229,9 +228,6 @@ export default function LanguageClockScreen() {
                 >
                   {item.label}
                 </Text>
-                {item.rtl && (
-                  <Text style={styles.rtlBadge}>RTL</Text>
-                )}
               </TouchableOpacity>
             );
           })}
@@ -334,9 +330,9 @@ function makeStyles(
     },
     hourBtn: {
       position: "absolute",
-      width: 28,
-      height: 28,
-      borderRadius: 14,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       backgroundColor: "#27272a",
       alignItems: "center",
       justifyContent: "center",
@@ -344,21 +340,16 @@ function makeStyles(
       borderColor: "#52525b",
     },
     hourBtnActive: {
-      backgroundColor: "#f59e0b",
-      borderColor: "#fff",
+      backgroundColor: "#f59e0b22",
+      borderColor: "#f59e0b",
       shadowColor: "#f59e0b",
       shadowOpacity: 0.7,
       shadowRadius: 6,
       shadowOffset: { width: 0, height: 0 },
       elevation: 6,
     },
-    hourText: {
-      fontSize: 8,
-      fontFamily: "Inter_700Bold",
-      color: "#a1a1aa",
-    },
-    hourTextActive: {
-      color: "#000",
+    hourFlag: {
+      fontSize: 14,
     },
     // Quote
     quoteCard: {
@@ -417,7 +408,7 @@ function makeStyles(
       flexDirection: "row",
       alignItems: "center",
       gap: 5,
-      paddingHorizontal: 10,
+      paddingHorizontal: 8,
       paddingVertical: 7,
       borderRadius: 8,
       borderWidth: 1,
@@ -430,13 +421,17 @@ function makeStyles(
       borderColor: "#f59e0b88",
       backgroundColor: "#f59e0b18",
     },
-    langHour: {
-      fontSize: 10,
-      fontFamily: "Inter_400Regular",
-      color: colors.mutedForeground,
-      width: 16,
+    langFlag: {
+      fontSize: 16,
     },
-    langHourActive: {
+    langIso: {
+      fontSize: 9,
+      fontFamily: "Inter_600SemiBold",
+      color: colors.mutedForeground,
+      width: 20,
+      letterSpacing: 0.5,
+    },
+    langIsoActive: {
       color: "#f59e0b",
     },
     langLabel: {
@@ -448,11 +443,6 @@ function makeStyles(
     langLabelActive: {
       fontFamily: "Inter_600SemiBold",
       color: "#f59e0b",
-    },
-    rtlBadge: {
-      fontSize: 8,
-      fontFamily: "Inter_400Regular",
-      color: colors.mutedForeground,
     },
   });
 }
