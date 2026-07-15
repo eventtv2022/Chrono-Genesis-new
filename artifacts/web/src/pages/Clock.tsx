@@ -9,31 +9,33 @@ const LANGUAGES_24: {
   native: string;
   code: string;
   rtl: boolean;
+  flag: string;
+  iso: string;
 }[] = [
-  { hour: 24, label: "O'zbek",       native: "O'zbek",       code: "uz", rtl: false },
-  { hour: 1,  label: "Русский",      native: "Русский",      code: "ru", rtl: false },
-  { hour: 2,  label: "English",      native: "English",      code: "en", rtl: false },
-  { hour: 3,  label: "中文",          native: "中文",          code: "zh", rtl: false },
-  { hour: 4,  label: "हिन्दी",        native: "हिन्दी",        code: "hi", rtl: false },
-  { hour: 5,  label: "Español",      native: "Español",      code: "es", rtl: false },
-  { hour: 6,  label: "Français",     native: "Français",     code: "fr", rtl: false },
-  { hour: 7,  label: "العربية",      native: "العربية",      code: "ar", rtl: true  },
-  { hour: 8,  label: "বাংলা",         native: "বাংলা",         code: "bn", rtl: false },
-  { hour: 9,  label: "Português",    native: "Português",    code: "pt", rtl: false },
-  { hour: 10, label: "اردو",          native: "اردو",          code: "ur", rtl: true  },
-  { hour: 11, label: "Indonesia",    native: "Indonesian",   code: "id", rtl: false },
-  { hour: 12, label: "Deutsch",      native: "Deutsch",      code: "de", rtl: false },
-  { hour: 13, label: "日本語",         native: "日本語",         code: "ja", rtl: false },
-  { hour: 14, label: "Türkçe",       native: "Türkçe",       code: "tr", rtl: false },
-  { hour: 15, label: "Tiếng Việt",   native: "Tiếng Việt",   code: "vi", rtl: false },
-  { hour: 16, label: "עברית",         native: "עברית",         code: "he", rtl: true  },
-  { hour: 17, label: "فارسی",         native: "فارسی",         code: "fa", rtl: true  },
-  { hour: 18, label: "한국어",         native: "한국어",         code: "ko", rtl: false },
-  { hour: 19, label: "Italiano",     native: "Italiano",     code: "it", rtl: false },
-  { hour: 20, label: "Polski",       native: "Polski",       code: "pl", rtl: false },
-  { hour: 21, label: "Українська",   native: "Українська",   code: "uk", rtl: false },
-  { hour: 22, label: "Nederlands",   native: "Nederlands",   code: "nl", rtl: false },
-  { hour: 23, label: "Қазақша",      native: "Қазақша",      code: "kk", rtl: false },
+  { hour: 1,  label: "Русский",      native: "Русский",      code: "ru", rtl: false, flag: "🇷🇺", iso: "RU" },
+  { hour: 2,  label: "English",      native: "English",      code: "en", rtl: false, flag: "🇬🇧", iso: "EN" },
+  { hour: 3,  label: "中文",          native: "中文",          code: "zh", rtl: false, flag: "🇨🇳", iso: "ZH" },
+  { hour: 4,  label: "हिन्दी",        native: "हिन्दी",        code: "hi", rtl: false, flag: "🇮🇳", iso: "HI" },
+  { hour: 5,  label: "Español",      native: "Español",      code: "es", rtl: false, flag: "🇪🇸", iso: "ES" },
+  { hour: 6,  label: "Français",     native: "Français",     code: "fr", rtl: false, flag: "🇫🇷", iso: "FR" },
+  { hour: 7,  label: "العربية",      native: "العربية",      code: "ar", rtl: true,  flag: "🇸🇦", iso: "AR" },
+  { hour: 8,  label: "বাংলা",         native: "বাংলা",         code: "bn", rtl: false, flag: "🇧🇩", iso: "BN" },
+  { hour: 9,  label: "Português",    native: "Português",    code: "pt", rtl: false, flag: "🇵🇹", iso: "PT" },
+  { hour: 10, label: "اردو",          native: "اردو",          code: "ur", rtl: true,  flag: "🇵🇰", iso: "UR" },
+  { hour: 11, label: "Indonesia",    native: "Indonesia",    code: "id", rtl: false, flag: "🇮🇩", iso: "ID" },
+  { hour: 12, label: "Deutsch",      native: "Deutsch",      code: "de", rtl: false, flag: "🇩🇪", iso: "DE" },
+  { hour: 13, label: "日本語",         native: "日本語",         code: "ja", rtl: false, flag: "🇯🇵", iso: "JA" },
+  { hour: 14, label: "Türkçe",       native: "Türkçe",       code: "tr", rtl: false, flag: "🇹🇷", iso: "TR" },
+  { hour: 15, label: "Tiếng Việt",   native: "Tiếng Việt",   code: "vi", rtl: false, flag: "🇻🇳", iso: "VI" },
+  { hour: 16, label: "עברית",         native: "עברית",         code: "he", rtl: true,  flag: "🇮🇱", iso: "HE" },
+  { hour: 17, label: "فارسی",         native: "فارسی",         code: "fa", rtl: true,  flag: "🇮🇷", iso: "FA" },
+  { hour: 18, label: "한국어",         native: "한국어",         code: "ko", rtl: false, flag: "🇰🇷", iso: "KO" },
+  { hour: 19, label: "Italiano",     native: "Italiano",     code: "it", rtl: false, flag: "🇮🇹", iso: "IT" },
+  { hour: 20, label: "Polski",       native: "Polski",       code: "pl", rtl: false, flag: "🇵🇱", iso: "PL" },
+  { hour: 21, label: "Українська",   native: "Українська",   code: "uk", rtl: false, flag: "🇺🇦", iso: "UK" },
+  { hour: 22, label: "Nederlands",   native: "Nederlands",   code: "nl", rtl: false, flag: "🇳🇱", iso: "NL" },
+  { hour: 23, label: "Қазақша",      native: "Қазақша",      code: "kk", rtl: false, flag: "🇰🇿", iso: "KK" },
+  { hour: 24, label: "O'zbek",       native: "O'zbek",       code: "uz", rtl: false, flag: "🇺🇿", iso: "UZ" },
 ];
 
 const TRANSLATIONS: Record<string, { welcome: string; select: string; status: string }> = {
@@ -108,7 +110,7 @@ export function Clock() {
         </h1>
         <p className="text-zinc-400 text-sm mb-8 text-center">
           {t.select}:{" "}
-          <span className="text-amber-500 font-bold">{active.native}</span>
+          <span className="text-amber-500 font-bold">{active.flag} {activeHour}:00 · {active.iso} · {active.native}</span>
         </p>
 
         {/* Two-column layout on large screens */}
@@ -137,20 +139,21 @@ export function Clock() {
                     key={item.hour}
                     onClick={() => selectHour(item.hour, item.code as LangCode)}
                     title={item.native}
-                    className="absolute flex items-center justify-center rounded-full text-[9px] font-bold transition-all duration-300"
+                    className="absolute flex items-center justify-center rounded-full transition-all duration-300"
                     style={{
-                      width: 28,
-                      height: 28,
-                      left: x - 14,
-                      top: y - 14,
-                      background: isActive ? "#f59e0b" : "#27272a",
-                      border: `${isActive ? 2 : 1}px solid ${isActive ? "#fff" : "#52525b"}`,
-                      color: isActive ? "#000" : "#a1a1aa",
+                      width: 32,
+                      height: 32,
+                      left: x - 16,
+                      top: y - 16,
+                      fontSize: 18,
+                      lineHeight: 1,
+                      background: isActive ? "#f59e0b22" : "transparent",
+                      border: `${isActive ? 2 : 1}px solid ${isActive ? "#f59e0b" : "#3f3f46"}`,
                       boxShadow: isActive ? "0 0 10px #f59e0b" : undefined,
                       zIndex: 2,
                     }}
                   >
-                    {item.hour === 24 ? "24" : item.hour}
+                    {item.flag}
                   </button>
                 );
               })}
@@ -215,7 +218,8 @@ export function Clock() {
                         : "bg-zinc-900/40 border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
                     }`}
                   >
-                    <span className="font-mono text-[10px] text-zinc-600 w-5 shrink-0">{item.hour}</span>
+                    <span className="text-base leading-none shrink-0">{item.flag}</span>
+                    <span className="font-mono text-[10px] text-zinc-500 shrink-0">{item.iso}</span>
                     <span className="truncate">{item.label}</span>
                     {item.rtl && (
                       <span className="ml-auto text-[9px] text-zinc-600 shrink-0">RTL</span>
