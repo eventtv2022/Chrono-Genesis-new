@@ -12,6 +12,7 @@ import * as Location from "expo-location";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
+import { useLanguage } from "@/context/LanguageContext";
 
 const BASE_URL = getBaseUrl();
 

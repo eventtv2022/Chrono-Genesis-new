@@ -18,6 +18,7 @@ import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { LogoBrand } from "@/components/LogoBrand";
+import { useLanguage } from "@/context/LanguageContext";
 
 const BASE_URL = getBaseUrl();
 
