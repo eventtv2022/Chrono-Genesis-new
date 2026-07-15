@@ -160,7 +160,7 @@ export async function publishVideoToTelegram(
       const errDesc = data.description ?? "Unknown Telegram error";
 
       // Постоянные ошибки — не повторяем
-      if (errCode === 400 || errCode === 403 || errCode === 404) {
+      if (errCode === 400 || errCode === 401 || errCode === 403 || errCode === 404) {
         logger.error({ errCode, errDesc, chatId }, "Telegram publish: permanent error");
         return { ok: false, description: errDesc, errorCode: errCode };
       }
