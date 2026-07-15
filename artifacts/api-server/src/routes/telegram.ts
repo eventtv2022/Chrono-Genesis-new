@@ -22,6 +22,7 @@ import {
   publishVideoToTelegram,
   buildTVCaption,
   getThreadIdForSlotType,
+  resolvePublicVideoUrl,
   type PublishResult,
 } from "../services/tvPublishService";
 
@@ -120,11 +121,20 @@ router.post(
     // ── Resolve thread ID ────────────────────────────────────────────────────
     const threadId = overrideThreadId ?? getThreadIdForSlotType(slot.slotType);
 
+    // ── Resolve absolute public video URL ────────────────────────────────────
+    const videoUrl = resolvePublicVideoUrl(capsule.mediaUrl, capsule.catcastUrl);
+    if (!videoUrl) {
+      res.status(422).json({
+        error: "Cannot resolve a public video URL for this capsule. Ensure REPLIT_DOMAINS is set or the capsule has a catcastUrl.",
+      });
+      return;
+    }
+
     // ── Publish ───────────────────────────────────────────────────────────────
-    logger.info({ slotId, slotType: slot.slotType, threadId }, "Publishing capsule to Telegram");
+    logger.info({ slotId, slotType: slot.slotType, threadId, videoUrl }, "Publishing capsule to Telegram");
 
     const result: PublishResult = await publishVideoToTelegram(
-      { videoUrl: capsule.mediaUrl, caption, threadId },
+      { videoUrl, caption, threadId },
     );
 
     if (!result.ok) {

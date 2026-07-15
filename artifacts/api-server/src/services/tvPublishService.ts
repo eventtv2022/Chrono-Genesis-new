@@ -16,21 +16,59 @@ import { logger } from "../lib/logger";
 const TG_API_BASE = "https://api.telegram.org/bot";
 
 // ─── Thread-ID routing by slot type ───────────────────────────────────────────
-
-const THREAD_IDS: Record<string, string | undefined> = {
-  citizen: process.env["TELEGRAM_TV_THREAD_CITIZEN"],
-  quarter: process.env["TELEGRAM_TV_THREAD_QUARTER"],
-  half:    process.env["TELEGRAM_TV_THREAD_HALF"],
-  apex:    process.env["TELEGRAM_TV_THREAD_APEX"],
-};
-
-const DEFAULT_THREAD_ID = process.env["TELEGRAM_TV_THREAD_ID"];
+// Read lazily (inside the function) so changes to env vars after module load
+// are picked up without a server restart.
 
 export function getThreadIdForSlotType(slotType: string): number | undefined {
-  const raw = THREAD_IDS[slotType] ?? DEFAULT_THREAD_ID;
+  const threadMap: Record<string, string | undefined> = {
+    citizen: process.env["TELEGRAM_TV_THREAD_CITIZEN"],
+    quarter: process.env["TELEGRAM_TV_THREAD_QUARTER"],
+    half:    process.env["TELEGRAM_TV_THREAD_HALF"],
+    apex:    process.env["TELEGRAM_TV_THREAD_APEX"],
+  };
+  const raw = threadMap[slotType] ?? process.env["TELEGRAM_TV_THREAD_ID"];
   if (!raw) return undefined;
   const n = parseInt(raw, 10);
   return isNaN(n) ? undefined : n;
+}
+
+// ─── URL resolver ──────────────────────────────────────────────────────────────
+
+/**
+ * Converts a potentially relative mediaUrl into an absolute public https URL
+ * that Telegram servers can download.
+ *
+ * Priority:
+ *  1. catcastUrl  — already a public absolute URL from CatCast CDN
+ *  2. mediaUrl    — may be relative (/api/tv/media/slot_X.mp4); resolved using
+ *                   the first entry of REPLIT_DOMAINS
+ *
+ * Returns null if neither produces a usable URL.
+ */
+export function resolvePublicVideoUrl(
+  mediaUrl:   string | null | undefined,
+  catcastUrl: string | null | undefined,
+): string | null {
+  // Prefer catcastUrl — it's always a public absolute URL
+  if (catcastUrl && catcastUrl.startsWith("https://")) return catcastUrl;
+
+  if (!mediaUrl) return null;
+
+  // Already absolute
+  if (mediaUrl.startsWith("https://")) return mediaUrl;
+
+  // Relative path — prepend the first public domain
+  const domains = process.env["REPLIT_DOMAINS"] ?? "";
+  const domain  = domains.split(",")[0]?.trim();
+  if (!domain) {
+    logger.warn(
+      { mediaUrl },
+      "REPLIT_DOMAINS not set — cannot resolve relative mediaUrl to public URL for Telegram",
+    );
+    return null;
+  }
+
+  return `https://${domain}${mediaUrl.startsWith("/") ? "" : "/"}${mediaUrl}`;
 }
 
 // ─── Caption builder ───────────────────────────────────────────────────────────

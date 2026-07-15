@@ -8,6 +8,7 @@ import {
   publishVideoToTelegram,
   buildTVCaption,
   getThreadIdForSlotType,
+  resolvePublicVideoUrl,
 } from "./tvPublishService";
 import { citizensTable } from "@workspace/db";
 import { logger } from "../lib/logger";
@@ -161,6 +162,13 @@ export function enqueueRender(job: RenderJob): string {
 
                 if (!slot || !capsule?.mediaUrl) return;
 
+                // Resolve to an absolute public URL Telegram servers can fetch
+                const videoUrl = resolvePublicVideoUrl(capsule.mediaUrl, capsule.catcastUrl);
+                if (!videoUrl) {
+                  renderLog.warn({ slotId }, "Telegram TV auto-publish skipped: no public URL available");
+                  return;
+                }
+
                 const caption = buildTVCaption({
                   slotDate:     slot.date,
                   slotTime:     `${String(Math.floor(slot.minuteIndex / 60)).padStart(2, "0")}:${String(slot.minuteIndex % 60).padStart(2, "0")}`,
@@ -171,8 +179,9 @@ export function enqueueRender(job: RenderJob): string {
                 });
 
                 const threadId = getThreadIdForSlotType(slot.slotType);
+                renderLog.info({ slotId, videoUrl, threadId }, "Sending video to Telegram TV");
                 const tgResult = await publishVideoToTelegram(
-                  { videoUrl: capsule.mediaUrl, caption, threadId },
+                  { videoUrl, caption, threadId },
                 );
 
                 if (tgResult.ok) {
