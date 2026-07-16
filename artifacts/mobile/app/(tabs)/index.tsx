@@ -967,6 +967,22 @@ export default function TimerScreen() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
+  // ── Logout confirmation (inline, works in web too) ──────────────────────────
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleLogoutPress = useCallback(() => {
+    if (confirmLogout) {
+      if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+      setCitizen(null);
+      setConfirmLogout(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      setConfirmLogout(true);
+      logoutTimerRef.current = setTimeout(() => setConfirmLogout(false), 3000);
+    }
+  }, [confirmLogout]);
+
   const { data: citizens = [], isLoading: loadingCitizens } = useQuery<Citizen[]>({
     queryKey: ["citizens"],
     queryFn: async () => {
@@ -1140,17 +1156,19 @@ export default function TimerScreen() {
               <Feather name="refresh-cw" size={15} color={colors.mutedForeground} />
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.passportLogout, { borderColor: colors.destructive + "55", backgroundColor: colors.destructive + "15" }]}
-              onPress={() => {
-                Alert.alert(ui.logout_confirm_title, ui.logout_confirm_msg, [
-                  { text: ui.cancel, style: "cancel" },
-                  { text: ui.logout_confirm_yes, style: "destructive", onPress: () => { setCitizen(null); } },
-                ]);
-              }}
+              style={[
+                styles.passportLogout,
+                confirmLogout
+                  ? { borderColor: colors.destructive, backgroundColor: colors.destructive + "33" }
+                  : { borderColor: colors.destructive + "55", backgroundColor: colors.destructive + "15" },
+              ]}
+              onPress={handleLogoutPress}
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
               <Feather name="log-out" size={13} color={colors.destructive} />
-              <Text style={[styles.passportLogoutText, { color: colors.destructive }]}>{ui.logout}</Text>
+              <Text style={[styles.passportLogoutText, { color: colors.destructive }]}>
+                {confirmLogout ? ui.logout_confirm_yes : ui.logout}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
