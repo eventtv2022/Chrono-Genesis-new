@@ -21,6 +21,8 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCitizen, CitizenProfile } from "@/context/CitizenContext";
+import { useLanguage } from "@/context/LanguageContext";
+import { UI } from "@/lib/i18n";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
 
@@ -50,8 +52,12 @@ export default function RegisterScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { setCitizen } = useCitizen();
+  const { lang, setLang } = useLanguage();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const loginLang: "ru" | "en" = lang === "ru" ? "ru" : "en";
+  const L = UI[loginLang];
+  const t = (ru: string, en: string) => loginLang === "ru" ? ru : en;
 
   const [mode, setMode] = useState<Mode>("choose");
 
@@ -320,7 +326,25 @@ export default function RegisterScreen() {
       <View style={styles.logoSection}>
         <LogoBrand size={72} />
         <Text style={[styles.title, { color: colors.foreground }]}>TimeNation</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Цифровое государство</Text>
+        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{L.digital_state}</Text>
+        {/* RU | EN toggle — visible only on entry modes */}
+        {(mode === "choose" || mode === "login" || mode === "forgot") && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 2, marginTop: 10 }}>
+            <TouchableOpacity
+              onPress={() => setLang("ru")}
+              style={[styles.langBtn, loginLang === "ru" && styles.langBtnActive]}
+            >
+              <Text style={[styles.langBtnText, loginLang === "ru" && styles.langBtnTextActive]}>RU</Text>
+            </TouchableOpacity>
+            <Text style={styles.langSep}>|</Text>
+            <TouchableOpacity
+              onPress={() => setLang("en")}
+              style={[styles.langBtn, loginLang === "en" && styles.langBtnActive]}
+            >
+              <Text style={[styles.langBtnText, loginLang === "en" && styles.langBtnTextActive]}>EN</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* ── CHOOSE ── */}
@@ -328,11 +352,11 @@ export default function RegisterScreen() {
         <View style={styles.section}>
           <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary }]} onPress={() => setMode("register")} activeOpacity={0.8}>
             <Feather name="user-plus" size={18} color={colors.primaryForeground} />
-            <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>Стать гражданином</Text>
+            <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>{t("Стать гражданином", "Become a Citizen")}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.secondaryBtn, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => setMode("login")} activeOpacity={0.8}>
             <Feather name="log-in" size={18} color={colors.foreground} />
-            <Text style={[styles.secondaryBtnText, { color: colors.foreground }]}>Войти по телефону</Text>
+            <Text style={[styles.secondaryBtnText, { color: colors.foreground }]}>{t("Войти по телефону", "Login by phone")}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.secondaryBtn, { backgroundColor: "transparent", borderColor: colors.border }]}
@@ -340,7 +364,7 @@ export default function RegisterScreen() {
             activeOpacity={0.8}
           >
             <Feather name="file-text" size={18} color={colors.mutedForeground} />
-            <Text style={[styles.secondaryBtnText, { color: colors.mutedForeground }]}>Найти мой паспорт</Text>
+            <Text style={[styles.secondaryBtnText, { color: colors.mutedForeground }]}>{t("Найти мой паспорт", "Find my passport")}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -509,13 +533,13 @@ export default function RegisterScreen() {
       {/* ── LOGIN ── */}
       {mode === "login" && (
         <View style={styles.section}>
-          <Text style={[styles.formTitle, { color: colors.foreground }]}>Вход</Text>
+          <Text style={[styles.formTitle, { color: colors.foreground }]}>{L.login}</Text>
 
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ТЕЛЕФОН</Text>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ТЕЛЕФОН", "PHONE")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
-            value={loginPhone} onChangeText={setLoginPhone} placeholder="+7..." placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" autoFocus />
+            value={loginPhone} onChangeText={setLoginPhone} placeholder={L.login_placeholder} placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" autoFocus />
 
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ПАРОЛЬ</Text>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ПАРОЛЬ", "PASSWORD")}</Text>
           <View style={{ position: "relative" }}>
             <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground, paddingRight: 44 }]}
               value={loginPassword} onChangeText={setLoginPassword} placeholder="••••••••" placeholderTextColor={colors.mutedForeground}
@@ -529,19 +553,19 @@ export default function RegisterScreen() {
           </View>
 
           <TouchableOpacity onPress={() => { setForgotPhone(loginPhone); setForgotSent(false); setMode("forgot"); }} style={{ marginBottom: 12, alignSelf: "flex-end" }}>
-            <Text style={{ fontSize: 13, color: colors.primary }}>Забыли пароль?</Text>
+            <Text style={{ fontSize: 13, color: colors.primary }}>{t("Забыли пароль?", "Forgot password?")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: loading ? 0.6 : 1 }]} onPress={handleLogin} disabled={loading} activeOpacity={0.8}>
             {loading ? <ActivityIndicator color={colors.primaryForeground} /> : (
               <>
                 <Feather name="log-in" size={18} color={colors.primaryForeground} />
-                <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>Войти</Text>
+                <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>{L.login}</Text>
               </>
             )}
           </TouchableOpacity>
           <TouchableOpacity style={styles.cancelBtn} onPress={() => setMode("choose")} activeOpacity={0.8}>
-            <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Назад</Text>
+            <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>{L.back}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -549,28 +573,28 @@ export default function RegisterScreen() {
       {/* ── FORGOT PASSWORD ── */}
       {mode === "forgot" && (
         <View style={styles.section}>
-          <Text style={[styles.formTitle, { color: colors.foreground }]}>Восстановление пароля</Text>
+          <Text style={[styles.formTitle, { color: colors.foreground }]}>{t("Восстановление пароля", "Password Recovery")}</Text>
 
           {forgotSent ? (
             <View style={[styles.infoBox, { backgroundColor: "#22c55e20", borderColor: "#22c55e60" }]}>
               <Feather name="check-circle" size={18} color="#22c55e" />
               <Text style={[styles.infoText, { color: colors.foreground }]}>
-                Токен восстановления выдан. Администратор вышлет ссылку для сброса пароля.
+                {t("Токен восстановления выдан. Администратор вышлет ссылку для сброса пароля.", "Recovery token issued. An administrator will send a password reset link.")}
               </Text>
             </View>
           ) : (
             <>
               <Text style={[styles.infoText, { color: colors.mutedForeground, marginBottom: 12 }]}>
-                Введите телефон, привязанный к аккаунту. Токен для сброса будет выдан администратором.
+                {t("Введите телефон, привязанный к аккаунту. Токен для сброса будет выдан администратором.", "Enter the phone number linked to your account. A reset token will be issued by an administrator.")}
               </Text>
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ТЕЛЕФОН</Text>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ТЕЛЕФОН", "PHONE")}</Text>
               <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
-                value={forgotPhone} onChangeText={setForgotPhone} placeholder="+7..." placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" autoFocus />
+                value={forgotPhone} onChangeText={setForgotPhone} placeholder={L.login_placeholder} placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" autoFocus />
               <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: loading ? 0.6 : 1 }]} onPress={handleForgotPassword} disabled={loading} activeOpacity={0.8}>
                 {loading ? <ActivityIndicator color={colors.primaryForeground} /> : (
                   <>
                     <Feather name="send" size={18} color={colors.primaryForeground} />
-                    <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>Запросить сброс</Text>
+                    <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>{t("Запросить сброс", "Request Reset")}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -578,7 +602,7 @@ export default function RegisterScreen() {
           )}
 
           <TouchableOpacity style={styles.cancelBtn} onPress={() => setMode("login")} activeOpacity={0.8}>
-            <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Назад ко входу</Text>
+            <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>{t("Назад ко входу", "Back to Login")}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -660,6 +684,11 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     logoSection: { alignItems: "center", paddingVertical: 32, gap: 10 },
     title: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: 1 },
     subtitle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+    langBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: colors.border },
+    langBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    langBtnText: { fontSize: 11, fontFamily: "Inter_700Bold", color: colors.mutedForeground, letterSpacing: 0.5 },
+    langBtnTextActive: { color: colors.primaryForeground },
+    langSep: { fontSize: 11, color: colors.mutedForeground + "55", marginHorizontal: 2 },
     section: { gap: 4 },
     formTitle: { fontSize: 22, fontFamily: "Inter_700Bold", marginBottom: 12 },
     fieldLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 1.2, marginBottom: 5, marginTop: 10 },
