@@ -6,7 +6,7 @@ import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 
 function CitizenWidget() {
-  const { citizen, setCitizen, refreshCitizen } = useCitizen();
+  const { citizen, setCitizen, setAuthToken, refreshCitizen } = useCitizen();
   const { t, lang, setLang } = useLanguage();
   const loginLang: "ru" | "en" = lang === "ru" ? "ru" : "en";
   const [input, setInput] = useState("");
@@ -34,7 +34,7 @@ function CitizenWidget() {
         setCitizen(data as unknown as Parameters<typeof setCitizen>[0]);
         setInput(""); setPassword("");
       } else {
-        // Номер телефона — авторизация через auth/login
+        // Номер телефона — авторизация через auth/login (возвращает authToken)
         const res = await fetch("/api/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -44,6 +44,8 @@ function CitizenWidget() {
         if (!res.ok) { setError((data["error"] as string) ?? t.citizen_not_found); setLoading(false); return; }
         if (!data?.["id"]) { setError(t.citizen_not_found); setLoading(false); return; }
         setCitizen(data as unknown as Parameters<typeof setCitizen>[0]);
+        const tok = data["authToken"] as string | undefined;
+        if (tok) setAuthToken(tok);
         setInput(""); setPassword("");
       }
     } catch {

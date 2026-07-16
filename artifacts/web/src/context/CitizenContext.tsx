@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 
 const STORAGE_KEY = "timenation_citizen";
+const AUTH_TOKEN_KEY = "timenation_auth_token";
 
 export interface CitizenProfile {
   id: number;
@@ -22,6 +23,9 @@ export interface CitizenProfile {
 interface CitizenContextType {
   citizen: CitizenProfile | null;
   setCitizen: (c: CitizenProfile | null) => void;
+  authToken: string | null;
+  setAuthToken: (token: string | null) => void;
+  authHeaders: Record<string, string>;
   refreshCitizen: () => Promise<void>;
   isLoading: boolean;
 }
@@ -29,12 +33,16 @@ interface CitizenContextType {
 const CitizenContext = createContext<CitizenContextType>({
   citizen: null,
   setCitizen: () => {},
+  authToken: null,
+  setAuthToken: () => {},
+  authHeaders: {},
   refreshCitizen: async () => {},
   isLoading: true,
 });
 
 export function CitizenProvider({ children }: { children: React.ReactNode }) {
   const [citizen, setCitizenState] = useState<CitizenProfile | null>(null);
+  const [authToken, setAuthTokenState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -44,6 +52,8 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
         const stored = JSON.parse(raw) as CitizenProfile;
         setCitizenState(stored);
       }
+      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+      if (token) setAuthTokenState(token);
     } catch {}
     setIsLoading(false);
   }, []);
@@ -66,11 +76,26 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(c));
     } else {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      setAuthTokenState(null);
     }
   }
 
+  function setAuthToken(token: string | null) {
+    setAuthTokenState(token);
+    if (token) {
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+  }
+
+  const authHeaders: Record<string, string> = authToken
+    ? { Authorization: `Bearer ${authToken}` }
+    : {};
+
   return (
-    <CitizenContext.Provider value={{ citizen, setCitizen, refreshCitizen, isLoading }}>
+    <CitizenContext.Provider value={{ citizen, setCitizen, authToken, setAuthToken, authHeaders, refreshCitizen, isLoading }}>
       {children}
     </CitizenContext.Provider>
   );

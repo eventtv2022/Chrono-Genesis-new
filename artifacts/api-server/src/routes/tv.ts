@@ -4,6 +4,7 @@ import { tvSlotsTable, tvCapsulesTable, citizensTable, transactionsTable } from 
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
+import { requireAuth } from "../middleware/auth";
 import {
   ensureSlotsForDate,
   getFingerprint,
@@ -113,7 +114,7 @@ router.get("/tv/styles/preview", async (req, res): Promise<void> => {
 
 const BookSlotBody = z.object({
   slotId: z.number().int().positive(),
-  citizenId: z.number().int().positive(),
+  citizenId: z.number().int().positive().optional(), // deprecated — use Bearer token instead
   paymentType: z.enum(["fiat", "timeltr"]),
   successUrl: z.string().optional(),
   cancelUrl: z.string().optional(),
@@ -206,11 +207,13 @@ router.get("/tv/slots/:id", async (req, res): Promise<void> => {
 // ─── POST /api/tv/slots/book ──────────────────────────────────────────────────
 // paymentType=fiat   → Stripe EUR checkout session
 // paymentType=timeltr → instant hard burn from citizen balance
-router.post("/tv/slots/book", async (req, res): Promise<void> => {
+router.post("/tv/slots/book", requireAuth, async (req, res): Promise<void> => {
   const parsed = BookSlotBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { slotId, citizenId, paymentType, successUrl, cancelUrl } = parsed.data;
+  const { slotId, paymentType, successUrl, cancelUrl } = parsed.data;
+  // citizenId comes from Bearer token (req.citizen), body field is deprecated
+  const citizenId = req.citizen!.id;
 
   // Load slot
   const [slot] = await db
@@ -225,13 +228,7 @@ router.post("/tv/slots/book", async (req, res): Promise<void> => {
     return;
   }
 
-  // Load citizen
-  const [citizen] = await db
-    .select()
-    .from(citizensTable)
-    .where(eq(citizensTable.id, citizenId))
-    .limit(1);
-
+  const citizen = req.citizen!;
   if (!citizen) { res.status(404).json({ error: "Гражданин не найден" }); return; }
 
   // Anti-consecutive guard

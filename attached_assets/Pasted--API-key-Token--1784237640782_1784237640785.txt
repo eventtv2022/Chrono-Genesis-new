@@ -1,0 +1,185 @@
+Геннадий, отличный выбор! Путь со скрытым токеном авторизации (API-key/Token) — это золотой стандарт для мобильных и веб-приложений. Он абсолютно не усложняет UX (пользователь даже не заметит его наличия), но полностью закрывает дыру безопасности, предотвращая подмену ID граждан.
+
+Ниже приведена подробная, готовая к внедрению инструкция с кодом для Replit, разделенная на 3 простых шага: база данных, бэкенд (middleware) и фронтенд.
+
+---
+
+### Шаг 1. Добавляем поле токена в схему Drizzle DB
+
+Нам нужно добавить уникальную строку `authToken` в таблицу граждан (`citizens`). При регистрации или первом входе система будет генерировать случайный хэш (токен) и записывать его туда.
+
+**Файл схемы:** `lib/db/src/schema/citizens.ts` (или аналогичный, где описана таблица `citizensTable`)
+
+Добавьте новое текстовое поле `authToken`:
+
+```typescript
+import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+
+export const citizensTable = pgTable("citizens", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  // ... ваши существующие поля (email, passwordHash и т.д.) ...
+  
+  // ДОБАВЛЯЕМ СЮДА: Уникальный токен авторизации
+  authToken: text("auth_token").unique(), 
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+```
+
+> *После сохранения этого файла в Replit не забудьте запустить миграцию базы данных (обычно Replit Agent делает это автоматически через команды `npx drizzle-kit push` или аналогичные).*
+
+---
+
+### Шаг 2. Создаем middleware для проверки токена на бэкенде
+
+Создадим промежуточное ПО (функцию-посредник), которое будет перехватывать входящие запросы к защищенным эндпоинтам (таким как оплата слота, создание аукциона или ставка), вытаскивать токен из заголовков и проверять его валидность.
+
+**Файл на бэкенде:** например, `artifacts/api-server/src/middleware/auth.ts`
+
+```typescript
+import { Request, Response, NextFunction } from "express";
+import { db } from "../db"; // ваш инстанс подключения к БД
+import { citizensTable } from "../../../lib/db/src/schema/citizens";
+import { eq } from "drizzle-orm";
+
+// Расширяем стандартный тип Request в Express, чтобы прикреплять проверенного гражданина
+declare global {
+  namespace Express {
+    interface Request {
+      citizen?: typeof citizensTable.$inferSelect;
+    }
+  }
+}
+
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  // 1. Извлекаем токен из заголовка "Authorization"
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Требуется авторизация (отсутствует токен)" });
+  }
+
+  const token = authHeader.split(" ")[1]; // Получаем сам токен после слова "Bearer"
+
+  try {
+    // 2. Ищем гражданина в БД по этому токену
+    const [citizen] = await db
+      .select()
+      .from(citizensTable)
+      .where(eq(citizensTable.authToken, token))
+      .limit(1);
+
+    if (!citizen) {
+      return res.status(401).json({ error: "Неверный или просроченный токен авторизации" });
+    }
+
+    // 3. Записываем найденного гражданина в объект запроса req
+    req.citizen = citizen;
+    
+    next(); // Пропускаем запрос дальше к обработчику (route handler)
+  } catch (error) {
+    console.error("Ошибка при проверке токена:", error);
+    return res.status(500).json({ error: "Внутренняя ошибка сервера при авторизации" });
+  }
+}
+
+```
+
+#### Как теперь использовать это middleware в роутах (например, в аукционах):
+
+Вместо того чтобы доверять `buyerId` из тела запроса `req.body`, мы подключаем `requireAuth` и берем ID строго из авторизованного объекта:
+
+```typescript
+import { requireAuth } from "../middleware/auth";
+
+// Защищаем эндпоинт ставки
+router.post("/api/auctions/:id/bid", requireAuth, async (req, res) => {
+  const citizenId = req.citizen!.id; // ID проверен и на 100% безопасен!
+  
+  // ... логика совершения ставки с использованием citizenId ...
+});
+
+```
+
+---
+
+### Шаг 3. Передаем токен в заголовках на фронтенде (Web / Expo)
+
+При успешном входе или регистрации сервер должен возвращать этот токен фронтенду, а фронтенд сохраняет его и прикрепляет ко всем последующим API-запросам.
+
+#### Сохранение токена на клиенте:
+
+* **В Web (браузер):** `localStorage.setItem('auth_token', token);`
+* **В Mobile (Expo / React Native):** Используйте безопасное хранилище `SecureStore`:
+```typescript
+import * as SecureStore from 'expo-secure-store';
+await SecureStore.setItemAsync('auth_token', token);
+
+```
+
+
+
+#### Пример отправки запроса с токеном из фронтенда:
+
+Каждый раз при отправке защищенного запроса (например, через `fetch` или `axios`), добавляйте заголовок `Authorization: Bearer <ваш_токен>`:
+
+```typescript
+async function placeBid(auctionId: number, bidAmount: number) {
+  // Получаем токен из памяти устройства (пример для Web)
+  const token = localStorage.getItem('auth_token'); 
+
+  const response = await fetch(`/api/auctions/${auctionId}/bid`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // ДОБАВЛЯЕМ ЭТОТ ЗАГОЛОВОК:
+      'Authorization': `Bearer ${token}` 
+    },
+    body: JSON.stringify({ amount: bidAmount }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json();
+    alert(`Ошибка: ${err.error}`);
+    return;
+  }
+
+  alert("Ставка успешно принята!");
+}
+
+```
+
+---
+
+### 🚀 Что отправить Replit Agent для реализации этой задачи:
+
+Скопируйте этот текст и отправьте его в Replit чат. Он мгновенно настроит всю систему защиты:
+
+```text
+TITLE: Implement Secure Token Authentication (Auth-Bypass Prevention)
+
+We need to close the auth-bypass vulnerability identified in the audit. Instead of raw "citizenId" passed in request bodies, we will use a secure token-based authentication (Authorization Bearer Token).
+
+Please perform the following steps in our codebase:
+
+1. Database Schema (lib/db/src/schema/):
+- Add a unique nullable string column "authToken" (auth_token) to the citizens table.
+- Ensure that upon successful login or registration, a secure random token (e.g., crypto.randomBytes(32).toString('hex')) is generated, saved to this column, and returned to the client.
+
+2. Backend Middleware:
+- Create an authentication middleware (e.g., "requireAuth") that extracts the token from the "Authorization: Bearer <token>" header.
+- Look up the citizen in the database by this token. If not found or header is missing, return a 401 Unauthorized error.
+- If found, append the authenticated citizen object to "req.citizen" and proceed.
+
+3. Secure Routes:
+- Update sensitive endpoints (like TV slot booking in "tvSlots.ts" and bidding/finalizing in "auctions.ts") to use this middleware.
+- In these route handlers, replace any raw "req.body.buyerId" or "req.body.sellerId" with the verified "req.citizen.id".
+
+4. Frontend Integration:
+- In both Web and Mobile (Expo) API helper clients, ensure that the returned token is saved (to localStorage in web and Expo SecureStore in mobile) and automatically appended to the "Authorization" header for all protected API requests.
+
+Please run the migrations and verify that there are no typecheck errors.
+
+```

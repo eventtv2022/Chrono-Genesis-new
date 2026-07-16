@@ -100,7 +100,7 @@ function formatCountdown(seconds: number): string {
 export default function RegisterScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { setCitizen } = useCitizen();
+  const { setCitizen, setAuthToken } = useCitizen();
   const { lang, setLang } = useLanguage();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -302,6 +302,8 @@ export default function RegisterScreen() {
       };
 
       setCitizen(cd as CitizenProfile);
+      const regToken = (cd as CitizenProfile & { authToken?: string }).authToken;
+      if (regToken) setAuthToken(regToken);
       queryClient.invalidateQueries({ queryKey: ["citizens"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -342,6 +344,8 @@ export default function RegisterScreen() {
         return;
       }
       setCitizen(data as CitizenProfile);
+      const loginToken = (data as CitizenProfile & { authToken?: string }).authToken;
+      if (loginToken) setAuthToken(loginToken);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch {

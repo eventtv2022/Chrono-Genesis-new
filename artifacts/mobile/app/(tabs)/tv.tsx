@@ -476,7 +476,7 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
   const slotTypeLabels = getSlotTypeLabels(t);
   const broadcastLabels = getBroadcastLabels(t);
   const qc = useQueryClient();
-  const { citizen } = useCitizen();
+  const { citizen, authHeaders } = useCitizen();
   const styles = getStyles(colors);
 
   const [seedText, setSeedText] = useState("");
@@ -1148,6 +1148,7 @@ const FIAT_PRICES: Record<string, string> = {
 
 function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooked }: BookSlotModalProps) {
   const { t } = useLanguage();
+  const { authHeaders } = useCitizen();
   const slotTypeLabels = getSlotTypeLabels(t);
   const filterLabels = getFilterLabels(t);
   const qc = useQueryClient();
@@ -1175,10 +1176,9 @@ function BookSlotModal({ visible, onClose, slots, citizen, date, colors, onBooke
       if (!selected) throw new Error("No slot selected");
       const res = await fetch(`${BASE_URL}/api/tv/slots/book`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           slotId: selected.id,
-          citizenId: citizen.id,
           paymentType,
           successUrl: `${BASE_URL}/tv?booked=1`,
           cancelUrl: `${BASE_URL}/tv`,

@@ -4,18 +4,17 @@ import { auctionsTable, auctionLogsTable, citizensTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
+import { requireAuth } from "../middleware/auth";
 
 const router: IRouter = Router();
 
 const CreateAuctionBody = z.object({
-  sellerId: z.number().int().positive(),
   amountDarmins: z.number().int().positive(),
   startingPrice: z.number().positive(),
   durationHours: z.number().int().min(1).max(168).default(24),
 });
 
 const BidBody = z.object({
-  buyerId: z.number().int().positive(),
   bid: z.number().positive(),
 });
 
@@ -42,19 +41,14 @@ router.get("/auctions", async (_req, res): Promise<void> => {
 });
 
 // POST /api/auctions — создать лот
-router.post("/auctions", async (req, res): Promise<void> => {
+router.post("/auctions", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateAuctionBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { sellerId, amountDarmins, startingPrice, durationHours } = parsed.data;
+  const sellerId = req.citizen!.id;
+  const { amountDarmins, startingPrice, durationHours } = parsed.data;
 
-  const [seller] = await db
-    .select()
-    .from(citizensTable)
-    .where(eq(citizensTable.id, sellerId))
-    .limit(1);
-
-  if (!seller) { res.status(404).json({ error: "Seller not found" }); return; }
+  const seller = req.citizen!;
 
   // Родовая минута (1 Д) не может быть выставлена
   const transferable = seller.balanceMinutes - 1;
@@ -81,14 +75,15 @@ router.post("/auctions", async (req, res): Promise<void> => {
 });
 
 // POST /api/auctions/:id/bid — сделать ставку
-router.post("/auctions/:id/bid", async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id ?? "", 10);
+router.post("/auctions/:id/bid", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid auction ID" }); return; }
 
   const parsed = BidBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { buyerId, bid } = parsed.data;
+  const buyerId = req.citizen!.id;
+  const { bid } = parsed.data;
 
   const [auction] = await db
     .select()

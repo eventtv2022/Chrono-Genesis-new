@@ -38,7 +38,7 @@ function timeLeft(endsAt: string, finished: string): string {
 export default function AuctionsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { citizen, isLoading: citizenLoading } = useCitizen();
+  const { citizen, authHeaders, isLoading: citizenLoading } = useCitizen();
   const { t } = useLanguage();
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
@@ -63,9 +63,8 @@ export default function AuctionsScreen() {
     mutationFn: async () => {
       const res = await fetch(`${BASE_URL}/api/auctions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
-          sellerId: citizen?.id,
           amountDarmins: parseInt(amount, 10),
           startingPrice: parseFloat(price),
           durationHours: parseInt(hours, 10),
@@ -88,8 +87,8 @@ export default function AuctionsScreen() {
     mutationFn: async ({ auctionId, bid }: { auctionId: number; bid: number }) => {
       const res = await fetch(`${BASE_URL}/api/auctions/${auctionId}/bid`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ buyerId: citizen?.id, bid }),
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ bid }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error((data as { error: string }).error);

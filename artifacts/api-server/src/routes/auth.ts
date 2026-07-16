@@ -20,7 +20,8 @@ const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 // ── Safe citizen shape (never exposes password fields) ────────────────────────
 function safeRow(c: typeof citizensTable.$inferSelect) {
-  const { passwordHash: _ph, resetPasswordToken: _rt, resetPasswordExpires: _re, ...rest } = c;
+  // Never expose password fields or the auth token in regular profile responses
+  const { passwordHash: _ph, resetPasswordToken: _rt, resetPasswordExpires: _re, authToken: _at, ...rest } = c;
   return {
     ...rest,
     email:      tryDecrypt(c.email)      ?? null,
@@ -100,12 +101,15 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     }
   }
 
+  const newAuthToken = crypto.randomBytes(32).toString("hex");
+
   const [citizen] = await db
     .insert(citizensTable)
     .values({
       name,
       phone,
       passwordHash,
+      authToken: newAuthToken,
       surname:    encryptNullable(surname ?? null),
       givenNames: encryptNullable(givenNames ?? null),
       dateOfBirth: dateOfBirth || null,
@@ -125,6 +129,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 
   res.status(201).json({
     ...safeRow(citizen!),
+    authToken: newAuthToken,
     citizenNumber,
     availableAt: availableAt.toISOString(),
     registrationStatus: "pending",
@@ -177,8 +182,15 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     req.log.info({ citizenId: citizen.id }, "Login via legacy phone-only (no password set)");
   }
 
+  // Issue or reuse authToken
+  let token = citizen.authToken;
+  if (!token) {
+    token = crypto.randomBytes(32).toString("hex");
+    await db.update(citizensTable).set({ authToken: token }).where(eq(citizensTable.id, citizen.id));
+  }
+
   req.log.info({ citizenId: citizen.id }, "Citizen logged in");
-  res.json(safeRow(citizen));
+  res.json({ ...safeRow(citizen), authToken: token });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

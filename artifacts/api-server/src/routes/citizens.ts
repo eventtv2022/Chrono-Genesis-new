@@ -45,7 +45,7 @@ const router: IRouter = Router();
 
 function formatCitizenRow(c: typeof citizensTable.$inferSelect) {
   // Explicitly exclude sensitive auth fields — never expose to clients
-  const { passwordHash: _ph, resetPasswordToken: _rt, resetPasswordExpires: _re, ...safe } = c;
+  const { passwordHash: _ph, resetPasswordToken: _rt, resetPasswordExpires: _re, authToken: _at, ...safe } = c;
   return {
     ...safe,
     // Decrypt PII fields before returning — encrypted values stored as v1:... in DB
@@ -412,7 +412,15 @@ router.get("/citizens/by-phone/:phone", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(formatCitizenRow(citizen));
+  // Issue or reuse authToken on login via phone lookup
+  let token = citizen.authToken;
+  if (!token) {
+    const { randomBytes } = await import("crypto");
+    token = randomBytes(32).toString("hex");
+    await db.update(citizensTable).set({ authToken: token }).where(eq(citizensTable.id, citizen.id));
+  }
+
+  res.json({ ...formatCitizenRow(citizen), authToken: token });
 });
 
 // ── GET /citizens/number/:num/status ─────────────────────────────────────────

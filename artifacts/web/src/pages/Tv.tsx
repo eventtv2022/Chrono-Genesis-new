@@ -344,7 +344,7 @@ export function Tv() {
   const slots = (slotsData?.slots ?? []) as SlotLike[];
   const schedule = scheduleData?.schedule ?? [];
 
-  const { citizen, refreshCitizen } = useCitizen();
+  const { citizen, authHeaders, refreshCitizen } = useCitizen();
   const { t } = useLanguage();
 
   // ── Terminal form state
@@ -569,9 +569,9 @@ export function Tv() {
 
       const res = await fetch("/api/tv/slots/book", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
-          slotId: selectedSlot.id, citizenId: citizen.id, paymentType,
+          slotId: selectedSlot.id, paymentType,
           successUrl: `${origin}/tv?booked=1`, cancelUrl: `${origin}/tv`,
         }),
       });
