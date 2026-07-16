@@ -188,7 +188,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
   colors: ReturnType<typeof useColors>;
   refreshCitizen: () => Promise<void>;
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const STATUS_LABELS: Record<string, { label: string; color: string }> = {
     open:            { label: t.deal_status_open,      color: STATUS_COLORS.open },
     accepted:        { label: t.deal_status_accepted,  color: STATUS_COLORS.accepted },
@@ -278,7 +278,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       const r = await fetch(`${BASE_URL}/api/deals/audit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: description.trim() }),
+        body: JSON.stringify({ description: description.trim(), lang }),
       });
       const data = await r.json() as { suggestedAmount?: number; summary?: string; breakdown?: string[]; error?: string };
       if (!r.ok) throw new Error(data.error ?? t.error);
@@ -674,7 +674,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
                 <View style={{ backgroundColor: colors.primary + "18", borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: colors.primary + "44" }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
                     <Feather name="cpu" size={15} color={colors.primary} />
-                    <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.primary }}>Заключение Минтруда</Text>
+                    <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.primary }}>{t.deal_ai_verdict}</Text>
                   </View>
                   <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular", lineHeight: 18, marginBottom: 10 }}>
                     {auditResult.summary}
@@ -698,7 +698,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
                 <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.mutedForeground, marginBottom: 4, letterSpacing: 0.5 }}>{t.deal_task_label}</Text>
                 <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular", lineHeight: 17 }} numberOfLines={4}>{description}</Text>
                 <TouchableOpacity onPress={() => setCreateStep("describe")} style={{ marginTop: 6 }}>
-                  <Text style={{ fontSize: 11, color: colors.primary, fontFamily: "Inter_700Bold" }}>✎ Изменить задачу</Text>
+                  <Text style={{ fontSize: 11, color: colors.primary, fontFamily: "Inter_700Bold" }}>{t.deal_change_task}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -751,7 +751,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
               {auditResult && parseInt(amount, 10) !== auditResult.suggestedAmount && (
                 <TouchableOpacity onPress={() => setAmount(String(auditResult.suggestedAmount))} style={{ marginTop: -8, marginBottom: 8, alignSelf: "flex-end", paddingRight: 4 }}>
                   <Text style={{ fontSize: 11, color: colors.primary, fontFamily: "Inter_400Regular" }}>
-                    ↩ Вернуть рекомендацию ({auditResult.suggestedAmount} Д)
+                    {t.deal_restore_rec} ({auditResult.suggestedAmount} Д)
                   </Text>
                 </TouchableOpacity>
               )}

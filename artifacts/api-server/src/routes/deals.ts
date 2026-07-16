@@ -29,6 +29,7 @@ const router: IRouter = Router();
 
 const AuditBody = z.object({
   description: z.string().min(5).max(2000),
+  lang: z.string().max(10).optional(),
 });
 
 const CreateDealBody = z.object({
@@ -66,30 +67,32 @@ router.post("/deals/audit", async (req, res): Promise<void> => {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    const prompt = `Ты — ИИ-Аудитор Министерства Труда суверенного государства TimeNation.
-Валюта государства — Дармины (Д). 1 Дармин = 1 минута реального рабочего времени.
+    const responseLang = parsed.data.lang ?? "ru";
 
-Задача гражданина:
+    const prompt = `You are the AI Auditor of the Ministry of Labor of the sovereign state TimeNation.
+The state currency is Darmins (Д). 1 Darmin = 1 real working minute.
+
+Citizen's task:
 ${parsed.data.description}
 
-Твоё задание — объективно оценить трудозатраты и вернуть ТОЛЬКО JSON без markdown-блоков.
+Your job is to objectively assess the labor cost and return ONLY JSON without markdown blocks.
 
-Формат ответа (строго JSON):
+Response format (strict JSON):
 {
-  "suggestedAmount": <целое число Д от 1 до 1000>,
-  "summary": "<краткая оценка задачи 1-2 предложения>",
+  "suggestedAmount": <integer Д from 1 to 1000>,
+  "summary": "<brief task assessment 1-2 sentences>",
   "breakdown": [
-    "<действие 1> — <N Д>",
-    "<действие 2> — <N Д>",
+    "<action 1> — <N Д>",
+    "<action 2> — <N Д>",
     ...
   ]
 }
 
-Правила:
-- 1 Дармин = 1 минута. Простая задача ~5-15 Д. Средняя ~30-60 Д. Сложная ~100-500 Д.
-- Разбей на 2-5 конкретных этапов с указанием минут.
-- Сумма breakdown должна равняться suggestedAmount.
-- Отвечай на русском языке.`;
+Rules:
+- 1 Darmin = 1 minute. Simple task ~5-15 Д. Medium ~30-60 Д. Complex ~100-500 Д.
+- Break into 2-5 concrete stages with minute counts.
+- Sum of breakdown must equal suggestedAmount.
+- Respond entirely in the language with BCP-47 code: ${responseLang}`;
 
     const result = await model.generateContent(prompt);
     const rawText = result.response.text().trim();
