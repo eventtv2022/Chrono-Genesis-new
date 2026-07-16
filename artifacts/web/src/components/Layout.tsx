@@ -7,7 +7,8 @@ import { useLanguage } from "@/context/LanguageContext";
 
 function CitizenWidget() {
   const { citizen, setCitizen, refreshCitizen } = useCitizen();
-  const { t } = useLanguage();
+  const { t, lang, setLang } = useLanguage();
+  const loginLang: "ru" | "en" = lang === "ru" ? "ru" : "en";
   const [input, setInput] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -84,7 +85,22 @@ function CitizenWidget() {
 
   return (
     <div className="px-3 py-3 border-t border-border">
-      <p className="text-[10px] text-muted-foreground font-mono mb-1.5 uppercase tracking-wider">{t.login_title}</p>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">{t.login_title}</p>
+        <div className="flex items-center gap-0.5 text-[10px] font-mono">
+          <button
+            type="button"
+            onClick={() => setLang("ru")}
+            className={`px-1.5 py-0.5 rounded transition-colors ${loginLang === "ru" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >RU</button>
+          <span className="text-muted-foreground/40">|</span>
+          <button
+            type="button"
+            onClick={() => setLang("en")}
+            className={`px-1.5 py-0.5 rounded transition-colors ${loginLang === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >EN</button>
+        </div>
+      </div>
       <form onSubmit={(e) => void handleLogin(e)} className="space-y-1.5">
         <input
           value={input}

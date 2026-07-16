@@ -3,6 +3,17 @@ import { type LangCode, UI, type UIStrings } from "@/i18n/ui";
 
 const STORAGE_KEY = "timenation_lang";
 
+function detectInitialLang(): LangCode {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY) as LangCode | null;
+    if (stored && stored in UI) return stored;
+    const browser = (navigator.language ?? "").toLowerCase();
+    return browser.startsWith("ru") ? "ru" : "en";
+  } catch {
+    return "en";
+  }
+}
+
 interface LanguageContextType {
   lang: LangCode;
   setLang: (code: LangCode) => void;
@@ -10,19 +21,13 @@ interface LanguageContextType {
 }
 
 const LanguageContext = createContext<LanguageContextType>({
-  lang: "ru",
+  lang: "en",
   setLang: () => {},
-  t: UI["ru"],
+  t: UI["en"],
 });
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<LangCode>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY) as LangCode | null;
-      if (stored && stored in UI) return stored;
-    } catch {}
-    return "ru";
-  });
+  const [lang, setLangState] = useState<LangCode>(detectInitialLang);
 
   function setLang(code: LangCode) {
     setLangState(code);

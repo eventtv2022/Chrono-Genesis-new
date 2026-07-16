@@ -20,6 +20,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { UI } from "@/lib/i18n";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
 import { AnimatedHourglass } from "@/components/AnimatedHourglass";
@@ -949,7 +950,9 @@ export default function TimerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { citizen, refreshCitizen, setCitizen } = useCitizen();
-  const { t: ui } = useLanguage();
+  const { t: ui, lang, setLang } = useLanguage();
+  const loginLang: "ru" | "en" = lang === "ru" ? "ru" : "en";
+  const loginUi = UI[loginLang];
   const router = useRouter();
   const queryClient = useQueryClient();
   const walletGuide = useContextualGuide("wallet");
@@ -1197,7 +1200,27 @@ export default function TimerScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.loginCard}>
-            <Text style={styles.loginCardTitle}>{ui.login}</Text>
+            {/* Title row + RU|EN toggle */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <Text style={styles.loginCardTitle}>{loginUi.login}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                <TouchableOpacity
+                  onPress={() => setLang("ru")}
+                  style={[styles.langToggleBtn, loginLang === "ru" && styles.langToggleBtnActive]}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 4 }}
+                >
+                  <Text style={[styles.langToggleText, loginLang === "ru" && styles.langToggleTextActive]}>RU</Text>
+                </TouchableOpacity>
+                <Text style={styles.langToggleSep}>|</Text>
+                <TouchableOpacity
+                  onPress={() => setLang("en")}
+                  style={[styles.langToggleBtn, loginLang === "en" && styles.langToggleBtnActive]}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 6 }}
+                >
+                  <Text style={[styles.langToggleText, loginLang === "en" && styles.langToggleTextActive]}>EN</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
 
             <View style={styles.loginInputWrap}>
               <Feather name="phone" size={13} color={colors.mutedForeground} style={styles.loginInputIcon} />
@@ -1205,7 +1228,7 @@ export default function TimerScreen() {
                 style={styles.loginInput}
                 value={loginPhone}
                 onChangeText={v => { setLoginPhone(v); setLoginError(null); }}
-                placeholder={ui.login_placeholder}
+                placeholder={loginUi.login_placeholder}
                 placeholderTextColor={colors.mutedForeground}
                 keyboardType="phone-pad"
                 autoCapitalize="none"
@@ -1219,7 +1242,7 @@ export default function TimerScreen() {
                 style={[styles.loginInput, { flex: 1 }]}
                 value={loginPassword}
                 onChangeText={v => { setLoginPassword(v); setLoginError(null); }}
-                placeholder={ui.login_password}
+                placeholder={loginUi.login_password}
                 placeholderTextColor={colors.mutedForeground}
                 secureTextEntry={!showLoginPassword}
                 autoCapitalize="none"
@@ -1240,18 +1263,18 @@ export default function TimerScreen() {
             >
               {loginLoading
                 ? <ActivityIndicator size="small" color={colors.primaryForeground} />
-                : <Text style={styles.loginBtnText}>{ui.login}</Text>
+                : <Text style={styles.loginBtnText}>{loginUi.login}</Text>
               }
             </TouchableOpacity>
 
             <View style={styles.loginDivider}>
               <View style={styles.loginDividerLine} />
-              <Text style={styles.loginDividerText}>или</Text>
+              <Text style={styles.loginDividerText}>{loginLang === "ru" ? "или" : "or"}</Text>
               <View style={styles.loginDividerLine} />
             </View>
             <TouchableOpacity style={styles.registerPrompt} onPress={() => router.push("/register")} activeOpacity={0.8}>
               <Feather name="user-plus" size={16} color={colors.primary} />
-              <Text style={styles.registerPromptText}>{ui.timer_get_citizenship}</Text>
+              <Text style={styles.registerPromptText}>{loginUi.timer_get_citizenship}</Text>
               <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
@@ -1469,7 +1492,12 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     regBannerSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 2 },
 
     loginCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 20, marginBottom: 16, gap: 10 },
-    loginCardTitle: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 4 },
+    loginCardTitle: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.foreground },
+    langToggleBtn: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5, borderWidth: 1, borderColor: colors.border },
+    langToggleBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    langToggleText: { fontSize: 10, fontFamily: "Inter_700Bold", color: colors.mutedForeground, letterSpacing: 0.5 },
+    langToggleTextActive: { color: colors.primaryForeground },
+    langToggleSep: { fontSize: 10, color: colors.mutedForeground + "55", marginHorizontal: 1 },
     loginInputWrap: { flexDirection: "row", alignItems: "center", backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
     loginInputIcon: { flexShrink: 0 },
     loginInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", color: colors.foreground },
