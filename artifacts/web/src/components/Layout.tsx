@@ -148,9 +148,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <aside className="w-60 border-r border-border bg-card flex flex-col h-full shrink-0">
         <div className="p-5 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-primary text-primary-foreground flex items-center justify-center font-bold text-base uppercase tracking-tighter rounded-sm">
-              TN
-            </div>
+            <img
+              src={`${import.meta.env.BASE_URL}logo.jpg`}
+              alt="TimeNation"
+              className="w-8 h-8 rounded-sm object-cover shrink-0"
+            />
             <div>
               <h1 className="font-bold text-base tracking-tight leading-none">TimeNation</h1>
               <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-mono mt-1">
