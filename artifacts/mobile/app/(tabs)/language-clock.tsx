@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-  ScrollView,
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -72,12 +71,14 @@ const TRANSLATIONS: Record<LangCode, { welcome: string; select_hour: string; btn
   uz: { welcome: "TimeNation-ga xush kelibsiz",     select_hour: "Soatingizni tanlang",        btn_publish: "Videoni nashr qilish", status: "Vaqt — dunyodagi barcha millatlarni birlashtiradigan umumiy tildir." },
 };
 
+const COLS = 4;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function LanguageClockScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
 
   const { lang, setLang } = useLanguage();
 
@@ -90,15 +91,15 @@ export default function LanguageClockScreen() {
   const active = LANGUAGES_24.find((l) => l.hour === activeHour) ?? LANGUAGES_24[0];
   const t = TRANSLATIONS[active.code];
 
-  // Clock geometry — 80% screen width, capped at 340
-  const CLOCK_SIZE = Math.min(width * 0.82, 340);
-  const RADIUS = CLOCK_SIZE / 2 - 22;
-  const HAND_H = CLOCK_SIZE / 2 - 18;
+  // Compact clock: takes ~28% of usable height, min 160, max 240
+  const usableH = height - insets.top - insets.bottom - 50;
+  const CLOCK_SIZE = Math.min(Math.max(usableH * 0.27, 160), 240);
+  const RADIUS = CLOCK_SIZE / 2 - 18;
+  const HAND_H = CLOCK_SIZE / 2 - 14;
 
   function selectHour(hour: number, code: LangCode) {
-    const targetDeg = hour * 15;
     Animated.spring(handAnim, {
-      toValue: targetDeg,
+      toValue: hour * 15,
       tension: 60,
       friction: 8,
       useNativeDriver: true,
@@ -112,41 +113,26 @@ export default function LanguageClockScreen() {
     outputRange: ["0deg", "360deg"],
   });
 
-  const styles = makeStyles(colors, CLOCK_SIZE, insets);
+  // Item width for 4-column grid with gaps
+  const PAD = 12;
+  const GAP = 5;
+  const itemW = (width - PAD * 2 - GAP * (COLS - 1)) / COLS;
+
+  const styles = makeStyles(colors, CLOCK_SIZE, insets, itemW);
 
   return (
     <View style={styles.screen}>
       {/* Header */}
       <View style={styles.header}>
-        <LogoBrand size={28} />
+        <LogoBrand size={24} />
         <Text style={styles.headerTitle}>Циферблат народов</Text>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Welcome text */}
-        <Text
-          style={[styles.welcomeText, active.rtl && { textAlign: "right", writingDirection: "rtl" }]}
-          numberOfLines={2}
-          key={active.code + "-w"}
-        >
-          {t.welcome}
-        </Text>
-        <Text style={styles.subText}>
-          {t.select_hour}:{" "}
-          <Text style={styles.subHighlight}>
-            {active.flag} {activeHour}:00 · {active.iso} · {active.label}
-          </Text>
-        </Text>
-
-        {/* ── Clock face ── */}
+      {/* Top section: clock + status side by side */}
+      <View style={styles.topRow}>
+        {/* Clock */}
         <View style={[styles.clockWrap, { width: CLOCK_SIZE, height: CLOCK_SIZE }]}>
-          {/* Center amber dot (rendered above hand) */}
           <View style={styles.centerDot} />
-
-          {/* Animated hand */}
           <Animated.View
             style={[
               styles.clockHand,
@@ -159,23 +145,16 @@ export default function LanguageClockScreen() {
               },
             ]}
           />
-
-          {/* 24 hour buttons */}
           {LANGUAGES_24.map((item) => {
             const angleRad = (item.hour * 15 - 90) * (Math.PI / 180);
-            const bx = CLOCK_SIZE / 2 + RADIUS * Math.cos(angleRad) - 16;
-            const by = CLOCK_SIZE / 2 + RADIUS * Math.sin(angleRad) - 16;
+            const bx = CLOCK_SIZE / 2 + RADIUS * Math.cos(angleRad) - 13;
+            const by = CLOCK_SIZE / 2 + RADIUS * Math.sin(angleRad) - 13;
             const isActive = item.hour === activeHour;
-
             return (
               <TouchableOpacity
                 key={item.hour}
                 onPress={() => selectHour(item.hour, item.code as LangCode)}
-                style={[
-                  styles.hourBtn,
-                  { left: bx, top: by },
-                  isActive && styles.hourBtnActive,
-                ]}
+                style={[styles.hourBtn, { left: bx, top: by }, isActive && styles.hourBtnActive]}
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
                 <Text style={styles.hourFlag}>{item.flag}</Text>
@@ -184,57 +163,48 @@ export default function LanguageClockScreen() {
           })}
         </View>
 
-        {/* Status quote */}
-        <View
-          style={[styles.quoteCard, active.rtl && { alignItems: "flex-end" }]}
-          key={active.code + "-q"}
-        >
-          <Text
-            style={[styles.quoteText, active.rtl && { textAlign: "right", writingDirection: "rtl" }]}
-          >
+        {/* Right panel: active info + publish */}
+        <View style={styles.rightPanel}>
+          <Text style={styles.activeFlag}>{active.flag}</Text>
+          <Text style={styles.activeIso}>{active.iso} · {activeHour}:00</Text>
+          <Text style={styles.activeLabel} numberOfLines={1}>{active.label}</Text>
+          <Text style={styles.statusText} numberOfLines={3} key={active.code}>
             {t.status}
           </Text>
+          <TouchableOpacity
+            style={styles.publishBtn}
+            onPress={() => router.push("/(tabs)/tv")}
+            activeOpacity={0.8}
+          >
+            <Feather name="video" size={12} color="#000" />
+            <Text style={styles.publishBtnText}>{t.btn_publish}</Text>
+          </TouchableOpacity>
         </View>
+      </View>
 
-        {/* Publish button */}
-        <TouchableOpacity
-          style={styles.publishBtn}
-          onPress={() => router.push("/(tabs)/tv")}
-          activeOpacity={0.8}
-        >
-          <Feather name="video" size={16} color="#000" style={{ marginRight: 8 }} />
-          <Text style={styles.publishBtnText}>{t.btn_publish}</Text>
-        </TouchableOpacity>
+      {/* Grid label */}
+      <Text style={styles.gridLabel}>24 языка · 24 часа</Text>
 
-        {/* Language grid */}
-        <Text style={styles.gridLabel}>24 языка · 24 часа</Text>
-        <View style={styles.langGrid}>
-          {LANGUAGES_24.map((item) => {
-            const isActive = item.hour === activeHour;
-            return (
-              <TouchableOpacity
-                key={item.hour}
-                onPress={() => selectHour(item.hour, item.code as LangCode)}
-                style={[styles.langItem, isActive && styles.langItemActive]}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.langFlag}>{item.flag}</Text>
-                <Text style={[styles.langIso, isActive && styles.langIsoActive]}>
-                  {item.iso}
-                </Text>
-                <Text
-                  style={[styles.langLabel, isActive && styles.langLabelActive]}
-                  numberOfLines={1}
-                >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <View style={{ height: 32 }} />
-      </ScrollView>
+      {/* 4-column flag grid */}
+      <View style={styles.langGrid}>
+        {LANGUAGES_24.map((item) => {
+          const isActive = item.hour === activeHour;
+          return (
+            <TouchableOpacity
+              key={item.hour}
+              onPress={() => selectHour(item.hour, item.code as LangCode)}
+              style={[styles.langItem, isActive && styles.langItemActive]}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.langFlag}>{item.flag}</Text>
+              <Text style={[styles.langIso, isActive && styles.langIsoActive]}>{item.iso}</Text>
+              <Text style={[styles.langLabel, isActive && styles.langLabelActive]} numberOfLines={1}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -244,78 +214,61 @@ export default function LanguageClockScreen() {
 function makeStyles(
   colors: ReturnType<typeof useColors>,
   clockSize: number,
-  insets: { top: number; bottom: number; left: number; right: number }
+  insets: { top: number; bottom: number; left: number; right: number },
+  itemW: number,
 ) {
   return StyleSheet.create({
     screen: {
       flex: 1,
       backgroundColor: colors.background,
       paddingTop: insets.top,
+      paddingBottom: insets.bottom + 4,
+      paddingHorizontal: 12,
     },
     header: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 10,
-      paddingHorizontal: 20,
-      paddingVertical: 12,
+      gap: 8,
+      paddingVertical: 8,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
+      marginBottom: 10,
     },
     headerTitle: {
-      fontSize: 16,
+      fontSize: 15,
       fontFamily: "Inter_600SemiBold",
       color: colors.foreground,
     },
-    scrollContent: {
+    // ── Top row ──
+    topRow: {
+      flexDirection: "row",
       alignItems: "center",
-      paddingTop: 20,
-      paddingHorizontal: 16,
-    },
-    welcomeText: {
-      fontSize: 20,
-      fontFamily: "Inter_700Bold",
-      color: "#f59e0b",
-      textAlign: "center",
-      marginBottom: 6,
-    },
-    subText: {
-      fontSize: 13,
-      fontFamily: "Inter_400Regular",
-      color: colors.mutedForeground,
-      textAlign: "center",
-      marginBottom: 20,
-    },
-    subHighlight: {
-      color: "#f59e0b",
-      fontFamily: "Inter_600SemiBold",
+      gap: 12,
+      marginBottom: 10,
     },
     // Clock
     clockWrap: {
       borderRadius: clockSize / 2,
-      borderWidth: 4,
+      borderWidth: 3,
       borderColor: "#f59e0b",
       backgroundColor: "#18181b",
       position: "relative",
-      alignSelf: "center",
+      flexShrink: 0,
       shadowColor: "#f59e0b",
-      shadowOpacity: 0.3,
-      shadowRadius: 18,
+      shadowOpacity: 0.25,
+      shadowRadius: 12,
       shadowOffset: { width: 0, height: 0 },
-      elevation: 8,
+      elevation: 6,
     },
     centerDot: {
       position: "absolute",
-      top: clockSize / 2 - 7,
-      left: clockSize / 2 - 7,
-      width: 14,
-      height: 14,
-      borderRadius: 7,
+      top: clockSize / 2 - 5,
+      left: clockSize / 2 - 5,
+      width: 10,
+      height: 10,
+      borderRadius: 5,
       backgroundColor: "#f59e0b",
       zIndex: 10,
-      shadowColor: "#f59e0b",
-      shadowOpacity: 0.8,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 0 },
     },
     clockHand: {
       position: "absolute",
@@ -323,16 +276,12 @@ function makeStyles(
       borderRadius: 2,
       transformOrigin: "bottom center",
       zIndex: 5,
-      shadowColor: "#ef4444",
-      shadowOpacity: 0.5,
-      shadowRadius: 4,
-      shadowOffset: { width: 0, height: 0 },
     },
     hourBtn: {
       position: "absolute",
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 26,
+      height: 26,
+      borderRadius: 13,
       backgroundColor: "#27272a",
       alignItems: "center",
       justifyContent: "center",
@@ -342,100 +291,96 @@ function makeStyles(
     hourBtnActive: {
       backgroundColor: "#f59e0b22",
       borderColor: "#f59e0b",
-      shadowColor: "#f59e0b",
-      shadowOpacity: 0.7,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 6,
+      elevation: 4,
     },
     hourFlag: {
-      fontSize: 14,
+      fontSize: 11,
     },
-    // Quote
-    quoteCard: {
-      marginTop: 18,
-      width: "100%",
-      maxWidth: 340,
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 14,
-      paddingHorizontal: 18,
-      paddingVertical: 14,
+    // ── Right panel ──
+    rightPanel: {
+      flex: 1,
+      gap: 3,
     },
-    quoteText: {
+    activeFlag: {
+      fontSize: 28,
+    },
+    activeIso: {
       fontSize: 13,
+      fontFamily: "Inter_700Bold",
+      color: "#f59e0b",
+    },
+    activeLabel: {
+      fontSize: 12,
+      fontFamily: "Inter_500Medium",
+      color: colors.foreground,
+    },
+    statusText: {
+      fontSize: 10,
       fontFamily: "Inter_400Regular",
       color: colors.mutedForeground,
-      lineHeight: 20,
-      textAlign: "center",
+      lineHeight: 15,
+      marginTop: 2,
+      marginBottom: 6,
     },
-    // Publish button
     publishBtn: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "center",
-      marginTop: 14,
-      width: "100%",
-      maxWidth: 340,
+      gap: 5,
       backgroundColor: "#f59e0b",
-      borderRadius: 12,
-      paddingVertical: 13,
+      borderRadius: 8,
+      paddingVertical: 7,
+      paddingHorizontal: 10,
+      alignSelf: "flex-start",
     },
     publishBtnText: {
-      fontSize: 14,
+      fontSize: 11,
       fontFamily: "Inter_700Bold",
       color: "#000",
     },
-    // Language grid
+    // ── Grid ──
     gridLabel: {
-      marginTop: 22,
-      marginBottom: 10,
-      fontSize: 11,
+      fontSize: 10,
       fontFamily: "Inter_600SemiBold",
       color: colors.mutedForeground,
       textTransform: "uppercase",
-      letterSpacing: 1.5,
-      alignSelf: "flex-start",
+      letterSpacing: 1.2,
+      marginBottom: 6,
     },
     langGrid: {
-      width: "100%",
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: 6,
+      gap: 5,
     },
     langItem: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 5,
-      paddingHorizontal: 8,
-      paddingVertical: 7,
-      borderRadius: 8,
+      gap: 3,
+      width: itemW,
+      paddingHorizontal: 5,
+      paddingVertical: 5,
+      borderRadius: 7,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.card,
-      minWidth: "30%",
-      flexShrink: 1,
     },
     langItemActive: {
       borderColor: "#f59e0b88",
       backgroundColor: "#f59e0b18",
     },
     langFlag: {
-      fontSize: 16,
+      fontSize: 13,
     },
     langIso: {
-      fontSize: 9,
+      fontSize: 8,
       fontFamily: "Inter_600SemiBold",
       color: colors.mutedForeground,
-      width: 20,
-      letterSpacing: 0.5,
+      width: 16,
     },
     langIsoActive: {
       color: "#f59e0b",
     },
     langLabel: {
-      fontSize: 11,
+      fontSize: 9,
       fontFamily: "Inter_400Regular",
       color: colors.mutedForeground,
       flex: 1,
