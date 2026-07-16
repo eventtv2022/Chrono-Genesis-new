@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe } from "lucide-react";
+import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff } from "lucide-react";
 import { SystemClock } from "./SystemClock";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -9,8 +9,12 @@ function CitizenWidget() {
   const { citizen, setCitizen, refreshCitizen } = useCitizen();
   const { t } = useLanguage();
   const [input, setInput] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isPhone = input.trim().length > 0 && !/^\d+$/.test(input.trim());
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -20,15 +24,27 @@ function CitizenWidget() {
     setError(null);
     try {
       const byId = /^\d+$/.test(val);
-      const url = byId
-        ? `/api/citizens/${val}`
-        : `/api/citizens/by-phone/${encodeURIComponent(val)}`;
-      const res = await fetch(url);
-      if (!res.ok) { setError(t.citizen_not_found); setLoading(false); return; }
-      const citizenData = await res.json() as Record<string, unknown>;
-      if (!citizenData || !citizenData["id"]) { setError(t.citizen_not_found); setLoading(false); return; }
-      setCitizen(citizenData as unknown as Parameters<typeof setCitizen>[0]);
-      setInput("");
+      if (byId) {
+        // Числовой ID — публичный поиск без пароля
+        const res = await fetch(`/api/citizens/${val}`);
+        if (!res.ok) { setError(t.citizen_not_found); setLoading(false); return; }
+        const data = await res.json() as Record<string, unknown>;
+        if (!data?.["id"]) { setError(t.citizen_not_found); setLoading(false); return; }
+        setCitizen(data as unknown as Parameters<typeof setCitizen>[0]);
+        setInput(""); setPassword("");
+      } else {
+        // Номер телефона — авторизация через auth/login
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: val, ...(password ? { password } : {}) }),
+        });
+        const data = await res.json() as Record<string, unknown>;
+        if (!res.ok) { setError((data["error"] as string) ?? t.citizen_not_found); setLoading(false); return; }
+        if (!data?.["id"]) { setError(t.citizen_not_found); setLoading(false); return; }
+        setCitizen(data as unknown as Parameters<typeof setCitizen>[0]);
+        setInput(""); setPassword("");
+      }
     } catch {
       setError(t.connection_error);
     }
@@ -74,8 +90,29 @@ function CitizenWidget() {
           value={input}
           onChange={e => { setInput(e.target.value); setError(null); }}
           placeholder={t.login_placeholder}
+          autoComplete="username"
           className="w-full bg-background border border-border rounded-sm px-2 py-1 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60"
         />
+        {isPhone && (
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={e => { setPassword(e.target.value); setError(null); }}
+              placeholder={t.login_password}
+              autoComplete="current-password"
+              className="w-full bg-background border border-border rounded-sm px-2 py-1 pr-6 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(v => !v)}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            </button>
+          </div>
+        )}
         {error && <p className="text-[10px] text-destructive font-mono">{error}</p>}
         <button
           type="submit"

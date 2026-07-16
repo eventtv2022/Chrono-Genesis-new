@@ -960,6 +960,13 @@ export default function TimerScreen() {
   const [selectedRecipient, setSelectedRecipient] = useState<Citizen | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // ── Login form state ────────────────────────────────────────────────────────
+  const [loginPhone, setLoginPhone] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
   const { data: citizens = [], isLoading: loadingCitizens } = useQuery<Citizen[]>({
     queryKey: ["citizens"],
     queryFn: async () => {
@@ -1013,6 +1020,34 @@ export default function TimerScreen() {
     try { await stopSession(); } catch (e: unknown) { Alert.alert(ui.error, (e as Error).message); }
     setSessionLoading(false);
   }, [activeSession]);
+
+  const handleLoginSubmit = useCallback(async () => {
+    const phone = loginPhone.trim();
+    if (!phone) return;
+    setLoginLoading(true);
+    setLoginError(null);
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, ...(loginPassword ? { password: loginPassword } : {}) }),
+      });
+      const data = await res.json() as Record<string, unknown>;
+      if (!res.ok) {
+        setLoginError((data["error"] as string) ?? ui.citizen_not_found);
+        setLoginLoading(false);
+        return;
+      }
+      setCitizen(data as unknown as Parameters<typeof setCitizen>[0]);
+      setLoginPhone("");
+      setLoginPassword("");
+      setLoginError(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      setLoginError(ui.connection_error);
+    }
+    setLoginLoading(false);
+  }, [loginPhone, loginPassword, ui]);
 
   useEffect(() => {
     if (activeSession) {
@@ -1208,11 +1243,70 @@ export default function TimerScreen() {
           <View style={styles.listSection}>
             <Text style={styles.listTitle}>{activeSession ? ui.timer_session_active : ui.timer_pick_recipient}</Text>
             {!citizen && (
-              <TouchableOpacity style={styles.registerPrompt} onPress={() => router.push("/register")} activeOpacity={0.8}>
-                <Feather name="user-plus" size={20} color={colors.primary} />
-                <Text style={styles.registerPromptText}>{ui.timer_get_citizenship}</Text>
-                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-              </TouchableOpacity>
+              <View style={styles.loginCard}>
+                <Text style={styles.loginCardTitle}>{ui.login}</Text>
+
+                {/* Phone */}
+                <View style={styles.loginInputWrap}>
+                  <Feather name="phone" size={13} color={colors.mutedForeground} style={styles.loginInputIcon} />
+                  <TextInput
+                    style={styles.loginInput}
+                    value={loginPhone}
+                    onChangeText={v => { setLoginPhone(v); setLoginError(null); }}
+                    placeholder={ui.login_placeholder}
+                    placeholderTextColor={colors.mutedForeground}
+                    keyboardType="phone-pad"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                {/* Password */}
+                <View style={styles.loginInputWrap}>
+                  <Feather name="lock" size={13} color={colors.mutedForeground} style={styles.loginInputIcon} />
+                  <TextInput
+                    style={[styles.loginInput, { flex: 1 }]}
+                    value={loginPassword}
+                    onChangeText={v => { setLoginPassword(v); setLoginError(null); }}
+                    placeholder={ui.login_password}
+                    placeholderTextColor={colors.mutedForeground}
+                    secureTextEntry={!showLoginPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity onPress={() => setShowLoginPassword(v => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Feather name={showLoginPassword ? "eye-off" : "eye"} size={14} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                </View>
+
+                {loginError && (
+                  <Text style={styles.loginError}>{loginError}</Text>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.loginBtn, (!loginPhone.trim() || loginLoading) && styles.loginBtnDisabled]}
+                  onPress={() => void handleLoginSubmit()}
+                  disabled={!loginPhone.trim() || loginLoading}
+                  activeOpacity={0.8}
+                >
+                  {loginLoading
+                    ? <ActivityIndicator size="small" color={colors.primaryForeground} />
+                    : <Text style={styles.loginBtnText}>{ui.login}</Text>
+                  }
+                </TouchableOpacity>
+
+                {/* Divider + Register */}
+                <View style={styles.loginDivider}>
+                  <View style={styles.loginDividerLine} />
+                  <Text style={styles.loginDividerText}>или</Text>
+                  <View style={styles.loginDividerLine} />
+                </View>
+                <TouchableOpacity style={styles.registerPrompt} onPress={() => router.push("/register")} activeOpacity={0.8}>
+                  <Feather name="user-plus" size={16} color={colors.primary} />
+                  <Text style={styles.registerPromptText}>{ui.timer_get_citizenship}</Text>
+                  <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              </View>
             )}
             {loadingCitizens && citizen && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
             {!loadingCitizens && others.length === 0 && citizen && (
@@ -1353,8 +1447,20 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     regBannerTitle: { fontSize: 14, fontFamily: "Inter_700Bold", color: colors.foreground },
     regBannerSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 2 },
 
-    registerPrompt: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary, borderRadius: 12, padding: 16, marginBottom: 16 },
-    registerPromptText: { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium", color: colors.foreground },
+    loginCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 20, marginBottom: 16, gap: 10 },
+    loginCardTitle: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 4 },
+    loginInputWrap: { flexDirection: "row", alignItems: "center", backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
+    loginInputIcon: { flexShrink: 0 },
+    loginInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", color: colors.foreground },
+    loginError: { fontSize: 12, fontFamily: "Inter_400Regular", color: colors.destructive },
+    loginBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: "center", justifyContent: "center" },
+    loginBtnDisabled: { opacity: 0.4 },
+    loginBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: colors.primaryForeground, letterSpacing: 1 },
+    loginDivider: { flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 2 },
+    loginDividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+    loginDividerText: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
+    registerPrompt: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, marginBottom: 0 },
+    registerPromptText: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium", color: colors.foreground },
     emptyState: { alignItems: "center", paddingTop: 40, gap: 8 },
     emptyText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground },
     emptySubtext: { fontSize: 13, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
