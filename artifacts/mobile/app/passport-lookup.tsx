@@ -16,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
+import { useLanguage } from "@/context/LanguageContext";
 
 const BASE_URL = getBaseUrl();
 
@@ -33,7 +34,11 @@ export default function PassportLookupScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { lang, setLang } = useLanguage();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  const loginLang: "ru" | "en" = lang === "ru" ? "ru" : "en";
+  const t = (ru: string, en: string) => loginLang === "ru" ? ru : en;
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -52,12 +57,12 @@ export default function PassportLookupScreen() {
       const res = await fetch(`${BASE_URL}/api/citizens/lookup/${raw}`);
       const data = await res.json() as LookupResult & { error?: string };
       if (!res.ok) {
-        setError(data.error ?? "Гражданин не найден в реестре");
+        setError(data.error ?? t("Гражданин не найден в реестре", "Citizen not found in registry"));
         return;
       }
       setResult(data);
     } catch {
-      setError("Ошибка соединения с реестром");
+      setError(t("Ошибка соединения с реестром", "Registry connection error"));
     } finally {
       setLoading(false);
     }
@@ -68,9 +73,7 @@ export default function PassportLookupScreen() {
     if (Platform.OS === "web") {
       Linking.openURL(fullUrl);
     } else {
-      await WebBrowser.openBrowserAsync(fullUrl, {
-        toolbarColor: "#0D1B2A",
-      });
+      await WebBrowser.openBrowserAsync(fullUrl, { toolbarColor: "#0D1B2A" });
     }
   }
 
@@ -84,14 +87,32 @@ export default function PassportLookupScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <View style={{ marginLeft: 12 }}>
-          <Text style={styles.title}>МОЙ ПАСПОРТ</Text>
-          <Text style={styles.subtitle}>Восстановление доступа к документам</Text>
+        <View style={{ marginLeft: 12, flex: 1 }}>
+          <Text style={styles.title}>{t("МОЙ ПАСПОРТ", "MY PASSPORT")}</Text>
+          <Text style={styles.subtitle}>{t("Восстановление доступа к документам", "Document access recovery")}</Text>
+        </View>
+        {/* RU | EN toggle */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+          <TouchableOpacity
+            onPress={() => setLang("ru")}
+            style={[styles.langBtn, loginLang === "ru" && styles.langBtnActive]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+          >
+            <Text style={[styles.langBtnText, loginLang === "ru" && styles.langBtnTextActive]}>RU</Text>
+          </TouchableOpacity>
+          <Text style={styles.langSep}>|</Text>
+          <TouchableOpacity
+            onPress={() => setLang("en")}
+            style={[styles.langBtn, loginLang === "en" && styles.langBtnActive]}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+          >
+            <Text style={[styles.langBtnText, loginLang === "en" && styles.langBtnTextActive]}>EN</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.fieldLabel}>НОМЕР ГРАЖДАНИНА (9 ЦИФР)</Text>
+        <Text style={styles.fieldLabel}>{t("НОМЕР ГРАЖДАНИНА (9 ЦИФР)", "CITIZEN NUMBER (9 DIGITS)")}</Text>
         <TextInput
           style={styles.numberInput}
           value={input}
@@ -102,7 +123,7 @@ export default function PassportLookupScreen() {
           maxLength={9}
           autoFocus
         />
-        <Text style={styles.hint}>Номер выдан при регистрации · только цифры</Text>
+        <Text style={styles.hint}>{t("Номер выдан при регистрации · только цифры", "Number issued at registration · digits only")}</Text>
 
         <TouchableOpacity
           style={[styles.searchBtn, { opacity: loading || input.replace(/\D/g, "").length === 0 ? 0.4 : 1 }]}
@@ -115,7 +136,7 @@ export default function PassportLookupScreen() {
           ) : (
             <>
               <Feather name="search" size={16} color="#fff" />
-              <Text style={styles.searchBtnText}>ПОЛУЧИТЬ ДОКУМЕНТЫ</Text>
+              <Text style={styles.searchBtnText}>{t("ПОЛУЧИТЬ ДОКУМЕНТЫ", "GET DOCUMENTS")}</Text>
             </>
           )}
         </TouchableOpacity>
@@ -125,7 +146,7 @@ export default function PassportLookupScreen() {
         <View style={[styles.alertBox, { backgroundColor: colors.destructive + "18", borderColor: colors.destructive + "44" }]}>
           <Feather name="alert-circle" size={18} color={colors.destructive} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.alertTitle, { color: colors.destructive }]}>Гражданин не найден</Text>
+            <Text style={[styles.alertTitle, { color: colors.destructive }]}>{t("Гражданин не найден", "Citizen not found")}</Text>
             <Text style={[styles.alertBody, { color: colors.mutedForeground }]}>{error}</Text>
           </View>
         </View>
@@ -135,10 +156,10 @@ export default function PassportLookupScreen() {
         <View style={[styles.alertBox, { backgroundColor: "#f59e0b18", borderColor: "#f59e0b44" }]}>
           <Feather name="clock" size={18} color="#f59e0b" />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.alertTitle, { color: "#f59e0b" }]}>ВЕРИФИКАЦИЯ В ПРОЦЕССЕ</Text>
+            <Text style={[styles.alertTitle, { color: "#f59e0b" }]}>{t("ВЕРИФИКАЦИЯ В ПРОЦЕССЕ", "VERIFICATION IN PROGRESS")}</Text>
             <Text style={[styles.alertBody, { color: colors.mutedForeground }]}>{result.message}</Text>
             <Text style={[styles.alertBody, { color: colors.mutedForeground, marginTop: 4 }]}>
-              Номер гражданина:{" "}
+              {t("Номер гражданина:", "Citizen number:")}{" "}
               <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", letterSpacing: 2 }}>
                 {result.citizenNumber}
               </Text>
@@ -150,13 +171,13 @@ export default function PassportLookupScreen() {
       {result?.status === "issued" && (
         <View style={styles.resultCard}>
           <View style={styles.resultHeader}>
-            <Text style={styles.resultLabel}>ГРАЖДАНИН ПОДТВЕРЖДЁН</Text>
+            <Text style={styles.resultLabel}>{t("ГРАЖДАНИН ПОДТВЕРЖДЁН", "CITIZEN VERIFIED")}</Text>
             <Text style={[styles.resultNumber, { color: colors.primary }]}>{result.citizenNumber}</Text>
             <Text style={styles.resultName}>{result.name}</Text>
             {result.rank && <Text style={styles.resultRank}>{result.rank}</Text>}
           </View>
 
-          <Text style={[styles.fieldLabel, { marginBottom: 10 }]}>ДОКУМЕНТЫ</Text>
+          <Text style={[styles.fieldLabel, { marginBottom: 10 }]}>{t("ДОКУМЕНТЫ", "DOCUMENTS")}</Text>
 
           {result.idCardUrl && (
             <TouchableOpacity
@@ -166,7 +187,7 @@ export default function PassportLookupScreen() {
             >
               <Feather name="credit-card" size={20} color={colors.primary} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.docBtnTitle, { color: colors.primary }]}>ID-КАРТА TIMENATION</Text>
+                <Text style={[styles.docBtnTitle, { color: colors.primary }]}>{t("ID-КАРТА TIMENATION", "TIMENATION ID CARD")}</Text>
               </View>
               <Feather name="external-link" size={15} color={colors.primary + "88"} />
             </TouchableOpacity>
@@ -180,14 +201,14 @@ export default function PassportLookupScreen() {
             >
               <Feather name="file-text" size={20} color={colors.mutedForeground} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.docBtnTitle, { color: colors.foreground }]}>ПАСПОРТ (КЛАССИЧЕСКИЙ)</Text>
+                <Text style={[styles.docBtnTitle, { color: colors.foreground }]}>{t("ПАСПОРТ (КЛАССИЧЕСКИЙ)", "PASSPORT (CLASSIC)")}</Text>
               </View>
               <Feather name="external-link" size={15} color={colors.mutedForeground} />
             </TouchableOpacity>
           )}
 
           <Text style={[styles.hint, { textAlign: "center", marginTop: 12 }]}>
-            Откройте ссылку и сохраните файл через «Сохранить как»
+            {t("Откройте ссылку и сохраните файл через «Сохранить как»", "Open the link and save the file via \"Save as\"")}
           </Text>
         </View>
       )}
@@ -201,6 +222,11 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
     title: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.foreground, letterSpacing: 2 },
     subtitle: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 1 },
+    langBtn: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5, borderWidth: 1, borderColor: colors.border },
+    langBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    langBtnText: { fontSize: 10, fontFamily: "Inter_700Bold", color: colors.mutedForeground, letterSpacing: 0.5 },
+    langBtnTextActive: { color: colors.primaryForeground },
+    langSep: { fontSize: 10, color: colors.mutedForeground + "55", marginHorizontal: 1 },
     card: { margin: 16, padding: 20, backgroundColor: colors.card, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
     fieldLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground, letterSpacing: 1.5, marginBottom: 8 },
     numberInput: {
