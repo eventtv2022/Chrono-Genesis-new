@@ -189,6 +189,31 @@ export default function RegisterScreen() {
 
   // ── Photo picker ───────────────────────────────────────────────────────────
   async function handlePickPhoto() {
+    if (Platform.OS === "web") {
+      // Web: use a hidden <input type="file"> — Alert.alert buttons don't resolve on web
+      await new Promise<void>((resolve) => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.onchange = () => {
+          const file = input.files?.[0];
+          if (!file) { resolve(); return; }
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const dataUrl = e.target?.result as string;
+            setPhotoUri(dataUrl);
+            setPhotoBase64(dataUrl);
+            resolve();
+          };
+          reader.readAsDataURL(file);
+        };
+        input.oncancel = () => resolve();
+        input.click();
+      });
+      return;
+    }
+
+    // Native: show camera / gallery choice
     const choice = await new Promise<"camera" | "gallery" | null>(resolve => {
       Alert.alert("Фото для паспорта", "Выбери источник", [
         { text: "Камера", onPress: () => resolve("camera") },
