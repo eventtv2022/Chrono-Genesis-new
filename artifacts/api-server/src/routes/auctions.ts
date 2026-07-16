@@ -143,10 +143,10 @@ router.post("/auctions/:id/finalize", async (req, res): Promise<void> => {
         .where(eq(citizensTable.id, auction.buyerId));
     }
 
-    // Зачислить продавцу (finalPrice - tax) — условно через Казначейство (Дармины)
+    // Зачислить продавцу (finalPrice - tax) — точная дробь, без округления
     const [seller] = await db.select().from(citizensTable).where(eq(citizensTable.id, auction.sellerId)).limit(1);
     if (seller) {
-      const sellerReceives = Math.floor(finalPrice - tax);
+      const sellerReceives = finalPrice - tax;
       await db.update(citizensTable)
         .set({ balanceMinutes: seller.balanceMinutes + sellerReceives })
         .where(eq(citizensTable.id, auction.sellerId));

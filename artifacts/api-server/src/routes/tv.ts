@@ -268,7 +268,26 @@ router.post("/tv/slots/book", async (req, res): Promise<void> => {
       return;
     }
 
-    // Hard burn — списание с гражданина
+    // Атомарный захват слота: UPDATE WHERE status='free' предотвращает race condition.
+    // Если два запроса пришли одновременно — только один получит returning-строку.
+    const [claimed] = await db
+      .update(tvSlotsTable)
+      .set({
+        status: "booked",
+        ownerId: citizenId,
+        paymentType: "timeltr",
+        fingerprintHash: fingerprint,
+      })
+      .where(and(eq(tvSlotsTable.id, slotId), eq(tvSlotsTable.status, "free")))
+      .returning({ id: tvSlotsTable.id });
+
+    if (!claimed) {
+      // Слот был захвачен параллельным запросом — баланс не трогаем
+      res.status(409).json({ error: "Слот уже забронирован" });
+      return;
+    }
+
+    // Слот наш — теперь списываем баланс
     await db
       .update(citizensTable)
       .set({ balanceMinutes: citizen.balanceMinutes - totalCost })
@@ -285,16 +304,6 @@ router.post("/tv/slots/book", async (req, res): Promise<void> => {
         /* казначейский аккаунт необязателен в dev */
       }
     }
-
-    await db
-      .update(tvSlotsTable)
-      .set({
-        status: "booked",
-        ownerId: citizenId,
-        paymentType: "timeltr",
-        fingerprintHash: fingerprint,
-      })
-      .where(eq(tvSlotsTable.id, slotId));
 
     // ── Запись транзакции ────────────────────────────────────────────────────
     // sessionId=0 — sentinel для TV-транзакций (без реальной TiMETR-сессии)
