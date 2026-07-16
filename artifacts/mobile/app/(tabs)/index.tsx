@@ -1189,8 +1189,77 @@ export default function TimerScreen() {
         </TouchableOpacity>
       )}
 
+      {/* ── Guest: login form instead of timer ─────────────────────────────── */}
+      {!citizen && (
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: botPad + 32 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.loginCard}>
+            <Text style={styles.loginCardTitle}>{ui.login}</Text>
+
+            <View style={styles.loginInputWrap}>
+              <Feather name="phone" size={13} color={colors.mutedForeground} style={styles.loginInputIcon} />
+              <TextInput
+                style={styles.loginInput}
+                value={loginPhone}
+                onChangeText={v => { setLoginPhone(v); setLoginError(null); }}
+                placeholder={ui.login_placeholder}
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.loginInputWrap}>
+              <Feather name="lock" size={13} color={colors.mutedForeground} style={styles.loginInputIcon} />
+              <TextInput
+                style={[styles.loginInput, { flex: 1 }]}
+                value={loginPassword}
+                onChangeText={v => { setLoginPassword(v); setLoginError(null); }}
+                placeholder={ui.login_password}
+                placeholderTextColor={colors.mutedForeground}
+                secureTextEntry={!showLoginPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity onPress={() => setShowLoginPassword(v => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Feather name={showLoginPassword ? "eye-off" : "eye"} size={14} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+
+            {loginError && <Text style={styles.loginError}>{loginError}</Text>}
+
+            <TouchableOpacity
+              style={[styles.loginBtn, (!loginPhone.trim() || loginLoading) && styles.loginBtnDisabled]}
+              onPress={() => void handleLoginSubmit()}
+              disabled={!loginPhone.trim() || loginLoading}
+              activeOpacity={0.8}
+            >
+              {loginLoading
+                ? <ActivityIndicator size="small" color={colors.primaryForeground} />
+                : <Text style={styles.loginBtnText}>{ui.login}</Text>
+              }
+            </TouchableOpacity>
+
+            <View style={styles.loginDivider}>
+              <View style={styles.loginDividerLine} />
+              <Text style={styles.loginDividerText}>или</Text>
+              <View style={styles.loginDividerLine} />
+            </View>
+            <TouchableOpacity style={styles.registerPrompt} onPress={() => router.push("/register")} activeOpacity={0.8}>
+              <Feather name="user-plus" size={16} color={colors.primary} />
+              <Text style={styles.registerPromptText}>{ui.timer_get_citizenship}</Text>
+              <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      )}
+
       {/* ── Mode toggle ────────────────────────────────────────────────────── */}
-      <View style={styles.modeToggle}>
+      {citizen && <View style={styles.modeToggle}>
         <TouchableOpacity
           style={[styles.modeBtn, mode === "transfer" && styles.modeBtnActive]}
           onPress={() => setMode("transfer")}
@@ -1207,10 +1276,10 @@ export default function TimerScreen() {
           <Feather name="lock" size={13} color={mode === "escrow" ? colors.primaryForeground : colors.mutedForeground} />
           <Text style={[styles.modeBtnText, mode === "escrow" && styles.modeBtnTextActive]}>{ui.timer_escrow_tab}</Text>
         </TouchableOpacity>
-      </View>
+      </View>}
 
       {/* ── Transfer mode ──────────────────────────────────────────────────── */}
-      {mode === "transfer" && (
+      {citizen && mode === "transfer" && (
         <>
           <View style={styles.timerSection}>
             {activeSession ? (
@@ -1260,72 +1329,6 @@ export default function TimerScreen() {
 
           <View style={styles.listSection}>
             <Text style={styles.listTitle}>{activeSession ? ui.timer_session_active : ui.timer_pick_recipient}</Text>
-            {!citizen && (
-              <View style={styles.loginCard}>
-                <Text style={styles.loginCardTitle}>{ui.login}</Text>
-
-                {/* Phone */}
-                <View style={styles.loginInputWrap}>
-                  <Feather name="phone" size={13} color={colors.mutedForeground} style={styles.loginInputIcon} />
-                  <TextInput
-                    style={styles.loginInput}
-                    value={loginPhone}
-                    onChangeText={v => { setLoginPhone(v); setLoginError(null); }}
-                    placeholder={ui.login_placeholder}
-                    placeholderTextColor={colors.mutedForeground}
-                    keyboardType="phone-pad"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
-
-                {/* Password */}
-                <View style={styles.loginInputWrap}>
-                  <Feather name="lock" size={13} color={colors.mutedForeground} style={styles.loginInputIcon} />
-                  <TextInput
-                    style={[styles.loginInput, { flex: 1 }]}
-                    value={loginPassword}
-                    onChangeText={v => { setLoginPassword(v); setLoginError(null); }}
-                    placeholder={ui.login_password}
-                    placeholderTextColor={colors.mutedForeground}
-                    secureTextEntry={!showLoginPassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <TouchableOpacity onPress={() => setShowLoginPassword(v => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Feather name={showLoginPassword ? "eye-off" : "eye"} size={14} color={colors.mutedForeground} />
-                  </TouchableOpacity>
-                </View>
-
-                {loginError && (
-                  <Text style={styles.loginError}>{loginError}</Text>
-                )}
-
-                <TouchableOpacity
-                  style={[styles.loginBtn, (!loginPhone.trim() || loginLoading) && styles.loginBtnDisabled]}
-                  onPress={() => void handleLoginSubmit()}
-                  disabled={!loginPhone.trim() || loginLoading}
-                  activeOpacity={0.8}
-                >
-                  {loginLoading
-                    ? <ActivityIndicator size="small" color={colors.primaryForeground} />
-                    : <Text style={styles.loginBtnText}>{ui.login}</Text>
-                  }
-                </TouchableOpacity>
-
-                {/* Divider + Register */}
-                <View style={styles.loginDivider}>
-                  <View style={styles.loginDividerLine} />
-                  <Text style={styles.loginDividerText}>или</Text>
-                  <View style={styles.loginDividerLine} />
-                </View>
-                <TouchableOpacity style={styles.registerPrompt} onPress={() => router.push("/register")} activeOpacity={0.8}>
-                  <Feather name="user-plus" size={16} color={colors.primary} />
-                  <Text style={styles.registerPromptText}>{ui.timer_get_citizenship}</Text>
-                  <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              </View>
-            )}
             {loadingCitizens && citizen && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
             {!loadingCitizens && others.length === 0 && citizen && (
               <View style={styles.emptyState}>
