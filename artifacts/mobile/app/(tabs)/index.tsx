@@ -628,10 +628,10 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
               <View style={{ backgroundColor: colors.card, borderRadius: 10, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: colors.border }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
                   <Feather name="cpu" size={14} color={colors.primary} />
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.primary }}>ИИ-Аудитор Минтруда</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: colors.primary }}>{t.deal_ai_name}</Text>
                 </View>
                 <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 16 }}>
-                  Аудитор оценит трудозатраты в Дарминах, разобьёт работу на этапы и предложит справедливую сумму.
+                  {t.deal_ai_desc}
                 </Text>
               </View>
 
