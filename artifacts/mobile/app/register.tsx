@@ -26,6 +26,55 @@ import { UI } from "@/lib/i18n";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
 
+// ── Web-only canvas signature pad ────────────────────────────────────────────
+function WebSignaturePad({
+  onOK, onEmpty, clearText, confirmText,
+}: { onOK: (sig: string) => void; onEmpty: () => void; clearText: string; confirmText: string }) {
+  const containerRef = useRef<any>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawing = useRef(false);
+
+  useEffect(() => {
+    const el = containerRef.current as HTMLElement | null;
+    if (!el) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = el.offsetWidth || 320;
+    canvas.height = 150;
+    canvas.style.cssText = "width:100%;height:150px;touch-action:none;cursor:crosshair;background:rgba(255,255,255,0.04);border-radius:8px;display:block";
+    el.appendChild(canvas);
+    canvasRef.current = canvas;
+    const ctx = canvas.getContext("2d")!;
+    ctx.strokeStyle = "#c9a84c"; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+    const xy = (e: MouseEvent | TouchEvent) => {
+      const r = canvas.getBoundingClientRect();
+      const src = "touches" in e ? e.touches[0] : (e as MouseEvent);
+      return [src.clientX - r.left, src.clientY - r.top] as const;
+    };
+    const down = (e: MouseEvent | TouchEvent) => { e.preventDefault(); isDrawing.current = true; const [x,y] = xy(e); ctx.beginPath(); ctx.moveTo(x,y); };
+    const move = (e: MouseEvent | TouchEvent) => { if (!isDrawing.current) return; e.preventDefault(); const [x,y] = xy(e); ctx.lineTo(x,y); ctx.stroke(); };
+    const up   = () => { isDrawing.current = false; };
+
+    canvas.addEventListener("mousedown", down); canvas.addEventListener("mousemove", move); canvas.addEventListener("mouseup", up);
+    canvas.addEventListener("touchstart", down, { passive: false }); canvas.addEventListener("touchmove", move, { passive: false }); canvas.addEventListener("touchend", up);
+    return () => { try { el.removeChild(canvas); } catch {} };
+  }, []);
+
+  function clear() { const c = canvasRef.current; if (c) { const ctx = c.getContext("2d"); ctx?.clearRect(0,0,c.width,c.height); } onEmpty(); }
+  function confirm() { const c = canvasRef.current; if (c) onOK(c.toDataURL("image/png")); }
+
+  return (
+    <View>
+      <View ref={containerRef} style={{ height: 150, borderRadius: 8, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.04)" }} />
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
+        <TouchableOpacity onPress={clear}   style={{ flex: 1, alignItems: "center", padding: 8, backgroundColor: "#1a1a2e", borderRadius: 6, borderWidth: 1, borderColor: "#333" }}><Text style={{ color: "#aaa", fontSize: 13 }}>{clearText}</Text></TouchableOpacity>
+        <TouchableOpacity onPress={confirm} style={{ flex: 1, alignItems: "center", padding: 8, backgroundColor: "#1a1a2e", borderRadius: 6, borderWidth: 1, borderColor: "#333" }}><Text style={{ color: "#aaa", fontSize: 13 }}>{confirmText}</Text></TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+
 const MANIFESTO_URL = "https://issuu.com/timenation2025/docs/_timenatio";
 
 const BASE_URL = getBaseUrl();
@@ -372,42 +421,54 @@ export default function RegisterScreen() {
       {/* ── REGISTER ── */}
       {mode === "register" && (
         <View style={styles.section}>
-          <Text style={[styles.formTitle, { color: colors.foreground }]}>Регистрация</Text>
+          {/* RU | EN toggle in register mode too */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <Text style={[styles.formTitle, { color: colors.foreground, marginBottom: 0 }]}>{t("Регистрация", "Registration")}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+              <TouchableOpacity onPress={() => setLang("ru")} style={[styles.langBtn, loginLang === "ru" && styles.langBtnActive]}>
+                <Text style={[styles.langBtnText, loginLang === "ru" && styles.langBtnTextActive]}>RU</Text>
+              </TouchableOpacity>
+              <Text style={styles.langSep}>|</Text>
+              <TouchableOpacity onPress={() => setLang("en")} style={[styles.langBtn, loginLang === "en" && styles.langBtnActive]}>
+                <Text style={[styles.langBtnText, loginLang === "en" && styles.langBtnTextActive]}>EN</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ФАМИЛИЯ</Text>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ФАМИЛИЯ", "LAST NAME")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
-            value={surname} onChangeText={setSurname} placeholder="Иванов" placeholderTextColor={colors.mutedForeground} autoFocus />
+            value={surname} onChangeText={setSurname} placeholder={t("Иванов", "Smith")} placeholderTextColor={colors.mutedForeground} autoFocus />
 
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ИМЯ И ОТЧЕСТВО</Text>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ИМЯ И ОТЧЕСТВО", "FIRST & MIDDLE NAME")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
-            value={givenNames} onChangeText={setGivenNames} placeholder="Иван Иванович" placeholderTextColor={colors.mutedForeground} />
+            value={givenNames} onChangeText={setGivenNames} placeholder={t("Иван Иванович", "John Michael")} placeholderTextColor={colors.mutedForeground} />
 
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ПСЕВДОНИМ (если нет ФИО)</Text>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ПСЕВДОНИМ (если нет ФИО)", "NICKNAME (if no full name)")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
-            value={name} onChangeText={setName} placeholder="Отображаемое имя" placeholderTextColor={colors.mutedForeground} />
+            value={name} onChangeText={setName} placeholder={t("Отображаемое имя", "Display name")} placeholderTextColor={colors.mutedForeground} />
 
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ДАТА РОЖДЕНИЯ</Text>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ДАТА РОЖДЕНИЯ", "DATE OF BIRTH")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
-            value={dateOfBirth} onChangeText={setDateOfBirth} placeholder="ГГГГ-ММ-ДД" placeholderTextColor={colors.mutedForeground} />
+            value={dateOfBirth} onChangeText={setDateOfBirth} placeholder={t("ГГГГ-ММ-ДД", "YYYY-MM-DD")} placeholderTextColor={colors.mutedForeground} />
 
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ТЕЛЕФОН *</Text>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ТЕЛЕФОН *", "PHONE *")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={phone} onChangeText={setPhone} placeholder="+7..." placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" />
 
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>E-MAIL (для получения паспорта)</Text>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("E-MAIL (для получения паспорта)", "E-MAIL (for passport delivery)")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={email} onChangeText={setEmail} placeholder="example@timenation.com" placeholderTextColor={colors.mutedForeground} keyboardType="email-address" autoCapitalize="none" />
 
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ПАРОЛЬ * (мин. 6 символов)</Text>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ПАРОЛЬ * (мин. 6 символов)", "PASSWORD * (min. 6 characters)")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.mutedForeground} secureTextEntry />
 
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ПОВТОРИТЕ ПАРОЛЬ *</Text>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ПОВТОРИТЕ ПАРОЛЬ *", "REPEAT PASSWORD *")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={confirmPassword} onChangeText={setConfirmPassword} placeholder="••••••••" placeholderTextColor={colors.mutedForeground} secureTextEntry />
 
           {/* ── Photo picker ── */}
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ФОТОГРАФИЯ (для паспорта)</Text>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ФОТОГРАФИЯ (для паспорта)", "PHOTO (for passport)")}</Text>
           <TouchableOpacity
             style={[styles.photoPicker, { borderColor: colors.border, backgroundColor: colors.card }]}
             onPress={() => void handlePickPhoto()}
@@ -418,34 +479,43 @@ export default function RegisterScreen() {
             ) : (
               <View style={styles.photoPlaceholder}>
                 <Feather name="camera" size={28} color={colors.mutedForeground} />
-                <Text style={[styles.photoPlaceholderText, { color: colors.mutedForeground }]}>Загрузить фото анфас</Text>
-                <Text style={[styles.photoPlaceholderSub, { color: colors.mutedForeground }]}>Светлый фон · JPG, PNG</Text>
+                <Text style={[styles.photoPlaceholderText, { color: colors.mutedForeground }]}>{t("Загрузить фото анфас", "Upload front-facing photo")}</Text>
+                <Text style={[styles.photoPlaceholderSub, { color: colors.mutedForeground }]}>{t("Светлый фон · JPG, PNG", "Light background · JPG, PNG")}</Text>
               </View>
             )}
           </TouchableOpacity>
           {photoUri && (
             <TouchableOpacity onPress={() => void handlePickPhoto()} style={{ alignSelf: "flex-end", marginTop: 4 }}>
-              <Text style={{ fontSize: 12, color: colors.primary }}>Заменить фото</Text>
+              <Text style={{ fontSize: 12, color: colors.primary }}>{t("Заменить фото", "Replace photo")}</Text>
             </TouchableOpacity>
           )}
 
           {/* ── Signature ── */}
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>ПОДПИСЬ *</Text>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ПОДПИСЬ *", "SIGNATURE *")}</Text>
           <View style={[styles.signatureContainer, { borderColor: colors.border }]}>
-            <SignatureCanvas
-              onOK={(sig: string) => setSignatureBase64(sig)}
-              onEmpty={() => setSignatureBase64(null)}
-              penColor="rgb(10, 30, 80)"
-              backgroundColor="rgba(255,255,255,0.04)"
-              descriptionText=""
-              clearText="Очистить"
-              confirmText="Сохранить"
-              webStyle={`.m-signature-pad{box-shadow:none;border:none;height:100%}.m-signature-pad--body{border:none;background:transparent}.m-signature-pad--footer{background:#111;padding:4px}.m-signature-pad--footer .button{background:#222;border:1px solid #333;color:#aaa;font-size:13px;border-radius:6px;padding:4px 12px}`}
-              style={{ height: 150 }}
-            />
+            {Platform.OS === "web" ? (
+              <WebSignaturePad
+                onOK={(sig) => setSignatureBase64(sig)}
+                onEmpty={() => setSignatureBase64(null)}
+                clearText={t("Очистить", "Clear")}
+                confirmText={t("Сохранить", "Save")}
+              />
+            ) : (
+              <SignatureCanvas
+                onOK={(sig: string) => setSignatureBase64(sig)}
+                onEmpty={() => setSignatureBase64(null)}
+                penColor="rgb(10, 30, 80)"
+                backgroundColor="rgba(255,255,255,0.04)"
+                descriptionText=""
+                clearText={t("Очистить", "Clear")}
+                confirmText={t("Сохранить", "Save")}
+                webStyle={`.m-signature-pad{box-shadow:none;border:none;height:100%}.m-signature-pad--body{border:none;background:transparent}.m-signature-pad--footer{background:#111;padding:4px}.m-signature-pad--footer .button{background:#222;border:1px solid #333;color:#aaa;font-size:13px;border-radius:6px;padding:4px 12px}`}
+                style={{ height: 150 }}
+              />
+            )}
           </View>
           {signatureBase64 && (
-            <Text style={[styles.signatureStatus, { color: "#22c55e" }]}>✓ Подпись сохранена</Text>
+            <Text style={[styles.signatureStatus, { color: "#22c55e" }]}>{t("✓ Подпись сохранена", "✓ Signature saved")}</Text>
           )}
 
           {/* ── Compliance checkboxes ── */}
@@ -458,7 +528,7 @@ export default function RegisterScreen() {
                 style={[styles.manifestoBtn, { backgroundColor: "#f59e0b20", borderColor: "#f59e0b50" }]}
               >
                 <Feather name="book-open" size={14} color="#f59e0b" />
-                <Text style={[styles.manifestoBtnText, { color: "#f59e0b" }]}>Открыть документ TimeNation</Text>
+                <Text style={[styles.manifestoBtnText, { color: "#f59e0b" }]}>{t("Открыть документ TimeNation", "Open TimeNation Document")}</Text>
                 <Feather name="external-link" size={12} color="#f59e0b" />
               </TouchableOpacity>
               <TouchableOpacity style={styles.checkRowInner} onPress={() => setManifestoAccepted(v => !v)}>
@@ -466,7 +536,10 @@ export default function RegisterScreen() {
                   {manifestoAccepted && <Feather name="check" size={12} color={colors.primaryForeground} />}
                 </View>
                 <Text style={[styles.checkLabel, { color: colors.mutedForeground }]}>
-                  Я ознакомлен с основополагающим документом TimeNation и понимаю принципы цифрового государства.
+                  {t(
+                    "Я ознакомлен с основополагающим документом TimeNation и понимаю принципы цифрового государства.",
+                    "I have read the founding document of TimeNation and understand the principles of the digital state."
+                  )}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -477,11 +550,7 @@ export default function RegisterScreen() {
                 {tosAccepted && <Feather name="check" size={12} color={colors.primaryForeground} />}
               </View>
               <Text style={[styles.checkLabel, { color: colors.mutedForeground }]}>
-                Я ознакомлен с{" "}
-                <Text style={{ color: colors.primary }} onPress={() => Linking.openURL(`${BASE_URL}/tos`)}>
-                  Условиями использования
-                </Text>
-                . Дармины — внутриигровые баллы, не являются денежными средствами.
+                {t("Я ознакомлен с ", "I agree to the ")}<Text style={{ color: colors.primary }} onPress={() => Linking.openURL(`${BASE_URL}/tos`)}>{t("Условиями использования", "Terms of Use")}</Text>{t(". Дармины — внутриигровые баллы, не являются денежными средствами.", ". Darmins are in-game points, not monetary funds.")}
               </Text>
             </TouchableOpacity>
 
@@ -493,7 +562,10 @@ export default function RegisterScreen() {
                   {privacyAccepted && <Feather name="check" size={12} color={colors.primaryForeground} />}
                 </View>
                 <Text style={[styles.checkLabel, { color: colors.mutedForeground }]}>
-                  Я даю согласие на обработку персональных данных (ФИО, email, фото) для выпуска цифрового удостоверения TimeNation. Данные хранятся в защищённой базе (GDPR / 152-ФЗ).
+                  {t(
+                    "Я даю согласие на обработку персональных данных (ФИО, email, фото) для выпуска цифрового удостоверения TimeNation. Данные хранятся в защищённой базе (GDPR / 152-ФЗ).",
+                    "I consent to the processing of personal data (name, email, photo) for the issuance of a TimeNation digital ID. Data is stored in a secured database (GDPR compliant)."
+                  )}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -502,7 +574,10 @@ export default function RegisterScreen() {
           <View style={[styles.infoBox, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "40" }]}>
             <Feather name="clock" size={14} color={colors.primary} />
             <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-              После регистрации данные проходят 60-минутную верификацию. Вы сразу получите доступ к системе, а цифровой паспорт будет выдан после проверки.
+              {t(
+                "После регистрации данные проходят 60-минутную верификацию. Вы сразу получите доступ к системе, а цифровой паспорт будет выдан после проверки.",
+                "After registration, your data goes through a 60-minute verification. You will immediately gain access to the system, and your digital passport will be issued after review."
+              )}
             </Text>
           </View>
 
@@ -515,17 +590,19 @@ export default function RegisterScreen() {
             {loading ? <ActivityIndicator color={colors.primaryForeground} /> : (
               <>
                 <Feather name="user-check" size={18} color={colors.primaryForeground} />
-                <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>Подать заявку на гражданство</Text>
+                <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>{t("Подать заявку на гражданство", "Apply for Citizenship")}</Text>
               </>
             )}
           </TouchableOpacity>
           {!canSubmit && (
             <Text style={[styles.cancelBtnText, { color: colors.mutedForeground, textAlign: "center", fontSize: 12, marginTop: 4 }]}>
-              {!signatureBase64 ? "Поставьте подпись и отметьте все три пункта" : "Отметьте все три пункта, чтобы продолжить"}
+              {!signatureBase64
+                ? t("Поставьте подпись и отметьте все три пункта", "Sign and check all three boxes")
+                : t("Отметьте все три пункта, чтобы продолжить", "Check all three boxes to continue")}
             </Text>
           )}
           <TouchableOpacity style={styles.cancelBtn} onPress={() => setMode("choose")} activeOpacity={0.8}>
-            <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Назад</Text>
+            <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>{t("Назад", "Back")}</Text>
           </TouchableOpacity>
         </View>
       )}
