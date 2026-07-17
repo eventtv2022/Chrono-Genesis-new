@@ -81,7 +81,7 @@ function timeAgo(iso: string, lang: string): string {
 
 // ── Discount calculator (same tiers as shop.tsx) ─────────────────────────────
 
-const RATE_EUR = 0.01; // 1 Д = 0.01 €
+const RATE_EUR = 1; // 1 Д = 1 €
 
 const TIERS = [
   { label: "1–99 Д",          discount: 0,  from: 1     },
