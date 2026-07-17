@@ -1,83 +1,103 @@
 import { Router, type IRouter } from "express";
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@workspace/db";
 import { transactionsTable, citizensTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
+// Public-safe citizen fields (no PII)
+type CitizenRow = typeof citizensTable.$inferSelect;
+function publicCitizen(c: CitizenRow) {
+  return {
+    id: c.id,
+    name: c.name,
+    meritScore: c.meritScore,
+    rank: c.rank,
+    status: c.status,
+    balanceMinutes: c.balanceMinutes,
+    totalGiven: c.totalGiven,
+    totalReceived: c.totalReceived,
+    transferableBalance: c.balanceMinutes - 1,
+    lastActivity: c.lastActivity?.toISOString() ?? null,
+    createdAt: c.createdAt.toISOString(),
+  };
+}
+
+// Aliases for double-join on citizens
+const fromAlias = alias(citizensTable, "from_c");
+const toAlias   = alias(citizensTable, "to_c");
+
+// Select shape that replaces stored names with current citizen pseudonyms
+const txSelect = {
+  id:                 transactionsTable.id,
+  sessionId:          transactionsTable.sessionId,
+  fromCitizenId:      transactionsTable.fromCitizenId,
+  toCitizenId:        transactionsTable.toCitizenId,
+  minutesTransferred: transactionsTable.minutesTransferred,
+  durationSeconds:    transactionsTable.durationSeconds,
+  createdAt:          transactionsTable.createdAt,
+  // Current pseudonym takes priority; system entries (no citizen row) keep stored name
+  fromCitizenName: sql<string>`COALESCE(${fromAlias.name}, ${transactionsTable.fromCitizenName})`,
+  toCitizenName:   sql<string>`COALESCE(${toAlias.name},   ${transactionsTable.toCitizenName})`,
+} as const;
+
 router.get("/transactions", async (req, res): Promise<void> => {
   const citizenIdRaw = req.query["citizenId"];
-  const limitRaw = req.query["limit"];
+  const limitRaw     = req.query["limit"];
 
-  const limit = limitRaw ? parseInt(String(limitRaw), 10) : 50;
+  const limit     = limitRaw     ? Math.min(parseInt(String(limitRaw),     10), 200) : 50;
   const citizenId = citizenIdRaw ? parseInt(String(citizenIdRaw), 10) : null;
 
-  let rows;
-  if (citizenId && !isNaN(citizenId)) {
-    rows = await db
-      .select()
-      .from(transactionsTable)
-      .where(
-        sql`${transactionsTable.fromCitizenId} = ${citizenId} OR ${transactionsTable.toCitizenId} = ${citizenId}`
-      )
-      .orderBy(desc(transactionsTable.createdAt))
-      .limit(Math.min(limit, 200));
-  } else {
-    rows = await db
-      .select()
-      .from(transactionsTable)
-      .orderBy(desc(transactionsTable.createdAt))
-      .limit(Math.min(limit, 200));
-  }
+  const base = db
+    .select(txSelect)
+    .from(transactionsTable)
+    .leftJoin(fromAlias, eq(transactionsTable.fromCitizenId, fromAlias.id))
+    .leftJoin(toAlias,   eq(transactionsTable.toCitizenId,   toAlias.id));
 
-  res.json(
-    rows.map((t) => ({ ...t, createdAt: t.createdAt.toISOString() }))
-  );
+  const rows = await (citizenId && !isNaN(citizenId)
+    ? base
+        .where(sql`${transactionsTable.fromCitizenId} = ${citizenId} OR ${transactionsTable.toCitizenId} = ${citizenId}`)
+        .orderBy(desc(transactionsTable.createdAt))
+        .limit(limit)
+    : base
+        .orderBy(desc(transactionsTable.createdAt))
+        .limit(limit));
+
+  res.json(rows.map((t) => ({ ...t, createdAt: t.createdAt.toISOString() })));
 });
 
 router.get("/stats", async (_req, res): Promise<void> => {
   const citizens = await db.select().from(citizensTable);
-  const allTransactions = await db
-    .select()
+
+  const recentRows = await db
+    .select(txSelect)
     .from(transactionsTable)
+    .leftJoin(fromAlias, eq(transactionsTable.fromCitizenId, fromAlias.id))
+    .leftJoin(toAlias,   eq(transactionsTable.toCitizenId,   toAlias.id))
     .orderBy(desc(transactionsTable.createdAt))
     .limit(200);
 
-  const recentTransactions = allTransactions.slice(0, 10);
-
-  const totalMinutesAll = allTransactions.reduce(
-    (sum, t) => sum + t.minutesTransferred,
-    0
-  );
+  const totalMinutesAll = recentRows.reduce((sum, t) => sum + t.minutesTransferred, 0);
 
   const topGivers = [...citizens]
     .sort((a, b) => b.totalGiven - a.totalGiven)
     .slice(0, 5)
-    .map((c) => ({
-      ...c,
-      transferableBalance: c.balanceMinutes - 1,
-      lastActivity: c.lastActivity?.toISOString() ?? null,
-      createdAt: c.createdAt.toISOString(),
-    }));
+    .map(publicCitizen);
 
   const topReceivers = [...citizens]
     .sort((a, b) => b.totalReceived - a.totalReceived)
     .slice(0, 5)
-    .map((c) => ({
-      ...c,
-      transferableBalance: c.balanceMinutes - 1,
-      lastActivity: c.lastActivity?.toISOString() ?? null,
-      createdAt: c.createdAt.toISOString(),
-    }));
+    .map(publicCitizen);
 
   res.json({
-    totalCitizens: citizens.length,
-    activeCitizens: citizens.filter((c) => c.status === "active").length,
-    totalTransactions: allTransactions.length,
+    totalCitizens:          citizens.length,
+    activeCitizens:         citizens.filter((c) => c.status === "active").length,
+    totalTransactions:      recentRows.length,
     totalMinutesCirculated: totalMinutesAll,
     topGivers,
     topReceivers,
-    recentTransactions: recentTransactions.map((t) => ({
+    recentTransactions: recentRows.slice(0, 10).map((t) => ({
       ...t,
       createdAt: t.createdAt.toISOString(),
     })),
