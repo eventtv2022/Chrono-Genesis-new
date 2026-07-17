@@ -28,11 +28,13 @@ import { LogoBrand } from "@/components/LogoBrand";
 
 // ── Web-only canvas signature pad ────────────────────────────────────────────
 function WebSignaturePad({
-  onOK, onEmpty, clearText, confirmText,
-}: { onOK: (sig: string) => void; onEmpty: () => void; clearText: string; confirmText: string }) {
+  onOK, onEmpty, clearText,
+}: { onOK: (sig: string) => void; onEmpty: () => void; clearText: string }) {
   const containerRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawing = useRef(false);
+  const onOKRef = useRef(onOK);
+  useEffect(() => { onOKRef.current = onOK; }, [onOK]);
 
   useEffect(() => {
     const el = containerRef.current as HTMLElement | null;
@@ -51,24 +53,27 @@ function WebSignaturePad({
       const src = "touches" in e ? e.touches[0] : (e as MouseEvent);
       return [src.clientX - r.left, src.clientY - r.top] as const;
     };
+    // Auto-confirm on mouse/touch release so users don't need a separate button
+    const autoConfirm = () => {
+      isDrawing.current = false;
+      onOKRef.current(canvas.toDataURL("image/png"));
+    };
     const down = (e: MouseEvent | TouchEvent) => { e.preventDefault(); isDrawing.current = true; const [x,y] = xy(e); ctx.beginPath(); ctx.moveTo(x,y); };
     const move = (e: MouseEvent | TouchEvent) => { if (!isDrawing.current) return; e.preventDefault(); const [x,y] = xy(e); ctx.lineTo(x,y); ctx.stroke(); };
-    const up   = () => { isDrawing.current = false; };
 
-    canvas.addEventListener("mousedown", down); canvas.addEventListener("mousemove", move); canvas.addEventListener("mouseup", up);
-    canvas.addEventListener("touchstart", down, { passive: false }); canvas.addEventListener("touchmove", move, { passive: false }); canvas.addEventListener("touchend", up);
+    canvas.addEventListener("mousedown", down); canvas.addEventListener("mousemove", move); canvas.addEventListener("mouseup", autoConfirm);
+    canvas.addEventListener("touchstart", down, { passive: false }); canvas.addEventListener("touchmove", move, { passive: false }); canvas.addEventListener("touchend", autoConfirm);
     return () => { try { el.removeChild(canvas); } catch {} };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function clear() { const c = canvasRef.current; if (c) { const ctx = c.getContext("2d"); ctx?.clearRect(0,0,c.width,c.height); } onEmpty(); }
-  function confirm() { const c = canvasRef.current; if (c) onOK(c.toDataURL("image/png")); }
 
   return (
     <View>
       <View ref={containerRef} style={{ height: 150, borderRadius: 8, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.04)" }} />
       <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
-        <TouchableOpacity onPress={clear}   style={{ flex: 1, alignItems: "center", padding: 8, backgroundColor: "#1a1a2e", borderRadius: 6, borderWidth: 1, borderColor: "#333" }}><Text style={{ color: "#aaa", fontSize: 13 }}>{clearText}</Text></TouchableOpacity>
-        <TouchableOpacity onPress={confirm} style={{ flex: 1, alignItems: "center", padding: 8, backgroundColor: "#1a1a2e", borderRadius: 6, borderWidth: 1, borderColor: "#333" }}><Text style={{ color: "#aaa", fontSize: 13 }}>{confirmText}</Text></TouchableOpacity>
+        <TouchableOpacity onPress={clear} style={{ flex: 1, alignItems: "center", padding: 8, backgroundColor: "#1a1a2e", borderRadius: 6, borderWidth: 1, borderColor: "#333" }}><Text style={{ color: "#aaa", fontSize: 13 }}>{clearText}</Text></TouchableOpacity>
       </View>
     </View>
   );
@@ -479,6 +484,7 @@ export default function RegisterScreen() {
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ДАТА РОЖДЕНИЯ", "DATE OF BIRTH")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={dateOfBirth} onChangeText={setDateOfBirth} placeholder={t("ГГГГ-ММ-ДД", "YYYY-MM-DD")} placeholderTextColor={colors.mutedForeground} />
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: -8, marginBottom: 8 }}>{t("Формат: 2000-12-31", "Format: 2000-12-31")}</Text>
 
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ТЕЛЕФОН *", "PHONE *")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
@@ -527,7 +533,6 @@ export default function RegisterScreen() {
                 onOK={(sig) => setSignatureBase64(sig)}
                 onEmpty={() => setSignatureBase64(null)}
                 clearText={t("Очистить", "Clear")}
-                confirmText={t("Сохранить", "Save")}
               />
             ) : (
               <SignatureCanvas
