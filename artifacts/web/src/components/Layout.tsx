@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff } from "lucide-react";
+import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X } from "lucide-react";
 import { SystemClock } from "./SystemClock";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -147,6 +147,7 @@ function CitizenWidget() {
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { t } = useLanguage();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navItems = [
     { href: "/",          label: t.nav_dashboard,       icon: Activity  },
@@ -162,8 +163,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden dark text-foreground font-sans">
-      {/* Sidebar */}
-      <aside className="w-60 border-r border-border bg-card flex flex-col h-full shrink-0">
+
+      {/* ── Mobile backdrop ──────────────────────────────────────────────────── */}
+      {sidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-30 bg-black/50 backdrop-blur-sm"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* ── Hamburger button (mobile only) ───────────────────────────────────── */}
+      <button
+        className="lg:hidden fixed top-3 left-3 z-50 p-2 rounded-md bg-card border border-border text-foreground shadow-md transition-colors hover:bg-secondary"
+        onClick={() => setSidebarOpen(v => !v)}
+        aria-label="Toggle menu"
+      >
+        {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+      </button>
+
+      {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
+      <aside
+        className={`
+          fixed lg:static inset-y-0 left-0 z-40
+          w-60 border-r border-border bg-card
+          flex flex-col h-full shrink-0
+          transition-transform duration-300 ease-in-out
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+          lg:translate-x-0
+        `}
+      >
         <div className="p-5 border-b border-border">
           <div className="flex items-center gap-3">
             <img
@@ -186,6 +214,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-sm text-sm transition-colors ${
                   active
                     ? "bg-primary/10 text-primary font-medium"
@@ -210,7 +239,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* ── Main Content ─────────────────────────────────────────────────────── */}
       <main className="flex-1 h-full overflow-y-auto relative">
         <div
           className="absolute inset-0 pointer-events-none opacity-[0.015]"
@@ -219,7 +248,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E\")",
           }}
         />
-        <div className="p-8 max-w-7xl mx-auto min-h-full">
+        <div className="p-4 lg:p-8 max-w-7xl mx-auto min-h-full">
           {children}
         </div>
       </main>
