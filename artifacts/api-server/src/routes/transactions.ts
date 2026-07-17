@@ -6,12 +6,29 @@ import { transactionsTable, citizensTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
+// ── Deterministic time-themed pseudonym generator ─────────────────────────────
+const ADJS  = ["Quantum","Eternal","Cosmic","Chrono","Swift","Future","Epochal","Matrix","Midnight","Paradox","Cyber","Retro","Infinite"] as const;
+const NOUNS = ["Clock","Hour","Tick","Nomad","Keeper","Watcher","Shift","Continuum","Vertex","Pulsar","Century","Relay","Ghost","Spark"] as const;
+
+/** Seeded with citizen ID → same citizen always gets the same nick */
+function seededNick(id: number): string {
+  // Simple LCG-style hash: two independent primes to spread adj / noun indices
+  const a = ((id * 2654435761) >>> 0) % ADJS.length;
+  const n = ((id * 2246822519) >>> 0) % NOUNS.length;
+  return `${ADJS[a]}${NOUNS[n]}`;
+}
+
+/** Returns the display name for a citizen, never exposing PII */
+function displayName(name: string | null | undefined, id: number): string {
+  return name && name.trim() ? name.trim() : seededNick(id);
+}
+
 // Public-safe citizen fields (no PII)
 type CitizenRow = typeof citizensTable.$inferSelect;
 function publicCitizen(c: CitizenRow) {
   return {
     id: c.id,
-    name: c.name,
+    name: displayName(c.name, c.id),
     meritScore: c.meritScore,
     rank: c.rank,
     status: c.status,
@@ -64,7 +81,13 @@ router.get("/transactions", async (req, res): Promise<void> => {
         .orderBy(desc(transactionsTable.createdAt))
         .limit(limit));
 
-  res.json(rows.map((t) => ({ ...t, createdAt: t.createdAt.toISOString() })));
+  res.json(rows.map((t) => ({
+    ...t,
+    // If citizen exists (id known) → apply displayName; system entries keep stored value
+    fromCitizenName: t.fromCitizenId ? displayName(t.fromCitizenName, t.fromCitizenId) : t.fromCitizenName,
+    toCitizenName:   t.toCitizenId   ? displayName(t.toCitizenName,   t.toCitizenId)   : t.toCitizenName,
+    createdAt: t.createdAt.toISOString(),
+  })));
 });
 
 router.get("/stats", async (_req, res): Promise<void> => {
@@ -99,6 +122,8 @@ router.get("/stats", async (_req, res): Promise<void> => {
     topReceivers,
     recentTransactions: recentRows.slice(0, 10).map((t) => ({
       ...t,
+      fromCitizenName: t.fromCitizenId ? displayName(t.fromCitizenName, t.fromCitizenId) : t.fromCitizenName,
+      toCitizenName:   t.toCitizenId   ? displayName(t.toCitizenName,   t.toCitizenId)   : t.toCitizenName,
       createdAt: t.createdAt.toISOString(),
     })),
   });
