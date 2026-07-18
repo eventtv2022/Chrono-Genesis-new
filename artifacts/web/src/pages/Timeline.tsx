@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Layout } from "@/components/Layout";
 import {
   useGetTimelineOccupied,
@@ -10,11 +10,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, ChevronRight, MapPin, X, Clock, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCitizen } from "@/context/CitizenContext";
+import { useLanguage } from "@/context/LanguageContext";
 
-const MONTHS = [
+const MONTHS_RU = [
   "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
   "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
 ];
+const WEEKDAYS_RU = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 
 const currentYear = new Date().getFullYear();
 const currentMonth = new Date().getMonth() + 1;
@@ -24,6 +26,7 @@ function padYear(n: number) { return String(n).padStart(4, "0"); }
 
 export function Timeline() {
   const { citizen, refreshCitizen } = useCitizen();
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
 
   const [year, setYear]   = useState(currentYear);
@@ -36,8 +39,6 @@ export function Timeline() {
   const [anchoring,    setAnchoring]    = useState(false);
   const [anchorResult, setAnchorResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  useEffect(() => { document.title = "Таймлайн | TimeNation"; }, []);
-
   const yearStr  = String(year);
   const monthStr = String(month);
 
@@ -46,7 +47,6 @@ export function Timeline() {
     { query: { queryKey: getGetTimelineOccupiedQueryKey({ year: yearStr, month: monthStr }) } }
   );
 
-  // Per-day detail (hours) — fetch when a day is selected
   const dayStr = selectedDay !== null ? pad2(selectedDay) : null;
   const { data: dayOccupied } = useGetTimelineOccupied(
     { year: yearStr, month: monthStr, day: dayStr ?? "" },
@@ -83,10 +83,9 @@ export function Timeline() {
     return `${coord.slice(0, 4)}-${coord.slice(4, 6)}-${coord.slice(6, 8)} ${coord.slice(8, 10)}:${coord.slice(10, 12)}`;
   }
 
-  // Occupied minute-level set for the selected day
   const dayCoords = new Set((dayOccupied ?? []).map((e) => e.timelineCoord));
+  void dayCoords;
 
-  // Citizen who owns a given coord
   const ownerOf = useCallback((coord: string) => {
     return (dayOccupied ?? []).find((e) => e.timelineCoord === coord);
   }, [dayOccupied]);
@@ -103,17 +102,16 @@ export function Timeline() {
       });
       const data = await res.json() as { error?: string; newBalance?: number };
       if (!res.ok) {
-        setAnchorResult({ ok: false, msg: data.error ?? "Ошибка соединения" });
+        setAnchorResult({ ok: false, msg: data.error ?? t.connection_error });
       } else {
-        setAnchorResult({ ok: true, msg: `Координата закреплена! Остаток: ${data.newBalance} Д` });
+        setAnchorResult({ ok: true, msg: `${t.tl_anchor_ok} ${data.newBalance} Д` });
         setConfirmCoord(null);
-        // Invalidate occupied cache for month + day
         void queryClient.invalidateQueries({ queryKey: getGetTimelineOccupiedQueryKey({ year: yearStr, month: monthStr }) });
         void queryClient.invalidateQueries({ queryKey: getGetTimelineOccupiedQueryKey({ year: yearStr, month: monthStr, day: dayStr ?? "" }) });
         void refreshCitizen();
       }
     } catch {
-      setAnchorResult({ ok: false, msg: "Ошибка соединения" });
+      setAnchorResult({ ok: false, msg: t.connection_error });
     } finally {
       setAnchoring(false);
     }
@@ -123,7 +121,7 @@ export function Timeline() {
     <Layout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Таймлайн</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t.nav_timeline}</h1>
           <p className="text-muted-foreground font-mono text-sm mt-1">
             Захваченные временны́е координаты · 12-значный код
           </p>
@@ -139,7 +137,7 @@ export function Timeline() {
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <span className="font-mono font-bold text-lg w-40 text-center">
-              {MONTHS[month - 1]} {year}
+              {MONTHS_RU[month - 1]} {year}
             </span>
             <Button variant="ghost" size="icon" onClick={() => changeMonth(1)}>
               <ChevronRight className="w-4 h-4" />
@@ -153,7 +151,7 @@ export function Timeline() {
 
         {/* Calendar grid */}
         <div className="grid grid-cols-7 gap-1 text-xs font-mono">
-          {["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].map((d) => (
+          {WEEKDAYS_RU.map((d) => (
             <div key={d} className="text-center text-muted-foreground uppercase py-1">{d}</div>
           ))}
           {(() => {
@@ -183,7 +181,6 @@ export function Timeline() {
                     ? "bg-red-900/20 border-red-500/40 text-red-400"
                     : "bg-secondary/30 border-border/30 text-muted-foreground hover:bg-secondary/50"
                 }`}
-                title={hasCoords ? entries.map(formatCoord).join("\n") : `Выбрать день ${day}`}
               >
                 <span className="text-[11px] font-bold">{day}</span>
                 {hasCoords && <span className="text-[8px] font-mono opacity-70">{entries.length}</span>}
@@ -199,14 +196,14 @@ export function Timeline() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <Clock className="w-4 h-4 text-primary" />
-                  {pad2(selectedDay)}.{pad2(month)}.{year} — выберите час
+                  {pad2(selectedDay)}.{pad2(month)}.{year} — {t.tl_choose_hour}
                 </CardTitle>
                 <button onClick={closePanel} className="text-muted-foreground hover:text-foreground">
                   <X className="w-4 h-4" />
                 </button>
               </div>
               {!citizen && (
-                <p className="text-xs text-amber-400 mt-1">Войдите в систему, чтобы забронировать координату</p>
+                <p className="text-xs text-amber-400 mt-1">{t.tl_login_to_book_coord}</p>
               )}
             </CardHeader>
             <CardContent>
@@ -246,7 +243,7 @@ export function Timeline() {
                     className="flex items-center gap-1 text-xs text-muted-foreground mb-3 hover:text-foreground"
                     onClick={() => { setSelectedHour(null); setConfirmCoord(null); setAnchorResult(null); }}
                   >
-                    <ChevronLeft className="w-3 h-3" /> {pad2(selectedHour)}:00 — выберите минуту
+                    <ChevronLeft className="w-3 h-3" /> {pad2(selectedHour)}:00 — {t.tl_choose_minute}
                   </button>
                   <div className="grid grid-cols-10 sm:grid-cols-12 gap-1">
                     {Array.from({ length: 60 }, (_, min) => {
@@ -275,7 +272,7 @@ export function Timeline() {
                               ? "bg-secondary/20 border-border/20 text-muted-foreground/40 cursor-not-allowed"
                               : "bg-secondary/30 border-border/30 text-muted-foreground hover:border-primary hover:text-foreground"
                           }`}
-                          title={isMine ? "Ваша координата" : isOcc ? "Занято" : coord}
+                          title={isMine ? t.tl_mine_coord : isOcc ? t.tl_occupied_coord : coord}
                         >
                           {pad2(min)}
                         </button>
@@ -287,10 +284,10 @@ export function Timeline() {
                   {confirmCoord && (
                     <div className="mt-4 p-3 rounded-lg border border-primary/40 bg-primary/5">
                       <p className="text-sm font-mono text-foreground mb-1">
-                        Закрепить координату?
+                        {t.tl_confirm_coord}
                       </p>
                       <p className="text-xs text-muted-foreground font-mono mb-3">
-                        {confirmCoord} · стоимость: <span className="text-primary font-bold">1 Д</span>
+                        {confirmCoord} · {t.tl_cost} <span className="text-primary font-bold">1 Д</span>
                       </p>
                       <div className="flex gap-2">
                         <Button
@@ -299,7 +296,7 @@ export function Timeline() {
                           onClick={() => setConfirmCoord(null)}
                           disabled={anchoring}
                         >
-                          Отмена
+                          {t.cancel}
                         </Button>
                         <Button
                           size="sm"
@@ -307,7 +304,7 @@ export function Timeline() {
                           disabled={anchoring}
                           className="bg-primary hover:bg-primary/90 text-primary-foreground"
                         >
-                          {anchoring ? "Бронируется…" : "Закрепить за родом"}
+                          {anchoring ? t.tl_anchoring : t.tl_anchor_btn}
                         </Button>
                       </div>
                     </div>
@@ -344,7 +341,7 @@ export function Timeline() {
             <CardHeader>
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-primary" />
-                Захваченные координаты — {MONTHS[month - 1]} {year}
+                Захваченные координаты — {MONTHS_RU[month - 1]} {year}
               </CardTitle>
             </CardHeader>
             <CardContent>

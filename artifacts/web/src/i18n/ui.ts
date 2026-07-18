@@ -113,6 +113,17 @@ export interface UIStrings {
   // TV — schedule
   tv_schedule_title: string;
   tv_no_schedule: string;
+  // Timeline — booking
+  tl_choose_hour: string;
+  tl_choose_minute: string;
+  tl_login_to_book_coord: string;
+  tl_confirm_coord: string;
+  tl_cost: string;
+  tl_anchor_btn: string;
+  tl_anchoring: string;
+  tl_mine_coord: string;
+  tl_occupied_coord: string;
+  tl_anchor_ok: string;
 }
 
 export const UI: Record<LangCode, UIStrings> = {
@@ -167,6 +178,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Мои слоты", tv_retro: "РЕТРО",
     tv_retro_air: "РЕТРО в эфир", tv_on_air_btn: "В эфир",
     tv_schedule_title: "Расписание эфира", tv_no_schedule: "Нет забронированных слотов",
+    tl_choose_hour: "выберите час", tl_choose_minute: "выберите минуту", tl_login_to_book_coord: "Войдите в систему, чтобы забронировать координату", tl_confirm_coord: "Закрепить координату?", tl_cost: "стоимость:", tl_anchor_btn: "Закрепить за родом", tl_anchoring: "Бронируется…", tl_mine_coord: "Ваша координата", tl_occupied_coord: "Занято", tl_anchor_ok: "Координата закреплена! Остаток:",
   },
   en: {
     nav_dashboard: "Dashboard", nav_tv: "TimeNation-TV", nav_registry: "Registry",
@@ -219,6 +231,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "My slots", tv_retro: "RETRO",
     tv_retro_air: "RETRO broadcast", tv_on_air_btn: "On air",
     tv_schedule_title: "Broadcast schedule", tv_no_schedule: "No booked slots",
+    tl_choose_hour: "choose hour", tl_choose_minute: "choose minute", tl_login_to_book_coord: "Log in to book a coordinate", tl_confirm_coord: "Claim coordinate?", tl_cost: "cost:", tl_anchor_btn: "Claim for your lineage", tl_anchoring: "Booking…", tl_mine_coord: "Your coordinate", tl_occupied_coord: "Occupied", tl_anchor_ok: "Coordinate claimed! Balance:",
   },
   zh: {
     nav_dashboard: "仪表板", nav_tv: "TimeNation-TV", nav_registry: "公民登记",
@@ -271,6 +284,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "我的时段", tv_retro: "复古",
     tv_retro_air: "复古播出", tv_on_air_btn: "播出",
     tv_schedule_title: "播出时间表", tv_no_schedule: "没有预订的时段",
+    tl_choose_hour: "选择小时", tl_choose_minute: "选择分钟", tl_login_to_book_coord: "登录以预订坐标", tl_confirm_coord: "锁定坐标？", tl_cost: "费用：", tl_anchor_btn: "为家族锁定", tl_anchoring: "预订中…", tl_mine_coord: "您的坐标", tl_occupied_coord: "已占用", tl_anchor_ok: "坐标已锁定！余额：",
   },
   hi: {
     nav_dashboard: "डैशबोर्ड", nav_tv: "TimeNation-TV", nav_registry: "रजिस्ट्री",
@@ -323,6 +337,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "मेरे स्लॉट", tv_retro: "रेट्रो",
     tv_retro_air: "रेट्रो प्रसारण", tv_on_air_btn: "प्रसारण",
     tv_schedule_title: "प्रसारण कार्यक्रम", tv_no_schedule: "कोई बुक्ड स्लॉट नहीं",
+    tl_choose_hour: "घंटा चुनें", tl_choose_minute: "मिनट चुनें", tl_login_to_book_coord: "निर्देशांक बुक करने के लिए लॉग इन करें", tl_confirm_coord: "निर्देशांक निर्धारित करें?", tl_cost: "लागत:", tl_anchor_btn: "वंश के लिए निर्धारित करें", tl_anchoring: "बुकिंग…", tl_mine_coord: "आपका निर्देशांक", tl_occupied_coord: "व्यस्त", tl_anchor_ok: "निर्देशांक निर्धारित! शेष:",
   },
   es: {
     nav_dashboard: "Panel", nav_tv: "TimeNation-TV", nav_registry: "Registro",
@@ -375,6 +390,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Mis franjas", tv_retro: "RETRO",
     tv_retro_air: "Emisión RETRO", tv_on_air_btn: "Emitir",
     tv_schedule_title: "Programación de emisión", tv_no_schedule: "Sin franjas reservadas",
+    tl_choose_hour: "elegir hora", tl_choose_minute: "elegir minuto", tl_login_to_book_coord: "Inicia sesión para reservar una coordenada", tl_confirm_coord: "¿Fijar coordenada?", tl_cost: "costo:", tl_anchor_btn: "Fijar para tu linaje", tl_anchoring: "Reservando…", tl_mine_coord: "Tu coordenada", tl_occupied_coord: "Ocupado", tl_anchor_ok: "¡Coordenada fijada! Saldo:",
   },
   fr: {
     nav_dashboard: "Tableau de bord", nav_tv: "TimeNation-TV", nav_registry: "Registre",
@@ -427,6 +443,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Mes créneaux", tv_retro: "RÉTRO",
     tv_retro_air: "Diffusion RÉTRO", tv_on_air_btn: "Diffuser",
     tv_schedule_title: "Programme de diffusion", tv_no_schedule: "Aucun créneau réservé",
+    tl_choose_hour: "choisir l'heure", tl_choose_minute: "choisir la minute", tl_login_to_book_coord: "Connectez-vous pour réserver une coordonnée", tl_confirm_coord: "Fixer la coordonnée ?", tl_cost: "coût :", tl_anchor_btn: "Fixer pour votre lignée", tl_anchoring: "Réservation…", tl_mine_coord: "Votre coordonnée", tl_occupied_coord: "Occupé", tl_anchor_ok: "Coordonnée fixée ! Solde :",
   },
   ar: {
     nav_dashboard: "لوحة التحكم", nav_tv: "TimeNation-TV", nav_registry: "السجل",
@@ -479,6 +496,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "فتحاتي", tv_retro: "ريترو",
     tv_retro_air: "بث ريترو", tv_on_air_btn: "بث",
     tv_schedule_title: "جدول البث", tv_no_schedule: "لا توجد فتحات محجوزة",
+    tl_choose_hour: "اختر الساعة", tl_choose_minute: "اختر الدقيقة", tl_login_to_book_coord: "سجّل الدخول لحجز إحداثية", tl_confirm_coord: "تثبيت الإحداثية؟", tl_cost: "التكلفة:", tl_anchor_btn: "تثبيت لعائلتك", tl_anchoring: "جارٍ الحجز…", tl_mine_coord: "إحداثيتك", tl_occupied_coord: "محجوز", tl_anchor_ok: "تم تثبيت الإحداثية! الرصيد:",
   },
   bn: {
     nav_dashboard: "ড্যাশবোর্ড", nav_tv: "TimeNation-TV", nav_registry: "রেজিস্ট্রি",
@@ -531,6 +549,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "আমার স্লট", tv_retro: "রেট্রো",
     tv_retro_air: "রেট্রো সম্প্রচার", tv_on_air_btn: "সম্প্রচার",
     tv_schedule_title: "সম্প্রচার সময়সূচি", tv_no_schedule: "কোনো বুক্ড স্লট নেই",
+    tl_choose_hour: "ঘণ্টা বেছে নিন", tl_choose_minute: "মিনিট বেছে নিন", tl_login_to_book_coord: "স্থানাঙ্ক বুক করতে লগ ইন করুন", tl_confirm_coord: "স্থানাঙ্ক নোঙর করবেন?", tl_cost: "খরচ:", tl_anchor_btn: "বংশের জন্য নোঙর করুন", tl_anchoring: "বুকিং…", tl_mine_coord: "আপনার স্থানাঙ্ক", tl_occupied_coord: "দখল", tl_anchor_ok: "স্থানাঙ্ক নোঙর! ব্যালেন্স:",
   },
   pt: {
     nav_dashboard: "Painel", nav_tv: "TimeNation-TV", nav_registry: "Registro",
@@ -583,6 +602,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Meus slots", tv_retro: "RETRO",
     tv_retro_air: "Transmissão RETRO", tv_on_air_btn: "Transmitir",
     tv_schedule_title: "Grade de transmissão", tv_no_schedule: "Nenhum slot reservado",
+    tl_choose_hour: "escolher hora", tl_choose_minute: "escolher minuto", tl_login_to_book_coord: "Entre para reservar uma coordenada", tl_confirm_coord: "Fixar coordenada?", tl_cost: "custo:", tl_anchor_btn: "Fixar para sua linhagem", tl_anchoring: "Reservando…", tl_mine_coord: "Sua coordenada", tl_occupied_coord: "Ocupado", tl_anchor_ok: "Coordenada fixada! Saldo:",
   },
   ur: {
     nav_dashboard: "ڈیش بورڈ", nav_tv: "TimeNation-TV", nav_registry: "رجسٹری",
@@ -635,6 +655,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "میرے سلاٹ", tv_retro: "ریٹرو",
     tv_retro_air: "ریٹرو نشریات", tv_on_air_btn: "نشر",
     tv_schedule_title: "نشریاتی شیڈول", tv_no_schedule: "کوئی بک سلاٹ نہیں",
+    tl_choose_hour: "گھنٹہ منتخب کریں", tl_choose_minute: "منٹ منتخب کریں", tl_login_to_book_coord: "کوآرڈینیٹ بک کرنے کے لیے لاگ ان کریں", tl_confirm_coord: "کوآرڈینیٹ ثابت کریں؟", tl_cost: "قیمت:", tl_anchor_btn: "خاندان کے لیے ثابت کریں", tl_anchoring: "بکنگ…", tl_mine_coord: "آپ کا کوآرڈینیٹ", tl_occupied_coord: "مقبوض", tl_anchor_ok: "کوآرڈینیٹ ثابت! بیلنس:",
   },
   id: {
     nav_dashboard: "Dasbor", nav_tv: "TimeNation-TV", nav_registry: "Registri",
@@ -687,6 +708,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Slot saya", tv_retro: "RETRO",
     tv_retro_air: "Siaran RETRO", tv_on_air_btn: "Siaran",
     tv_schedule_title: "Jadwal siaran", tv_no_schedule: "Tidak ada slot dipesan",
+    tl_choose_hour: "pilih jam", tl_choose_minute: "pilih menit", tl_login_to_book_coord: "Masuk untuk memesan koordinat", tl_confirm_coord: "Klaim koordinat?", tl_cost: "biaya:", tl_anchor_btn: "Klaim untuk keturunanmu", tl_anchoring: "Memesan…", tl_mine_coord: "Koordinatmu", tl_occupied_coord: "Ditempati", tl_anchor_ok: "Koordinat diklaim! Saldo:",
   },
   de: {
     nav_dashboard: "Dashboard", nav_tv: "TimeNation-TV", nav_registry: "Register",
@@ -739,6 +761,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Meine Slots", tv_retro: "RETRO",
     tv_retro_air: "RETRO-Sendung", tv_on_air_btn: "Senden",
     tv_schedule_title: "Sendeprogramm", tv_no_schedule: "Keine gebuchten Slots",
+    tl_choose_hour: "Stunde wählen", tl_choose_minute: "Minute wählen", tl_login_to_book_coord: "Anmelden, um eine Koordinate zu buchen", tl_confirm_coord: "Koordinate festlegen?", tl_cost: "Kosten:", tl_anchor_btn: "Für dein Geschlecht festlegen", tl_anchoring: "Buchung…", tl_mine_coord: "Deine Koordinate", tl_occupied_coord: "Belegt", tl_anchor_ok: "Koordinate festgelegt! Guthaben:",
   },
   ja: {
     nav_dashboard: "ダッシュボード", nav_tv: "TimeNation-TV", nav_registry: "市民登録",
@@ -791,6 +814,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "マイスロット", tv_retro: "レトロ",
     tv_retro_air: "レトロ放送", tv_on_air_btn: "放送",
     tv_schedule_title: "放送スケジュール", tv_no_schedule: "予約済みスロットなし",
+    tl_choose_hour: "時間を選択", tl_choose_minute: "分を選択", tl_login_to_book_coord: "座標を予約するにはログイン", tl_confirm_coord: "座標を確定しますか？", tl_cost: "コスト：", tl_anchor_btn: "家系のために確定", tl_anchoring: "予約中…", tl_mine_coord: "あなたの座標", tl_occupied_coord: "使用中", tl_anchor_ok: "座標確定！残高：",
   },
   tr: {
     nav_dashboard: "Gösterge paneli", nav_tv: "TimeNation-TV", nav_registry: "Kayıt",
@@ -843,6 +867,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Slotlarım", tv_retro: "RETRO",
     tv_retro_air: "RETRO yayın", tv_on_air_btn: "Yayınla",
     tv_schedule_title: "Yayın programı", tv_no_schedule: "Rezerve slot yok",
+    tl_choose_hour: "saat seçin", tl_choose_minute: "dakika seçin", tl_login_to_book_coord: "Koordinat rezerve etmek için giriş yapın", tl_confirm_coord: "Koordinatı sabitle?", tl_cost: "maliyet:", tl_anchor_btn: "Soyun için sabitle", tl_anchoring: "Rezervasyon…", tl_mine_coord: "Senin koordinatın", tl_occupied_coord: "Dolu", tl_anchor_ok: "Koordinat sabitlendi! Bakiye:",
   },
   vi: {
     nav_dashboard: "Bảng điều khiển", nav_tv: "TimeNation-TV", nav_registry: "Đăng ký",
@@ -895,6 +920,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Khe của tôi", tv_retro: "RETRO",
     tv_retro_air: "Phát sóng RETRO", tv_on_air_btn: "Phát sóng",
     tv_schedule_title: "Lịch phát sóng", tv_no_schedule: "Không có khe đã đặt",
+    tl_choose_hour: "chọn giờ", tl_choose_minute: "chọn phút", tl_login_to_book_coord: "Đăng nhập để đặt tọa độ", tl_confirm_coord: "Khóa tọa độ?", tl_cost: "chi phí:", tl_anchor_btn: "Khóa cho dòng họ", tl_anchoring: "Đang đặt…", tl_mine_coord: "Tọa độ của bạn", tl_occupied_coord: "Đã chiếm", tl_anchor_ok: "Tọa độ đã khóa! Số dư:",
   },
   he: {
     nav_dashboard: "לוח בקרה", nav_tv: "TimeNation-TV", nav_registry: "רשם",
@@ -947,6 +973,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "החריצים שלי", tv_retro: "רטרו",
     tv_retro_air: "שידור רטרו", tv_on_air_btn: "שדר",
     tv_schedule_title: "לוח שידורים", tv_no_schedule: "אין חריצים מוזמנים",
+    tl_choose_hour: "בחר שעה", tl_choose_minute: "בחר דקה", tl_login_to_book_coord: "התחבר כדי להזמין קואורדינטה", tl_confirm_coord: "לנעול קואורדינטה?", tl_cost: "עלות:", tl_anchor_btn: "לנעול לשושלתך", tl_anchoring: "מזמין…", tl_mine_coord: "הקואורדינטה שלך", tl_occupied_coord: "תפוס", tl_anchor_ok: "קואורדינטה ננעלה! יתרה:",
   },
   fa: {
     nav_dashboard: "داشبورد", nav_tv: "TimeNation-TV", nav_registry: "ثبت‌نام",
@@ -999,6 +1026,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "اسلات‌های من", tv_retro: "رترو",
     tv_retro_air: "پخش رترو", tv_on_air_btn: "پخش",
     tv_schedule_title: "برنامه پخش", tv_no_schedule: "اسلات رزرو شده‌ای وجود ندارد",
+    tl_choose_hour: "ساعت را انتخاب کنید", tl_choose_minute: "دقیقه را انتخاب کنید", tl_login_to_book_coord: "برای رزرو مختصات وارد شوید", tl_confirm_coord: "مختصات را ثبت می‌کنید؟", tl_cost: "هزینه:", tl_anchor_btn: "برای نسل خود ثبت کنید", tl_anchoring: "در حال رزرو…", tl_mine_coord: "مختصات شما", tl_occupied_coord: "اشغال شده", tl_anchor_ok: "مختصات ثبت شد! موجودی:",
   },
   ko: {
     nav_dashboard: "대시보드", nav_tv: "TimeNation-TV", nav_registry: "레지스트리",
@@ -1051,6 +1079,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "내 슬롯", tv_retro: "레트로",
     tv_retro_air: "레트로 방송", tv_on_air_btn: "방송",
     tv_schedule_title: "방송 일정", tv_no_schedule: "예약된 슬롯 없음",
+    tl_choose_hour: "시간 선택", tl_choose_minute: "분 선택", tl_login_to_book_coord: "좌표를 예약하려면 로그인", tl_confirm_coord: "좌표를 고정할까요?", tl_cost: "비용:", tl_anchor_btn: "가문을 위해 고정", tl_anchoring: "예약 중…", tl_mine_coord: "내 좌표", tl_occupied_coord: "점유됨", tl_anchor_ok: "좌표 고정 완료! 잔액:",
   },
   it: {
     nav_dashboard: "Cruscotto", nav_tv: "TimeNation-TV", nav_registry: "Registro",
@@ -1103,6 +1132,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "I miei slot", tv_retro: "RETRO",
     tv_retro_air: "Trasmissione RETRO", tv_on_air_btn: "Trasmetti",
     tv_schedule_title: "Programma trasmissioni", tv_no_schedule: "Nessuno slot prenotato",
+    tl_choose_hour: "scegli l'ora", tl_choose_minute: "scegli il minuto", tl_login_to_book_coord: "Accedi per prenotare una coordinata", tl_confirm_coord: "Fissare la coordinata?", tl_cost: "costo:", tl_anchor_btn: "Fissa per il tuo lignaggio", tl_anchoring: "Prenotazione…", tl_mine_coord: "La tua coordinata", tl_occupied_coord: "Occupato", tl_anchor_ok: "Coordinata fissata! Saldo:",
   },
   pl: {
     nav_dashboard: "Panel", nav_tv: "TimeNation-TV", nav_registry: "Rejestr",
@@ -1155,6 +1185,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Moje sloty", tv_retro: "RETRO",
     tv_retro_air: "Emisja RETRO", tv_on_air_btn: "Emituj",
     tv_schedule_title: "Program emisji", tv_no_schedule: "Brak zarezerwowanych slotów",
+    tl_choose_hour: "wybierz godzinę", tl_choose_minute: "wybierz minutę", tl_login_to_book_coord: "Zaloguj się, aby zarezerwować współrzędną", tl_confirm_coord: "Zablokować współrzędną?", tl_cost: "koszt:", tl_anchor_btn: "Zablokuj dla swojego rodu", tl_anchoring: "Rezerwowanie…", tl_mine_coord: "Twoja współrzędna", tl_occupied_coord: "Zajęte", tl_anchor_ok: "Współrzędna zablokowana! Saldo:",
   },
   uk: {
     nav_dashboard: "Дашборд", nav_tv: "TimeNation-TV", nav_registry: "Реєстр",
@@ -1207,6 +1238,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Мої слоти", tv_retro: "РЕТРО",
     tv_retro_air: "РЕТРО в ефір", tv_on_air_btn: "В ефір",
     tv_schedule_title: "Розклад ефіру", tv_no_schedule: "Немає заброньованих слотів",
+    tl_choose_hour: "виберіть годину", tl_choose_minute: "виберіть хвилину", tl_login_to_book_coord: "Увійдіть, щоб зарезервувати координату", tl_confirm_coord: "Закріпити координату?", tl_cost: "вартість:", tl_anchor_btn: "Закріпити за родом", tl_anchoring: "Бронювання…", tl_mine_coord: "Ваша координата", tl_occupied_coord: "Зайнято", tl_anchor_ok: "Координату закріплено! Залишок:",
   },
   nl: {
     nav_dashboard: "Dashboard", nav_tv: "TimeNation-TV", nav_registry: "Register",
@@ -1259,6 +1291,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Mijn slots", tv_retro: "RETRO",
     tv_retro_air: "RETRO uitzending", tv_on_air_btn: "Uitzenden",
     tv_schedule_title: "Uitzendschema", tv_no_schedule: "Geen gereserveerde slots",
+    tl_choose_hour: "kies uur", tl_choose_minute: "kies minuut", tl_login_to_book_coord: "Log in om een coördinaat te reserveren", tl_confirm_coord: "Coördinaat vastleggen?", tl_cost: "kosten:", tl_anchor_btn: "Vastleggen voor je geslacht", tl_anchoring: "Reserveren…", tl_mine_coord: "Jouw coördinaat", tl_occupied_coord: "Bezet", tl_anchor_ok: "Coördinaat vastgelegd! Saldo:",
   },
   kk: {
     nav_dashboard: "Бақылау тақтасы", nav_tv: "TimeNation-TV", nav_registry: "Тізілім",
@@ -1311,6 +1344,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Менің слоттарым", tv_retro: "РЕТРО",
     tv_retro_air: "РЕТРО эфир", tv_on_air_btn: "Эфирге",
     tv_schedule_title: "Эфир кестесі", tv_no_schedule: "Брондалған слоттар жоқ",
+    tl_choose_hour: "сағатты таңдаңыз", tl_choose_minute: "минутты таңдаңыз", tl_login_to_book_coord: "Координатаны брондау үшін кіріңіз", tl_confirm_coord: "Координатаны бекіту?", tl_cost: "құны:", tl_anchor_btn: "Ұрпақ үшін бекіту", tl_anchoring: "Брондалуда…", tl_mine_coord: "Сіздің координатаңыз", tl_occupied_coord: "Алынған", tl_anchor_ok: "Координата бекітілді! Қалдық:",
   },
   uz: {
     nav_dashboard: "Boshqaruv paneli", nav_tv: "TimeNation-TV", nav_registry: "Ro'yxat",
@@ -1363,6 +1397,7 @@ export const UI: Record<LangCode, UIStrings> = {
     tv_my_slots: "Mening slotlarim", tv_retro: "RETRO",
     tv_retro_air: "RETRO efir", tv_on_air_btn: "Efirga",
     tv_schedule_title: "Efir jadvali", tv_no_schedule: "Band qilingan slotlar yo'q",
+    tl_choose_hour: "soatni tanlang", tl_choose_minute: "daqiqani tanlang", tl_login_to_book_coord: "Koordinatani bron qilish uchun kiring", tl_confirm_coord: "Koordinatani mahkamlash?", tl_cost: "narxi:", tl_anchor_btn: "Avlod uchun mahkamlash", tl_anchoring: "Bronlanmoqda…", tl_mine_coord: "Sizning koordinatangiz", tl_occupied_coord: "Band", tl_anchor_ok: "Koordinata mahkamlandi! Qoldiq:",
   },
 };
 
