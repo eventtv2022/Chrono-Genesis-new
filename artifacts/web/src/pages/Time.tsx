@@ -264,7 +264,7 @@ const PRESETS = [
 
 const DAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
-interface Subscriber { id: number; name: string; rank: string; }
+interface Subscriber { id: number; pseudonym: string; rank: string; }
 
 // ── Main page ────────────────────────────────────────────────────────────────
 
@@ -487,6 +487,8 @@ export function Time() {
   const { connected: wsConnected, subscribed: wsSubscribed, playAnthemEvent, clearAnthemEvent, updateConsent } = useSocialAlarmWs(citizen?.id);
   const [saConsent, setSaConsent] = useState(false);
   const [saConsentSaving, setSaConsentSaving] = useState(false);
+  const [saAlarmTime, setSaAlarmTime] = useState("");
+  const [saPurpose, setSaPurpose] = useState("");
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [saSearch, setSaSearch] = useState("");
   const [selectedTargets, setSelectedTargets] = useState<Set<number>>(new Set());
@@ -565,8 +567,8 @@ export function Time() {
     setSaSending(true);
     try {
       const body = global
-        ? { initiatedBy: citizen.id }
-        : { initiatedBy: citizen.id, targetCitizenIds: [...selectedTargets] };
+        ? { initiatedBy: citizen.id, purpose: saPurpose || undefined, scheduledFor: saAlarmTime || undefined }
+        : { initiatedBy: citizen.id, targetCitizenIds: [...selectedTargets], purpose: saPurpose || undefined, scheduledFor: saAlarmTime || undefined };
       const res = await fetch("/api/system/trigger-alarm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -583,7 +585,7 @@ export function Time() {
   };
 
   const filteredSubscribers = subscribers.filter(s =>
-    s.name.toLowerCase().includes(saSearch.toLowerCase()) && s.id !== citizen?.id
+    s.pseudonym.toLowerCase().includes(saSearch.toLowerCase()) && s.id !== citizen?.id
   );
 
   const toggleTarget = (id: number) => {
@@ -639,26 +641,29 @@ export function Time() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Время</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Мировые часы · Таймер фокусировки · Суверенный будильник · {t.sa_title}
+            Мировые часы · Таймер фокусировки · Суверенный будильник · Синхро-сигнал
           </p>
         </div>
 
-        {/* Section tabs */}
-        <div className="flex gap-2 flex-wrap">
-          {(["clock", "timer", "alarm", "social-alarm"] as const).map(s => (
-            <button
-              key={s}
-              onClick={() => setSection(s)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border transition-colors ${
-                section === s
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card text-muted-foreground border-border hover:text-foreground hover:bg-secondary"
-              }`}
-            >
-              {s === "clock" ? <Globe className="w-4 h-4" /> : s === "timer" ? <Clock className="w-4 h-4" /> : s === "alarm" ? <Bell className="w-4 h-4" /> : <Radio className="w-4 h-4" />}
-              {s === "clock" ? "Часовые пояса" : s === "timer" ? "Таймер" : s === "alarm" ? "Будильник" : t.sa_title}
-            </button>
-          ))}
+        {/* Section tabs — compact scrollable */}
+        <div className="overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          <div className="flex gap-1.5 flex-nowrap min-w-max">
+            {(["clock", "timer", "alarm", "social-alarm"] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => setSection(s)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium border transition-colors whitespace-nowrap shrink-0 ${
+                  section === s
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-card text-muted-foreground border-border hover:text-foreground hover:bg-secondary"
+                }`}
+                style={{ fontSize: "12px" }}
+              >
+                {s === "clock" ? <Globe className="w-3.5 h-3.5 shrink-0" /> : s === "timer" ? <Clock className="w-3.5 h-3.5 shrink-0" /> : s === "alarm" ? <Bell className="w-3.5 h-3.5 shrink-0" /> : <Radio className="w-3.5 h-3.5 shrink-0" />}
+                {s === "clock" ? "Часовые пояса" : s === "timer" ? "Таймер" : s === "alarm" ? "Будильник" : "Синхро-сигнал"}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ── World Clock ── */}
@@ -953,6 +958,36 @@ export function Time() {
                   </div>
                 )}
 
+                {/* Sync parameters */}
+                <div className="p-4 bg-card border border-border rounded-lg space-y-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-primary" />
+                    Параметры синхронизации
+                  </h3>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground font-mono">Время срабатывания</label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                      <input
+                        type="time"
+                        value={saAlarmTime}
+                        onChange={e => setSaAlarmTime(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2.5 text-sm bg-secondary border border-border rounded-lg font-mono focus:outline-none focus:border-primary [color-scheme:dark]"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground font-mono">Смысл уведомления</label>
+                    <textarea
+                      value={saPurpose}
+                      onChange={e => setSaPurpose(e.target.value)}
+                      placeholder="Укажите причину отправки сигнала (например: Общий сбор / Парад планет)..."
+                      rows={2}
+                      className="w-full px-3 py-2.5 text-sm bg-secondary border border-border rounded-lg font-mono focus:outline-none focus:border-primary resize-none"
+                    />
+                  </div>
+                </div>
+
                 {/* Subscriber picker */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -990,7 +1025,7 @@ export function Time() {
                               : "bg-card border-border text-muted-foreground hover:text-foreground hover:bg-secondary"
                           }`}
                         >
-                          <span className="font-mono text-sm">{s.name}</span>
+                          <span className="font-mono text-sm">{s.pseudonym}</span>
                           <span className="text-xs font-mono opacity-60">{s.rank}</span>
                         </button>
                       ))}
@@ -1011,7 +1046,7 @@ export function Time() {
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-colors disabled:opacity-40"
                   >
                     <Radio className="w-4 h-4" />
-                    {saSending ? "…" : t.sa_send_signal}
+                    {saSending ? "…" : "Запустить Гимн выбранным"}
                     {selectedTargets.size > 0 && ` (${selectedTargets.size})`}
                   </button>
                 )}

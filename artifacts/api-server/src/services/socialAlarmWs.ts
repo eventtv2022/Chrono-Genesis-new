@@ -16,9 +16,11 @@ interface AuthedSocket extends WebSocket {
 
 export interface PlayAnthemPayload {
   type: "PLAY_ANTHEM";
-  triggeredBy: string;   // citizen name or "TimeNation Government"
+  triggeredBy: string;   // pseudonym or "TimeNation Government"
   targetType: "all" | "direct";
   message?: string;
+  purpose?: string;
+  scheduledFor?: string;
 }
 
 // ── State ──────────────────────────────────────────────────────────────────

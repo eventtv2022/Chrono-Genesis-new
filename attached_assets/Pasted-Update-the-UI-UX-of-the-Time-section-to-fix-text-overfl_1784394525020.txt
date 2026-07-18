@@ -1,0 +1,23 @@
+Update the UI/UX of the "Время" (Time) section to fix text overflow issues, optimize spacing, and add social alarm configuration fields. Follow these requirements precisely:
+
+1. **Fix and Compact the Top Navigation Bar (Button Rows):**
+   - The navigation tabs ("Часовые пояса", "Таймер", "Будильник", "Социальный будильник") must be highly compact and responsive.
+   - Prevent text overflow/clipping on the active yellow button ("Социал. будильник"). 
+   - Implementation: Reduce horizontal padding, decrease font-size to 12px, and allow text to wrap into two balanced lines if necessary, or use a flexible horizontal scrolling container (`flex-nowrap overflow-x-auto scroller-hidden`) so buttons keep their shape without breaking.
+
+2. **Add Social Alarm Configuration Section (New Form Fields):**
+   - Insert a new section titled "Настройка сигнала" right above "Выберите получателей".
+   - **Time Input:** Add a time picker field labeled "Время срабатывания". It should look clean, matching the dark theme, with a native or styled clock icon.
+   - **Purpose Input (Text Area):** Add a text input/textarea labeled "Цель/Смысл уведомления". Add a placeholder: "Например: Пора просыпаться на Парад планет! / Срочный общий сбор". This text will be sent along with the anthem to the chosen citizens.
+
+3. **Optimize the Visual Layout:**
+   - Keep the dark space-industrial aesthetic (deep navy backgrounds, amber/yellow accents for active elements, muted blue-gray borders).
+   - The layout flow should be:
+     1. Top Header & Compact Tabs
+     2. NEW: Alarm Setup Form (Time + Purpose)
+     3. Citizens Selection ("Выберите получателей" + Search + Citizen cards)
+     4. Action Button ("Включить Гимн выбранным" - make it semi-transparent if fields are empty, fully active yellow/blue when configured).
+     5. Info footer note.
+
+4. **Component State Management (JS/React Logic):**
+   - Ensure the "Включить Гимн выбранным" button captures: the selected time, the typed purpose string, and the array of selected citizens (e.g., Дудин Олег Геннадьевич, Lev Lerner), logging or sending this payload properly upon click.
