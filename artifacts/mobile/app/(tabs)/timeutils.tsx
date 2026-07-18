@@ -303,7 +303,7 @@ export default function TimeUtilsScreen() {
   // ── Social Alarm ─────────────────────────────────────────────────────────────
   const [saConsent, setSaConsent] = useState(false);
   const [saConsentSaving, setSaConsentSaving] = useState(false);
-  const [saSubscribers, setSaSubscribers] = useState<Array<{id:number;name:string;rank:string}>>([]);
+  const [saSubscribers, setSaSubscribers] = useState<Array<{id:number;pseudonym:string;rank:string}>>([]);
   const [saSearch, setSaSearch] = useState("");
   const [saSelectedTargets, setSaSelectedTargets] = useState<Set<number>>(new Set());
   const [saSending, setSaSending] = useState(false);
@@ -350,7 +350,7 @@ export default function TimeUtilsScreen() {
   const loadSaSubscribers = useCallback(async () => {
     try {
       const res = await fetch(`${BASE_URL}/api/citizens/social-alarm-subscribers`);
-      setSaSubscribers(await res.json() as Array<{id:number;name:string;rank:string}>);
+      setSaSubscribers(await res.json() as Array<{id:number;pseudonym:string;rank:string}>);
     } catch { /* offline */ }
   }, []);
 
@@ -423,7 +423,7 @@ export default function TimeUtilsScreen() {
   };
 
   const saFiltered = saSubscribers.filter(s =>
-    s.name.toLowerCase().includes(saSearch.toLowerCase()) && s.id !== citizen?.id
+    s.pseudonym.toLowerCase().includes(saSearch.toLowerCase()) && s.id !== citizen?.id
   );
 
   // ── World clock ─────────────────────────────────────────────────────────────
@@ -1050,7 +1050,7 @@ export default function TimeUtilsScreen() {
                         ]}
                         onPress={() => { Haptics.selectionAsync(); toggleSaTarget(item.id); }}
                       >
-                        <Text style={[saSt.subscriberName, { color: colors.foreground }]}>{item.name}</Text>
+                        <Text style={[saSt.subscriberName, { color: colors.foreground }]}>{item.pseudonym}</Text>
                         <Text style={[saSt.subscriberRank, { color: colors.mutedForeground }]}>{item.rank}</Text>
                       </TouchableOpacity>
                     )}
