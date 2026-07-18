@@ -308,6 +308,8 @@ export default function TimeUtilsScreen() {
   const [saSelectedTargets, setSaSelectedTargets] = useState<Set<number>>(new Set());
   const [saSending, setSaSending] = useState(false);
   const [saSentMsg, setSaSentMsg] = useState("");
+  const [saAlarmTime, setSaAlarmTime] = useState("");
+  const [saPurpose, setSaPurpose] = useState("");
   const [anthemModal, setAnthemModal] = useState(false);
   const [anthemSender, setAnthemSender] = useState("");
   const [anthemIsGlobal, setAnthemIsGlobal] = useState(false);
@@ -762,7 +764,7 @@ export default function TimeUtilsScreen() {
               color={section === s ? colors.primaryForeground : colors.mutedForeground}
             />
             <Text style={[st.sectionBtnText, section === s && st.sectionBtnTextActive]}>
-              {s === "clock" ? t.time_zones_tab : s === "timer" ? t.time_timer_tab : s === "alarm" ? t.time_alarm_tab : t.sa_title}
+              {s === "clock" ? t.time_zones_tab : s === "timer" ? t.time_timer_tab : s === "alarm" ? t.time_alarm_tab : "Синхро-сигнал"}
             </Text>
           </TouchableOpacity>
         ))}
@@ -1018,6 +1020,41 @@ export default function TimeUtilsScreen() {
                   <Text style={[saSt.savedText, { color: colors.primary }]}>✓ {t.sa_consent_saved}</Text>
                 )}
 
+                {/* Sync parameters */}
+                <View style={[saSt.syncCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={saSt.syncCardHeader}>
+                    <Feather name="clock" size={14} color={colors.primary} />
+                    <Text style={[saSt.syncCardTitle, { color: colors.foreground }]}>Параметры синхронизации</Text>
+                  </View>
+                  <View style={saSt.syncField}>
+                    <Text style={[saSt.syncLabel, { color: colors.mutedForeground }]}>Время срабатывания</Text>
+                    <View style={[saSt.syncInputRow, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                      <Feather name="clock" size={13} color={colors.mutedForeground} />
+                      <TextInput
+                        value={saAlarmTime}
+                        onChangeText={setSaAlarmTime}
+                        placeholder="ЧЧ:ММ"
+                        placeholderTextColor={colors.mutedForeground}
+                        keyboardType="numbers-and-punctuation"
+                        maxLength={5}
+                        style={[saSt.syncInput, { color: colors.foreground }]}
+                      />
+                    </View>
+                  </View>
+                  <View style={saSt.syncField}>
+                    <Text style={[saSt.syncLabel, { color: colors.mutedForeground }]}>Смысл уведомления</Text>
+                    <TextInput
+                      value={saPurpose}
+                      onChangeText={setSaPurpose}
+                      placeholder="Задайте цель (например: Общий сбор / Парад планет)"
+                      placeholderTextColor={colors.mutedForeground}
+                      multiline
+                      numberOfLines={2}
+                      style={[saSt.syncTextarea, { color: colors.foreground, backgroundColor: colors.secondary, borderColor: colors.border }]}
+                    />
+                  </View>
+                </View>
+
                 {/* Subscriber search */}
                 <Text style={[saSt.pickerLabel, { color: colors.foreground }]}>{t.sa_select_targets}</Text>
                 <View style={[saSt.searchRow, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
@@ -1173,6 +1210,41 @@ const saSt = StyleSheet.create({
     paddingVertical: 14,
   },
   sendBtnText: { fontSize: 15, fontWeight: "700" },
+  // Sync parameters form
+  syncCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    gap: 12,
+  },
+  syncCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  syncCardTitle: { fontSize: 13, fontWeight: "700" },
+  syncField: { gap: 6 },
+  syncLabel: { fontSize: 12, fontFamily: "monospace" },
+  syncInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  syncInput: { flex: 1, fontSize: 14, fontFamily: "monospace" },
+  syncTextarea: {
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    fontSize: 13,
+    fontFamily: "monospace",
+    minHeight: 60,
+    textAlignVertical: "top",
+  },
   // Anthem modal
   anthemOverlay: {
     flex: 1,
@@ -1242,12 +1314,12 @@ function styles(colors: ReturnType<typeof useColors>) {
       gap: 8,
     },
     sectionBtn: {
-      flex: 1,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       gap: 5,
       paddingVertical: 8,
+      paddingHorizontal: 14,
       borderRadius: 10,
       backgroundColor: colors.card,
       borderWidth: 1,
