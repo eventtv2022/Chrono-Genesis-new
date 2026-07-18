@@ -17,11 +17,13 @@ import timeBankRouter from "./timeBank";
 import governmentRouter from "./government";
 import reviewsRouter from "./reviews";
 import telegramRouter from "./telegram";
+import socialAlarmRouter from "./socialAlarm";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(socialAlarmRouter);
 router.use(citizensRouter);
 router.use(sessionsRouter);
 router.use(transactionsRouter);

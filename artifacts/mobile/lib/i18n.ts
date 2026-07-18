@@ -283,6 +283,25 @@ export interface UIStrings {
   shop_register_cta: string;
   shop_enter_min_error: string;
   shop_payment_error: string;
+  // Social Alarm
+  sa_title: string;
+  sa_subtitle: string;
+  sa_consent_label: string;
+  sa_consent_hint: string;
+  sa_send_signal: string;
+  sa_search_ph: string;
+  sa_global_alarm: string;
+  sa_trigger_global: string;
+  sa_overlay_admin: string;
+  sa_overlay_user: string;
+  sa_tap_to_play: string;
+  sa_dismiss: string;
+  sa_sent: string;
+  sa_no_subscribers: string;
+  sa_login_required: string;
+  sa_select_targets: string;
+  sa_selected: string;
+  sa_consent_saved: string;
 }
 
 export const UI: Record<LangCode, UIStrings> = {
@@ -419,7 +438,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Оплата через Stripe (EUR). Дармины — внутриигровые баллы. Не являются электронными деньгами или ценными бумагами.",
     shop_webhook_note: "После оплаты баланс обновится через Stripe Webhook. Если Дармины не зачислились — перезапусти приложение.",
     shop_need_auth: "Нужна авторизация", shop_register_cta: "Зарегистрируйся как гражданин",
-    shop_enter_min_error: "Введи количество Дарминов (минимум 1)", shop_payment_error: "Не удалось создать сессию оплаты",
+    shop_enter_min_error: "Введи количество Дарминов (минимум 1)", shop_payment_error: "Не удалось создать сессию оплаты", sa_title: "Социальный будильник", sa_subtitle: "Синхронная активация Гимна TimeNation", sa_consent_label: "Разрешить другим будить меня Гимном TimeNation", sa_consent_hint: "Другие граждане смогут отправить вам сигнал", sa_send_signal: "Включить Гимн выбранным", sa_search_ph: "Поиск граждан...", sa_global_alarm: "Глобальная тревога (Админ)", sa_trigger_global: "Активировать для всех подписчиков", sa_overlay_admin: "Внимание! Запущен глобальный Социальный Будильник TimeNation", sa_overlay_user: "приглашает вас к Социальному Будильнику!", sa_tap_to_play: "Нажмите в любой точке экрана, чтобы включить Гимн!", sa_dismiss: "Выйти", sa_sent: "Сигнал отправлен!", sa_no_subscribers: "Нет граждан с активным согласием", sa_login_required: "Войдите, чтобы использовать Социальный Будильник", sa_select_targets: "Выберите получателей", sa_selected: "выбрано", sa_consent_saved: "Настройки сохранены",
   },
   en: {
     tab_timer: "TiMETR", tab_timeline: "Timeline", tab_economy: "Economy",
@@ -551,7 +570,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Payment via Stripe (EUR). Darmins are in-game credits. Not electronic money or securities.",
     shop_webhook_note: "Balance updates automatically via Stripe Webhook. If Darmins not credited — reopen the app.",
     shop_need_auth: "Authorization required", shop_register_cta: "Register as citizen",
-    shop_enter_min_error: "Enter number of Darmins (minimum 1)", shop_payment_error: "Could not create payment session",
+    shop_enter_min_error: "Enter number of Darmins (minimum 1)", shop_payment_error: "Could not create payment session", sa_title: "Social Alarm", sa_subtitle: "Synchronized TimeNation Anthem activation", sa_consent_label: "Allow others to wake me with the TimeNation Anthem", sa_consent_hint: "Other citizens will be able to send you a signal", sa_send_signal: "Play Anthem for selected", sa_search_ph: "Search citizens...", sa_global_alarm: "Global Alarm (Admin)", sa_trigger_global: "Activate for all subscribers", sa_overlay_admin: "Attention! Global Social Alarm activated by TimeNation Government", sa_overlay_user: "invites you to join the Social Alarm!", sa_tap_to_play: "Tap anywhere on the screen to play the Anthem!", sa_dismiss: "Dismiss", sa_sent: "Signal sent!", sa_no_subscribers: "No citizens with active consent", sa_login_required: "Log in to use the Social Alarm", sa_select_targets: "Select recipients", sa_selected: "selected", sa_consent_saved: "Settings saved",
   },
   zh: {
     tab_timer: "TiMETR", tab_timeline: "时间线", tab_economy: "经济",
@@ -680,7 +699,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "通过Stripe（EUR）支付。达明是游戏内积分。不是电子货币或证券。",
     shop_webhook_note: "支付后余额将通过Stripe Webhook自动更新。如未到账，请重新打开应用。",
     shop_need_auth: "需要授权", shop_register_cta: "注册为公民",
-    shop_enter_min_error: "输入达明数量（最少1）", shop_payment_error: "无法创建支付会话",
+    shop_enter_min_error: "输入达明数量（最少1）", shop_payment_error: "无法创建支付会话", sa_title: "社交闹钟", sa_subtitle: "TimeNation国歌同步激活", sa_consent_label: "允许其他人用TimeNation国歌叫醒我", sa_consent_hint: "其他市民将能够向您发送信号", sa_send_signal: "为所选人播放国歌", sa_search_ph: "搜索市民...", sa_global_alarm: "全球警报（管理员）", sa_trigger_global: "为所有订阅者激活", sa_overlay_admin: "注意！TimeNation政府启动了全球社交闹钟", sa_overlay_user: "邀请您加入社交闹钟！", sa_tap_to_play: "点击屏幕任意处播放国歌！", sa_dismiss: "关闭", sa_sent: "信号已发送！", sa_no_subscribers: "没有启用同意的市民", sa_login_required: "登录以使用社交闹钟", sa_select_targets: "选择接收者", sa_selected: "已选", sa_consent_saved: "设置已保存",
   },
   hi: {
     tab_timer: "TiMETR", tab_timeline: "टाइमलाइन", tab_economy: "अर्थव्यवस्था",
@@ -809,7 +828,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Stripe (EUR) के माध्यम से भुगतान। दार्मिन इन-गेम क्रेडिट हैं। इलेक्ट्रॉनिक मुद्रा या प्रतिभूतियां नहीं।",
     shop_webhook_note: "भुगतान के बाद Stripe Webhook के माध्यम से बैलेंस अपडेट होगा। अगर दार्मिन नहीं मिले — ऐप को दोबारा खोलें।",
     shop_need_auth: "प्राधिकरण आवश्यक", shop_register_cta: "नागरिक के रूप में पंजीकरण करें",
-    shop_enter_min_error: "दार्मिन की संख्या दर्ज करें (न्यूनतम 1)", shop_payment_error: "भुगतान सत्र नहीं बनाया जा सका",
+    shop_enter_min_error: "दार्मिन की संख्या दर्ज करें (न्यूनतम 1)", shop_payment_error: "भुगतान सत्र नहीं बनाया जा सका", sa_title: "सोशल अलार्म", sa_subtitle: "TimeNation राष्ट्रगान का समकालिक सक्रियण", sa_consent_label: "दूसरों को TimeNation राष्ट्रगान से जगाने की अनुमति दें", sa_consent_hint: "अन्य नागरिक आपको संकेत भेज सकेंगे", sa_send_signal: "चयनितों के लिए राष्ट्रगान चलाएं", sa_search_ph: "नागरिक खोजें...", sa_global_alarm: "वैश्विक अलार्म (व्यवस्थापक)", sa_trigger_global: "सभी सब्सक्राइबर के लिए सक्रिय करें", sa_overlay_admin: "ध्यान! TimeNation सरकार द्वारा वैश्विक सोशल अलार्म सक्रिय", sa_overlay_user: "आपको सोशल अलार्म में आमंत्रित करता है!", sa_tap_to_play: "राष्ट्रगान चलाने के लिए स्क्रीन पर कहीं भी टैप करें!", sa_dismiss: "बंद करें", sa_sent: "संकेत भेजा गया!", sa_no_subscribers: "सक्रिय सहमति वाले कोई नागरिक नहीं", sa_login_required: "सोशल अलार्म के लिए लॉग इन करें", sa_select_targets: "प्राप्तकर्ता चुनें", sa_selected: "चयनित", sa_consent_saved: "सेटिंग्स सहेजी गईं",
   },
   es: {
     tab_timer: "TiMETR", tab_timeline: "Cronología", tab_economy: "Economía",
@@ -938,7 +957,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Pago vía Stripe (EUR). Los Darmins son créditos del juego. No son dinero electrónico ni valores.",
     shop_webhook_note: "El saldo se actualiza automáticamente vía Stripe Webhook. Si no se acreditan los Darmins, vuelve a abrir la app.",
     shop_need_auth: "Autorización requerida", shop_register_cta: "Regístrate como ciudadano",
-    shop_enter_min_error: "Introduce cantidad de Darmins (mínimo 1)", shop_payment_error: "No se pudo crear la sesión de pago",
+    shop_enter_min_error: "Introduce cantidad de Darmins (mínimo 1)", shop_payment_error: "No se pudo crear la sesión de pago", sa_title: "Alarma Social", sa_subtitle: "Activacion sincronizada del Himno de TimeNation", sa_consent_label: "Permitir que otros me despierten con el Himno de TimeNation", sa_consent_hint: "Otros ciudadanos podran enviarte una senal", sa_send_signal: "Reproducir Himno para los seleccionados", sa_search_ph: "Buscar ciudadanos...", sa_global_alarm: "Alarma Global (Admin)", sa_trigger_global: "Activar para todos los suscriptores", sa_overlay_admin: "Atencion! Alarma Social Global activada por el Gobierno de TimeNation", sa_overlay_user: "te invita a unirte a la Alarma Social!", sa_tap_to_play: "Toca en cualquier parte de la pantalla para reproducir el Himno!", sa_dismiss: "Salir", sa_sent: "Senal enviada!", sa_no_subscribers: "No hay ciudadanos con consentimiento activo", sa_login_required: "Inicia sesion para usar la Alarma Social", sa_select_targets: "Seleccionar destinatarios", sa_selected: "seleccionados", sa_consent_saved: "Configuracion guardada",
   },
   fr: {
     tab_timer: "TiMETR", tab_timeline: "Chronologie", tab_economy: "Économie",
@@ -1067,7 +1086,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Paiement via Stripe (EUR). Les Darmins sont des crédits de jeu. Ce ne sont pas de la monnaie électronique ni des valeurs mobilières.",
     shop_webhook_note: "Le solde se met à jour automatiquement via Stripe Webhook. Si les Darmins ne sont pas crédités, rouvrez l'application.",
     shop_need_auth: "Autorisation requise", shop_register_cta: "Inscrivez-vous en tant que citoyen",
-    shop_enter_min_error: "Entrez le nombre de Darmins (minimum 1)", shop_payment_error: "Impossible de créer la session de paiement",
+    shop_enter_min_error: "Entrez le nombre de Darmins (minimum 1)", shop_payment_error: "Impossible de créer la session de paiement", sa_title: "Alarme Sociale", sa_subtitle: "Activation synchronisee de l'Hymne TimeNation", sa_consent_label: "Autoriser les autres a me reveiller avec l'Hymne TimeNation", sa_consent_hint: "D'autres citoyens pourront vous envoyer un signal", sa_send_signal: "Jouer l'Hymne pour les selectionnes", sa_search_ph: "Rechercher des citoyens...", sa_global_alarm: "Alarme Globale (Admin)", sa_trigger_global: "Activer pour tous les abonnes", sa_overlay_admin: "Attention ! Alarme Sociale Globale activee par le Gouvernement TimeNation", sa_overlay_user: "vous invite a rejoindre l'Alarme Sociale !", sa_tap_to_play: "Appuyez partout sur l'ecran pour lancer l'Hymne !", sa_dismiss: "Fermer", sa_sent: "Signal envoye !", sa_no_subscribers: "Aucun citoyen avec consentement actif", sa_login_required: "Connectez-vous pour utiliser l'Alarme Sociale", sa_select_targets: "Selectionner les destinataires", sa_selected: "selectionnes", sa_consent_saved: "Parametres sauvegardes",
   },
   ar: {
     tab_timer: "TiMETR", tab_timeline: "الجدول", tab_economy: "الاقتصاد",
@@ -1196,7 +1215,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "الدفع عبر Stripe (EUR). الدارمينات رصيد ألعاب. ليست أموالاً إلكترونية أو أوراقاً مالية.",
     shop_webhook_note: "يتم تحديث الرصيد تلقائياً عبر Stripe Webhook. إذا لم تُضاف الدارمينات، أعد فتح التطبيق.",
     shop_need_auth: "التفويض مطلوب", shop_register_cta: "سجل كمواطن",
-    shop_enter_min_error: "أدخل عدد الدارمينات (الحد الأدنى 1)", shop_payment_error: "تعذر إنشاء جلسة الدفع",
+    shop_enter_min_error: "أدخل عدد الدارمينات (الحد الأدنى 1)", shop_payment_error: "تعذر إنشاء جلسة الدفع", sa_title: "المنبه الاجتماعي", sa_subtitle: "تفعيل النشيد الوطني لـ TimeNation بشكل متزامن", sa_consent_label: "السماح للآخرين بإيقاظي بنشيد TimeNation", sa_consent_hint: "سيتمكن المواطنون الآخرون من إرسال إشارة إليك", sa_send_signal: "تشغيل النشيد للمختارين", sa_search_ph: "البحث عن مواطنين...", sa_global_alarm: "إنذار عالمي (المسؤول)", sa_trigger_global: "تفعيل لجميع المشتركين", sa_overlay_admin: "انتباه! تم تفعيل المنبه الاجتماعي العالمي من قبل حكومة TimeNation", sa_overlay_user: "يدعوك للانضمام إلى المنبه الاجتماعي!", sa_tap_to_play: "اضغط في أي مكان على الشاشة لتشغيل النشيد!", sa_dismiss: "إغلاق", sa_sent: "تم إرسال الإشارة!", sa_no_subscribers: "لا يوجد مواطنون بموافقة نشطة", sa_login_required: "سجل دخولك لاستخدام المنبه الاجتماعي", sa_select_targets: "اختر المستلمين", sa_selected: "محدد", sa_consent_saved: "تم حفظ الإعدادات",
   },
   bn: {
     tab_timer: "TiMETR", tab_timeline: "টাইমলাইন", tab_economy: "অর্থনীতি",
@@ -1325,7 +1344,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Stripe (EUR) এর মাধ্যমে পেমেন্ট। দার্মিন ইন-গেম ক্রেডিট। ইলেকট্রনিক অর্থ বা সিকিউরিটি নয়।",
     shop_webhook_note: "পেমেন্টের পর Stripe Webhook এর মাধ্যমে ব্যালেন্স আপডেট হবে। দার্মিন না পেলে অ্যাপ পুনরায় খুলুন।",
     shop_need_auth: "অনুমোদন প্রয়োজন", shop_register_cta: "নাগরিক হিসেবে নিবন্ধন করুন",
-    shop_enter_min_error: "দার্মিনের সংখ্যা লিখুন (সর্বনিম্ন 1)", shop_payment_error: "পেমেন্ট সেশন তৈরি করা সম্ভব হয়নি",
+    shop_enter_min_error: "দার্মিনের সংখ্যা লিখুন (সর্বনিম্ন 1)", shop_payment_error: "পেমেন্ট সেশন তৈরি করা সম্ভব হয়নি", sa_title: "সামাজিক অ্যালার্ম", sa_subtitle: "TimeNation জাতীয় সংগীতের সমকালীন সক্রিয়করণ", sa_consent_label: "অন্যদের TimeNation জাতীয় সংগীত দিয়ে আমাকে জাগানোর অনুমতি দিন", sa_consent_hint: "অন্য নাগরিকরা আপনাকে সংকেত পাঠাতে পারবে", sa_send_signal: "নির্বাচিতদের জন্য জাতীয় সংগীত বাজান", sa_search_ph: "নাগরিক খুঁজুন...", sa_global_alarm: "বৈশ্বিক অ্যালার্ম (অ্যাডমিন)", sa_trigger_global: "সকল সদস্যদের জন্য সক্রিয় করুন", sa_overlay_admin: "মনোযোগ! TimeNation সরকার কর্তৃক বৈশ্বিক সামাজিক অ্যালার্ম সক্রিয়", sa_overlay_user: "আপনাকে সামাজিক অ্যালার্মে আমন্ত্রণ জানাচ্ছে!", sa_tap_to_play: "জাতীয় সংগীত বাজাতে স্ক্রিনে যেকোনো জায়গায় ট্যাপ করুন!", sa_dismiss: "বন্ধ করুন", sa_sent: "সংকেত পাঠানো হয়েছে!", sa_no_subscribers: "সক্রিয় সম্মতি সহ কোনো নাগরিক নেই", sa_login_required: "সামাজিক অ্যালার্ম ব্যবহার করতে লগ ইন করুন", sa_select_targets: "প্রাপক নির্বাচন করুন", sa_selected: "নির্বাচিত", sa_consent_saved: "সেটিংস সংরক্ষিত",
   },
   pt: {
     tab_timer: "TiMETR", tab_timeline: "Cronologia", tab_economy: "Economia",
@@ -1454,7 +1473,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Pagamento via Stripe (EUR). Darmins são créditos do jogo. Não são dinheiro eletrônico nem títulos.",
     shop_webhook_note: "O saldo é atualizado automaticamente via Stripe Webhook. Se os Darmins não forem creditados, reabra o app.",
     shop_need_auth: "Autorização necessária", shop_register_cta: "Registre-se como cidadão",
-    shop_enter_min_error: "Digite a quantidade de Darmins (mínimo 1)", shop_payment_error: "Não foi possível criar a sessão de pagamento",
+    shop_enter_min_error: "Digite a quantidade de Darmins (mínimo 1)", shop_payment_error: "Não foi possível criar a sessão de pagamento", sa_title: "Alarme Social", sa_subtitle: "Ativacao sincronizada do Hino TimeNation", sa_consent_label: "Permitir que outros me acordem com o Hino TimeNation", sa_consent_hint: "Outros cidadaos poderao enviar-lhe um sinal", sa_send_signal: "Reproduzir Hino para os selecionados", sa_search_ph: "Pesquisar cidadaos...", sa_global_alarm: "Alarme Global (Admin)", sa_trigger_global: "Ativar para todos os assinantes", sa_overlay_admin: "Atencao! Alarme Social Global ativado pelo Governo TimeNation", sa_overlay_user: "convida-o a participar do Alarme Social!", sa_tap_to_play: "Toque em qualquer lugar da tela para reproduzir o Hino!", sa_dismiss: "Fechar", sa_sent: "Sinal enviado!", sa_no_subscribers: "Nenhum cidadao com consentimento ativo", sa_login_required: "Faca login para usar o Alarme Social", sa_select_targets: "Selecionar destinatarios", sa_selected: "selecionados", sa_consent_saved: "Configuracoes salvas",
   },
   ur: {
     tab_timer: "TiMETR", tab_timeline: "ٹائم لائن", tab_economy: "معیشت",
@@ -1583,7 +1602,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Stripe (EUR) کے ذریعے ادائیگی۔ دارمین گیم کے اندر کے کریڈٹ ہیں۔ الیکٹرانک رقم یا سیکیورٹیز نہیں۔",
     shop_webhook_note: "ادائیگی کے بعد Stripe Webhook کے ذریعے بیلنس اپ ڈیٹ ہو گا۔ اگر دارمین نہ ملیں تو ایپ دوبارہ کھولیں۔",
     shop_need_auth: "اجازت درکار ہے", shop_register_cta: "شہری کے طور پر رجسٹر کریں",
-    shop_enter_min_error: "دارمینوں کی تعداد درج کریں (کم از کم 1)", shop_payment_error: "ادائیگی سیشن نہیں بنایا جا سکا",
+    shop_enter_min_error: "دارمینوں کی تعداد درج کریں (کم از کم 1)", shop_payment_error: "ادائیگی سیشن نہیں بنایا جا سکا", sa_title: "سوشل الارم", sa_subtitle: "TimeNation ترانہ کا بیک وقت فعال کرنا", sa_consent_label: "دوسروں کو TimeNation ترانے سے جگانے کی اجازت دیں", sa_consent_hint: "دیگر شہری آپ کو سگنل بھیج سکیں گے", sa_send_signal: "منتخب کردہ کے لیے ترانہ چلائیں", sa_search_ph: "شہریوں کو تلاش کریں...", sa_global_alarm: "عالمی الارم (ایڈمن)", sa_trigger_global: "تمام سبسکرائبرز کے لیے فعال کریں", sa_overlay_admin: "توجہ! TimeNation حکومت نے عالمی سوشل الارم فعال کیا", sa_overlay_user: "آپ کو سوشل الارم میں مدعو کرتا ہے!", sa_tap_to_play: "ترانہ چلانے کے لیے اسکرین پر کہیں بھی ٹیپ کریں!", sa_dismiss: "بند کریں", sa_sent: "سگنل بھیج دیا گیا!", sa_no_subscribers: "فعال رضامندی والے کوئی شہری نہیں", sa_login_required: "سوشل الارم استعمال کرنے کے لیے لاگ ان کریں", sa_select_targets: "وصول کنندگان منتخب کریں", sa_selected: "منتخب", sa_consent_saved: "ترتیبات محفوظ",
   },
   id: {
     tab_timer: "TiMETR", tab_timeline: "Linimasa", tab_economy: "Ekonomi",
@@ -1712,7 +1731,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Pembayaran via Stripe (EUR). Darmin adalah kredit dalam game. Bukan uang elektronik atau surat berharga.",
     shop_webhook_note: "Saldo diperbarui otomatis via Stripe Webhook. Jika Darmin tidak dikreditkan, buka ulang aplikasi.",
     shop_need_auth: "Otorisasi diperlukan", shop_register_cta: "Daftar sebagai warga",
-    shop_enter_min_error: "Masukkan jumlah Darmin (minimum 1)", shop_payment_error: "Tidak dapat membuat sesi pembayaran",
+    shop_enter_min_error: "Masukkan jumlah Darmin (minimum 1)", shop_payment_error: "Tidak dapat membuat sesi pembayaran", sa_title: "Alarm Sosial", sa_subtitle: "Aktivasi serentak Lagu Kebangsaan TimeNation", sa_consent_label: "Izinkan orang lain membangunkan saya dengan Lagu Kebangsaan TimeNation", sa_consent_hint: "Warga lain akan dapat mengirimkan sinyal kepada Anda", sa_send_signal: "Putar Lagu Kebangsaan untuk yang dipilih", sa_search_ph: "Cari warga...", sa_global_alarm: "Alarm Global (Admin)", sa_trigger_global: "Aktifkan untuk semua pelanggan", sa_overlay_admin: "Perhatian! Alarm Sosial Global diaktifkan oleh Pemerintah TimeNation", sa_overlay_user: "mengundang Anda bergabung dalam Alarm Sosial!", sa_tap_to_play: "Ketuk di mana saja di layar untuk memutar Lagu Kebangsaan!", sa_dismiss: "Tutup", sa_sent: "Sinyal terkirim!", sa_no_subscribers: "Tidak ada warga dengan persetujuan aktif", sa_login_required: "Masuk untuk menggunakan Alarm Sosial", sa_select_targets: "Pilih penerima", sa_selected: "dipilih", sa_consent_saved: "Pengaturan disimpan",
   },
   de: {
     tab_timer: "TiMETR", tab_timeline: "Zeitleiste", tab_economy: "Wirtschaft",
@@ -1841,7 +1860,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Zahlung über Stripe (EUR). Darmins sind In-Game-Credits. Kein elektronisches Geld oder Wertpapiere.",
     shop_webhook_note: "Das Guthaben wird automatisch über Stripe Webhook aktualisiert. Falls keine Darmins gutgeschrieben wurden — App neu öffnen.",
     shop_need_auth: "Autorisierung erforderlich", shop_register_cta: "Als Bürger registrieren",
-    shop_enter_min_error: "Anzahl Darmins eingeben (mindestens 1)", shop_payment_error: "Zahlungssitzung konnte nicht erstellt werden",
+    shop_enter_min_error: "Anzahl Darmins eingeben (mindestens 1)", shop_payment_error: "Zahlungssitzung konnte nicht erstellt werden", sa_title: "Sozialwecker", sa_subtitle: "Synchrone Aktivierung der TimeNation-Hymne", sa_consent_label: "Anderen erlauben, mich mit der TimeNation-Hymne zu wecken", sa_consent_hint: "Andere Buerger koennen Ihnen ein Signal senden", sa_send_signal: "Hymne fuer Ausgewaehlte abspielen", sa_search_ph: "Buerger suchen...", sa_global_alarm: "Globaler Alarm (Admin)", sa_trigger_global: "Fuer alle Abonnenten aktivieren", sa_overlay_admin: "Achtung! Globaler Sozialwecker durch die TimeNation-Regierung aktiviert", sa_overlay_user: "laedt Sie zum Sozialwecker ein!", sa_tap_to_play: "Tippen Sie irgendwo auf den Bildschirm, um die Hymne abzuspielen!", sa_dismiss: "Schliessen", sa_sent: "Signal gesendet!", sa_no_subscribers: "Keine Buerger mit aktiver Zustimmung", sa_login_required: "Melden Sie sich an, um den Sozialwecker zu verwenden", sa_select_targets: "Empfaenger auswaehlen", sa_selected: "ausgewaehlt", sa_consent_saved: "Einstellungen gespeichert",
   },
   ja: {
     tab_timer: "TiMETR", tab_timeline: "時系列", tab_economy: "経済",
@@ -1970,7 +1989,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Stripe（EUR）経由での支払い。ダルミンはゲーム内クレジットです。電子マネーや有価証券ではありません。",
     shop_webhook_note: "支払い後、Stripe Webhookを通じて残高が自動更新されます。ダルミンが付与されない場合はアプリを再起動してください。",
     shop_need_auth: "認証が必要です", shop_register_cta: "市民として登録",
-    shop_enter_min_error: "ダルミン数を入力してください（最低1）", shop_payment_error: "支払いセッションを作成できませんでした",
+    shop_enter_min_error: "ダルミン数を入力してください（最低1）", shop_payment_error: "支払いセッションを作成できませんでした", sa_title: "ソーシャルアラーム", sa_subtitle: "TimeNation国歌の同期起動", sa_consent_label: "他の人がTimeNation国歌で起こすことを許可する", sa_consent_hint: "他の市民があなたにシグナルを送ることができます", sa_send_signal: "選択した人に国歌を再生", sa_search_ph: "市民を検索...", sa_global_alarm: "グローバルアラーム（管理者）", sa_trigger_global: "全購読者に対して有効化", sa_overlay_admin: "注意！TimeNation政府によるグローバルソーシャルアラームが発動", sa_overlay_user: "ソーシャルアラームに招待しています！", sa_tap_to_play: "画面のどこかをタップして国歌を再生！", sa_dismiss: "閉じる", sa_sent: "シグナルを送信しました！", sa_no_subscribers: "有効な同意を持つ市民がいません", sa_login_required: "ソーシャルアラームを使用するにはログインしてください", sa_select_targets: "受信者を選択", sa_selected: "選択済み", sa_consent_saved: "設定を保存しました",
   },
   tr: {
     tab_timer: "TiMETR", tab_timeline: "Zaman çizelgesi", tab_economy: "Ekonomi",
@@ -2099,7 +2118,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Stripe (EUR) üzerinden ödeme. Darminler oyun içi kredilerdir. Elektronik para veya menkul kıymet değildirler.",
     shop_webhook_note: "Ödeme sonrası bakiye Stripe Webhook üzerinden otomatik güncellenir. Darminler yüklenmezse uygulamayı yeniden açın.",
     shop_need_auth: "Yetkilendirme gerekli", shop_register_cta: "Vatandaş olarak kayıt ol",
-    shop_enter_min_error: "Darmin miktarını girin (minimum 1)", shop_payment_error: "Ödeme oturumu oluşturulamadı",
+    shop_enter_min_error: "Darmin miktarını girin (minimum 1)", shop_payment_error: "Ödeme oturumu oluşturulamadı", sa_title: "Sosyal Alarm", sa_subtitle: "TimeNation Milli Marsinin senkronize aktivasyonu", sa_consent_label: "Digerlerin beni TimeNation Milli Marsi ile uyandirmasina izin ver", sa_consent_hint: "Diger vatandaslar size sinyal gonderebilecek", sa_send_signal: "Secilenlere Milli Mars calar", sa_search_ph: "Vatandaslari ara...", sa_global_alarm: "Kuresel Alarm (Admin)", sa_trigger_global: "Tum aboneler icin etkinlestir", sa_overlay_admin: "Dikkat! TimeNation Hukumeti tarafindan kuresel Sosyal Alarm etkinlestirildi", sa_overlay_user: "sizi Sosyal Alarma davet ediyor!", sa_tap_to_play: "Milli Marsi calatmak icin ekranin herhangi bir yerine dokunun!", sa_dismiss: "Kapat", sa_sent: "Sinyal gonderildi!", sa_no_subscribers: "Aktif izni olan vatandas yok", sa_login_required: "Sosyal Alarmi kullanmak icin giris yapin", sa_select_targets: "Alicilari secin", sa_selected: "secildi", sa_consent_saved: "Ayarlar kaydedildi",
   },
   vi: {
     tab_timer: "TiMETR", tab_timeline: "Dòng thời gian", tab_economy: "Kinh tế",
@@ -2228,7 +2247,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Thanh toán qua Stripe (EUR). Darmin là tín dụng trong game. Không phải tiền điện tử hay chứng khoán.",
     shop_webhook_note: "Số dư cập nhật tự động qua Stripe Webhook. Nếu Darmin chưa được nạp, hãy mở lại ứng dụng.",
     shop_need_auth: "Cần xác thực", shop_register_cta: "Đăng ký làm công dân",
-    shop_enter_min_error: "Nhập số lượng Darmin (tối thiểu 1)", shop_payment_error: "Không thể tạo phiên thanh toán",
+    shop_enter_min_error: "Nhập số lượng Darmin (tối thiểu 1)", shop_payment_error: "Không thể tạo phiên thanh toán", sa_title: "Bao thuc Xa hoi", sa_subtitle: "Kich hoat dong bo Quoc ca TimeNation", sa_consent_label: "Cho phep nguoi khac danh thuc toi bang Quoc ca TimeNation", sa_consent_hint: "Cong dan khac se co the gui tin hieu cho ban", sa_send_signal: "Phat Quoc ca cho nguoi duoc chon", sa_search_ph: "Tim kiem cong dan...", sa_global_alarm: "Bao dong toan cau (Admin)", sa_trigger_global: "Kich hoat cho tat ca nguoi dang ky", sa_overlay_admin: "Chu y! Bao thuc Xa hoi toan cau duoc kich hoat boi Chinh phu TimeNation", sa_overlay_user: "moi ban tham gia Bao thuc Xa hoi!", sa_tap_to_play: "Cham vao bat ky dau tren man hinh de phat Quoc ca!", sa_dismiss: "Dong", sa_sent: "Da gui tin hieu!", sa_no_subscribers: "Khong co cong dan nao co su dong y hoat dong", sa_login_required: "Dang nhap de su dung Bao thuc Xa hoi", sa_select_targets: "Chon nguoi nhan", sa_selected: "da chon", sa_consent_saved: "Cai dat da luu",
   },
   he: {
     tab_timer: "TiMETR", tab_timeline: "ציר זמן", tab_economy: "כלכלה",
@@ -2357,7 +2376,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "תשלום דרך Stripe (EUR). דארמינים הם קרדיטים לתוך המשחק. אינם כסף אלקטרוני או ניירות ערך.",
     shop_webhook_note: "היתרה מתעדכנת אוטומטית דרך Stripe Webhook. אם הדארמינים לא זוכו, פתח מחדש את האפליקציה.",
     shop_need_auth: "נדרשת הרשאה", shop_register_cta: "הירשם כאזרח",
-    shop_enter_min_error: "הכנס כמות דארמינים (מינימום 1)", shop_payment_error: "לא ניתן ליצור סשן תשלום",
+    shop_enter_min_error: "הכנס כמות דארמינים (מינימום 1)", shop_payment_error: "לא ניתן ליצור סשן תשלום", sa_title: "אזעקה חברתית", sa_subtitle: "הפעלה מסונכרנת של המנון TimeNation", sa_consent_label: "אפשר לאחרים להעיר אותי עם המנון TimeNation", sa_consent_hint: "אזרחים אחרים יוכלו לשלוח לך אות", sa_send_signal: "נגן המנון לנבחרים", sa_search_ph: "חיפוש אזרחים...", sa_global_alarm: "אזעקה גלובלית (מנהל)", sa_trigger_global: "הפעל עבור כל המנויים", sa_overlay_admin: "שימו לב! אזעקה חברתית גלובלית הופעלה על ידי ממשלת TimeNation", sa_overlay_user: "מזמין אותך להצטרף לאזעקה החברתית!", sa_tap_to_play: "הקש בכל מקום על המסך להפעלת ההמנון!", sa_dismiss: "סגור", sa_sent: "האות נשלח!", sa_no_subscribers: "אין אזרחים עם הסכמה פעילה", sa_login_required: "התחבר כדי להשתמש באזעקה החברתית", sa_select_targets: "בחר נמענים", sa_selected: "נבחר", sa_consent_saved: "ההגדרות נשמרו",
   },
   fa: {
     tab_timer: "TiMETR", tab_timeline: "جدول زمانی", tab_economy: "اقتصاد",
@@ -2486,7 +2505,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "پرداخت از طریق Stripe (EUR). دارمین‌ها اعتبار درون‌بازی هستند. پول الکترونیکی یا اوراق بهادار نیستند.",
     shop_webhook_note: "پس از پرداخت، موجودی از طریق Stripe Webhook به‌روزرسانی می‌شود. اگر دارمین‌ها اضافه نشدند، برنامه را دوباره باز کنید.",
     shop_need_auth: "احراز هویت لازم است", shop_register_cta: "به عنوان شهروند ثبت‌نام کنید",
-    shop_enter_min_error: "تعداد دارمین را وارد کنید (حداقل ۱)", shop_payment_error: "ایجاد جلسه پرداخت ممکن نشد",
+    shop_enter_min_error: "تعداد دارمین را وارد کنید (حداقل ۱)", shop_payment_error: "ایجاد جلسه پرداخت ممکن نشد", sa_title: "زنگ اجتماعی", sa_subtitle: "فعال‌سازی همزمان سرود ملی TimeNation", sa_consent_label: "اجازه دهید دیگران مرا با سرود TimeNation بیدار کنند", sa_consent_hint: "شهروندان دیگر می‌توانند به شما سیگنال بفرستند", sa_send_signal: "پخش سرود برای منتخبان", sa_search_ph: "جستجوی شهروندان...", sa_global_alarm: "هشدار جهانی (مدیر)", sa_trigger_global: "فعال‌سازی برای همه مشترکان", sa_overlay_admin: "توجه! زنگ اجتماعی جهانی توسط دولت TimeNation فعال شد", sa_overlay_user: "شما را به زنگ اجتماعی دعوت می‌کند!", sa_tap_to_play: "برای پخش سرود ملی روی هر نقطه از صفحه ضربه بزنید!", sa_dismiss: "بستن", sa_sent: "سیگنال ارسال شد!", sa_no_subscribers: "هیچ شهروندی با رضایت فعال وجود ندارد", sa_login_required: "برای استفاده از زنگ اجتماعی وارد شوید", sa_select_targets: "انتخاب گیرندگان", sa_selected: "انتخاب شده", sa_consent_saved: "تنظیمات ذخیره شد",
   },
   ko: {
     tab_timer: "TiMETR", tab_timeline: "타임라인", tab_economy: "경제",
@@ -2615,7 +2634,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Stripe (EUR)를 통한 결제. 다르민은 게임 내 크레딧입니다. 전자화폐나 증권이 아닙니다.",
     shop_webhook_note: "결제 후 Stripe Webhook을 통해 잔액이 자동 업데이트됩니다. 다르민이 적립되지 않으면 앱을 다시 여세요.",
     shop_need_auth: "인증이 필요합니다", shop_register_cta: "시민으로 등록",
-    shop_enter_min_error: "다르민 수량을 입력하세요 (최소 1)", shop_payment_error: "결제 세션을 생성할 수 없습니다",
+    shop_enter_min_error: "다르민 수량을 입력하세요 (최소 1)", shop_payment_error: "결제 세션을 생성할 수 없습니다", sa_title: "소셜 알람", sa_subtitle: "TimeNation 국가 동기화 활성화", sa_consent_label: "다른 사람이 TimeNation 국가로 나를 깨우는 것을 허용", sa_consent_hint: "다른 시민들이 당신에게 신호를 보낼 수 있습니다", sa_send_signal: "선택된 사람들에게 국가 재생", sa_search_ph: "시민 검색...", sa_global_alarm: "전체 알람 (관리자)", sa_trigger_global: "모든 구독자에게 활성화", sa_overlay_admin: "주의! TimeNation 정부에 의해 전체 소셜 알람이 활성화되었습니다", sa_overlay_user: "소셜 알람에 초대합니다!", sa_tap_to_play: "국가를 재생하려면 화면 어디든 탭하세요!", sa_dismiss: "닫기", sa_sent: "신호 전송됨!", sa_no_subscribers: "활성 동의를 가진 시민이 없습니다", sa_login_required: "소셜 알람을 사용하려면 로그인하세요", sa_select_targets: "수신자 선택", sa_selected: "선택됨", sa_consent_saved: "설정이 저장되었습니다",
   },
   it: {
     tab_timer: "TiMETR", tab_timeline: "Cronologia", tab_economy: "Economia",
@@ -2744,7 +2763,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Pagamento tramite Stripe (EUR). I Darmin sono crediti di gioco. Non sono denaro elettronico né titoli.",
     shop_webhook_note: "Il saldo viene aggiornato automaticamente tramite Stripe Webhook. Se i Darmin non vengono accreditati, riapri l'app.",
     shop_need_auth: "Autorizzazione richiesta", shop_register_cta: "Registrati come cittadino",
-    shop_enter_min_error: "Inserisci la quantità di Darmin (minimo 1)", shop_payment_error: "Impossibile creare la sessione di pagamento",
+    shop_enter_min_error: "Inserisci la quantità di Darmin (minimo 1)", shop_payment_error: "Impossibile creare la sessione di pagamento", sa_title: "Sveglia Sociale", sa_subtitle: "Attivazione sincronizzata dell'Inno TimeNation", sa_consent_label: "Permetti ad altri di svegliarmi con l'Inno TimeNation", sa_consent_hint: "Altri cittadini potranno inviarti un segnale", sa_send_signal: "Riproduci Inno per i selezionati", sa_search_ph: "Cerca cittadini...", sa_global_alarm: "Allarme Globale (Admin)", sa_trigger_global: "Attiva per tutti gli abbonati", sa_overlay_admin: "Attenzione! Sveglia Sociale Globale attivata dal Governo TimeNation", sa_overlay_user: "ti invita a partecipare alla Sveglia Sociale!", sa_tap_to_play: "Tocca ovunque sullo schermo per riprodurre l'Inno!", sa_dismiss: "Chiudi", sa_sent: "Segnale inviato!", sa_no_subscribers: "Nessun cittadino con consenso attivo", sa_login_required: "Accedi per usare la Sveglia Sociale", sa_select_targets: "Seleziona destinatari", sa_selected: "selezionati", sa_consent_saved: "Impostazioni salvate",
   },
   pl: {
     tab_timer: "TiMETR", tab_timeline: "Oś czasu", tab_economy: "Gospodarka",
@@ -2873,7 +2892,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Płatność przez Stripe (EUR). Darminy to kredyty w grze. Nie są pieniądzem elektronicznym ani papierami wartościowymi.",
     shop_webhook_note: "Saldo aktualizuje się automatycznie przez Stripe Webhook. Jeśli Darminy nie zostały dodane — ponownie otwórz aplikację.",
     shop_need_auth: "Wymagana autoryzacja", shop_register_cta: "Zarejestruj się jako obywatel",
-    shop_enter_min_error: "Wpisz liczbę Darminów (minimum 1)", shop_payment_error: "Nie można utworzyć sesji płatności",
+    shop_enter_min_error: "Wpisz liczbę Darminów (minimum 1)", shop_payment_error: "Nie można utworzyć sesji płatności", sa_title: "Alarm Spoleczny", sa_subtitle: "Synchroniczna aktywacja Hymnu TimeNation", sa_consent_label: "Zezwol innym na budzenie mnie Hymnem TimeNation", sa_consent_hint: "Inni obywatele beda mogli wyslac ci sygnal", sa_send_signal: "Odtworz Hymn dla wybranych", sa_search_ph: "Szukaj obywateli...", sa_global_alarm: "Globalny Alarm (Admin)", sa_trigger_global: "Aktywuj dla wszystkich subskrybentow", sa_overlay_admin: "Uwaga! Globalny Alarm Spoleczny aktywowany przez Rzad TimeNation", sa_overlay_user: "zaprasza cie do Alarmu Spolecznego!", sa_tap_to_play: "Dotknij dowolnego miejsca na ekranie, aby odtworzyc Hymn!", sa_dismiss: "Zamknij", sa_sent: "Sygnal wyslany!", sa_no_subscribers: "Brak obywateli z aktywna zgoda", sa_login_required: "Zaloguj sie, aby uzyc Alarmu Spolecznego", sa_select_targets: "Wybierz odbiorcy", sa_selected: "wybrano", sa_consent_saved: "Ustawienia zapisane",
   },
   uk: {
     tab_timer: "TiMETR", tab_timeline: "Часова шкала", tab_economy: "Економіка",
@@ -3002,7 +3021,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Оплата через Stripe (EUR). Дарміни — внутрішньоігрові бали. Не є електронними грошима або цінними паперами.",
     shop_webhook_note: "Після оплати баланс оновиться через Stripe Webhook. Якщо Дарміни не зараховані — перезапусти застосунок.",
     shop_need_auth: "Потрібна авторизація", shop_register_cta: "Зареєструйся як громадянин",
-    shop_enter_min_error: "Введіть кількість Дармінів (мінімум 1)", shop_payment_error: "Не вдалося створити сесію оплати",
+    shop_enter_min_error: "Введіть кількість Дармінів (мінімум 1)", shop_payment_error: "Не вдалося створити сесію оплати", sa_title: "Соціальний будильник", sa_subtitle: "Синхронна активація Гімну TimeNation", sa_consent_label: "Дозволити іншим будити мене Гімном TimeNation", sa_consent_hint: "Інші громадяни зможуть надіслати вам сигнал", sa_send_signal: "Увімкнути Гімн обраним", sa_search_ph: "Пошук громадян...", sa_global_alarm: "Глобальна тривога (Адмін)", sa_trigger_global: "Активувати для всіх підписників", sa_overlay_admin: "Увага! Глобальний Соціальний Будильник активовано урядом TimeNation", sa_overlay_user: "запрошує вас до Соціального Будильника!", sa_tap_to_play: "Натисніть будь-де на екрані, щоб увімкнути Гімн!", sa_dismiss: "Закрити", sa_sent: "Сигнал надіслано!", sa_no_subscribers: "Немає громадян з активною згодою", sa_login_required: "Увійдіть, щоб використовувати Соціальний Будильник", sa_select_targets: "Виберіть отримувачів", sa_selected: "вибрано", sa_consent_saved: "Налаштування збережено",
   },
   nl: {
     tab_timer: "TiMETR", tab_timeline: "Tijdlijn", tab_economy: "Economie",
@@ -3131,7 +3150,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Betaling via Stripe (EUR). Darmins zijn in-game credits. Geen elektronisch geld of effecten.",
     shop_webhook_note: "Saldo wordt automatisch bijgewerkt via Stripe Webhook. Als Darmins niet zijn bijgeschreven, open de app opnieuw.",
     shop_need_auth: "Autorisatie vereist", shop_register_cta: "Registreer als burger",
-    shop_enter_min_error: "Voer aantal Darmins in (minimum 1)", shop_payment_error: "Kon geen betaalsessie aanmaken",
+    shop_enter_min_error: "Voer aantal Darmins in (minimum 1)", shop_payment_error: "Kon geen betaalsessie aanmaken", sa_title: "Sociaal Alarm", sa_subtitle: "Gesynchroniseerde activering van het TimeNation-Volkslied", sa_consent_label: "Anderen toestaan mij wakker te maken met het TimeNation-Volkslied", sa_consent_hint: "Andere burgers zullen een signaal naar u kunnen sturen", sa_send_signal: "Volkslied afspelen voor geselecteerden", sa_search_ph: "Burgers zoeken...", sa_global_alarm: "Globaal Alarm (Admin)", sa_trigger_global: "Activeer voor alle abonnees", sa_overlay_admin: "Let op! Globaal Sociaal Alarm geactiveerd door de TimeNation-Regering", sa_overlay_user: "nodigt u uit voor het Sociaal Alarm!", sa_tap_to_play: "Tik overal op het scherm om het Volkslied af te spelen!", sa_dismiss: "Sluiten", sa_sent: "Signaal verzonden!", sa_no_subscribers: "Geen burgers met actieve toestemming", sa_login_required: "Log in om het Sociaal Alarm te gebruiken", sa_select_targets: "Ontvangers selecteren", sa_selected: "geselecteerd", sa_consent_saved: "Instellingen opgeslagen",
   },
   kk: {
     tab_timer: "TiMETR", tab_timeline: "Уақыт шкаласы", tab_economy: "Экономика",
@@ -3260,7 +3279,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Stripe (EUR) арқылы төлем. Дарминдер ойын ішіндегі кредиттер. Электрондық ақша немесе бағалы қағаздар емес.",
     shop_webhook_note: "Төлемнен кейін баланс Stripe Webhook арқылы автоматты жаңарады. Дарминдер есептелмесе — қолданбаны қайта ашыңыз.",
     shop_need_auth: "Авторизация қажет", shop_register_cta: "Азамат ретінде тіркеліңіз",
-    shop_enter_min_error: "Дармин санын енгізіңіз (минимум 1)", shop_payment_error: "Төлем сессиясын жасау мүмкін болмады",
+    shop_enter_min_error: "Дармин санын енгізіңіз (минимум 1)", shop_payment_error: "Төлем сессиясын жасау мүмкін болмады", sa_title: "Әлеуметтік дабыл", sa_subtitle: "TimeNation Гимнін бір уақытта белсендіру", sa_consent_label: "Басқаларға мені TimeNation Гимнімен оятуға рұқсат беру", sa_consent_hint: "Басқа азаматтар сізге сигнал жібере алады", sa_send_signal: "Таңдалғандар үшін Гимнді ойнату", sa_search_ph: "Азаматтарды іздеу...", sa_global_alarm: "Жаһандық дабыл (Әкімші)", sa_trigger_global: "Барлық жазылушылар үшін белсендіру", sa_overlay_admin: "Назар аударыңыз! TimeNation Үкіметі жаһандық Әлеуметтік Дабылды белсендірді", sa_overlay_user: "сізді Әлеуметтік Дабылға шақырады!", sa_tap_to_play: "Гимнді ойнату үшін экранның кез келген жеріне басыңыз!", sa_dismiss: "Жабу", sa_sent: "Сигнал жіберілді!", sa_no_subscribers: "Белсенді келісімі бар азаматтар жоқ", sa_login_required: "Әлеуметтік Дабылды пайдалану үшін кіріңіз", sa_select_targets: "Алушыларды таңдаңыз", sa_selected: "таңдалды", sa_consent_saved: "Параметрлер сақталды",
   },
   uz: {
     tab_timer: "TiMETR", tab_timeline: "Vaqt chizig'i", tab_economy: "Iqtisodiyot",
@@ -3389,7 +3408,7 @@ export const UI: Record<LangCode, UIStrings> = {
     shop_legal: "Stripe (EUR) orqali to'lov. Darminlar o'yindagi kreditlar. Elektron pul yoki qimmatli qog'ozlar emas.",
     shop_webhook_note: "To'lovdan so'ng balans Stripe Webhook orqali avtomatik yangilanadi. Darminlar hisoblanmasa — ilovani qayta oching.",
     shop_need_auth: "Avtorizatsiya kerak", shop_register_cta: "Fuqaro sifatida ro'yxatdan o'ting",
-    shop_enter_min_error: "Darmin miqdorini kiriting (minimum 1)", shop_payment_error: "To'lov sessiyasini yaratib bo'lmadi",
+    shop_enter_min_error: "Darmin miqdorini kiriting (minimum 1)", shop_payment_error: "To'lov sessiyasini yaratib bo'lmadi", sa_title: "Ijtimoiy Signal", sa_subtitle: "TimeNation Madhiyasini bir vaqtda faollashtirish", sa_consent_label: "Boshqalarga TimeNation Madhiyasi bilan uyg'otishga ruxsat berish", sa_consent_hint: "Boshqa fuqarolar sizga signal yuborishi mumkin", sa_send_signal: "Tanlanganlarga Madhiyani ijro etish", sa_search_ph: "Fuqarolarni qidirish...", sa_global_alarm: "Global Signal (Admin)", sa_trigger_global: "Barcha obunachilarga faollashtirish", sa_overlay_admin: "Diqqat! TimeNation Hukumati global ijtimoiy signalni faollаshtirdi", sa_overlay_user: "sizni ijtimoiy signalga taklif etadi!", sa_tap_to_play: "Madhiyani ijro etish uchun ekranning istalgan joyiga bosing!", sa_dismiss: "Yopish", sa_sent: "Signal yuborildi!", sa_no_subscribers: "Faol rozilik berilgan fuqaro yo'q", sa_login_required: "Ijtimoiy signalni ishlatish uchun kiring", sa_select_targets: "Qabul qiluvchilarni tanlang", sa_selected: "tanlandi", sa_consent_saved: "Sozlamalar saqlandi",
   },
 };
 

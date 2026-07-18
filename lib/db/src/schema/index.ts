@@ -17,3 +17,4 @@ export * from "./timeBankLedger";
 export * from "./timeAuditLogs";
 export * from "./aiSystemPrompts";
 export * from "./citizenReviews";
+export * from "./socialAlarms";

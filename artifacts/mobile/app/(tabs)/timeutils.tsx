@@ -8,6 +8,9 @@ import {
   ScrollView,
   Alert,
   Platform,
+  Modal,
+  TextInput,
+  FlatList,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -295,7 +298,133 @@ export default function TimeUtilsScreen() {
   const PRESET_SECONDS = [12, 24, 25, 36, 48, 50, 60, 90].map((m) => ({ label: `${m}m`, seconds: m * 60 }));
 
   // ── Section toggle ──────────────────────────────────────────────────────────
-  const [section, setSection] = useState<"clock" | "timer" | "alarm">("clock");
+  const [section, setSection] = useState<"clock" | "timer" | "alarm" | "social-alarm">("clock");
+
+  // ── Social Alarm ─────────────────────────────────────────────────────────────
+  const [saConsent, setSaConsent] = useState(false);
+  const [saConsentSaving, setSaConsentSaving] = useState(false);
+  const [saSubscribers, setSaSubscribers] = useState<Array<{id:number;name:string;rank:string}>>([]);
+  const [saSearch, setSaSearch] = useState("");
+  const [saSelectedTargets, setSaSelectedTargets] = useState<Set<number>>(new Set());
+  const [saSending, setSaSending] = useState(false);
+  const [saSentMsg, setSaSentMsg] = useState("");
+  const [anthemModal, setAnthemModal] = useState(false);
+  const [anthemSender, setAnthemSender] = useState("");
+  const [anthemIsGlobal, setAnthemIsGlobal] = useState(false);
+  const [anthemPlaying, setAnthemPlaying] = useState(false);
+  const anthemSoundRef = useRef<Audio.Sound | null>(null);
+  const saWsRef = useRef<WebSocket | null>(null);
+  const saReconRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!citizen?.id) return;
+    const cId = citizen.id;
+    const connectWs = () => {
+      const wsUrl = BASE_URL.replace(/^https?/, (m: string) => (m === "https" ? "wss" : "ws")) + "/api/ws";
+      const ws = new WebSocket(wsUrl);
+      saWsRef.current = ws;
+      ws.onopen = () => ws.send(JSON.stringify({ type: "auth", citizenId: cId }));
+      ws.onmessage = (evt: MessageEvent) => {
+        try {
+          const msg = JSON.parse(evt.data as string) as Record<string, unknown>;
+          if (msg["type"] === "auth_ok") setSaConsent(msg["subscribed"] === true);
+          if (msg["type"] === "consent_updated") setSaConsent(msg["subscribed"] === true);
+          if (msg["type"] === "PLAY_ANTHEM") {
+            setAnthemSender(String(msg["triggeredBy"] ?? "TimeNation"));
+            setAnthemIsGlobal(msg["targetType"] === "all");
+            setAnthemModal(true);
+            setAnthemPlaying(false);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          }
+        } catch { /* bad JSON */ }
+      };
+      ws.onclose = () => { saReconRef.current = setTimeout(connectWs, 5000); };
+    };
+    connectWs();
+    return () => {
+      if (saReconRef.current) clearTimeout(saReconRef.current);
+      saWsRef.current?.close();
+    };
+  }, [citizen?.id]);
+
+  const loadSaSubscribers = useCallback(async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/citizens/social-alarm-subscribers`);
+      setSaSubscribers(await res.json() as Array<{id:number;name:string;rank:string}>);
+    } catch { /* offline */ }
+  }, []);
+
+  useEffect(() => { if (section === "social-alarm") void loadSaSubscribers(); }, [section, loadSaSubscribers]);
+
+  const toggleSaConsent = async () => {
+    if (!citizen?.id) return;
+    const next = !saConsent;
+    setSaConsentSaving(true);
+    try {
+      await fetch(`${BASE_URL}/api/citizens/${citizen.id}/social-alarm-consent`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consent: next }),
+      });
+      setSaConsent(next);
+      const ws = saWsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "update_consent", consent: next }));
+    } catch { /* silent */ } finally { setSaConsentSaving(false); }
+  };
+
+  const sendSaSignal = async (global = false) => {
+    if (!citizen?.id) return;
+    setSaSending(true);
+    try {
+      const body = global
+        ? { initiatedBy: citizen.id }
+        : { initiatedBy: citizen.id, targetCitizenIds: [...saSelectedTargets] };
+      const res = await fetch(`${BASE_URL}/api/system/trigger-alarm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setSaSentMsg(t.sa_sent);
+        setSaSelectedTargets(new Set());
+        setTimeout(() => setSaSentMsg(""), 3000);
+      }
+    } catch { /* silent */ } finally { setSaSending(false); }
+  };
+
+  const toggleSaTarget = (id: number) => {
+    setSaSelectedTargets(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const playAnthem = async () => {
+    try {
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      const { sound } = await Audio.Sound.createAsync(
+        require("../../assets/timenation_anthem.mp3"),
+        { shouldPlay: true }
+      );
+      anthemSoundRef.current = sound;
+      setAnthemPlaying(true);
+    } catch { /* blocked */ }
+  };
+
+  const stopAnthem = () => {
+    if (anthemSoundRef.current) {
+      void anthemSoundRef.current.stopAsync();
+      void anthemSoundRef.current.unloadAsync();
+      anthemSoundRef.current = null;
+    }
+    setAnthemPlaying(false);
+    setAnthemModal(false);
+  };
+
+  const saFiltered = saSubscribers.filter(s =>
+    s.name.toLowerCase().includes(saSearch.toLowerCase()) && s.id !== citizen?.id
+  );
 
   // ── World clock ─────────────────────────────────────────────────────────────
   const [tick, setTick] = useState(0);
@@ -577,25 +706,67 @@ export default function TimeUtilsScreen() {
         <View style={{ width: 28 }} />
       </View>
 
+      {/* Social Alarm fullscreen Modal */}
+      <Modal visible={anthemModal} animationType="fade" statusBarTranslucent transparent>
+        <TouchableOpacity
+          style={saSt.anthemOverlay}
+          activeOpacity={1}
+          onPress={!anthemPlaying ? () => { void playAnthem(); } : undefined}
+        >
+          <View style={saSt.anthemContent}>
+            <View style={[saSt.anthemCircle, { borderColor: colors.primary, backgroundColor: colors.primary + "22" }]}>
+              <Feather name="radio" size={52} color={colors.primary} />
+            </View>
+            <View style={{ gap: 8 }}>
+              {anthemIsGlobal ? (
+                <Text style={[saSt.anthemTitle, { color: colors.foreground }]}>{t.sa_overlay_admin}</Text>
+              ) : (
+                <Text style={[saSt.anthemTitle, { color: colors.foreground }]}>
+                  <Text style={{ color: colors.primary }}>{anthemSender}</Text>{" "}{t.sa_overlay_user}
+                </Text>
+              )}
+              {!anthemPlaying && (
+                <Text style={[saSt.anthemSub, { color: colors.primary }]}>{t.sa_tap_to_play}</Text>
+              )}
+              {anthemPlaying && (
+                <Text style={[saSt.anthemSub, { color: "#22c55e" }]}>♪ {t.sa_sent}</Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={[saSt.anthemDismiss, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={stopAnthem}
+            >
+              <Feather name="x" size={16} color={colors.foreground} />
+              <Text style={[saSt.anthemDismissText, { color: colors.foreground }]}>{t.sa_dismiss}</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Section tabs */}
-      <View style={st.sectionRow}>
-        {(["clock", "timer", "alarm"] as const).map((s) => (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={st.sectionRow}
+        style={{ flexGrow: 0 }}
+      >
+        {(["clock", "timer", "alarm", "social-alarm"] as const).map((s) => (
           <TouchableOpacity
             key={s}
             style={[st.sectionBtn, section === s && st.sectionBtnActive]}
             onPress={() => { Haptics.selectionAsync(); setSection(s); }}
           >
             <Feather
-              name={s === "clock" ? "globe" : s === "timer" ? "clock" : "bell"}
+              name={s === "clock" ? "globe" : s === "timer" ? "clock" : s === "alarm" ? "bell" : "radio"}
               size={14}
               color={section === s ? colors.primaryForeground : colors.mutedForeground}
             />
             <Text style={[st.sectionBtnText, section === s && st.sectionBtnTextActive]}>
-              {s === "clock" ? t.time_zones_tab : s === "timer" ? t.time_timer_tab : t.time_alarm_tab}
+              {s === "clock" ? t.time_zones_tab : s === "timer" ? t.time_timer_tab : s === "alarm" ? t.time_alarm_tab : t.sa_title}
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       <ScrollView
         style={{ flex: 1 }}
@@ -810,10 +981,243 @@ export default function TimeUtilsScreen() {
             </View>
           </View>
         )}
+
+        {/* ── Social Alarm ── */}
+        {section === "social-alarm" && (
+          <View style={st.section}>
+            {/* Title */}
+            <View style={saSt.headerRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={st.sectionTitle}>{t.sa_title}</Text>
+                <Text style={st.sectionSub}>{t.sa_subtitle}</Text>
+              </View>
+            </View>
+
+            {!citizen ? (
+              <View style={[saSt.infoCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                <Feather name="radio" size={16} color={colors.mutedForeground} />
+                <Text style={[saSt.infoCardText, { color: colors.mutedForeground }]}>{t.sa_login_required}</Text>
+              </View>
+            ) : (
+              <>
+                {/* Consent toggle */}
+                <View style={[saSt.consentCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[saSt.consentLabel, { color: colors.foreground }]}>{t.sa_consent_label}</Text>
+                    <Text style={[saSt.consentHint, { color: colors.mutedForeground }]}>{t.sa_consent_hint}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[saSt.toggle, { backgroundColor: saConsent ? colors.primary : colors.muted }]}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void toggleSaConsent(); }}
+                    disabled={saConsentSaving}
+                  >
+                    <View style={[saSt.toggleThumb, { left: saConsent ? 22 : 2 }]} />
+                  </TouchableOpacity>
+                </View>
+                {saConsent && (
+                  <Text style={[saSt.savedText, { color: colors.primary }]}>✓ {t.sa_consent_saved}</Text>
+                )}
+
+                {/* Subscriber search */}
+                <Text style={[saSt.pickerLabel, { color: colors.foreground }]}>{t.sa_select_targets}</Text>
+                <View style={[saSt.searchRow, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                  <Feather name="search" size={14} color={colors.mutedForeground} />
+                  <TextInput
+                    value={saSearch}
+                    onChangeText={setSaSearch}
+                    placeholder={t.sa_search_ph}
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[saSt.searchInput, { color: colors.foreground }]}
+                  />
+                </View>
+
+                {saFiltered.length === 0 ? (
+                  <View style={[saSt.infoCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                    <Feather name="users" size={14} color={colors.mutedForeground} />
+                    <Text style={[saSt.infoCardText, { color: colors.mutedForeground }]}>{t.sa_no_subscribers}</Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={saFiltered}
+                    keyExtractor={(item) => String(item.id)}
+                    scrollEnabled={false}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          saSt.subscriberRow,
+                          { borderColor: saSelectedTargets.has(item.id) ? colors.primary : colors.border,
+                            backgroundColor: saSelectedTargets.has(item.id) ? colors.primary + "18" : colors.card }
+                        ]}
+                        onPress={() => { Haptics.selectionAsync(); toggleSaTarget(item.id); }}
+                      >
+                        <Text style={[saSt.subscriberName, { color: colors.foreground }]}>{item.name}</Text>
+                        <Text style={[saSt.subscriberRank, { color: colors.mutedForeground }]}>{item.rank}</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                )}
+
+                {saSelectedTargets.size > 0 && (
+                  <Text style={[saSt.selectedCount, { color: colors.primary }]}>
+                    {saSelectedTargets.size} {t.sa_selected}
+                  </Text>
+                )}
+
+                {/* Send signal */}
+                {saSentMsg ? (
+                  <View style={[saSt.sentBanner, { backgroundColor: "#22c55e18", borderColor: "#22c55e44" }]}>
+                    <Feather name="volume-2" size={16} color="#22c55e" />
+                    <Text style={{ color: "#22c55e", fontWeight: "700", fontSize: 14 }}>{saSentMsg}</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[saSt.sendBtn, { backgroundColor: saSelectedTargets.size === 0 ? colors.muted : colors.primary }, saSending && { opacity: 0.6 }]}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); void sendSaSignal(false); }}
+                    disabled={saSending || saSelectedTargets.size === 0}
+                  >
+                    <Feather name="radio" size={18} color={colors.primaryForeground} />
+                    <Text style={[saSt.sendBtnText, { color: colors.primaryForeground }]}>
+                      {saSending ? "…" : `${t.sa_send_signal}${saSelectedTargets.size > 0 ? ` (${saSelectedTargets.size})` : ""}`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <View style={st.infoBox}>
+                  <Feather name="info" size={14} color={colors.mutedForeground} />
+                  <Text style={st.infoText}>{t.sa_consent_hint}</Text>
+                </View>
+              </>
+            )}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
 }
+
+// ── Social Alarm styles (static, doesn't depend on colors) ────────────────────
+const saSt = StyleSheet.create({
+  headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  consentCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+  },
+  consentLabel: { fontSize: 14, fontWeight: "600" },
+  consentHint: { fontSize: 12, marginTop: 2 },
+  toggle: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+  },
+  toggleThumb: {
+    position: "absolute",
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    top: 2,
+  },
+  savedText: { fontSize: 12, fontWeight: "600", fontFamily: "monospace" },
+  pickerLabel: { fontSize: 14, fontWeight: "600", marginTop: 4 },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  searchInput: { flex: 1, fontSize: 14 },
+  infoCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 12,
+  },
+  infoCardText: { fontSize: 13, fontFamily: "monospace", flex: 1 },
+  subscriberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 6,
+  },
+  subscriberName: { fontSize: 14, fontFamily: "monospace" },
+  subscriberRank: { fontSize: 12, fontFamily: "monospace" },
+  selectedCount: { fontSize: 12, fontWeight: "700", fontFamily: "monospace", textAlign: "right" },
+  sentBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 14,
+  },
+  sendBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  sendBtnText: { fontSize: 15, fontWeight: "700" },
+  // Anthem modal
+  anthemOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  anthemContent: {
+    alignItems: "center",
+    gap: 24,
+    paddingHorizontal: 32,
+    maxWidth: 360,
+  },
+  anthemCircle: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    borderWidth: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  anthemTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
+    lineHeight: 26,
+  },
+  anthemSub: {
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
+    fontFamily: "monospace",
+  },
+  anthemDismiss: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginTop: 8,
+  },
+  anthemDismissText: { fontSize: 15, fontWeight: "600" },
+});
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 

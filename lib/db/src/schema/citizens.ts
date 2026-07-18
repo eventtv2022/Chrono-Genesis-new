@@ -57,6 +57,9 @@ export const citizensTable = pgTable("citizens", {
   potentialLaborDepositedMinutes: integer("potential_labor_deposited_minutes").notNull().default(0), // 0–480
   skillsAuditedAt: timestamp("skills_audited_at", { withTimezone: true }),
   reviewScoreCount: integer("review_score_count").notNull().default(0), // учтённых отзывов для ИИ
+
+  // ── Social Alarm ───────────────────────────────────────────────────────────
+  socialAlarmConsent: integer("social_alarm_consent").notNull().default(0), // 1 = разрешено
 });
 
 export const insertCitizenSchema = createInsertSchema(citizensTable).omit({

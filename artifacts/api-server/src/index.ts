@@ -1,3 +1,4 @@
+import http from "http";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { applyEntropy } from "./services/meritocracyService";
@@ -6,6 +7,7 @@ import { airDueSlots } from "./services/tvService";
 import { initBot } from "./services/telegramService";
 import { rehydrateRenderQueue } from "./services/renderQueue";
 import { startNodeValidator } from "./services/nodeValidatorService";
+import { attachSocialAlarmWs } from "./services/socialAlarmWs";
 
 const rawPort = process.env["PORT"];
 
@@ -97,20 +99,21 @@ async function bootstrap(): Promise<void> {
   scheduleMinuteTick();
   startNodeValidator();
 
+  // ── Create HTTP server from Express app ───────────────────────────────────────
+  const server = http.createServer(app);
+
+  // ── Attach Social Alarm WebSocket server ──────────────────────────────────────
+  attachSocialAlarmWs(server);
+
   // ── Render queue rehydration ─────────────────────────────────────────────────
-  // Re-queue capsules stuck in `pending_render` from before the last restart.
-  // Awaited so the queue is fully loaded before the server starts accepting
-  // new render requests — satisfying the "drain from DB before new jobs" guarantee.
   try {
     await rehydrateRenderQueue();
   } catch (err) {
-    // Log and continue: a rehydration failure must not prevent the server from
-    // starting. The stuck capsules will be visible in the next restart attempt.
     logger.error({ err }, "Render queue rehydration failed — server will start anyway");
   }
 
   await new Promise<void>((resolve, reject) => {
-    app.listen(port, (err?: Error) => {
+    server.listen(port, (err?: Error) => {
       if (err) {
         logger.error({ err }, "Error listening on port");
         reject(err);
