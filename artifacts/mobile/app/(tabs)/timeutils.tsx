@@ -764,7 +764,7 @@ export default function TimeUtilsScreen() {
               color={section === s ? colors.primaryForeground : colors.mutedForeground}
             />
             <Text style={[st.sectionBtnText, section === s && st.sectionBtnTextActive]}>
-              {s === "clock" ? t.time_zones_tab : s === "timer" ? t.time_timer_tab : s === "alarm" ? t.time_alarm_tab : "Синхро-сигнал"}
+              {s === "clock" ? t.time_zones_tab : s === "timer" ? t.time_timer_tab : s === "alarm" ? t.time_alarm_tab : t.sa_tab}
             </Text>
           </TouchableOpacity>
         ))}
@@ -1024,16 +1024,16 @@ export default function TimeUtilsScreen() {
                 <View style={[saSt.syncCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <View style={saSt.syncCardHeader}>
                     <Feather name="clock" size={14} color={colors.primary} />
-                    <Text style={[saSt.syncCardTitle, { color: colors.foreground }]}>Параметры синхронизации</Text>
+                    <Text style={[saSt.syncCardTitle, { color: colors.foreground }]}>{t.sa_sync_params}</Text>
                   </View>
                   <View style={saSt.syncField}>
-                    <Text style={[saSt.syncLabel, { color: colors.mutedForeground }]}>Время срабатывания</Text>
+                    <Text style={[saSt.syncLabel, { color: colors.mutedForeground }]}>{t.sa_alarm_time}</Text>
                     <View style={[saSt.syncInputRow, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
                       <Feather name="clock" size={13} color={colors.mutedForeground} />
                       <TextInput
                         value={saAlarmTime}
                         onChangeText={setSaAlarmTime}
-                        placeholder="ЧЧ:ММ"
+                        placeholder={t.sa_time_ph}
                         placeholderTextColor={colors.mutedForeground}
                         keyboardType="numbers-and-punctuation"
                         maxLength={5}
@@ -1042,11 +1042,11 @@ export default function TimeUtilsScreen() {
                     </View>
                   </View>
                   <View style={saSt.syncField}>
-                    <Text style={[saSt.syncLabel, { color: colors.mutedForeground }]}>Смысл уведомления</Text>
+                    <Text style={[saSt.syncLabel, { color: colors.mutedForeground }]}>{t.sa_purpose_label}</Text>
                     <TextInput
                       value={saPurpose}
                       onChangeText={setSaPurpose}
-                      placeholder="Задайте цель (например: Общий сбор / Парад планет)"
+                      placeholder={t.sa_purpose_ph}
                       placeholderTextColor={colors.mutedForeground}
                       multiline
                       numberOfLines={2}
