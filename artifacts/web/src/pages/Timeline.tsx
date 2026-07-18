@@ -1,13 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Layout } from "@/components/Layout";
 import {
   useGetTimelineOccupied,
   getGetTimelineOccupiedQueryKey,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, X, Clock, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useCitizen } from "@/context/CitizenContext";
 
 const MONTHS = [
   "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
@@ -17,15 +19,26 @@ const MONTHS = [
 const currentYear = new Date().getFullYear();
 const currentMonth = new Date().getMonth() + 1;
 
+function pad2(n: number) { return String(n).padStart(2, "0"); }
+function padYear(n: number) { return String(n).padStart(4, "0"); }
+
 export function Timeline() {
-  const [year, setYear] = useState(currentYear);
+  const { citizen, refreshCitizen } = useCitizen();
+  const queryClient = useQueryClient();
+
+  const [year, setYear]   = useState(currentYear);
   const [month, setMonth] = useState(currentMonth);
 
-  useEffect(() => {
-    document.title = "Таймлайн | TimeNation";
-  }, []);
+  // Booking drill-down state
+  const [selectedDay,  setSelectedDay]  = useState<number | null>(null);
+  const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  const [confirmCoord, setConfirmCoord] = useState<string | null>(null);
+  const [anchoring,    setAnchoring]    = useState(false);
+  const [anchorResult, setAnchorResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  const yearStr = String(year);
+  useEffect(() => { document.title = "Таймлайн | TimeNation"; }, []);
+
+  const yearStr  = String(year);
   const monthStr = String(month);
 
   const { data: occupied, isLoading } = useGetTimelineOccupied(
@@ -33,9 +46,15 @@ export function Timeline() {
     { query: { queryKey: getGetTimelineOccupiedQueryKey({ year: yearStr, month: monthStr }) } }
   );
 
+  // Per-day detail (hours) — fetch when a day is selected
+  const dayStr = selectedDay !== null ? pad2(selectedDay) : null;
+  const { data: dayOccupied } = useGetTimelineOccupied(
+    { year: yearStr, month: monthStr, day: dayStr ?? "" },
+    { query: { queryKey: getGetTimelineOccupiedQueryKey({ year: yearStr, month: monthStr, day: dayStr ?? "" }), enabled: !!dayStr } }
+  );
+
   const coords = occupied ?? [];
 
-  // Group by day within the month
   const byDay: Record<string, string[]> = {};
   for (const entry of coords) {
     const coord = entry.timelineCoord;
@@ -50,15 +69,55 @@ export function Timeline() {
     let m = month + delta;
     let y = year;
     if (m > 12) { m = 1; y++; }
-    if (m < 1) { m = 12; y--; }
-    setMonth(m);
-    setYear(y);
+    if (m < 1)  { m = 12; y--; }
+    setMonth(m); setYear(y);
+    closePanel();
+  }
+
+  function closePanel() {
+    setSelectedDay(null); setSelectedHour(null);
+    setConfirmCoord(null); setAnchorResult(null);
   }
 
   function formatCoord(coord: string): string {
-    // YYYYMMDDHHmm → YYYY-MM-DD HH:mm
     return `${coord.slice(0, 4)}-${coord.slice(4, 6)}-${coord.slice(6, 8)} ${coord.slice(8, 10)}:${coord.slice(10, 12)}`;
   }
+
+  // Occupied minute-level set for the selected day
+  const dayCoords = new Set((dayOccupied ?? []).map((e) => e.timelineCoord));
+
+  // Citizen who owns a given coord
+  const ownerOf = useCallback((coord: string) => {
+    return (dayOccupied ?? []).find((e) => e.timelineCoord === coord);
+  }, [dayOccupied]);
+
+  const doAnchor = async (coord: string) => {
+    if (!citizen) return;
+    setAnchoring(true);
+    setAnchorResult(null);
+    try {
+      const res = await fetch("/api/timeline/anchor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ citizenId: citizen.id, timelineCoord: coord }),
+      });
+      const data = await res.json() as { error?: string; newBalance?: number };
+      if (!res.ok) {
+        setAnchorResult({ ok: false, msg: data.error ?? "Ошибка соединения" });
+      } else {
+        setAnchorResult({ ok: true, msg: `Координата закреплена! Остаток: ${data.newBalance} Д` });
+        setConfirmCoord(null);
+        // Invalidate occupied cache for month + day
+        void queryClient.invalidateQueries({ queryKey: getGetTimelineOccupiedQueryKey({ year: yearStr, month: monthStr }) });
+        void queryClient.invalidateQueries({ queryKey: getGetTimelineOccupiedQueryKey({ year: yearStr, month: monthStr, day: dayStr ?? "" }) });
+        void refreshCitizen();
+      }
+    } catch {
+      setAnchorResult({ ok: false, msg: "Ошибка соединения" });
+    } finally {
+      setAnchoring(false);
+    }
+  };
 
   return (
     <Layout>
@@ -71,13 +130,8 @@ export function Timeline() {
         </div>
 
         {/* Month navigator */}
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setYear((y) => y - 1)}
-            className="font-mono text-xs"
-          >
+        <div className="flex items-center gap-4 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => { setYear((y) => y - 1); closePanel(); }} className="font-mono text-xs">
             {year - 1}
           </Button>
           <div className="flex items-center gap-2">
@@ -91,17 +145,10 @@ export function Timeline() {
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setYear((y) => y + 1)}
-            className="font-mono text-xs"
-          >
+          <Button variant="outline" size="sm" onClick={() => { setYear((y) => y + 1); closePanel(); }} className="font-mono text-xs">
             {year + 1}
           </Button>
-          <span className="text-xs text-muted-foreground font-mono ml-2">
-            {coords.length} точек
-          </span>
+          <span className="text-xs text-muted-foreground font-mono ml-2">{coords.length} точек</span>
         </div>
 
         {/* Calendar grid */}
@@ -109,36 +156,181 @@ export function Timeline() {
           {["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].map((d) => (
             <div key={d} className="text-center text-muted-foreground uppercase py-1">{d}</div>
           ))}
-          {/* Offset for first day of month */}
           {(() => {
             const firstDay = new Date(year, month - 1, 1).getDay();
             const offset = firstDay === 0 ? 6 : firstDay - 1;
-            return Array.from({ length: offset }).map((_, i) => (
-              <div key={`off-${i}`} />
-            ));
+            return Array.from({ length: offset }).map((_, i) => <div key={`off-${i}`} />);
           })()}
           {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = String(i + 1).padStart(2, "0");
-            const entries = byDay[day] ?? [];
+            const day = i + 1;
+            const dayPad = pad2(day);
+            const entries = byDay[dayPad] ?? [];
             const hasCoords = entries.length > 0;
+            const isMine = citizen && entries.some((coord) =>
+              (occupied ?? []).find((e) => e.timelineCoord === coord && (e as { citizenId?: number }).citizenId === citizen.id)
+            );
+            const isSelected = selectedDay === day;
             return (
-              <div
+              <button
                 key={day}
-                className={`aspect-square flex flex-col items-center justify-center rounded-sm border transition-colors ${
-                  hasCoords
+                onClick={() => { setSelectedDay(day); setSelectedHour(null); setConfirmCoord(null); setAnchorResult(null); }}
+                className={`aspect-square flex flex-col items-center justify-center rounded-sm border transition-colors cursor-pointer hover:border-primary/70 ${
+                  isSelected
+                    ? "border-primary bg-primary/20 text-primary ring-1 ring-primary"
+                    : isMine
                     ? "bg-primary/15 border-primary/50 text-primary"
-                    : "bg-secondary/30 border-border/30 text-muted-foreground"
+                    : hasCoords
+                    ? "bg-red-900/20 border-red-500/40 text-red-400"
+                    : "bg-secondary/30 border-border/30 text-muted-foreground hover:bg-secondary/50"
                 }`}
-                title={hasCoords ? entries.map(formatCoord).join("\n") : ""}
+                title={hasCoords ? entries.map(formatCoord).join("\n") : `Выбрать день ${day}`}
               >
-                <span className="text-[11px] font-bold">{i + 1}</span>
-                {hasCoords && (
-                  <span className="text-[8px] font-mono text-primary/80">{entries.length}</span>
-                )}
-              </div>
+                <span className="text-[11px] font-bold">{day}</span>
+                {hasCoords && <span className="text-[8px] font-mono opacity-70">{entries.length}</span>}
+              </button>
             );
           })}
         </div>
+
+        {/* Day booking panel */}
+        {selectedDay !== null && (
+          <Card className="bg-card border-primary/30">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-primary" />
+                  {pad2(selectedDay)}.{pad2(month)}.{year} — выберите час
+                </CardTitle>
+                <button onClick={closePanel} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {!citizen && (
+                <p className="text-xs text-amber-400 mt-1">Войдите в систему, чтобы забронировать координату</p>
+              )}
+            </CardHeader>
+            <CardContent>
+              {/* Hour grid */}
+              {selectedHour === null ? (
+                <div className="grid grid-cols-6 sm:grid-cols-8 gap-1">
+                  {Array.from({ length: 24 }, (_, h) => {
+                    const prefix = `${padYear(year)}${pad2(month)}${pad2(selectedDay)}${pad2(h)}`;
+                    const occupied60 = (dayOccupied ?? []).filter((e) => e.timelineCoord.startsWith(prefix));
+                    const isMineHour = citizen && occupied60.some((e) => (e as { citizenId?: number }).citizenId === citizen.id);
+                    const fullyOcc = occupied60.length >= 60;
+                    const partOcc = occupied60.length > 0 && !fullyOcc;
+                    return (
+                      <button
+                        key={h}
+                        onClick={() => { if (!fullyOcc) setSelectedHour(h); }}
+                        disabled={fullyOcc}
+                        className={`py-2 rounded text-xs font-mono border transition-colors ${
+                          isMineHour
+                            ? "bg-primary/30 border-primary text-primary"
+                            : fullyOcc
+                            ? "bg-red-900/30 border-red-500/30 text-red-400/50 cursor-not-allowed"
+                            : partOcc
+                            ? "bg-amber-900/20 border-amber-500/30 text-amber-300 hover:border-primary"
+                            : "bg-secondary/30 border-border/30 text-muted-foreground hover:border-primary hover:text-foreground"
+                        }`}
+                      >
+                        {pad2(h)}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* Minute grid */
+                <div>
+                  <button
+                    className="flex items-center gap-1 text-xs text-muted-foreground mb-3 hover:text-foreground"
+                    onClick={() => { setSelectedHour(null); setConfirmCoord(null); setAnchorResult(null); }}
+                  >
+                    <ChevronLeft className="w-3 h-3" /> {pad2(selectedHour)}:00 — выберите минуту
+                  </button>
+                  <div className="grid grid-cols-10 sm:grid-cols-12 gap-1">
+                    {Array.from({ length: 60 }, (_, min) => {
+                      const coord = `${padYear(year)}${pad2(month)}${pad2(selectedDay)}${pad2(selectedHour)}${pad2(min)}`;
+                      const owner = ownerOf(coord);
+                      const isMine = citizen && (owner as { citizenId?: number } | undefined)?.citizenId === citizen.id;
+                      const isOcc = !!owner && !isMine;
+                      const isPending = confirmCoord === coord;
+                      return (
+                        <button
+                          key={min}
+                          onClick={() => {
+                            if (owner || !citizen) return;
+                            setConfirmCoord(isPending ? null : coord);
+                            setAnchorResult(null);
+                          }}
+                          disabled={!!owner || !citizen}
+                          className={`py-1.5 rounded text-[11px] font-mono border transition-colors ${
+                            isMine
+                              ? "bg-primary/30 border-primary text-primary cursor-default"
+                              : isOcc
+                              ? "bg-red-900/30 border-red-500/30 text-red-400/50 cursor-not-allowed"
+                              : isPending
+                              ? "bg-primary/20 border-primary text-primary ring-1 ring-primary"
+                              : !citizen
+                              ? "bg-secondary/20 border-border/20 text-muted-foreground/40 cursor-not-allowed"
+                              : "bg-secondary/30 border-border/30 text-muted-foreground hover:border-primary hover:text-foreground"
+                          }`}
+                          title={isMine ? "Ваша координата" : isOcc ? "Занято" : coord}
+                        >
+                          {pad2(min)}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Confirm panel */}
+                  {confirmCoord && (
+                    <div className="mt-4 p-3 rounded-lg border border-primary/40 bg-primary/5">
+                      <p className="text-sm font-mono text-foreground mb-1">
+                        Закрепить координату?
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono mb-3">
+                        {confirmCoord} · стоимость: <span className="text-primary font-bold">1 Д</span>
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setConfirmCoord(null)}
+                          disabled={anchoring}
+                        >
+                          Отмена
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => doAnchor(confirmCoord)}
+                          disabled={anchoring}
+                          className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                        >
+                          {anchoring ? "Бронируется…" : "Закрепить за родом"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Result */}
+                  {anchorResult && (
+                    <div className={`mt-3 flex items-center gap-2 p-3 rounded-lg border text-sm ${
+                      anchorResult.ok
+                        ? "border-green-500/40 bg-green-900/10 text-green-400"
+                        : "border-red-500/40 bg-red-900/10 text-red-400"
+                    }`}>
+                      {anchorResult.ok
+                        ? <CheckCircle className="w-4 h-4 shrink-0" />
+                        : <XCircle className="w-4 h-4 shrink-0" />}
+                      <span className="font-mono text-xs">{anchorResult.msg}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Coordinate list */}
         {isLoading ? (
@@ -173,7 +365,7 @@ export function Timeline() {
           </Card>
         )}
 
-        {!isLoading && coords.length === 0 && (
+        {!isLoading && coords.length === 0 && !selectedDay && (
           <div className="text-center py-12 text-muted-foreground font-mono text-sm">
             В этом месяце нет захваченных координат
           </div>
