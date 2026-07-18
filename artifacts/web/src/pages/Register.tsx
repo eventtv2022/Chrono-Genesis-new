@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserPlus, Clock, CheckCircle2, AlertCircle, Shield, Award, ExternalLink, Upload, Camera, Lock, BookOpen, PenLine } from "lucide-react";
 import { SignaturePad } from "@/components/SignaturePad";
+import { useLanguage } from "@/context/LanguageContext";
 
 const BASE_WEB = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 const MANIFESTO_URL = "https://issuu.com/timenation2025/docs/_timenatio";
@@ -19,6 +20,7 @@ type Mode = "form" | "pending" | "issued";
 interface PendingData { citizenNumber: string; availableAt: string; citizenId: number; citizenName: string; }
 
 export function Register() {
+  const { t } = useLanguage();
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   const [givenNames, setGivenNames] = useState("");
@@ -41,7 +43,7 @@ export function Register() {
   const [countdown, setCountdown] = useState(3600);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => { document.title = "Стать гражданином | TimeNation"; }, []);
+  useEffect(() => { document.title = `${t.nav_become_citizen} | TimeNation`; }, [t]);
 
   useEffect(() => {
     if (mode !== "pending" || !pendingData) return;
@@ -92,13 +94,13 @@ export function Register() {
 
       const res = await fetch("/api/citizens", { method: "POST", body: formData });
       const data = await res.json() as { id?: number; name?: string; citizenNumber?: string; availableAt?: string; error?: string; };
-      if (!res.ok) { setError(data.error ?? "Ошибка регистрации"); return; }
+      if (!res.ok) { setError(data.error ?? t.reg_error); return; }
       if (data.citizenNumber && data.availableAt) {
         setPendingData({ citizenNumber: data.citizenNumber, availableAt: data.availableAt, citizenId: data.id!, citizenName: data.name! });
         setMode("pending");
       }
     } catch {
-      setError("Ошибка соединения с сервером");
+      setError(t.connection_error);
     } finally {
       setLoading(false);
     }
@@ -112,29 +114,29 @@ export function Register() {
           <div className="flex items-center gap-3 p-5 bg-primary/10 border border-primary/30 rounded-sm">
             <Shield className="w-8 h-8 text-primary shrink-0" />
             <div>
-              <h2 className="font-bold text-xl">Верификация данных</h2>
-              <p className="text-muted-foreground font-mono text-sm mt-1">Ваши данные приняты. Инспекция займёт ровно 60 минут.</p>
+              <h2 className="font-bold text-xl">{t.reg_pending_title}</h2>
+              <p className="text-muted-foreground font-mono text-sm mt-1">{t.reg_pending_desc}</p>
             </div>
           </div>
           <Card className="bg-card border-border text-center">
             <CardContent className="p-8 space-y-2">
-              <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest">ОСТАЛОСЬ</p>
+              <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest">{t.reg_time_left}</p>
               <p className={`text-6xl font-mono font-bold tabular-nums tracking-widest ${countdown <= 0 ? "text-emerald-400" : "text-foreground"}`}>
                 {formatCountdown(countdown)}
               </p>
-              {countdown <= 0 && <p className="text-sm text-muted-foreground font-mono animate-pulse">Получаем паспорт…</p>}
+              {countdown <= 0 && <p className="text-sm text-muted-foreground font-mono animate-pulse">{t.reg_getting_passport}</p>}
             </CardContent>
           </Card>
           <Card className="bg-card border-border">
             <CardContent className="p-6 space-y-3">
-              <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">НОМЕР ГРАЖДАНИНА</p>
+              <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">{t.reg_citizen_number}</p>
               <p className="text-3xl font-mono font-bold text-primary tracking-widest">{pendingData.citizenNumber}</p>
-              <p className="text-xs text-muted-foreground font-mono">Сохраните этот номер — он ваш идентификатор в TimeNation</p>
+              <p className="text-xs text-muted-foreground font-mono">{t.reg_save_number}</p>
               <div className="pt-3 border-t border-border">
                 <p className="text-xs text-muted-foreground font-mono leading-relaxed">
-                  Закрыли вкладку? Документы всегда доступны по номеру на странице{" "}
+                  {t.reg_tab_closed}{" "}
                   <a href={`${BASE_WEB}/passport-lookup`} className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors">
-                    Реестр граждан
+                    {t.reg_citizen_registry}
                   </a>
                 </p>
               </div>
@@ -153,14 +155,14 @@ export function Register() {
           <div className="flex items-center gap-3 p-5 bg-emerald-500/10 border border-emerald-500/30 rounded-sm">
             <Award className="w-8 h-8 text-emerald-400 shrink-0" />
             <div>
-              <h2 className="font-bold text-xl">Паспорт выдан!</h2>
-              <p className="text-muted-foreground font-mono text-sm mt-1">Верификация завершена. Добро пожаловать в TimeNation.</p>
+              <h2 className="font-bold text-xl">{t.reg_issued_title}</h2>
+              <p className="text-muted-foreground font-mono text-sm mt-1">{t.reg_issued_desc}</p>
             </div>
           </div>
           <Card className="bg-card border-border">
             <CardContent className="p-6 space-y-4">
               <div>
-                <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">НОМЕР ГРАЖДАНИНА</p>
+                <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">{t.reg_citizen_number}</p>
                 <p className="text-3xl font-mono font-bold text-primary tracking-widest">{pendingData.citizenNumber}</p>
                 <p className="text-base font-medium mt-2">{pendingData.citizenName}</p>
               </div>
@@ -171,7 +173,7 @@ export function Register() {
                 className="flex items-center gap-2 w-full justify-center bg-emerald-500 hover:bg-emerald-600 text-white font-mono font-bold py-3 px-4 rounded-sm transition-colors"
               >
                 <ExternalLink className="w-4 h-4" />
-                Открыть ID-карту
+                {t.reg_open_id}
               </a>
               <a
                 href={`/api/citizens/number/${pendingData.citizenNumber}/passport`}
@@ -180,7 +182,7 @@ export function Register() {
                 className="flex items-center gap-2 w-full justify-center bg-muted/60 hover:bg-muted border border-border text-muted-foreground font-mono text-sm py-2.5 px-4 rounded-sm transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                Паспорт (классический формат)
+                {t.reg_open_passport}
               </a>
             </CardContent>
           </Card>
@@ -194,8 +196,8 @@ export function Register() {
     <Layout>
       <div className="max-w-lg space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Стать гражданином</h1>
-          <p className="text-muted-foreground font-mono text-sm mt-1">Каждый гражданин получает 1 Дармин — родовую минуту</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t.nav_become_citizen}</h1>
+          <p className="text-muted-foreground font-mono text-sm mt-1">{t.reg_subtitle}</p>
         </div>
 
         {/* ── Manifesto read banner ──────────────────────────────────────── */}
@@ -203,9 +205,9 @@ export function Register() {
           <div className="flex items-start gap-3">
             <BookOpen className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-sm">Перед подачей заявки ознакомьтесь с документом</p>
+              <p className="font-semibold text-sm">{t.reg_manifesto_title}</p>
               <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                Регистрация возможна только после прочтения основополагающего документа TimeNation.
+                {t.reg_manifesto_desc}
               </p>
             </div>
           </div>
@@ -216,53 +218,53 @@ export function Register() {
             className="flex items-center gap-2 w-full justify-center bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-mono font-semibold text-sm py-2.5 px-4 rounded-sm transition-colors"
           >
             <ExternalLink className="w-4 h-4" />
-            Открыть документ TimeNation (Issuu)
+            {t.reg_open_doc}
           </a>
         </div>
 
         <div className="flex items-start gap-3 p-4 bg-primary/5 border border-primary/20 rounded-sm">
           <Clock className="w-5 h-5 text-primary mt-0.5 shrink-0" />
           <div className="space-y-1 text-sm">
-            <p className="font-medium">1 Дармин = 1 родовая минута</p>
-            <p className="text-muted-foreground font-mono text-xs">Родовая минута неотчуждаема · Верификация 60 мин · Паспорт выдаётся автоматически</p>
+            <p className="font-medium">{t.reg_darmins_title}</p>
+            <p className="text-muted-foreground font-mono text-xs">{t.reg_darmins_desc}</p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit}>
           <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-base font-medium">Данные для паспорта ICAO Doc 9303</CardTitle>
+              <CardTitle className="text-base font-medium">{t.reg_passport_title}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Фамилия</Label>
-                  <Input value={surname} onChange={e => setSurname(e.target.value)} placeholder="Иванов" className="bg-secondary border-border font-mono" />
+                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">{t.reg_surname}</Label>
+                  <Input value={surname} onChange={e => setSurname(e.target.value)} placeholder={t.reg_surname_ph} className="bg-secondary border-border font-mono" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Имя и отчество</Label>
-                  <Input value={givenNames} onChange={e => setGivenNames(e.target.value)} placeholder="Иван Иванович" className="bg-secondary border-border font-mono" />
+                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">{t.reg_given_names}</Label>
+                  <Input value={givenNames} onChange={e => setGivenNames(e.target.value)} placeholder={t.reg_given_names_ph} className="bg-secondary border-border font-mono" />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Псевдоним / отображаемое имя</Label>
-                <Input value={name} onChange={e => setName(e.target.value)} placeholder="Если нет ФИО — укажите псевдоним" className="bg-secondary border-border font-mono" />
+                <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">{t.reg_nickname}</Label>
+                <Input value={name} onChange={e => setName(e.target.value)} placeholder={t.reg_nickname_ph} className="bg-secondary border-border font-mono" />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Дата рождения</Label>
-                <Input value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} placeholder="ГГГГ-ММ-ДД" className="bg-secondary border-border font-mono" />
+                <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">{t.reg_dob}</Label>
+                <Input value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} placeholder={t.reg_dob_ph} className="bg-secondary border-border font-mono" />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Номер телефона *</Label>
+                <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">{t.reg_phone}</Label>
                 <Input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+7XXXXXXXXXX" required className="bg-secondary border-border font-mono" />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">E-mail для получения паспорта</Label>
+                <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">{t.reg_email}</Label>
                 <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="example@timenation.com" className="bg-secondary border-border font-mono" />
               </div>
 
@@ -270,19 +272,19 @@ export function Register() {
               <div className="space-y-1.5">
                 <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                   <Camera className="w-3.5 h-3.5" />
-                  Фотография гражданина (для паспорта)
+                  {t.reg_photo}
                 </Label>
                 <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-border rounded-sm cursor-pointer bg-secondary hover:bg-secondary/80 transition-colors overflow-hidden">
                   {photoPreview ? (
                     <div className="relative w-full">
-                      <img src={photoPreview} alt="Предпросмотр" className="w-full h-48 object-cover" />
-                      <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs font-mono px-2 py-1 rounded">Нажмите для замены</div>
+                      <img src={photoPreview} alt={t.reg_upload_photo} className="w-full h-48 object-cover" />
+                      <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs font-mono px-2 py-1 rounded">{t.reg_click_replace}</div>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center py-8 gap-2">
                       <Upload className="w-8 h-8 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground font-mono"><span className="font-semibold">Загрузить фото анфас</span></p>
-                      <p className="text-xs text-muted-foreground font-mono">Светлый фон · JPG, PNG · до 5 МБ</p>
+                      <p className="text-sm text-muted-foreground font-mono"><span className="font-semibold">{t.reg_upload_photo}</span></p>
+                      <p className="text-xs text-muted-foreground font-mono">{t.reg_photo_hint}</p>
                     </div>
                   )}
                   <input id="passport_photo" name="passport_photo" type="file" className="hidden" accept="image/*" onChange={handlePhotoChange} />
@@ -293,11 +295,11 @@ export function Register() {
               <div className="space-y-1.5">
                 <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                   <PenLine className="w-3.5 h-3.5" />
-                  Подпись гражданина *
+                  {t.reg_signature}
                 </Label>
                 <SignaturePad onChange={setSignatureBase64} />
                 <p className="text-xs text-muted-foreground font-mono">
-                  {signatureBase64 ? "✓ Подпись поставлена" : "Распишитесь мышью или пальцем на планшете"}
+                  {signatureBase64 ? t.reg_signature_done : t.reg_signature_hint}
                 </p>
               </div>
 
@@ -317,11 +319,11 @@ export function Register() {
                       required
                     />
                     <label htmlFor="manifesto" className="text-xs text-muted-foreground font-mono leading-relaxed">
-                      Я ознакомлен с{" "}
+                      {t.reg_check_manifesto_link.split("TimeNation")[0]}
                       <a href={MANIFESTO_URL} target="_blank" rel="noopener noreferrer" className="text-amber-400 underline">
-                        основополагающим документом TimeNation
-                      </a>.
-                      {" "}Я понимаю принципы и правила цифрового государства.
+                        {t.reg_check_manifesto_link}
+                      </a>
+                      {". "}{t.reg_check_manifesto}
                     </label>
                   </div>
                 </div>
@@ -330,9 +332,8 @@ export function Register() {
                 <div className="flex items-start gap-3">
                   <input type="checkbox" id="tos" checked={tosAccepted} onChange={e => setTosAccepted(e.target.checked)} className="mt-0.5 accent-primary" />
                   <label htmlFor="tos" className="text-xs text-muted-foreground font-mono leading-relaxed">
-                    Я ознакомлен с{" "}
-                    <a href={`${BASE_WEB}/tos`} target="_blank" className="text-primary underline">Условиями использования</a>.
-                    {" "}Дармины — внутриигровые баллы, не являются денежными средствами.
+                    <a href={`${BASE_WEB}/tos`} target="_blank" className="text-primary underline">{t.reg_check_tos_link}</a>
+                    {". "}{t.reg_check_tos}
                   </label>
                 </div>
 
@@ -349,9 +350,7 @@ export function Register() {
                       required
                     />
                     <label htmlFor="privacy" className="text-xs text-muted-foreground font-mono leading-relaxed">
-                      Я даю согласие на обработку моих персональных данных (ФИО, email, фото) в целях выпуска цифрового удостоверения TimeNation.
-                      Данные хранятся в защищённой базе и не передаются третьим лицам.
-                      Вправе отозвать в любой момент (GDPR / 152-ФЗ).
+                      {t.reg_check_privacy}
                     </label>
                   </div>
                 </div>
@@ -369,24 +368,24 @@ export function Register() {
                 disabled={loading || !canSubmit}
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-mono font-bold disabled:opacity-40"
               >
-                {loading ? "Регистрация…" : (
+                {loading ? t.reg_submitting : (
                   <span className="flex items-center gap-2">
                     <UserPlus className="w-4 h-4" />
-                    Подать заявку на гражданство
+                    {t.reg_submit_btn}
                   </span>
                 )}
               </Button>
 
               {!canSubmit && (
                 <p className="text-center text-xs text-muted-foreground font-mono">
-                  {!signatureBase64 ? "Поставьте подпись, затем отметьте все три пункта" : "Отметьте все три пункта, чтобы продолжить"}
+                  {!signatureBase64 ? t.reg_hint_sign : t.reg_hint_check}
                 </p>
               )}
 
               <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-sm">
                 <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
                 <p className="text-xs text-muted-foreground font-mono">
-                  Паспорт выдаётся через 60 минут. Доступ к системе — немедленно.
+                  {t.reg_passport_note}
                 </p>
               </div>
             </CardContent>
