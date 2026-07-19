@@ -7,10 +7,10 @@ import { requireAuth, requireAdmin } from "../middleware/auth";
 const router = Router();
 
 // All admin routes require auth + admin role
-router.use("/api/admin", requireAuth, requireAdmin);
+router.use("/admin", requireAuth, requireAdmin);
 
-// GET /api/admin/stats — system overview
-router.get("/api/admin/stats", async (req, res) => {
+// GET /admin/stats — system overview
+router.get("/admin/stats", async (req, res) => {
   const [citizenStats] = await db
     .select({
       total: count(),
@@ -47,8 +47,8 @@ router.get("/api/admin/stats", async (req, res) => {
   });
 });
 
-// GET /api/admin/citizens — full citizen list with details
-router.get("/api/admin/citizens", async (req, res) => {
+// GET /admin/citizens — full citizen list with details
+router.get("/admin/citizens", async (req, res) => {
   const citizens = await db
     .select({
       id: citizensTable.id,
@@ -74,8 +74,8 @@ router.get("/api/admin/citizens", async (req, res) => {
   res.json(citizens);
 });
 
-// PATCH /api/admin/citizens/:id — update status or isAdmin flag
-router.patch("/api/admin/citizens/:id", async (req, res) => {
+// PATCH /admin/citizens/:id — update status or isAdmin flag
+router.patch("/admin/citizens/:id", async (req, res) => {
   const id = parseInt(req.params["id"] ?? "", 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Неверный ID" });
@@ -115,8 +115,8 @@ router.patch("/api/admin/citizens/:id", async (req, res) => {
   res.json({ ok: true, citizen: updated });
 });
 
-// GET /api/admin/transactions — recent transactions
-router.get("/api/admin/transactions", async (req, res) => {
+// GET /admin/transactions — recent transactions
+router.get("/admin/transactions", async (req, res) => {
   const limit = Math.min(parseInt(String(req.query["limit"] ?? "50"), 10), 200);
   const txs = await db
     .select({
@@ -136,8 +136,8 @@ router.get("/api/admin/transactions", async (req, res) => {
   res.json(txs);
 });
 
-// POST /api/admin/emit — manual Darmin emission to a citizen
-router.post("/api/admin/emit", async (req, res) => {
+// POST /admin/emit — manual Darmin emission to a citizen
+router.post("/admin/emit", async (req, res) => {
   const { citizenId, amount, description } = req.body as {
     citizenId?: number;
     amount?: number;
