@@ -1,0 +1,31 @@
+We need to perform a complete database and logs cleanup to a production-ready state, removing all test accounts and keeping ONLY our core real citizens, while also initializing their balances.
+
+CRITICAL PRE-REQUISITE (DO NOT SKIP):
+Before deleting anything, query the `citizens` table and output a clear list of the current login identifiers, usernames, and credentials for the 7 real citizens listed below. I must not lose access to these accounts.
+
+Once the credentials are safely displayed in the logs/chat, execute the following database, balance initialization, and Google Sheets purge:
+
+1. TARGET RETAINED CITIZENS:
+Keep ONLY these 7 real users in the database:
+- Gennadii Lerner (Creator / Administrator)
+- Olga Fedorova
+- Lev Lerner
+- Gleb Lerner
+- Roman Lerner
+- Fima Lerner
+- Oleg Dudin
+
+2. DATABASE PURGE & BALANCE INITIALIZATION (PostgreSQL via Drizzle):
+- Write and execute a script to delete all rows from the `citizens` table EXCEPT for the 7 real users listed above.
+- Cascadingly delete all related records from secondary tables (`transactions`, `sessions`, `timelineAnchors`, `socialAlarms`, `socialAlarmConsent`, `emissionLogs`, `auctions`, `auctionLogs`) that belong to the deleted test accounts.
+- **Balance Initialization:** Update the balance field in the `citizens` table for the remaining users:
+  * Set the balance for Gennadii Lerner (Creator) to precisely **60 Darmin** (for advanced ecosystem testing).
+  * Set the balance for the other 6 real citizens (Olga Fedorova, Lev Lerner, Gleb Lerner, Roman Lerner, Fima Lerner, Oleg Dudin) to precisely **1 ancestral Darmin (1 родовой Дармин)** each.
+- Ensure that the primary keys and foreign key constraints for the 7 remaining citizens remain completely intact and unbroken.
+
+3. GOOGLE SHEETS WIPE:
+- Use the Google Sheets API for spreadsheet ID `13PgzgxjZ60cZT5ATbDYyTLi01psHIYxRoTOJY-CWNw4`.
+- For all active logging sheets (e.g., "Транзакции", "Таймлайн", "Граждане", "Transactions", "TimelineAnchors"), clear all rows EXCEPT for the first header row. 
+- This will wipe out old test historical entries so that new logs start fresh and align perfectly with our clean PostgreSQL database.
+
+Verify system stability after execution and confirm that the balances are correctly applied.
