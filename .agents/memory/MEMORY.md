@@ -2,3 +2,4 @@
 - [TimeNation roadmap phases](timenation-roadmap.md) — Дармин=Минута, EmissionGatekeeper, Посольства, Аукционы, Compliance — реализованы
 - [Decimal Darmins migration](decimal-darmins.md) — все балансы/суммы переведены на real (дробные), налог exact * 0.02
 - [Social Alarm feature](social-alarm.md) — WS на /api/ws, citizenId-only auth (no token), mobile i18n отдельный файл lib/i18n.ts
+- [PK reassignment pattern](pk-reassign.md) — единственный надёжный способ сменить PK в PostgreSQL без deferrable constraints

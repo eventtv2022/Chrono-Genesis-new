@@ -86,7 +86,7 @@ export function Citizens() {
                     key={citizen.id}
                     className="flex items-center px-6 py-3 hover:bg-secondary/30 transition-colors"
                   >
-                    <span className="w-8 text-xs font-mono text-muted-foreground">{idx + 1}</span>
+                    <span className="w-8 text-xs font-mono text-muted-foreground">#{citizen.id}</span>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">{citizen.name}</div>
                     </div>

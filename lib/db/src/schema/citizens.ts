@@ -60,6 +60,9 @@ export const citizensTable = pgTable("citizens", {
 
   // ── Social Alarm ───────────────────────────────────────────────────────────
   socialAlarmConsent: integer("social_alarm_consent").notNull().default(0), // 1 = разрешено
+
+  // ── Admin flag ─────────────────────────────────────────────────────────────
+  isAdmin: integer("is_admin").notNull().default(0), // 1 = системный администратор
 });
 
 export const insertCitizenSchema = createInsertSchema(citizensTable).omit({

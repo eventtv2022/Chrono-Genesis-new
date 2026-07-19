@@ -11,6 +11,18 @@ declare global {
   }
 }
 
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (!req.citizen) {
+    res.status(401).json({ error: "Требуется авторизация" });
+    return;
+  }
+  if (req.citizen.isAdmin !== 1) {
+    res.status(403).json({ error: "Доступ запрещён — требуются права администратора" });
+    return;
+  }
+  next();
+}
+
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers["authorization"];
   if (!authHeader || !authHeader.startsWith("Bearer ")) {

@@ -18,12 +18,14 @@ import governmentRouter from "./government";
 import reviewsRouter from "./reviews";
 import telegramRouter from "./telegram";
 import socialAlarmRouter from "./socialAlarm";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
 router.use(socialAlarmRouter);
+router.use(adminRouter);
 router.use(citizensRouter);
 router.use(sessionsRouter);
 router.use(transactionsRouter);

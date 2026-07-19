@@ -17,6 +17,7 @@ import { LaborDashboard } from "./pages/LaborDashboard";
 import { Time } from "./pages/Time";
 import { Clock } from "./pages/Clock";
 import { ResetPassword } from "./pages/ResetPassword";
+import { Admin } from "./pages/Admin";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/clock" component={Clock} />
       <Route path="/government/labor-dashboard" component={LaborDashboard} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X } from "lucide-react";
+import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X, ShieldCheck } from "lucide-react";
 import { SystemClock } from "./SystemClock";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -147,6 +147,7 @@ function CitizenWidget() {
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { t } = useLanguage();
+  const { citizen } = useCitizen();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navItems = [
@@ -159,6 +160,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/passport-lookup", label: t.nav_passport,  icon: Search    },
     { href: "/time",      label: t.nav_time,            icon: Clock     },
     { href: "/clock",     label: t.nav_clock,           icon: Globe     },
+    ...(citizen && (citizen as { isAdmin?: number }).isAdmin === 1
+      ? [{ href: "/admin", label: "Администратор", icon: ShieldCheck }]
+      : []),
   ];
 
   return (
