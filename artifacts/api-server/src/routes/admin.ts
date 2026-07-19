@@ -1,21 +1,107 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { citizensTable, sessionsTable, transactionsTable, auctionsTable, emissionLogsTable } from "@workspace/db";
-import { eq, desc, count, sum } from "drizzle-orm";
+import {
+  citizensTable,
+  sessionsTable,
+  transactionsTable,
+  auctionsTable,
+  emissionLogsTable,
+} from "@workspace/db";
+import { eq, desc, count, sum, gte, sql, and } from "drizzle-orm";
+import nodemailer from "nodemailer";
 import { requireAuth, requireAdmin } from "../middleware/auth";
+import { applyMeritAfterSession } from "../services/meritocracyService";
+import { sendTransactionNotification } from "../services/telegramService";
 
 const router = Router();
 
-// All admin routes require auth + admin role
+// ── OTP store (in-memory, TTL 5 min) ─────────────────────────────────────────
+interface OtpRecord {
+  otp: string;
+  expiresAt: number;
+  pendingAmount: number;
+  pendingCitizenId: number;
+  pendingDescription: string;
+}
+const otpStore = new Map<number, OtpRecord>();
+
+// ── Email transport ───────────────────────────────────────────────────────────
+function getTransporter() {
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env["CATCAST_EMAIL"],
+      pass: process.env["CATCAST_PASSWORD"],
+    },
+  });
+}
+
+async function sendOtpEmail(otp: string, amount: number): Promise<boolean> {
+  try {
+    const transporter = getTransporter();
+    await transporter.sendMail({
+      from: `TimeNation Admin <${process.env["CATCAST_EMAIL"]}>`,
+      to: "eventtrnc@gmail.com",
+      subject: `[TimeNation] Код подтверждения эмиссии: ${otp}`,
+      html: `
+        <div style="font-family:monospace;background:#0a0a0a;color:#e0e0e0;padding:32px;border-radius:8px;max-width:480px">
+          <h2 style="color:#f59e0b;margin:0 0 16px">TimeNation — Подтверждение эмиссии</h2>
+          <p style="color:#9ca3af;margin:0 0 8px">Сумма: <strong style="color:#fff">${amount} Д</strong></p>
+          <p style="margin:0 0 24px;color:#9ca3af">Ваш одноразовый код (действует 5 минут):</p>
+          <div style="font-size:36px;letter-spacing:12px;font-weight:bold;color:#f59e0b;background:#1a1a1a;padding:20px;border-radius:6px;text-align:center">${otp}</div>
+          <p style="color:#6b7280;font-size:12px;margin:24px 0 0">Если вы не запрашивали этот код — игнорируйте письмо.</p>
+        </div>`,
+    });
+    return true;
+  } catch (err) {
+    // Log OTP as fallback (visible in Replit workflow logs)
+    console.error("[Admin OTP] Email failed:", err);
+    console.warn(`[Admin OTP] CODE FOR AMOUNT=${amount}Д → ${otp}`);
+    return false;
+  }
+}
+
+// ── Daily emission cap ────────────────────────────────────────────────────────
+export const ADMIN_DAILY_EMISSION_CAP = 1440;
+
+async function getAdminDailyEmitted(): Promise<number> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [row] = await db
+    .select({ total: sum(emissionLogsTable.amount) })
+    .from(emissionLogsTable)
+    .where(
+      and(
+        eq(emissionLogsTable.isApproved, true),
+        gte(emissionLogsTable.createdAt, since),
+        sql`${emissionLogsTable.reason} LIKE '%Административная эмиссия%' OR ${emissionLogsTable.reason} LIKE '%admin_emit%'`
+      )
+    );
+  return Number(row?.total ?? 0);
+}
+
+// ── Public endpoint ───────────────────────────────────────────────────────────
+
+// GET /supply — total circulating supply (public, for Treasury page)
+router.get("/supply", async (_req, res) => {
+  const [row] = await db
+    .select({ total: sum(citizensTable.balanceMinutes) })
+    .from(citizensTable);
+  const emitted24h = await getAdminDailyEmitted();
+  res.json({
+    totalSupply: Number(row?.total ?? 0),
+    emitted24h,
+    remainingCap: Math.max(0, ADMIN_DAILY_EMISSION_CAP - emitted24h),
+    dailyCap: ADMIN_DAILY_EMISSION_CAP,
+  });
+});
+
+// ── All routes below require auth + admin ─────────────────────────────────────
 router.use("/admin", requireAuth, requireAdmin);
 
-// GET /admin/stats — system overview
+// GET /admin/stats
 router.get("/admin/stats", async (req, res) => {
   const [citizenStats] = await db
-    .select({
-      total: count(),
-      totalBalance: sum(citizensTable.balanceMinutes),
-    })
+    .select({ total: count(), totalBalance: sum(citizensTable.balanceMinutes) })
     .from(citizensTable);
 
   const [sessionStats] = await db
@@ -23,31 +109,29 @@ router.get("/admin/stats", async (req, res) => {
     .from(sessionsTable);
 
   const [txStats] = await db
-    .select({
-      total: count(),
-      totalVolume: sum(transactionsTable.minutesTransferred),
-    })
+    .select({ total: count(), totalVolume: sum(transactionsTable.minutesTransferred) })
     .from(transactionsTable);
 
   const [auctionStats] = await db
     .select({ total: count() })
     .from(auctionsTable);
 
+  const emitted24h = await getAdminDailyEmitted();
+
   res.json({
-    citizens: {
-      total: citizenStats?.total ?? 0,
-      totalBalance: citizenStats?.totalBalance ?? 0,
-    },
+    citizens: { total: citizenStats?.total ?? 0, totalBalance: citizenStats?.totalBalance ?? 0 },
     sessions: { total: sessionStats?.total ?? 0 },
-    transactions: {
-      total: txStats?.total ?? 0,
-      totalVolume: txStats?.totalVolume ?? 0,
-    },
+    transactions: { total: txStats?.total ?? 0, totalVolume: txStats?.totalVolume ?? 0 },
     auctions: { total: auctionStats?.total ?? 0 },
+    emission: {
+      emitted24h,
+      remainingCap: Math.max(0, ADMIN_DAILY_EMISSION_CAP - emitted24h),
+      dailyCap: ADMIN_DAILY_EMISSION_CAP,
+    },
   });
 });
 
-// GET /admin/citizens — full citizen list with details
+// GET /admin/citizens
 router.get("/admin/citizens", async (req, res) => {
   const citizens = await db
     .select({
@@ -70,25 +154,17 @@ router.get("/admin/citizens", async (req, res) => {
     })
     .from(citizensTable)
     .orderBy(citizensTable.id);
-
   res.json(citizens);
 });
 
-// PATCH /admin/citizens/:id — update status or isAdmin flag
+// PATCH /admin/citizens/:id
 router.patch("/admin/citizens/:id", async (req, res) => {
   const id = parseInt(req.params["id"] ?? "", 10);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Неверный ID" });
-    return;
-  }
+  if (isNaN(id)) { res.status(400).json({ error: "Неверный ID" }); return; }
 
   const { status, isAdmin, rank, meritScore } = req.body as {
-    status?: string;
-    isAdmin?: number;
-    rank?: string;
-    meritScore?: number;
+    status?: string; isAdmin?: number; rank?: string; meritScore?: number;
   };
-
   const updates: Partial<typeof citizensTable.$inferInsert> = {};
   if (status !== undefined) updates.status = status;
   if (isAdmin !== undefined) updates.isAdmin = isAdmin;
@@ -96,8 +172,7 @@ router.patch("/admin/citizens/:id", async (req, res) => {
   if (meritScore !== undefined) updates.meritScore = meritScore;
 
   if (Object.keys(updates).length === 0) {
-    res.status(400).json({ error: "Нет полей для обновления" });
-    return;
+    res.status(400).json({ error: "Нет полей для обновления" }); return;
   }
 
   const [updated] = await db
@@ -106,16 +181,13 @@ router.patch("/admin/citizens/:id", async (req, res) => {
     .where(eq(citizensTable.id, id))
     .returning({ id: citizensTable.id, name: citizensTable.name });
 
-  if (!updated) {
-    res.status(404).json({ error: "Гражданин не найден" });
-    return;
-  }
+  if (!updated) { res.status(404).json({ error: "Гражданин не найден" }); return; }
 
   req.log.info({ adminId: req.citizen!.id, targetId: id, updates }, "admin citizen update");
   res.json({ ok: true, citizen: updated });
 });
 
-// GET /admin/transactions — recent transactions
+// GET /admin/transactions
 router.get("/admin/transactions", async (req, res) => {
   const limit = Math.min(parseInt(String(req.query["limit"] ?? "50"), 10), 200);
   const txs = await db
@@ -132,53 +204,215 @@ router.get("/admin/transactions", async (req, res) => {
     .from(transactionsTable)
     .orderBy(desc(transactionsTable.createdAt))
     .limit(limit);
-
   res.json(txs);
 });
 
-// POST /admin/emit — manual Darmin emission to a citizen
-router.post("/admin/emit", async (req, res) => {
+// POST /admin/emit/request-otp — step 1: generate OTP and email it
+router.post("/admin/emit/request-otp", async (req, res) => {
   const { citizenId, amount, description } = req.body as {
-    citizenId?: number;
-    amount?: number;
-    description?: string;
+    citizenId?: number; amount?: number; description?: string;
   };
 
   if (!citizenId || !amount || amount <= 0) {
-    res.status(400).json({ error: "Требуются citizenId и amount > 0" });
+    res.status(400).json({ error: "Требуются citizenId и amount > 0" }); return;
+  }
+
+  // Check daily cap
+  const emitted24h = await getAdminDailyEmitted();
+  const remaining = ADMIN_DAILY_EMISSION_CAP - emitted24h;
+  if (amount > remaining) {
+    res.status(400).json({
+      error: `Превышен суточный лимит эмиссии (Макс: 1440 Д). Осталось: ${remaining.toFixed(2)} Д`,
+    });
+    return;
+  }
+
+  // Check recipient exists
+  const [recipient] = await db
+    .select({ id: citizensTable.id, name: citizensTable.name })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, citizenId))
+    .limit(1);
+  if (!recipient) { res.status(404).json({ error: "Гражданин не найден" }); return; }
+
+  // Generate 6-digit OTP
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 min
+
+  otpStore.set(req.citizen!.id, {
+    otp,
+    expiresAt,
+    pendingAmount: amount,
+    pendingCitizenId: citizenId,
+    pendingDescription: description ?? "",
+  });
+
+  const emailSent = await sendOtpEmail(otp, amount);
+
+  req.log.info({ adminId: req.citizen!.id, citizenId, amount, emailSent }, "emit OTP requested");
+
+  res.json({
+    ok: true,
+    emailSent,
+    message: emailSent
+      ? "Код отправлен на eventtrnc@gmail.com"
+      : "Email не отправлен (проверьте логи сервера). Код записан в лог.",
+    recipient: recipient.name,
+  });
+});
+
+// POST /admin/emit — step 2: verify OTP and execute emission
+router.post("/admin/emit", async (req, res) => {
+  const { otp } = req.body as { otp?: string };
+  if (!otp) { res.status(400).json({ error: "Требуется код подтверждения" }); return; }
+
+  const record = otpStore.get(req.citizen!.id);
+  if (!record) {
+    res.status(400).json({ error: "Нет активного запроса OTP. Запросите код заново." }); return;
+  }
+  if (Date.now() > record.expiresAt) {
+    otpStore.delete(req.citizen!.id);
+    res.status(400).json({ error: "Код истёк. Запросите новый." }); return;
+  }
+  if (record.otp !== otp.trim()) {
+    res.status(400).json({ error: "Неверный код подтверждения." }); return;
+  }
+
+  // Re-check daily cap (time may have passed)
+  const emitted24h = await getAdminDailyEmitted();
+  const remaining = ADMIN_DAILY_EMISSION_CAP - emitted24h;
+  if (record.pendingAmount > remaining) {
+    otpStore.delete(req.citizen!.id);
+    res.status(400).json({
+      error: `Превышен суточный лимит эмиссии (Макс: 1440 Д). Осталось: ${remaining.toFixed(2)} Д`,
+    });
     return;
   }
 
   const [citizen] = await db
     .select({ id: citizensTable.id, balanceMinutes: citizensTable.balanceMinutes })
     .from(citizensTable)
-    .where(eq(citizensTable.id, citizenId))
+    .where(eq(citizensTable.id, record.pendingCitizenId))
     .limit(1);
-
   if (!citizen) {
-    res.status(404).json({ error: "Гражданин не найден" });
-    return;
+    otpStore.delete(req.citizen!.id);
+    res.status(404).json({ error: "Гражданин-получатель не найден" }); return;
   }
 
-  const newBalance = citizen.balanceMinutes + amount;
+  const newBalance = citizen.balanceMinutes + record.pendingAmount;
 
   await db.transaction(async (tx) => {
     await tx
       .update(citizensTable)
       .set({ balanceMinutes: newBalance })
-      .where(eq(citizensTable.id, citizenId));
-
+      .where(eq(citizensTable.id, record.pendingCitizenId));
     await tx.insert(emissionLogsTable).values({
-      citizenId,
-      amount,
-      reason: description ?? `Административная эмиссия от #${req.citizen!.id}`,
-      dailyTotal: amount,
+      citizenId: record.pendingCitizenId,
+      amount: record.pendingAmount,
+      reason: record.pendingDescription || `Административная эмиссия от #${req.citizen!.id}`,
+      dailyTotal: emitted24h + record.pendingAmount,
       isApproved: true,
     });
   });
 
-  req.log.info({ adminId: req.citizen!.id, citizenId, amount }, "admin manual emit");
-  res.json({ ok: true, newBalance });
+  otpStore.delete(req.citizen!.id);
+
+  req.log.info(
+    { adminId: req.citizen!.id, citizenId: record.pendingCitizenId, amount: record.pendingAmount },
+    "admin emission executed"
+  );
+
+  res.json({ ok: true, newBalance, amount: record.pendingAmount });
+});
+
+// POST /admin/transfer — direct personal transfer from admin's balance
+router.post("/admin/transfer", async (req, res) => {
+  const { citizenId, amount, description } = req.body as {
+    citizenId?: number; amount?: number; description?: string;
+  };
+
+  if (!citizenId || !amount || amount <= 0) {
+    res.status(400).json({ error: "Требуются citizenId и amount > 0" }); return;
+  }
+
+  const adminId = req.citizen!.id;
+  if (citizenId === adminId) {
+    res.status(400).json({ error: "Нельзя перевести самому себе" }); return;
+  }
+
+  // Re-fetch admin's current balance
+  const [admin] = await db
+    .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, adminId))
+    .limit(1);
+
+  if (!admin) { res.status(404).json({ error: "Администратор не найден" }); return; }
+
+  // Keep 1 Д rodovaya minuta
+  const transferable = admin.balanceMinutes - 1;
+  if (amount > transferable) {
+    res.status(400).json({
+      error: `Недостаточно Дарминов. Доступно к переводу: ${transferable.toFixed(2)} Д (1 Д — родовая минута)`,
+    });
+    return;
+  }
+
+  const [recipient] = await db
+    .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes, totalReceived: citizensTable.totalReceived })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, citizenId))
+    .limit(1);
+
+  if (!recipient) { res.status(404).json({ error: "Гражданин не найден" }); return; }
+
+  // Admin direct transfer: no treasury tax (admin IS the treasury)
+  await db.transaction(async (tx) => {
+    await tx
+      .update(citizensTable)
+      .set({
+        balanceMinutes: admin.balanceMinutes - amount,
+        totalGiven: sql`${citizensTable.totalGiven} + ${amount}`,
+      })
+      .where(eq(citizensTable.id, adminId));
+
+    await tx
+      .update(citizensTable)
+      .set({
+        balanceMinutes: recipient.balanceMinutes + amount,
+        totalReceived: sql`${citizensTable.totalReceived} + ${amount}`,
+      })
+      .where(eq(citizensTable.id, citizenId));
+
+    await tx.insert(transactionsTable).values({
+      sessionId: 0,
+      fromCitizenId: adminId,
+      toCitizenId: citizenId,
+      fromCitizenName: admin.name,
+      toCitizenName: recipient.name,
+      minutesTransferred: amount,
+      durationSeconds: 0,
+    });
+  });
+
+  // Apply merit to admin
+  await applyMeritAfterSession(adminId, amount).catch(() => null);
+
+  // Telegram notifications
+  const desc = description ? ` · ${description}` : "";
+  await Promise.all([
+    sendTransactionNotification(
+      adminId,
+      `🏛 *Казначейство TimeNation*\n\nЛичный перевод *${amount.toFixed(2)} Д* → *${recipient.name}*${desc}`
+    ),
+    sendTransactionNotification(
+      citizenId,
+      `🏛 *Казначейство TimeNation*\n\nПолучено *${amount.toFixed(2)} Д* от *${admin.name}* (Администратор)${desc}\n\n💰 Ваш баланс: *${(recipient.balanceMinutes + amount).toFixed(2)} Д*`
+    ),
+  ]).catch(() => null);
+
+  req.log.info({ adminId, citizenId, amount }, "admin direct transfer");
+  res.json({ ok: true, newAdminBalance: admin.balanceMinutes - amount });
 });
 
 export default router;

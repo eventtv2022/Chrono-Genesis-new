@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AlertCircle, ShoppingBag, Tag, Zap } from "lucide-react";
 import { useCitizen } from "@/context/CitizenContext";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 // ── Discount tiers (mirrors server-side logic) ─────────────────────────────────
@@ -44,12 +44,24 @@ const TIERS = [
   { label: "свыше 10 000 Д",from: 10001, discount: 10 },
 ];
 
+interface SupplyData {
+  totalSupply: number;
+  emitted24h: number;
+  remainingCap: number;
+  dailyCap: number;
+}
+
 export function Shop() {
   const { citizen } = useCitizen();
   const { toast } = useToast();
   const [amountStr, setAmountStr] = useState("100");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [supply, setSupply] = useState<SupplyData | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/supply").then(r => r.json()).then(setSupply).catch(() => null);
+  }, []);
 
   const amount = useMemo(() => {
     const n = parseInt(amountStr, 10);
@@ -102,6 +114,23 @@ export function Shop() {
             Пополнение баланса Дарминов · 1 Д = 1 € базовая цена
           </p>
         </div>
+
+        {/* Total Supply */}
+        {supply && (
+          <div className="flex flex-wrap gap-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-sm">
+            <div>
+              <div className="text-[10px] font-mono text-amber-300/70 uppercase tracking-widest">Общий объём валюты (Total Supply)</div>
+              <div className="text-2xl font-bold font-mono text-amber-300">
+                {supply.totalSupply.toFixed(2)} Д
+              </div>
+            </div>
+            <div className="border-l border-amber-500/30 pl-4">
+              <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Эмиссия за 24ч</div>
+              <div className="text-sm font-mono">{supply.emitted24h.toFixed(2)} / {supply.dailyCap} Д</div>
+              <div className="text-[10px] font-mono text-muted-foreground">лимит: 1440 Д/сутки</div>
+            </div>
+          </div>
+        )}
 
         {status === "success" && (
           <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-sm text-emerald-300 text-sm font-mono">
