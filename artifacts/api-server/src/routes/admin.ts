@@ -8,10 +8,9 @@ import {
   emissionLogsTable,
 } from "@workspace/db";
 import { eq, desc, count, sum, gte, sql, and } from "drizzle-orm";
-import nodemailer from "nodemailer";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { applyMeritAfterSession } from "../services/meritocracyService";
-import { sendTransactionNotification } from "../services/telegramService";
+import { sendTransactionNotification, sendDirectMessage } from "../services/telegramService";
 
 const router = Router();
 
@@ -25,40 +24,24 @@ interface OtpRecord {
 }
 const otpStore = new Map<number, OtpRecord>();
 
-// ── Email transport ───────────────────────────────────────────────────────────
-function getTransporter() {
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env["CATCAST_EMAIL"],
-      pass: process.env["CATCAST_PASSWORD"],
-    },
-  });
-}
-
-async function sendOtpEmail(otp: string, amount: number): Promise<boolean> {
-  try {
-    const transporter = getTransporter();
-    await transporter.sendMail({
-      from: `TimeNation Admin <${process.env["CATCAST_EMAIL"]}>`,
-      to: "eventtrnc@gmail.com",
-      subject: `[TimeNation] Код подтверждения эмиссии: ${otp}`,
-      html: `
-        <div style="font-family:monospace;background:#0a0a0a;color:#e0e0e0;padding:32px;border-radius:8px;max-width:480px">
-          <h2 style="color:#f59e0b;margin:0 0 16px">TimeNation — Подтверждение эмиссии</h2>
-          <p style="color:#9ca3af;margin:0 0 8px">Сумма: <strong style="color:#fff">${amount} Д</strong></p>
-          <p style="margin:0 0 24px;color:#9ca3af">Ваш одноразовый код (действует 5 минут):</p>
-          <div style="font-size:36px;letter-spacing:12px;font-weight:bold;color:#f59e0b;background:#1a1a1a;padding:20px;border-radius:6px;text-align:center">${otp}</div>
-          <p style="color:#6b7280;font-size:12px;margin:24px 0 0">Если вы не запрашивали этот код — игнорируйте письмо.</p>
-        </div>`,
-    });
-    return true;
-  } catch (err) {
-    // Log OTP as fallback (visible in Replit workflow logs)
-    console.error("[Admin OTP] Email failed:", err);
-    console.warn(`[Admin OTP] CODE FOR AMOUNT=${amount}Д → ${otp}`);
-    return false;
+// ── Telegram OTP delivery ─────────────────────────────────────────────────────
+async function sendOtpViaTelegram(
+  adminTelegramId: string,
+  otp: string,
+  amount: number
+): Promise<boolean> {
+  const msg =
+    `🔐 *TimeNation — Подтверждение эмиссии*\n\n` +
+    `Сумма: *${amount} Д*\n\n` +
+    `Ваш код (действует 5 минут):\n` +
+    `\`${otp}\`\n\n` +
+    `_Если вы не запрашивали этот код — проигнорируйте._`;
+  const sent = await sendDirectMessage(adminTelegramId, msg);
+  if (!sent) {
+    // Fallback: log so admin can find it in Replit workflow logs
+    console.warn(`[Admin OTP] Telegram unavailable. CODE=${otp} AMOUNT=${amount}Д`);
   }
+  return sent;
 }
 
 // ── Daily emission cap ────────────────────────────────────────────────────────
@@ -235,6 +218,15 @@ router.post("/admin/emit/request-otp", async (req, res) => {
     .limit(1);
   if (!recipient) { res.status(404).json({ error: "Гражданин не найден" }); return; }
 
+  // Look up admin's Telegram ID from DB
+  const [adminRow] = await db
+    .select({ telegramId: citizensTable.telegramId })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, req.citizen!.id))
+    .limit(1);
+
+  const adminTelegramId = adminRow?.telegramId ?? "";
+
   // Generate 6-digit OTP
   const otp = String(Math.floor(100000 + Math.random() * 900000));
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 min
@@ -247,16 +239,19 @@ router.post("/admin/emit/request-otp", async (req, res) => {
     pendingDescription: description ?? "",
   });
 
-  const emailSent = await sendOtpEmail(otp, amount);
+  const tgSent = await sendOtpViaTelegram(adminTelegramId, otp, amount);
 
-  req.log.info({ adminId: req.citizen!.id, citizenId, amount, emailSent }, "emit OTP requested");
+  req.log.info({ adminId: req.citizen!.id, citizenId, amount, tgSent }, "emit OTP requested");
 
   res.json({
     ok: true,
-    emailSent,
-    message: emailSent
-      ? "Код отправлен на eventtrnc@gmail.com"
-      : "Email не отправлен (проверьте логи сервера). Код записан в лог.",
+    tgSent,
+    hasTelegram: !!adminTelegramId,
+    message: tgSent
+      ? "Код отправлен в Telegram"
+      : adminTelegramId
+        ? "Ошибка отправки в Telegram (проверьте логи сервера). Код записан в лог."
+        : "Telegram не привязан. Код записан в логи сервера (workflow logs).",
     recipient: recipient.name,
   });
 });

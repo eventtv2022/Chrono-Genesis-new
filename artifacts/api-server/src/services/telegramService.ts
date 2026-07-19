@@ -249,6 +249,20 @@ export function initBot(token: string): Telegraf {
   return bot;
 }
 
+export async function sendDirectMessage(
+  telegramId: string,
+  message: string
+): Promise<boolean> {
+  if (!bot || !telegramId) return false;
+  try {
+    await bot.telegram.sendMessage(telegramId, message, { parse_mode: "Markdown" });
+    return true;
+  } catch (err) {
+    logger.error({ err, telegramId }, "sendDirectMessage failed");
+    return false;
+  }
+}
+
 export async function sendTransactionNotification(
   citizenId: number,
   message: string

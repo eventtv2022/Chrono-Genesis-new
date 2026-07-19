@@ -71,7 +71,7 @@ function OtpEmitModal({ onClose, onSuccess, authHeaders }: OtpModalProps) {
           description: description || undefined,
         }),
       });
-      const data = await res.json() as { ok?: boolean; error?: string; message?: string; recipient?: string; emailSent?: boolean };
+      const data = await res.json() as { ok?: boolean; error?: string; message?: string; recipient?: string; tgSent?: boolean; hasTelegram?: boolean };
       if (!res.ok) { setError(data.error ?? "Ошибка"); }
       else {
         setEmailNote(data.message ?? null);
@@ -127,15 +127,15 @@ function OtpEmitModal({ onClose, onSuccess, authHeaders }: OtpModalProps) {
             <button type="submit" disabled={loading} className="w-full bg-amber-500/90 hover:bg-amber-500 text-black rounded-sm py-2 text-sm font-mono font-bold transition-colors disabled:opacity-50">
               {loading ? "Отправляю код…" : "Получить код подтверждения →"}
             </button>
-            <p className="text-[10px] text-muted-foreground font-mono text-center">Код будет отправлен на eventtrnc@gmail.com</p>
+            <p className="text-[10px] text-muted-foreground font-mono text-center">Код будет отправлен в Telegram</p>
           </form>
         ) : (
           <form onSubmit={(e) => void handleVerifyOtp(e)} className="p-5 space-y-4">
             {emailNote && (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-sm text-xs font-mono text-emerald-300">{emailNote}</div>
+              <div className={`p-3 rounded-sm text-xs font-mono border ${emailNote?.startsWith("Код отправлен") ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" : "bg-amber-500/10 border-amber-500/30 text-amber-300"}`}>{emailNote}</div>
             )}
             <div>
-              <label className="text-xs font-mono text-muted-foreground uppercase tracking-widest block mb-2">Введите 6-значный код из письма</label>
+              <label className="text-xs font-mono text-muted-foreground uppercase tracking-widest block mb-2">Введите 6-значный код из Telegram</label>
               <Input
                 value={otp}
                 onChange={e => setOtp(e.target.value)}
