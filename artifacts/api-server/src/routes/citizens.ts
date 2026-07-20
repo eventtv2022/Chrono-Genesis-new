@@ -369,6 +369,7 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
       dateOfBirth: dateOfBirth || null,
       photoUrl: vaultPhotoRef,
       citizenNumber,
+      balanceMinutes: 60,
       registrationStatus: "pending",
       availableAt,
       tosAcceptedAt: tosAcceptedAt ? new Date(tosAcceptedAt) : undefined,
