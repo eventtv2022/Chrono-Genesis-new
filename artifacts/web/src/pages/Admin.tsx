@@ -48,7 +48,7 @@ interface OtpModalProps {
   authHeaders: Record<string, string>;
 }
 function OtpEmitModal({ onClose, onSuccess, authHeaders }: OtpModalProps) {
-  const [step, setStep] = useState<"form" | "otp">("form");
+  const [step, setStep] = useState<"form" | "otp" | "success">("form");
   const [citizenId, setCitizenId] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -56,6 +56,7 @@ function OtpEmitModal({ onClose, onSuccess, authHeaders }: OtpModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailNote, setEmailNote] = useState<string | null>(null);
+  const [successAmount, setSuccessAmount] = useState(0);
 
   async function handleRequestOtp(e: React.FormEvent) {
     e.preventDefault();
@@ -93,7 +94,11 @@ function OtpEmitModal({ onClose, onSuccess, authHeaders }: OtpModalProps) {
       });
       const data = await res.json() as { ok?: boolean; error?: string; newBalance?: number; amount?: number };
       if (!res.ok) { setError(data.error ?? "Ошибка"); }
-      else { onSuccess(data.newBalance ?? 0, data.amount ?? 0); }
+      else {
+        setSuccessAmount(data.amount ?? 0);
+        setStep("success");
+        onSuccess(data.newBalance ?? 0, data.amount ?? 0);
+      }
     } catch { setError("Ошибка соединения"); }
     setLoading(false);
   }
@@ -109,7 +114,19 @@ function OtpEmitModal({ onClose, onSuccess, authHeaders }: OtpModalProps) {
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
         </div>
 
-        {step === "form" ? (
+        {step === "success" ? (
+          <div className="p-6 space-y-5 text-center">
+            <div className="text-5xl">✅</div>
+            <div>
+              <div className="text-xl font-bold font-mono text-emerald-400">Эмиссия выполнена</div>
+              <div className="text-sm font-mono text-muted-foreground mt-1">+ {successAmount} Д добавлено в оборот</div>
+            </div>
+            <p className="text-xs text-muted-foreground font-mono">Суточный лимит и Total Supply обновлены</p>
+            <button onClick={onClose} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-sm py-2 text-sm font-mono font-bold transition-colors">
+              Закрыть
+            </button>
+          </div>
+        ) : step === "form" ? (
           <form onSubmit={(e) => void handleRequestOtp(e)} className="p-5 space-y-4">
             <div>
               <label className="text-xs font-mono text-muted-foreground uppercase tracking-widest block mb-1">ID гражданина-получателя</label>
@@ -296,11 +313,12 @@ export function Admin() {
         <OtpEmitModal
           authHeaders={authHeaders}
           onClose={() => setShowEmitModal(false)}
-          onSuccess={(_newBal, amount) => {
-            setShowEmitModal(false);
+          onSuccess={(_newBal, _amount) => {
+            // modal shows success screen itself — just refresh data in background
             loadData();
             void refreshCitizen();
-            alert(`✓ Эмиссия ${amount} Д выполнена успешно.`);
+            // second refresh after short delay to ensure DB write is visible
+            setTimeout(() => { loadData(); }, 800);
           }}
         />
       )}
@@ -483,7 +501,7 @@ export function Admin() {
             >
               Открыть форму эмиссии →
             </button>
-            <p className="text-xs text-muted-foreground font-mono">Для подтверждения эмиссии потребуется код, отправленный на eventtrnc@gmail.com</p>
+            <p className="text-xs text-muted-foreground font-mono">Для подтверждения эмиссии потребуется код, отправленный в Telegram-бот</p>
           </div>
         )}
 
