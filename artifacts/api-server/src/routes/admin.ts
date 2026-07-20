@@ -55,8 +55,7 @@ async function getAdminDailyEmitted(): Promise<number> {
     .where(
       and(
         eq(emissionLogsTable.isApproved, true),
-        gte(emissionLogsTable.createdAt, since),
-        sql`${emissionLogsTable.reason} LIKE '%Административная эмиссия%' OR ${emissionLogsTable.reason} LIKE '%admin_emit%'`
+        gte(emissionLogsTable.createdAt, since)
       )
     );
   return Number(row?.total ?? 0);
