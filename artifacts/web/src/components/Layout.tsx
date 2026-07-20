@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X, ShieldCheck } from "lucide-react";
+import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X, ShieldCheck, QrCode } from "lucide-react";
 import { SystemClock } from "./SystemClock";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useWsSync } from "@/hooks/useWsSync";
 
 function CitizenWidget() {
   const { citizen, setCitizen, setAuthToken, refreshCitizen } = useCitizen();
@@ -147,7 +148,13 @@ function CitizenWidget() {
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { t } = useLanguage();
-  const { citizen } = useCitizen();
+  const { citizen, refreshCitizen } = useCitizen();
+
+  // Real-time WS balance sync — refreshes citizen data when server pushes balance_update
+  useWsSync({
+    citizenId: citizen?.id,
+    onBalanceUpdate: () => { void refreshCitizen(); },
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navItems = [
@@ -162,6 +169,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/clock",     label: t.nav_clock,           icon: Globe     },
     ...(citizen && (citizen as { isAdmin?: number }).isAdmin === 1
       ? [{ href: "/admin", label: "Администратор", icon: ShieldCheck }]
+      : []),
+    ...(!citizen
+      ? [{ href: "/qr-login", label: "Войти QR", icon: QrCode }]
       : []),
   ];
 

@@ -12,21 +12,30 @@ interface AuthedSocket extends WebSocket {
   citizenId?: number;
   citizenName?: string;
   isAlive?: boolean;
+  qrWaitToken?: string;        // set when client registers for QR login
 }
 
 export interface PlayAnthemPayload {
   type: "PLAY_ANTHEM";
-  triggeredBy: string;   // pseudonym or "TimeNation Government"
+  triggeredBy: string;
   targetType: "all" | "direct";
   message?: string;
   purpose?: string;
   scheduledFor?: string;
 }
 
+export interface WsPayload {
+  type: string;
+  [key: string]: unknown;
+}
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 const citizenSockets = new Map<number, Set<AuthedSocket>>();
 const globalSubscribers = new Set<AuthedSocket>();
+
+// QR login waiters: token → unauthenticated web socket waiting for login
+const qrWaiters = new Map<string, AuthedSocket>();
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -52,6 +61,7 @@ function removeFromRoom(citizenId: number, ws: AuthedSocket) {
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
+/** Broadcast PlayAnthem to all global subscribers */
 export function broadcastToAll(payload: PlayAnthemPayload) {
   let count = 0;
   for (const ws of globalSubscribers) {
@@ -63,6 +73,7 @@ export function broadcastToAll(payload: PlayAnthemPayload) {
   logger.info({ count }, "Social Alarm: broadcast to all subscribers");
 }
 
+/** Broadcast PlayAnthem to specific citizens */
 export function broadcastToCitizens(citizenIds: number[], payload: PlayAnthemPayload) {
   let count = 0;
   for (const id of citizenIds) {
@@ -77,6 +88,30 @@ export function broadcastToCitizens(citizenIds: number[], payload: PlayAnthemPay
     }
   }
   logger.info({ citizenIds, count }, "Social Alarm: direct broadcast");
+}
+
+/** Push any event to all active sessions of a citizen (used by API routes) */
+export function pushToCitizen(citizenId: number, payload: WsPayload) {
+  const room = citizenSockets.get(citizenId);
+  if (!room) return;
+  for (const ws of room) {
+    if (ws.readyState === WebSocket.OPEN) {
+      send(ws, payload);
+    }
+  }
+}
+
+/** Push QR login payload to the web session waiting on the given token */
+export function pushQrLogin(token: string, payload: WsPayload): boolean {
+  const ws = qrWaiters.get(token);
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    qrWaiters.delete(token);
+    return false;
+  }
+  send(ws, payload);
+  qrWaiters.delete(token);
+  if (ws.qrWaitToken) ws.qrWaitToken = undefined;
+  return true;
 }
 
 export function getOnlineSubscriberIds(): number[] {
@@ -100,6 +135,7 @@ export function attachSocialAlarmWs(server: Server) {
       const ws = rawWs as AuthedSocket;
       if (!ws.isAlive) {
         if (ws.citizenId != null) removeFromRoom(ws.citizenId, ws);
+        if (ws.qrWaitToken) qrWaiters.delete(ws.qrWaitToken);
         return ws.terminate();
       }
       ws.isAlive = false;
@@ -120,6 +156,7 @@ export function attachSocialAlarmWs(server: Server) {
       if (typeof msg !== "object" || msg === null) return;
       const m = msg as Record<string, unknown>;
 
+      // ── AUTH ─────────────────────────────────────────────────────────────
       if (m["type"] === "auth") {
         const citizenId = typeof m["citizenId"] === "number" ? m["citizenId"] : null;
         if (!citizenId) return send(ws, { type: "auth_error", reason: "missing_fields" });
@@ -143,25 +180,74 @@ export function attachSocialAlarmWs(server: Server) {
         logger.info({ citizenId: citizen.id, subscribed: citizen.socialAlarmConsent === 1 }, "WS: citizen authenticated");
       }
 
+      // ── CONSENT ──────────────────────────────────────────────────────────
       if (m["type"] === "update_consent") {
         if (!ws.citizenId) return;
         const consent = m["consent"] === true || m["consent"] === 1;
-        if (consent) {
-          globalSubscribers.add(ws);
-        } else {
-          globalSubscribers.delete(ws);
-        }
+        if (consent) globalSubscribers.add(ws);
+        else globalSubscribers.delete(ws);
         send(ws, { type: "consent_updated", subscribed: consent });
+      }
+
+      // ── QR LOGIN WAIT (anonymous — web registers before login) ────────────
+      if (m["type"] === "qr_wait") {
+        const token = typeof m["token"] === "string" ? m["token"] : null;
+        if (!token) return;
+        // Remove old token if re-registering
+        if (ws.qrWaitToken) qrWaiters.delete(ws.qrWaitToken);
+        ws.qrWaitToken = token;
+        qrWaiters.set(token, ws);
+        send(ws, { type: "qr_wait_ok", token });
+        logger.info({ token: token.slice(0, 8) }, "WS: QR wait registered");
+      }
+
+      // ── SYNC SIGNAL from mobile → relay to all web sessions of same citizen ─
+      if (m["type"] === "sync_signal") {
+        if (!ws.citizenId) return;
+        const payload: WsPayload = {
+          type: "sync_signal",
+          fromMobile: true,
+          citizenId: ws.citizenId,
+          triggeredBy: ws.citizenName ?? String(ws.citizenId),
+          message: typeof m["message"] === "string" ? m["message"] : "",
+          ts: Date.now(),
+        };
+        // Relay to all OTHER sessions of this citizen (web clients)
+        const room = citizenSockets.get(ws.citizenId);
+        if (room) {
+          for (const target of room) {
+            if (target !== ws && target.readyState === WebSocket.OPEN) {
+              send(target, payload);
+            }
+          }
+        }
+        send(ws, { type: "sync_signal_sent" });
+      }
+
+      // ── ANTHEM from mobile → relay to all web sessions of same citizen ─────
+      if (m["type"] === "anthem_mobile") {
+        if (!ws.citizenId) return;
+        const anthemPayload: WsPayload = {
+          type: "PLAY_ANTHEM",
+          triggeredBy: ws.citizenName ?? String(ws.citizenId),
+          targetType: "direct",
+          fromMobile: true,
+          message: typeof m["message"] === "string" ? m["message"] : undefined,
+        };
+        pushToCitizen(ws.citizenId, anthemPayload);
+        send(ws, { type: "anthem_mobile_sent" });
       }
     });
 
     ws.on("close", () => {
       if (ws.citizenId != null) removeFromRoom(ws.citizenId, ws);
+      if (ws.qrWaitToken) { qrWaiters.delete(ws.qrWaitToken); ws.qrWaitToken = undefined; }
     });
 
     ws.on("error", (err) => {
       logger.warn({ err }, "WS socket error");
       if (ws.citizenId != null) removeFromRoom(ws.citizenId, ws);
+      if (ws.qrWaitToken) { qrWaiters.delete(ws.qrWaitToken); ws.qrWaitToken = undefined; }
     });
   });
 

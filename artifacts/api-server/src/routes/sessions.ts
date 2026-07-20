@@ -8,6 +8,7 @@ import { sendTransactionNotification } from "../services/telegramService";
 import { applyMeritAfterSession } from "../services/meritocracyService";
 import { calcTreasuryTax, TREASURY_CITIZEN_ID } from "../services/videoStorage";
 import { autoRepayFromService } from "../services/timeBankService";
+import { pushToCitizen } from "../services/socialAlarmWs";
 
 const router: IRouter = Router();
 
@@ -254,6 +255,30 @@ router.post("/sessions/:id/stop", async (req, res): Promise<void> => {
     sendTransactionNotification(session.fromCitizenId, notifyFrom + rankMessage),
     sendTransactionNotification(session.toCitizenId, notifyTo),
   ]);
+
+  // Real-time WS push to both citizens
+  pushToCitizen(session.fromCitizenId, {
+    type: "balance_update",
+    balance: fromCitizen.balanceMinutes - actualMinutes,
+  });
+  pushToCitizen(session.toCitizenId, {
+    type: "balance_update",
+    balance: toCitizen.balanceMinutes + netToReceives,
+  });
+  pushToCitizen(session.fromCitizenId, {
+    type: "transaction_notify",
+    fromName: fromCitizen.name,
+    toName: toCitizen.name,
+    amount: actualMinutes,
+    direction: "out",
+  });
+  pushToCitizen(session.toCitizenId, {
+    type: "transaction_notify",
+    fromName: fromCitizen.name,
+    toName: toCitizen.name,
+    amount: toReceives,
+    direction: "in",
+  });
 
   res.json({
     session: {

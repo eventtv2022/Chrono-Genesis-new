@@ -75,6 +75,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "qrcode.react": "^4.2.0",
     "signature_pad": "^5.1.3"
   }
 }

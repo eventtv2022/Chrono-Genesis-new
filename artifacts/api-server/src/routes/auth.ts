@@ -335,4 +335,60 @@ router.post("/auth/set-password", async (req, res): Promise<void> => {
   res.json({ ok: true, message: "Пароль установлен. Теперь при входе требуется пароль." });
 });
 
+// ── QR Login ─────────────────────────────────────────────────────────────────
+import { generateQrToken, consumeQrToken } from "../services/qrAuthService";
+import { pushQrLogin } from "../services/socialAlarmWs";
+
+// GET /auth/qr-token — web requests a short-lived token to display as QR
+router.get("/auth/qr-token", (_req, res) => {
+  const token = generateQrToken();
+  res.json({ token, expiresIn: 120 });
+});
+
+// POST /auth/qr-verify — mobile scans QR, verifies and pushes login to web WS
+router.post("/auth/qr-verify", async (req, res): Promise<void> => {
+  const { qrToken, authToken } = req.body as { qrToken?: string; authToken?: string };
+  if (!qrToken || !authToken) {
+    res.status(400).json({ error: "Требуются qrToken и authToken" });
+    return;
+  }
+
+  // Verify mobile citizen by authToken
+  const [citizen] = await db
+    .select({
+      id: citizensTable.id,
+      name: citizensTable.name,
+      balanceMinutes: citizensTable.balanceMinutes,
+      rank: citizensTable.rank,
+      authToken: citizensTable.authToken,
+    })
+    .from(citizensTable)
+    .where(eq(citizensTable.authToken, authToken))
+    .limit(1);
+
+  if (!citizen) {
+    res.status(401).json({ error: "Неверный токен авторизации" });
+    return;
+  }
+
+  // Check and consume the QR token
+  const valid = consumeQrToken(qrToken);
+  if (!valid) {
+    res.status(400).json({ error: "QR-код недействителен или истёк. Обновите страницу." });
+    return;
+  }
+
+  // Push login event to web socket waiting on this token
+  const pushed = pushQrLogin(qrToken, {
+    type: "qr_login",
+    citizenId: citizen.id,
+    authToken: citizen.authToken ?? "",
+    name: citizen.name,
+    balanceMinutes: citizen.balanceMinutes,
+  });
+
+  logger.info({ citizenId: citizen.id, pushed }, "QR login verified");
+  res.json({ ok: true, pushed, citizenId: citizen.id });
+});
+
 export default router;

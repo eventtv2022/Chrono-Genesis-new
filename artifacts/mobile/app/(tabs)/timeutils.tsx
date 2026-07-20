@@ -1,5 +1,6 @@
 import { getBaseUrl } from "@/lib/api";
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import {
   View,
   Text,
@@ -291,7 +292,7 @@ function getDayNames(lang: string): string[] {
 export default function TimeUtilsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { citizen } = useCitizen();
+  const { citizen, authToken } = useCitizen();
   const { t, lang } = useLanguage();
   const st = styles(colors);
   const DAYS = getDayNames(lang);
@@ -317,6 +318,13 @@ export default function TimeUtilsScreen() {
   const anthemSoundRef = useRef<Audio.Sound | null>(null);
   const saWsRef = useRef<WebSocket | null>(null);
   const saReconRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // QR Login scanner
+  const [qrScanModal, setQrScanModal] = useState(false);
+  const [qrScanStatus, setQrScanStatus] = useState<"idle" | "scanning" | "success" | "error">("idle");
+  const [qrScanMsg, setQrScanMsg] = useState("");
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const qrHandledRef = useRef(false);
 
   useEffect(() => {
     if (!citizen?.id) return;
@@ -390,8 +398,55 @@ export default function TimeUtilsScreen() {
         setSaSentMsg(t.sa_sent);
         setSaSelectedTargets(new Set());
         setTimeout(() => setSaSentMsg(""), 3000);
+        // Also relay to own web sessions via WS sync_signal
+        const ws = saWsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "sync_signal", message: t.sa_sent }));
+        }
       }
     } catch { /* silent */ } finally { setSaSending(false); }
+  };
+
+  const openQrScanner = async () => {
+    if (!citizen?.id) return;
+    if (!cameraPermission?.granted) {
+      const { granted } = await requestCameraPermission();
+      if (!granted) {
+        Alert.alert("Камера", "Разрешите доступ к камере для сканирования QR-кода.");
+        return;
+      }
+    }
+    qrHandledRef.current = false;
+    setQrScanStatus("idle");
+    setQrScanMsg("");
+    setQrScanModal(true);
+  };
+
+  const handleQrScan = async ({ data }: { data: string }) => {
+    if (qrHandledRef.current) return;
+    try {
+      const parsed = JSON.parse(data) as { action?: string; token?: string };
+      if (parsed.action !== "qr_login" || !parsed.token) return;
+      qrHandledRef.current = true;
+      setQrScanStatus("scanning");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      const res = await fetch(`${BASE_URL}/api/auth/qr-verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qrToken: parsed.token, authToken }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string };
+      if (res.ok && json.ok) {
+        setQrScanStatus("success");
+        setQrScanMsg("Вход выполнен! Браузер авторизован.");
+        setTimeout(() => setQrScanModal(false), 2000);
+      } else {
+        setQrScanStatus("error");
+        setQrScanMsg(json.error ?? "Ошибка. Попробуйте снова.");
+        qrHandledRef.current = false;
+      }
+    } catch { /* not a QR login code, keep scanning */ }
   };
 
   const toggleSaTarget = (id: number) => {
@@ -1123,11 +1178,78 @@ export default function TimeUtilsScreen() {
                   <Feather name="info" size={14} color={colors.mutedForeground} />
                   <Text style={st.infoText}>{t.sa_consent_hint}</Text>
                 </View>
+
+                {/* QR Login — authorise web browser via mobile */}
+                <TouchableOpacity
+                  style={[saSt.sendBtn, { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border, marginTop: 8 }]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void openQrScanner(); }}
+                >
+                  <Feather name="smartphone" size={16} color={colors.foreground} />
+                  <Text style={[saSt.sendBtnText, { color: colors.foreground }]}>Сканировать QR веб-входа</Text>
+                </TouchableOpacity>
               </>
             )}
           </View>
         )}
       </ScrollView>
+
+      {/* QR Scanner Modal */}
+      <Modal visible={qrScanModal} animationType="slide" statusBarTranslucent transparent>
+        <View style={{ flex: 1, backgroundColor: "#000000ee" }}>
+          {qrScanStatus === "idle" || qrScanStatus === "scanning" ? (
+            <>
+              <CameraView
+                style={{ flex: 1 }}
+                barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                onBarcodeScanned={qrScanStatus === "idle" ? handleQrScan : undefined}
+              />
+              <View style={{
+                position: "absolute", bottom: 0, left: 0, right: 0,
+                backgroundColor: "#000000cc", padding: 24, paddingBottom: 40,
+              }}>
+                {qrScanStatus === "scanning" ? (
+                  <Text style={{ color: "#fff", textAlign: "center", fontSize: 15 }}>
+                    ⏳ Авторизация…
+                  </Text>
+                ) : (
+                  <Text style={{ color: "#999", textAlign: "center", fontSize: 13 }}>
+                    Наведите камеру на QR-код на странице
+                  </Text>
+                )}
+                <TouchableOpacity
+                  onPress={() => setQrScanModal(false)}
+                  style={{ marginTop: 16, alignSelf: "center", padding: 12 }}
+                >
+                  <Text style={{ color: "#666", fontSize: 14 }}>Закрыть</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 16 }}>
+              <Text style={{ fontSize: 60 }}>
+                {qrScanStatus === "success" ? "✅" : "❌"}
+              </Text>
+              <Text style={{ color: "#fff", fontSize: 16, textAlign: "center", paddingHorizontal: 24 }}>
+                {qrScanMsg}
+              </Text>
+              {qrScanStatus === "error" && (
+                <TouchableOpacity
+                  onPress={() => { setQrScanStatus("idle"); qrHandledRef.current = false; }}
+                  style={{ padding: 12, borderWidth: 1, borderColor: "#444", borderRadius: 8 }}
+                >
+                  <Text style={{ color: "#aaa" }}>Попробовать снова</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                onPress={() => setQrScanModal(false)}
+                style={{ padding: 12 }}
+              >
+                <Text style={{ color: "#666" }}>Закрыть</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
