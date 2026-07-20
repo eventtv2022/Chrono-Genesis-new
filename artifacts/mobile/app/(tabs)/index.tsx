@@ -1109,19 +1109,9 @@ export default function TimerScreen() {
               activeOpacity={0.75}
             >
               {citizen.walletVerified === 1 ? (
-                <>
-                  <Feather name="shield" size={11} color={colors.primaryForeground} />
-                  <Text style={[styles.walletBtnText, { color: colors.primaryForeground }]}>
-                    {citizen.walletAddress
-                      ? citizen.walletAddress.slice(0, 4) + "…" + citizen.walletAddress.slice(-3)
-                      : "W3"}
-                  </Text>
-                </>
+                <Feather name="shield" size={13} color={colors.primaryForeground} />
               ) : (
-                <>
-                  <Feather name="link" size={11} color={colors.primary} />
-                  <Text style={styles.walletBtnText}>{ui.timer_wallet}</Text>
-                </>
+                <Feather name="link" size={13} color={colors.primary} />
               )}
             </TouchableOpacity>
           </View>
@@ -1448,8 +1438,8 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     balancePill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.goldGlow, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
     balanceText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.primary },
     shopBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-    walletBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 20, backgroundColor: "transparent" },
-    walletBtnVerified: { backgroundColor: colors.primary },
+    walletBtn: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
+    walletBtnVerified: { backgroundColor: colors.primary, borderColor: colors.primary },
     walletBtnText: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.primary, letterSpacing: 0.3 },
     meritBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, paddingBottom: 8 },
     meritText: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
