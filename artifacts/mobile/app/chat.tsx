@@ -105,7 +105,7 @@ export default function ChatListScreen() {
 
   // ── Load conversations ────────────────────────────────────────────────────
   const loadConversations = useCallback(async () => {
-    if (!authToken) return;
+    if (!authToken) { setLoading(false); return; }
     setLoading(true);
     try {
       const res = await fetch(`${BASE_URL}/api/chat/conversations`, { headers: authHeaders });

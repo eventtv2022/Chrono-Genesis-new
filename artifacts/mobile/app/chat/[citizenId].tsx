@@ -128,7 +128,7 @@ export default function ConversationScreen() {
 
   // ── Load messages ─────────────────────────────────────────────────────────
   const loadMessages = useCallback(async () => {
-    if (!authToken || !peerId) return;
+    if (!authToken || !peerId) { setLoading(false); return; }
     setLoading(true);
     try {
       const res = await fetch(`${BASE_URL}/api/chat/messages/${peerId}?limit=100`, { headers: authHeaders });
