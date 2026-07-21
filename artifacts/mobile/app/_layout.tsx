@@ -32,6 +32,8 @@ function RootLayoutNav() {
       <Stack.Screen name="citizens" options={{ headerShown: false }} />
       <Stack.Screen name="passport-lookup" options={{ headerShown: false }} />
       <Stack.Screen name="broadcast" options={{ headerShown: false }} />
+      <Stack.Screen name="chat" options={{ headerShown: false }} />
+      <Stack.Screen name="chat/[citizenId]" options={{ headerShown: false }} />
     </Stack>
   );
 }

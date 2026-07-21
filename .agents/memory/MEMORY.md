@@ -3,3 +3,4 @@
 - [Decimal Darmins migration](decimal-darmins.md) — все балансы/суммы переведены на real (дробные), налог exact * 0.02
 - [Social Alarm feature](social-alarm.md) — WS на /api/ws, citizenId-only auth (no token), mobile i18n отдельный файл lib/i18n.ts
 - [PK reassignment pattern](pk-reassign.md) — единственный надёжный способ сменить PK в PostgreSQL без deferrable constraints
+- [P2P Chat Phase 1](chat-phase1.md) — E2EE DM чат: tweetnacl box, dm_messages таблица, chat_public_key в citizens, 6 API эндпоинтов

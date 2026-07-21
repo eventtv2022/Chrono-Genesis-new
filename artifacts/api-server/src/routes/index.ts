@@ -19,6 +19,7 @@ import reviewsRouter from "./reviews";
 import telegramRouter from "./telegram";
 import socialAlarmRouter from "./socialAlarm";
 import adminRouter from "./admin";
+import chatRouter from "./chat";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(timeBankRouter);
 router.use(governmentRouter);
 router.use(reviewsRouter);
 router.use(telegramRouter);
+router.use(chatRouter);
 
 export default router;

@@ -1114,6 +1114,13 @@ export default function TimerScreen() {
                 <Feather name="link" size={13} color={colors.primary} />
               )}
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.chatBtn}
+              onPress={() => router.push("/chat")}
+              activeOpacity={0.75}
+            >
+              <Feather name="message-square" size={13} color={colors.primary} />
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -1441,6 +1448,7 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     walletBtn: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
     walletBtnVerified: { backgroundColor: colors.primary, borderColor: colors.primary },
     walletBtnText: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.primary, letterSpacing: 0.3 },
+    chatBtn: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
     meritBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, paddingBottom: 8 },
     meritText: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
     meritSep: { fontSize: 11, color: colors.mutedForeground },
