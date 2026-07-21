@@ -578,6 +578,43 @@ router.get("/citizens/lookup/:num", async (req, res): Promise<void> => {
     return;
   }
 
+  // Auto-issue passport if available_at has elapsed (lazy promotion, same logic as /status)
+  if (citizen.registrationStatus === "pending" && citizen.availableAt) {
+    const now = Date.now();
+    const due = citizen.availableAt.getTime();
+    if (now >= due) {
+      const passportUrl = `/api/citizens/number/${num}/passport`;
+      await db
+        .update(citizensTable)
+        .set({ registrationStatus: "issued", idCardUrl: passportUrl })
+        .where(eq(citizensTable.citizenNumber, num));
+
+      req.log.info({ citizenNumber: num, citizenId: citizen.id }, "Passport auto-issued via /lookup");
+
+      logCitizenIssuedToSheets({
+        citizenNumber: num,
+        citizenId: citizen.id,
+        name: citizen.name,
+        phone: citizen.phone,
+        rank: citizen.rank,
+        balanceMinutes: citizen.balanceMinutes,
+        meritScore: citizen.meritScore,
+        registrationStatus: "issued",
+        issuedAt: new Date().toISOString(),
+      }).catch((err: unknown) => req.log.warn({ err }, "Sheets citizen log failed (non-critical)"));
+
+      res.json({
+        status: "issued",
+        citizenNumber: num,
+        name: citizen.name,
+        rank: citizen.rank,
+        idCardUrl: `/api/citizens/number/${num}/id-card`,
+        passportUrl,
+      });
+      return;
+    }
+  }
+
   if (citizen.registrationStatus !== "issued") {
     res.json({
       status: "pending",

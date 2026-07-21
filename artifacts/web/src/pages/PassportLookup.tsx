@@ -69,6 +69,7 @@ export function PassportLookup() {
                 <div className="relative">
                   <input
                     type="text"
+                    inputMode="numeric"
                     value={input}
                     onChange={e => {
                       const v = e.target.value.replace(/\D/g, "").slice(0, 9);
@@ -76,6 +77,9 @@ export function PassportLookup() {
                     }}
                     placeholder="000000000"
                     maxLength={9}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     className="w-full bg-background border border-border rounded-sm px-4 py-3 font-mono text-xl tracking-[0.3em] text-center text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary transition-colors"
                   />
                 </div>
