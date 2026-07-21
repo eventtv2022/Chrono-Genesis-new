@@ -264,7 +264,7 @@ export default function ConversationScreen() {
     if (!input.trim() || !citizen || !authToken) return;
     const peerPub = peerPubKeyRef.current;
     const sk = secretKeyRef.current;
-    if (!peerPub || !sk) return;
+    if (!peerPub || !sk) { Alert.alert("Нет ключа", "Ключ шифрования ещё не загружен"); return; }
 
     setSending(true);
     try {

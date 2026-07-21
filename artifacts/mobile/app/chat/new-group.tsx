@@ -61,7 +61,6 @@ export default function NewGroupScreen() {
   async function createGroup() {
     if (!groupName.trim()) { Alert.alert("Ошибка", "Введите название группы"); return; }
     if (selected.size === 0) { Alert.alert("Ошибка", "Выберите хотя бы одного участника"); return; }
-    if (!authToken) return;
 
     setCreating(true);
     try {
@@ -70,6 +69,9 @@ export default function NewGroupScreen() {
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ name: groupName.trim(), description: groupDesc.trim() || undefined, memberIds: [...selected] }),
       });
+      if (res.status === 401) {
+        Alert.alert("Сессия истекла", "Выйдите из аккаунта и войдите снова"); return;
+      }
       if (!res.ok) {
         const err = (await res.json()) as { error?: string };
         Alert.alert("Ошибка", err.error ?? "Не удалось создать группу"); return;
