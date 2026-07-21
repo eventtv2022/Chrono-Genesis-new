@@ -34,6 +34,8 @@ function RootLayoutNav() {
       <Stack.Screen name="broadcast" options={{ headerShown: false }} />
       <Stack.Screen name="chat" options={{ headerShown: false }} />
       <Stack.Screen name="chat/[citizenId]" options={{ headerShown: false }} />
+      <Stack.Screen name="chat/group/[groupId]" options={{ headerShown: false }} />
+      <Stack.Screen name="chat/new-group" options={{ headerShown: false }} />
     </Stack>
   );
 }

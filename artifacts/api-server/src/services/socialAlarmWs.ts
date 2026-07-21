@@ -12,7 +12,7 @@ interface AuthedSocket extends WebSocket {
   citizenId?: number;
   citizenName?: string;
   isAlive?: boolean;
-  qrWaitToken?: string;        // set when client registers for QR login
+  qrWaitToken?: string;
 }
 
 export interface PlayAnthemPayload {
@@ -33,8 +33,6 @@ export interface WsPayload {
 
 const citizenSockets = new Map<number, Set<AuthedSocket>>();
 const globalSubscribers = new Set<AuthedSocket>();
-
-// QR login waiters: token → unauthenticated web socket waiting for login
 const qrWaiters = new Map<string, AuthedSocket>();
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -61,47 +59,44 @@ function removeFromRoom(citizenId: number, ws: AuthedSocket) {
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
-/** Broadcast PlayAnthem to all global subscribers */
 export function broadcastToAll(payload: PlayAnthemPayload) {
   let count = 0;
   for (const ws of globalSubscribers) {
-    if (ws.readyState === WebSocket.OPEN) {
-      send(ws, payload);
-      count++;
-    }
+    if (ws.readyState === WebSocket.OPEN) { send(ws, payload); count++; }
   }
   logger.info({ count }, "Social Alarm: broadcast to all subscribers");
 }
 
-/** Broadcast PlayAnthem to specific citizens */
 export function broadcastToCitizens(citizenIds: number[], payload: PlayAnthemPayload) {
   let count = 0;
   for (const id of citizenIds) {
     const room = citizenSockets.get(id);
     if (room) {
       for (const ws of room) {
-        if (ws.readyState === WebSocket.OPEN) {
-          send(ws, payload);
-          count++;
-        }
+        if (ws.readyState === WebSocket.OPEN) { send(ws, payload); count++; }
       }
     }
   }
   logger.info({ citizenIds, count }, "Social Alarm: direct broadcast");
 }
 
-/** Push any event to all active sessions of a citizen (used by API routes) */
-export function pushToCitizen(citizenId: number, payload: WsPayload) {
+/**
+ * Push any event to all active sessions of a citizen.
+ * Returns true if at least one open socket received the message (= delivered).
+ */
+export function pushToCitizen(citizenId: number, payload: WsPayload): boolean {
   const room = citizenSockets.get(citizenId);
-  if (!room) return;
+  if (!room) return false;
+  let delivered = false;
   for (const ws of room) {
     if (ws.readyState === WebSocket.OPEN) {
       send(ws, payload);
+      delivered = true;
     }
   }
+  return delivered;
 }
 
-/** Push QR login payload to the web session waiting on the given token */
 export function pushQrLogin(token: string, payload: WsPayload): boolean {
   const ws = qrWaiters.get(token);
   if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -114,14 +109,25 @@ export function pushQrLogin(token: string, payload: WsPayload): boolean {
   return true;
 }
 
-export function getOnlineSubscriberIds(): number[] {
+/** Returns all currently connected citizen IDs */
+export function getOnlineCitizenIds(): number[] {
   const ids: number[] = [];
-  for (const ws of globalSubscribers) {
-    if (ws.readyState === WebSocket.OPEN && ws.citizenId != null) {
-      ids.push(ws.citizenId);
+  for (const [id, sockets] of citizenSockets.entries()) {
+    for (const ws of sockets) {
+      if (ws.readyState === WebSocket.OPEN) { ids.push(id); break; }
     }
   }
   return ids;
+}
+
+/** Returns true if the given citizen has at least one open WS connection */
+export function isCitizenOnline(citizenId: number): boolean {
+  const room = citizenSockets.get(citizenId);
+  if (!room) return false;
+  for (const ws of room) {
+    if (ws.readyState === WebSocket.OPEN) return true;
+  }
+  return false;
 }
 
 // ── WebSocket server setup ─────────────────────────────────────────────────
@@ -177,7 +183,7 @@ export function attachSocialAlarmWs(server: Server) {
         }
 
         send(ws, { type: "auth_ok", citizenId: citizen.id, subscribed: citizen.socialAlarmConsent === 1 });
-        logger.info({ citizenId: citizen.id, subscribed: citizen.socialAlarmConsent === 1 }, "WS: citizen authenticated");
+        logger.info({ citizenId: citizen.id }, "WS: citizen authenticated");
       }
 
       // ── CONSENT ──────────────────────────────────────────────────────────
@@ -189,11 +195,10 @@ export function attachSocialAlarmWs(server: Server) {
         send(ws, { type: "consent_updated", subscribed: consent });
       }
 
-      // ── QR LOGIN WAIT (anonymous — web registers before login) ────────────
+      // ── QR LOGIN WAIT ─────────────────────────────────────────────────────
       if (m["type"] === "qr_wait") {
         const token = typeof m["token"] === "string" ? m["token"] : null;
         if (!token) return;
-        // Remove old token if re-registering
         if (ws.qrWaitToken) qrWaiters.delete(ws.qrWaitToken);
         ws.qrWaitToken = token;
         qrWaiters.set(token, ws);
@@ -201,7 +206,7 @@ export function attachSocialAlarmWs(server: Server) {
         logger.info({ token: token.slice(0, 8) }, "WS: QR wait registered");
       }
 
-      // ── SYNC SIGNAL from mobile → relay to all web sessions of same citizen ─
+      // ── SYNC SIGNAL ───────────────────────────────────────────────────────
       if (m["type"] === "sync_signal") {
         if (!ws.citizenId) return;
         const payload: WsPayload = {
@@ -212,7 +217,6 @@ export function attachSocialAlarmWs(server: Server) {
           message: typeof m["message"] === "string" ? m["message"] : "",
           ts: Date.now(),
         };
-        // Relay to all OTHER sessions of this citizen (web clients)
         const room = citizenSockets.get(ws.citizenId);
         if (room) {
           for (const target of room) {
@@ -224,7 +228,7 @@ export function attachSocialAlarmWs(server: Server) {
         send(ws, { type: "sync_signal_sent" });
       }
 
-      // ── ANTHEM from mobile → relay to all web sessions of same citizen ─────
+      // ── ANTHEM from mobile ────────────────────────────────────────────────
       if (m["type"] === "anthem_mobile") {
         if (!ws.citizenId) return;
         const anthemPayload: WsPayload = {
@@ -251,12 +255,9 @@ export function attachSocialAlarmWs(server: Server) {
     });
   });
 
-  // Intercept HTTP upgrade requests on the /api/ws path
   server.on("upgrade", (req, socket, head) => {
     if (req.url === "/api/ws") {
-      wss.handleUpgrade(req, socket, head, (ws) => {
-        wss.emit("connection", ws, req);
-      });
+      wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
     } else {
       socket.destroy();
     }

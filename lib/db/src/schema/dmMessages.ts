@@ -8,7 +8,9 @@ export const dmMessagesTable = pgTable("dm_messages", {
   nonce: text("nonce").notNull(),
   msgType: text("msg_type").default("text").notNull(),
   darminAmount: real("darmin_amount"),
+  forwardedFromId: integer("forwarded_from_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   readAt: timestamp("read_at", { withTimezone: true }),
 });
 
