@@ -34,6 +34,8 @@ const C = {
   mineBorder: "#2D5A3D",
   theirs: "#12121A",
   theirsBorder: "#1E1E2E",
+  warn: "#2A1E0A",
+  warnBorder: "#5A3D0D",
 };
 
 interface RawMessage {
@@ -56,7 +58,7 @@ interface PeerInfo {
   id: number;
   name: string | null;
   rank: string | null;
-  publicKey: string | null;
+  hasKey: boolean;
 }
 
 function formatTime(iso: string): string {
@@ -82,22 +84,20 @@ export default function ConversationScreen() {
   const flatRef = useRef<FlatList>(null);
 
   const secretKeyRef = useRef<Uint8Array | null>(null);
-  const publicKeyRef = useRef<string | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
   const peerPubKeyRef = useRef<Uint8Array | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
-  // ── Init keypair + peer info ───────────────────────────────────────────────
+  // ── Step 1: Init MY keypair and upload it ─────────────────────────────────
   useEffect(() => {
-    if (!citizen || !authToken || !peerId) return;
+    if (!citizen || !authToken) return;
     (async () => {
-      const kp = await getOrCreateKeyPair();
-      secretKeyRef.current = kp.secretKey;
-      publicKeyRef.current = kp.publicKeyB64;
-
-      // Upload key if not set
       try {
+        const kp = await getOrCreateKeyPair();
+        secretKeyRef.current = kp.secretKey;
+
+        // Upload my public key if needed
         const checkRes = await fetch(`${BASE_URL}/api/chat/key/${citizen.id}`);
-        const checkData = await checkRes.json() as { publicKey?: string };
+        const checkData = (await checkRes.json()) as { publicKey?: string };
         if (checkData.publicKey !== kp.publicKeyB64) {
           await fetch(`${BASE_URL}/api/chat/key`, {
             method: "POST",
@@ -105,38 +105,57 @@ export default function ConversationScreen() {
             body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
           });
         }
-      } catch { /* silent */ }
+      } catch { /* silent — keypair is still usable locally */ }
+    })();
+  }, [citizen, authToken]);
 
-      // Load peer info
+  // ── Step 2: Load peer info (name + public key) in parallel ─────────────────
+  useEffect(() => {
+    if (!peerId) return;
+    (async () => {
       try {
-        const peerRes = await fetch(`${BASE_URL}/api/chat/key/${peerId}`);
-        if (peerRes.ok) {
-          const peerData = await peerRes.json() as { citizenId: number; name: string; publicKey: string };
-          setPeer({ id: peerData.citizenId, name: peerData.name, rank: null, publicKey: peerData.publicKey });
-          peerPubKeyRef.current = decodeBase64(peerData.publicKey);
-        } else {
-          // Peer exists but no key — still load their name from citizens
-          const citRes = await fetch(`${BASE_URL}/api/citizens/${peerId}`);
-          if (citRes.ok) {
-            const c = await citRes.json() as { id: number; name: string | null; rank: string | null };
-            if (c?.id) setPeer({ id: c.id, name: c.name, rank: c.rank, publicKey: null });
-          }
+        // Try to get their public key
+        const keyRes = await fetch(`${BASE_URL}/api/chat/key/${peerId}`);
+        if (keyRes.ok) {
+          const d = (await keyRes.json()) as { citizenId: number; name: string; publicKey: string };
+          peerPubKeyRef.current = decodeBase64(d.publicKey);
+          setPeer({ id: d.citizenId, name: d.name, rank: null, hasKey: true });
+          // Re-decrypt messages now that we have the key
+          setMessages((prev) => redecrypt(prev));
+          return;
+        }
+      } catch { /* fall through */ }
+
+      // No key — still get their name
+      try {
+        const citRes = await fetch(`${BASE_URL}/api/citizens/${peerId}`);
+        if (citRes.ok) {
+          const c = (await citRes.json()) as { id: number; name: string | null; rank: string | null };
+          if (c?.id) setPeer({ id: c.id, name: c.name, rank: c.rank, hasKey: false });
+          return;
         }
       } catch { /* silent */ }
-    })();
-  }, [citizen, authToken, peerId]);
 
-  // ── Load messages ─────────────────────────────────────────────────────────
+      // Absolute fallback — we at least know the peerId
+      setPeer({ id: peerId, name: null, rank: null, hasKey: false });
+    })();
+  }, [peerId]);
+
+  // ── Step 3: Load messages as soon as auth is ready (independent of peer) ──
   const loadMessages = useCallback(async () => {
     if (!authToken || !peerId) { setLoading(false); return; }
     setLoading(true);
     try {
       const res = await fetch(`${BASE_URL}/api/chat/messages/${peerId}?limit=100`, { headers: authHeaders });
-      const data = await res.json() as { messages: RawMessage[] };
+      if (!res.ok) { setLoading(false); return; }
+      const data = (await res.json()) as { messages: RawMessage[] };
       const raw = data.messages ?? [];
-      decryptAndSet(raw);
-      // Mark as read
-      fetch(`${BASE_URL}/api/chat/messages/read/${peerId}`, { method: "PATCH", headers: authHeaders }).catch(() => { /* silent */ });
+      setMessages(raw.map(decryptOne));
+      // Mark received messages as read
+      fetch(`${BASE_URL}/api/chat/messages/read/${peerId}`, {
+        method: "PATCH",
+        headers: authHeaders,
+      }).catch(() => { /* silent */ });
     } catch {
       Alert.alert("Ошибка", "Не удалось загрузить сообщения");
     } finally {
@@ -144,26 +163,9 @@ export default function ConversationScreen() {
     }
   }, [authToken, peerId]);
 
-  function decryptAndSet(raw: RawMessage[]) {
-    const sk = secretKeyRef.current;
-    if (!sk) { setMessages(raw.map((m) => ({ ...m, plaintext: "..." }))); return; }
-
-    const resolved: DecryptedMessage[] = raw.map((m) => {
-      if (m.msg_type === "darmin_transfer") {
-        return { ...m, plaintext: `💸 ${m.darmin_amount ?? "?"} Д` };
-      }
-      // peerPubKey may not be loaded yet — we'll try with what we have
-      const peerPub = peerPubKeyRef.current;
-      if (!peerPub) return { ...m, plaintext: "🔒 Ключ недоступен" };
-      const text = decryptMsg(m.ciphertext, m.nonce, peerPub, sk);
-      return { ...m, plaintext: text ?? "🔒 Не удалось расшифровать" };
-    });
-    setMessages(resolved);
-  }
-
   useEffect(() => {
-    if (peer && secretKeyRef.current) loadMessages();
-  }, [peer, loadMessages]);
+    loadMessages();
+  }, [loadMessages]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -171,51 +173,60 @@ export default function ConversationScreen() {
     }
   }, [messages.length]);
 
-  // ── WebSocket for real-time messages ──────────────────────────────────────
+  // ── Decrypt helpers ───────────────────────────────────────────────────────
+  function decryptOne(m: RawMessage): DecryptedMessage {
+    if (m.msg_type === "darmin_transfer") {
+      return { ...m, plaintext: `💸 ${m.darmin_amount ?? "?"} Д` };
+    }
+    const sk = secretKeyRef.current;
+    const pub = peerPubKeyRef.current;
+    if (!sk || !pub) return { ...m, plaintext: "🔒" };
+    return { ...m, plaintext: decryptMsg(m.ciphertext, m.nonce, pub, sk) ?? "🔒" };
+  }
+
+  function redecrypt(prev: DecryptedMessage[]): DecryptedMessage[] {
+    const sk = secretKeyRef.current;
+    const pub = peerPubKeyRef.current;
+    if (!sk || !pub) return prev;
+    return prev.map((m) => {
+      if (m.msg_type === "darmin_transfer") return m;
+      if (!m.plaintext.startsWith("🔒")) return m; // already decrypted
+      return { ...m, plaintext: decryptMsg(m.ciphertext, m.nonce, pub, sk) ?? "🔒" };
+    });
+  }
+
+  // ── WebSocket for real-time ───────────────────────────────────────────────
   useEffect(() => {
     if (!citizen || !authToken) return;
     const wsUrl = BASE_URL.replace(/^https?/, (m: string) => (m === "https" ? "wss" : "ws")) + "/api/ws";
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "auth", citizenId: citizen.id }));
-    };
+    ws.onopen = () => ws.send(JSON.stringify({ type: "auth", citizenId: citizen.id }));
 
     ws.onmessage = (evt: MessageEvent) => {
       try {
         const msg = JSON.parse(evt.data as string) as { type: string; message?: RawMessage };
-        if (msg.type === "chat_message" && msg.message) {
-          const m = msg.message;
-          if (
-            (m.from_citizen_id === peerId && m.to_citizen_id === citizen.id) ||
-            (m.from_citizen_id === citizen.id && m.to_citizen_id === peerId)
-          ) {
-            const sk = secretKeyRef.current;
-            const peerPub = peerPubKeyRef.current;
-            let plaintext = "🔒";
-            if (m.msg_type === "darmin_transfer") {
-              plaintext = `💸 ${m.darmin_amount ?? "?"} Д`;
-            } else if (sk && peerPub) {
-              plaintext = decryptMsg(m.ciphertext, m.nonce, peerPub, sk) ?? "🔒";
-            }
-            const dm: DecryptedMessage = { ...m, plaintext };
-            setMessages((prev) => [...prev, dm]);
-            setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
+        if (msg.type !== "chat_message" || !msg.message) return;
+        const m = msg.message;
+        const isRelevant =
+          (m.from_citizen_id === peerId && m.to_citizen_id === citizen.id) ||
+          (m.from_citizen_id === citizen.id && m.to_citizen_id === peerId);
+        if (!isRelevant) return;
 
-            // Mark as read if from peer
-            if (m.from_citizen_id === peerId) {
-              fetch(`${BASE_URL}/api/chat/messages/read/${peerId}`, { method: "PATCH", headers: authHeaders }).catch(() => { /* silent */ });
-            }
-          }
+        setMessages((prev) => [...prev, decryptOne(m)]);
+        setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
+
+        if (m.from_citizen_id === peerId) {
+          fetch(`${BASE_URL}/api/chat/messages/read/${peerId}`, {
+            method: "PATCH",
+            headers: authHeaders,
+          }).catch(() => { /* silent */ });
         }
-      } catch { /* ignore parse errors */ }
+      } catch { /* ignore */ }
     };
 
-    return () => {
-      ws.close();
-      wsRef.current = null;
-    };
+    return () => { ws.close(); wsRef.current = null; };
   }, [citizen, authToken, peerId]);
 
   // ── Send message ──────────────────────────────────────────────────────────
@@ -223,11 +234,7 @@ export default function ConversationScreen() {
     if (!input.trim() || !citizen || !authToken) return;
     const peerPub = peerPubKeyRef.current;
     const sk = secretKeyRef.current;
-
-    if (!peerPub || !sk) {
-      Alert.alert("E2EE", "Собеседник не зарегистрировал ключ шифрования. Попросите его открыть чат.");
-      return;
-    }
+    if (!peerPub || !sk) return; // guard (button disabled when no key)
 
     setSending(true);
     try {
@@ -238,11 +245,11 @@ export default function ConversationScreen() {
         body: JSON.stringify({ toCitizenId: peerId, ciphertext, nonce }),
       });
       if (!res.ok) {
-        const err = await res.json() as { error?: string };
+        const err = (await res.json()) as { error?: string };
         Alert.alert("Ошибка", err.error ?? "Не удалось отправить");
         return;
       }
-      const { message: sent } = await res.json() as { message: RawMessage };
+      const { message: sent } = (await res.json()) as { message: RawMessage };
       setMessages((prev) => [...prev, { ...sent, plaintext: input.trim() }]);
       setInput("");
       setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
@@ -262,7 +269,6 @@ export default function ConversationScreen() {
     }
     setTransferring(true);
     try {
-      // 1. Make the actual transaction
       const txRes = await fetch(`${BASE_URL}/api/transactions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
@@ -274,12 +280,12 @@ export default function ConversationScreen() {
         }),
       });
       if (!txRes.ok) {
-        const err = await txRes.json() as { error?: string };
+        const err = (await txRes.json()) as { error?: string };
         Alert.alert("Ошибка", err.error ?? "Транзакция не выполнена");
         return;
       }
 
-      // 2. Send chat notification (darmin_transfer type) — ciphertext contains note
+      // Send chat notification if E2EE is available
       const peerPub = peerPubKeyRef.current;
       const sk = secretKeyRef.current;
       if (peerPub && sk) {
@@ -319,6 +325,8 @@ export default function ConversationScreen() {
   }
 
   const peerName = peer?.name ?? `ID ${peerId}`;
+  const canSend = !!peerPubKeyRef.current && !!secretKeyRef.current;
+  const peerNoKey = peer !== null && !peer.hasKey;
 
   return (
     <SafeAreaView style={s.safe}>
@@ -329,22 +337,41 @@ export default function ConversationScreen() {
         </TouchableOpacity>
         <View style={s.peerInfo}>
           <View style={s.peerAvatar}>
-            <Text style={s.peerAvatarText}>{(peerName)[0]?.toUpperCase()}</Text>
+            <Text style={s.peerAvatarText}>{peerName[0]?.toUpperCase()}</Text>
           </View>
           <View>
             <Text style={s.peerName}>{peerName}</Text>
             {peer?.rank && <Text style={s.peerRank}>{peer.rank}</Text>}
           </View>
         </View>
-        <View style={s.e2eeBadge}>
-          <Feather name="lock" size={9} color={C.primary} />
-          <Text style={s.e2eeText}>E2EE</Text>
+        <View style={[s.e2eeBadge, peerNoKey && s.e2eeBadgeWarn]}>
+          <Feather name={peerNoKey ? "unlock" : "lock"} size={9} color={peerNoKey ? "#C97C4C" : C.primary} />
+          <Text style={[s.e2eeText, peerNoKey && { color: "#C97C4C" }]}>
+            {peerNoKey ? "Нет ключа" : "E2EE"}
+          </Text>
         </View>
       </View>
+
+      {/* No-key banner */}
+      {peerNoKey && (
+        <View style={s.noKeyBanner}>
+          <Feather name="alert-circle" size={14} color="#C97C4C" />
+          <Text style={s.noKeyText}>
+            {peerName} ещё не открывал чат — E2EE ключ не зарегистрирован.
+            Отправка сообщений недоступна.
+          </Text>
+        </View>
+      )}
 
       {/* Messages */}
       {loading ? (
         <View style={s.centered}><ActivityIndicator color={C.primary} /></View>
+      ) : messages.length === 0 ? (
+        <View style={s.centered}>
+          <Feather name="message-circle" size={36} color={C.muted} />
+          <Text style={s.emptyText}>Нет сообщений</Text>
+          {!peerNoKey && <Text style={s.emptySubText}>Начните переписку</Text>}
+        </View>
       ) : (
         <FlatList
           ref={flatRef}
@@ -380,27 +407,29 @@ export default function ConversationScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
         <View style={s.inputBar}>
           <TouchableOpacity
-            style={s.darminBtn}
-            onPress={() => setDarminModal(true)}
+            style={[s.darminBtn, peerNoKey && { opacity: 0.4 }]}
+            onPress={() => !peerNoKey && setDarminModal(true)}
             activeOpacity={0.75}
+            disabled={peerNoKey}
           >
             <Text style={s.darminBtnText}>Д</Text>
           </TouchableOpacity>
           <TextInput
-            style={s.input}
-            placeholder="Сообщение..."
+            style={[s.input, !canSend && { opacity: 0.5 }]}
+            placeholder={peerNoKey ? "Собеседник не подключил чат" : "Сообщение..."}
             placeholderTextColor={C.muted}
             value={input}
             onChangeText={setInput}
             multiline
             maxLength={2000}
+            editable={canSend}
             returnKeyType="send"
             onSubmitEditing={sendMessage}
           />
           <TouchableOpacity
-            style={[s.sendBtn, (!input.trim() || sending) && s.sendBtnDisabled]}
+            style={[s.sendBtn, (!canSend || !input.trim() || sending) && s.sendBtnDisabled]}
             onPress={sendMessage}
-            disabled={!input.trim() || sending}
+            disabled={!canSend || !input.trim() || sending}
             activeOpacity={0.75}
           >
             {sending ? (
@@ -461,8 +490,10 @@ export default function ConversationScreen() {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   muted: { color: C.muted, fontSize: 15 },
+  emptyText: { fontSize: 15, fontFamily: "Inter_500Medium", color: C.muted },
+  emptySubText: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.muted },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border, gap: 12 },
   peerInfo: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
   peerAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(201,168,76,0.15)", borderWidth: 1, borderColor: "rgba(201,168,76,0.3)", alignItems: "center", justifyContent: "center" },
@@ -470,7 +501,10 @@ const s = StyleSheet.create({
   peerName: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: C.fg },
   peerRank: { fontSize: 10, fontFamily: "Inter_400Regular", color: C.primary },
   e2eeBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(201,168,76,0.1)", borderWidth: 1, borderColor: "rgba(201,168,76,0.25)", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8 },
+  e2eeBadgeWarn: { backgroundColor: "rgba(201,124,76,0.1)", borderColor: "rgba(201,124,76,0.3)" },
   e2eeText: { fontSize: 9, fontFamily: "Inter_600SemiBold", color: C.primary },
+  noKeyBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: C.warn, borderBottomWidth: 1, borderBottomColor: C.warnBorder, paddingHorizontal: 16, paddingVertical: 10 },
+  noKeyText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", color: "#C97C4C", lineHeight: 17 },
   msgList: { padding: 12, gap: 6, flexGrow: 1 },
   msgRow: { flexDirection: "row", marginBottom: 6 },
   msgRowMine: { justifyContent: "flex-end" },
