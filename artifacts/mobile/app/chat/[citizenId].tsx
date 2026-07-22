@@ -460,6 +460,21 @@ export default function ConversationScreen() {
     if ((!input.trim() && pendingFiles.length === 0) || !citizen) return;
     const text = input.trim();
 
+    // ── Capture state before clearing UI ─────────────────────────────────
+    const capturedFiles = pendingFiles;
+    const capturedReplyTo = replyTo;
+
+    // ── Convert pending files to optimistic AttachmentMeta (local URIs) ──
+    const optimisticAttachments: AttachmentMeta[] = capturedFiles.map((f) => ({
+      url: f.uri,
+      type: f.mimeType.startsWith("image/") ? "image"
+        : f.mimeType.startsWith("video/") ? "video"
+        : f.mimeType.startsWith("audio/") ? "audio"
+        : "document",
+      name: f.name,
+      size: f.size,
+    }));
+
     // ── Optimistic UI: показываем сообщение мгновенно ─────────────────────
     const tempId = -Date.now();
     const tempMsg: DecryptedMessage = {
@@ -471,10 +486,10 @@ export default function ConversationScreen() {
       msg_type: "text",
       darmin_amount: null,
       forwarded_from_id: null,
-      reply_to_id: replyTo?.id ?? null,
-      reply_sender_name: replyTo?.senderName ?? null,
-      reply_content: replyTo?.text.slice(0, 400) ?? null,
-      attachments: null,
+      reply_to_id: capturedReplyTo?.id ?? null,
+      reply_sender_name: capturedReplyTo?.senderName ?? null,
+      reply_content: capturedReplyTo?.text.slice(0, 400) ?? null,
+      attachments: optimisticAttachments.length > 0 ? optimisticAttachments : null,
       created_at: new Date().toISOString(),
       delivered_at: null,
       read_at: null,
@@ -484,16 +499,21 @@ export default function ConversationScreen() {
     setMessages((prev) => [...prev, tempMsg]);
     setInput("");
     setReplyTo(null);
-    const capturedFiles = pendingFiles;
     setPendingFiles([]);
     setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
+
+    // Helper: rollback optimistic message and restore input state
+    const rollback = (restoreFiles = true) => {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      if (text) setInput(text);
+      if (restoreFiles && capturedFiles.length > 0) setPendingFiles(capturedFiles);
+    };
 
     setSending(true);
     try {
       const hdrs = await getStoredAuthHeaders();
       if (!hdrs.Authorization) {
-        setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        setInput(text);
+        rollback();
         Alert.alert("Сессия истекла", "Выйдите и войдите снова");
         return;
       }
@@ -505,8 +525,7 @@ export default function ConversationScreen() {
         try {
           uploadedAttachments = await uploadPendingFiles(rawToken);
         } catch (uploadErr) {
-          setMessages((prev) => prev.filter((m) => m.id !== tempId));
-          setPendingFiles(capturedFiles);
+          rollback();
           Alert.alert("Ошибка загрузки", String(uploadErr instanceof Error ? uploadErr.message : uploadErr));
           return;
         }
@@ -520,22 +539,22 @@ export default function ConversationScreen() {
       const sk = secretKeyRef.current;
 
       if (!peerPub || !sk) {
-        setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        setInput(text);
+        rollback();
         Alert.alert("Ошибка ключа", "Не удалось загрузить ключ шифрования. Попробуйте ещё раз.");
         return;
       }
 
       // ── Шифруем ──────────────────────────────────────────────────────────
+      // Текст для шифрования: если только вложения — служебный маркер
+      const plainForEncrypt = text || (capturedFiles.length > 0 ? "" : "");
       let ciphertext: string, nonce: string;
       try {
-        const enc = encryptMsg(text || "[вложение]", peerPub, sk);
+        const enc = encryptMsg(plainForEncrypt || "\u200b", peerPub, sk);
         ciphertext = enc.ciphertext;
         nonce = enc.nonce;
       } catch (encErr) {
         console.error("SEND_MESSAGE_ENCRYPT_ERROR:", encErr);
-        setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        setInput(text);
+        rollback();
         Alert.alert("Ошибка шифрования", String(encErr instanceof Error ? encErr.message : encErr));
         return;
       }
@@ -546,25 +565,28 @@ export default function ConversationScreen() {
         headers: { "Content-Type": "application/json", ...hdrs },
         body: JSON.stringify({
           toCitizenId: peerId, ciphertext, nonce,
-          ...(replyTo ? { replyToId: replyTo.id, replySenderName: replyTo.senderName, replyContent: replyTo.text.slice(0, 400) } : {}),
+          ...(capturedReplyTo ? { replyToId: capturedReplyTo.id, replySenderName: capturedReplyTo.senderName, replyContent: capturedReplyTo.text.slice(0, 400) } : {}),
           ...(uploadedAttachments && uploadedAttachments.length > 0 ? { attachments: uploadedAttachments } : {}),
         }),
       });
       if (!res.ok) {
         const errBody = (await res.json().catch(() => ({}))) as { error?: string };
         console.error("SEND_MESSAGE_SERVER_ERROR:", res.status, errBody);
-        setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        setInput(text);
+        rollback();
         Alert.alert("Ошибка", errBody.error ?? `Ошибка сервера ${res.status}`);
         return;
       }
       const { message: sent } = (await res.json()) as { message: RawMessage };
-      // Заменяем временное сообщение реальным
-      setMessages((prev) => prev.map((m) => m.id === tempId ? { ...sent, plaintext: text } : m));
+      // Заменяем временное сообщение реальным (с server-side URLs для вложений)
+      setMessages((prev) => prev.map((m) => {
+        if (m.id !== tempId) return m;
+        // Отображаемый текст: если пустой (только вложение) — скрываем служебный символ
+        const displayText = text || "";
+        return { ...sent, plaintext: displayText };
+      }));
     } catch (err) {
       console.error("SEND_MESSAGE_ERROR:", err);
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      setInput(text);
+      rollback();
       Alert.alert("Ошибка", "Сетевая ошибка при отправке");
     } finally {
       setSending(false);
