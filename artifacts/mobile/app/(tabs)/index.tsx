@@ -974,21 +974,18 @@ export default function TimerScreen() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  // ── Logout confirmation (inline, works in web too) ──────────────────────────
-  const [confirmLogout, setConfirmLogout] = useState(false);
-  const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Logout (single-tap, optimistic, blocks repeat clicks) ──────────────────
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogoutPress = useCallback(() => {
-    if (confirmLogout) {
-      if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
-      setCitizen(null);
-      setConfirmLogout(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else {
-      setConfirmLogout(true);
-      logoutTimerRef.current = setTimeout(() => setConfirmLogout(false), 3000);
-    }
-  }, [confirmLogout]);
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    // 1. Optimistically clear all cached data immediately
+    queryClient.clear();
+    // 2. Clear citizen state + wipe stored token from SecureStore / AsyncStorage
+    setCitizen(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [isLoggingOut, setCitizen, queryClient]);
 
   const { data: citizens = [], isLoading: loadingCitizens } = useQuery<Citizen[]>({
     queryKey: ["citizens"],
@@ -1167,16 +1164,18 @@ export default function TimerScreen() {
             <TouchableOpacity
               style={[
                 styles.passportLogout,
-                confirmLogout
-                  ? { borderColor: colors.destructive, backgroundColor: colors.destructive + "33" }
-                  : { borderColor: colors.destructive + "55", backgroundColor: colors.destructive + "15" },
+                { borderColor: colors.destructive + "55", backgroundColor: colors.destructive + "15" },
+                isLoggingOut && { opacity: 0.5 },
               ]}
               onPress={handleLogoutPress}
+              disabled={isLoggingOut}
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
-              <Feather name="log-out" size={13} color={colors.destructive} />
+              {isLoggingOut
+                ? <ActivityIndicator size={13} color={colors.destructive} />
+                : <Feather name="log-out" size={13} color={colors.destructive} />}
               <Text style={[styles.passportLogoutText, { color: colors.destructive }]}>
-                {confirmLogout ? ui.logout_confirm_yes : ui.logout}
+                {ui.logout}
               </Text>
             </TouchableOpacity>
           </View>
