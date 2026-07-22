@@ -109,52 +109,50 @@ export default function ConversationScreen() {
   const recordingRef = useRef<Audio.Recording | null>(null);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Step 1: Init MY keypair ───────────────────────────────────────────────
+  // ── Step 1: Init MY local secret key (server registration is in CitizenContext) ──
   useEffect(() => {
     if (!citizen) return;
-    (async () => {
-      try {
-        const kp = await getOrCreateKeyPair();
-        secretKeyRef.current = kp.secretKey;
-        const checkRes = await fetch(`${BASE_URL}/api/chat/key/${citizen.id}`);
-        const checkData = (await checkRes.json()) as { publicKey?: string };
-        if (checkData.publicKey !== kp.publicKeyB64) {
-          const hdrs = await getStoredAuthHeaders();
-          await fetch(`${BASE_URL}/api/chat/key`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...hdrs },
-            body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
-          });
-        }
-      } catch { /* silent */ }
-    })();
+    getOrCreateKeyPair()
+      .then((kp) => { secretKeyRef.current = kp.secretKey; })
+      .catch(() => {});
   }, [citizen]);
 
-  // ── Step 2: Load peer info ────────────────────────────────────────────────
+  // ── Step 2: Load peer info + key ─────────────────────────────────────────
+  const fetchPeerKey = useCallback(async () => {
+    if (!peerId) return;
+    try {
+      const keyRes = await fetch(`${BASE_URL}/api/chat/key/${peerId}`);
+      if (keyRes.ok) {
+        const d = (await keyRes.json()) as { citizenId: number; name: string; publicKey: string };
+        peerPubKeyRef.current = decodeBase64(d.publicKey);
+        setPeer({ id: d.citizenId, name: d.name, rank: null, hasKey: true });
+        setMessages((prev) => redecrypt(prev));
+        return;
+      }
+    } catch { /* fall through */ }
+    try {
+      const citRes = await fetch(`${BASE_URL}/api/citizens/${peerId}`);
+      if (citRes.ok) {
+        const c = (await citRes.json()) as { id: number; name: string | null; rank: string | null };
+        if (c?.id) setPeer((prev) => prev?.hasKey ? prev : { id: c.id, name: c.name, rank: c.rank, hasKey: false });
+        return;
+      }
+    } catch { /* silent */ }
+    setPeer((prev) => prev ?? { id: peerId, name: null, rank: null, hasKey: false });
+  }, [peerId]);
+
+  useEffect(() => { fetchPeerKey(); }, [fetchPeerKey]);
+
+  // Auto-poll for peer key every 15 s while key is missing
   useEffect(() => {
     if (!peerId) return;
-    (async () => {
-      try {
-        const keyRes = await fetch(`${BASE_URL}/api/chat/key/${peerId}`);
-        if (keyRes.ok) {
-          const d = (await keyRes.json()) as { citizenId: number; name: string; publicKey: string };
-          peerPubKeyRef.current = decodeBase64(d.publicKey);
-          setPeer({ id: d.citizenId, name: d.name, rank: null, hasKey: true });
-          setMessages((prev) => redecrypt(prev));
-          return;
-        }
-      } catch { /* fall through */ }
-      try {
-        const citRes = await fetch(`${BASE_URL}/api/citizens/${peerId}`);
-        if (citRes.ok) {
-          const c = (await citRes.json()) as { id: number; name: string | null; rank: string | null };
-          if (c?.id) setPeer({ id: c.id, name: c.name, rank: c.rank, hasKey: false });
-          return;
-        }
-      } catch { /* silent */ }
-      setPeer({ id: peerId, name: null, rank: null, hasKey: false });
-    })();
-  }, [peerId]);
+    const interval = setInterval(async () => {
+      // Only poll if we still don't have the key
+      if (peerPubKeyRef.current) { clearInterval(interval); return; }
+      await fetchPeerKey();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [peerId, fetchPeerKey]);
 
   // ── Step 3: Load messages ─────────────────────────────────────────────────
   const loadMessages = useCallback(async () => {
@@ -532,7 +530,11 @@ export default function ConversationScreen() {
       {peerNoKey && (
         <View style={s.noKeyBanner}>
           <Feather name="alert-circle" size={14} color="#C97C4C" />
-          <Text style={s.noKeyText}>{peerName} ещё не открывал чат — E2EE ключ не зарегистрирован. Отправка недоступна.</Text>
+          <Text style={s.noKeyText}>{peerName} ещё не открывал чат — E2EE ключ не зарегистрирован.</Text>
+          <TouchableOpacity onPress={fetchPeerKey} activeOpacity={0.7} style={s.retryKeyBtn}>
+            <Feather name="refresh-cw" size={12} color="#C97C4C" />
+            <Text style={s.retryKeyText}>Обновить</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -778,8 +780,10 @@ const s = StyleSheet.create({
   searchBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border, gap: 8, backgroundColor: C.surface },
   searchInput: { flex: 1, color: C.fg, fontFamily: "Inter_400Regular", fontSize: 14 },
   searchCount: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.muted },
-  noKeyBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: C.warn, borderBottomWidth: 1, borderBottomColor: C.warnBorder, paddingHorizontal: 16, paddingVertical: 10 },
+  noKeyBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.warn, borderBottomWidth: 1, borderBottomColor: C.warnBorder, paddingHorizontal: 16, paddingVertical: 10 },
   noKeyText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", color: "#C97C4C", lineHeight: 17 },
+  retryKeyBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: "rgba(201,124,76,0.4)" },
+  retryKeyText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#C97C4C" },
   msgList: { padding: 12, gap: 4, flexGrow: 1 },
   msgRow: { flexDirection: "row", marginBottom: 6 },
   msgRowMine: { justifyContent: "flex-end" },

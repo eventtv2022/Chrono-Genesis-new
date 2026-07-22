@@ -1,4 +1,6 @@
 import { getBaseUrl } from "@/lib/api";
+import { getStoredAuthHeaders } from "@/lib/authStorage";
+import { getOrCreateKeyPair } from "@/lib/e2ee";
 import React, { createContext, useContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -68,6 +70,31 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     });
   }, []);
+
+  // ── Register E2EE public key globally when citizen is authenticated ─────────
+  // This runs whenever the citizen logs in or app restarts with a saved session.
+  // Ensures every user's public key is on the server so anyone can message them
+  // without the recipient having to open a specific chat first.
+  useEffect(() => {
+    if (!citizen) return;
+    (async () => {
+      try {
+        const kp = await getOrCreateKeyPair();
+        const checkRes = await fetch(`${BASE_URL}/api/chat/key/${citizen.id}`);
+        if (checkRes.ok) {
+          const existing = (await checkRes.json()) as { publicKey?: string };
+          if (existing.publicKey === kp.publicKeyB64) return; // already registered
+        }
+        const hdrs = await getStoredAuthHeaders();
+        if (!hdrs.Authorization) return; // no token yet — will retry on next citizen change
+        await fetch(`${BASE_URL}/api/chat/key`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...hdrs },
+          body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
+        });
+      } catch { /* non-critical, silent */ }
+    })();
+  }, [citizen?.id]);
 
   async function refreshCitizen() {
     if (!citizen) return;
