@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -14,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ChronoSounds } from "@/lib/chronoSounds";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -73,7 +75,7 @@ interface DecryptedMessage extends RawMessage {
   plaintext: string;
 }
 
-interface PeerInfo { id: number; name: string | null; rank: string | null; hasKey: boolean; photoUrl?: string | null; }
+interface PeerInfo { id: number; name: string | null; rank: string | null; hasKey: boolean; photoUrl?: string | null; meritScore?: number; citizenDays?: number; }
 interface CitizenItem { id: number; name: string | null; rank: string | null; }
 
 function formatTime(iso: string | Date | null | undefined): string {
@@ -127,6 +129,11 @@ export default function ConversationScreen() {
   const [safetyModal, setSafetyModal] = useState(false);
   const [replyTo, setReplyTo] = useState<{ id: number; text: string; senderName: string } | null>(null);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+
+  // ── Phase 1: Tip + Chrono UI state ────────────────────────────────────────
+  const [tippingMsgId, setTippingMsgId] = useState<number | null>(null);
+  const tipToastAnim = useRef(new Animated.Value(0)).current;
+  const [tipToastText, setTipToastText] = useState<string>("");
 
   const flatRef = useRef<FlatList>(null);
   const secretKeyRef = useRef<Uint8Array | null>(null);
@@ -182,11 +189,14 @@ export default function ConversationScreen() {
     try {
       const citRes = await fetch(`${BASE_URL}/api/citizens/${peerId}`);
       if (citRes.ok) {
-        const c = (await citRes.json()) as { id: number; name: string | null; rank: string | null; photoUrl?: string | null };
+        const c = (await citRes.json()) as { id: number; name: string | null; rank: string | null; photoUrl?: string | null; meritScore?: number; createdAt?: string };
         if (c?.id) {
+          const citizenDays = c.createdAt
+            ? Math.floor((Date.now() - new Date(c.createdAt).getTime()) / 86_400_000)
+            : undefined;
           setPeer((prev) => prev
-            ? { ...prev, rank: c.rank ?? prev.rank, photoUrl: c.photoUrl ?? prev.photoUrl }
-            : { id: c.id, name: c.name, rank: c.rank, hasKey: false, photoUrl: c.photoUrl });
+            ? { ...prev, rank: c.rank ?? prev.rank, photoUrl: c.photoUrl ?? prev.photoUrl, meritScore: c.meritScore, citizenDays }
+            : { id: c.id, name: c.name, rank: c.rank, hasKey: false, photoUrl: c.photoUrl, meritScore: c.meritScore, citizenDays });
         }
       }
     } catch { /* silent */ }
@@ -296,6 +306,7 @@ export default function ConversationScreen() {
           setMessages((prev) => [...prev, decryptOne(m)]);
           setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
           if (m.from_citizen_id === peerId) {
+            ChronoSounds.playReceive();
             getStoredAuthHeaders().then((h) =>
               fetch(`${BASE_URL}/api/chat/messages/read/${peerId}`, { method: "PATCH", headers: h }).catch(() => {})
             );
@@ -331,6 +342,18 @@ export default function ConversationScreen() {
             if (m.id !== messageId) return m;
             return { ...m, reactions: m.reactions.filter((r) => !(r.citizenId === cid && r.emoji === emoji)) };
           }));
+        }
+
+        if (msg["type"] === "tip_received") {
+          const { fromName, amount } = msg as { fromName: string; amount: number };
+          ChronoSounds.playTip();
+          setTipToastText(`+${amount} Д от ${fromName}`);
+          tipToastAnim.setValue(0);
+          Animated.sequence([
+            Animated.timing(tipToastAnim, { toValue: 1, duration: 280, useNativeDriver: true }),
+            Animated.delay(1800),
+            Animated.timing(tipToastAnim, { toValue: 0, duration: 280, useNativeDriver: true }),
+          ]).start();
         }
 
         // ── Call signaling ─────────────────────────────────────────────────
@@ -629,12 +652,45 @@ export default function ConversationScreen() {
         const displayText = text || "";
         return { ...sent, plaintext: displayText };
       }));
+      ChronoSounds.playSend();
     } catch (err) {
       console.error("SEND_MESSAGE_ERROR:", err);
       rollback();
       Alert.alert("Ошибка", "Сетевая ошибка при отправке");
     } finally {
       setSending(false);
+    }
+  }
+
+  // ── Tip +1 Д ─────────────────────────────────────────────────────────────
+  async function sendTip(toCitizenId: number, msgId: number) {
+    if (tippingMsgId !== null) return;
+    setTippingMsgId(msgId);
+    setSelectedMsg(null);
+    try {
+      const hdrs = await getStoredAuthHeaders();
+      const res = await fetch(`${BASE_URL}/api/chat/tip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...hdrs },
+        body: JSON.stringify({ toCitizenId }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        Alert.alert("Ошибка", err.error ?? "Не удалось отправить чаевые");
+        return;
+      }
+      ChronoSounds.playTip();
+      setTipToastText("+1 Д ⏱");
+      tipToastAnim.setValue(0);
+      Animated.sequence([
+        Animated.timing(tipToastAnim, { toValue: 1, duration: 280, useNativeDriver: true }),
+        Animated.delay(1500),
+        Animated.timing(tipToastAnim, { toValue: 0, duration: 280, useNativeDriver: true }),
+      ]).start();
+    } catch {
+      Alert.alert("Ошибка", "Сетевая ошибка");
+    } finally {
+      setTippingMsgId(null);
     }
   }
 
@@ -917,7 +973,12 @@ export default function ConversationScreen() {
           />
           <View style={s.peerNameBlock}>
             <Text style={s.peerName} numberOfLines={1} ellipsizeMode="tail">{peerName}</Text>
-            {peer?.rank && <Text style={s.peerRank} numberOfLines={1}>{peer.rank}</Text>}
+            {peer && (
+              <Text style={s.peerRank} numberOfLines={1}>
+                {peer.citizenDays !== undefined ? `${peer.citizenDays} дн.` : (peer.rank ?? "")}
+                {peer.meritScore !== undefined ? ` · Merit ${peer.meritScore.toFixed(1)}` : ""}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -1094,6 +1155,19 @@ export default function ConversationScreen() {
         />
       )}
 
+      {/* Tip toast overlay */}
+      {tipToastText !== "" && (
+        <Animated.View
+          style={[s.tipToastWrap, {
+            opacity: tipToastAnim,
+            transform: [{ translateY: tipToastAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+            pointerEvents: "none",
+          }]}
+        >
+          <Text style={s.tipToastLabel}>{tipToastText}</Text>
+        </Animated.View>
+      )}
+
       {/* Input bar */}
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
         {replyTo && (
@@ -1203,6 +1277,18 @@ export default function ConversationScreen() {
               <Feather name="corner-up-left" size={18} color={C.fg} />
               <Text style={s.actionText}>Ответить</Text>
             </TouchableOpacity>
+            {/* Tip — only available on peer's messages */}
+            {selectedMsg && selectedMsg.from_citizen_id !== citizen.id && (
+              <TouchableOpacity
+                style={s.actionItem}
+                onPress={() => { if (selectedMsg) sendTip(selectedMsg.from_citizen_id, selectedMsg.id); }}
+                disabled={tippingMsgId !== null}
+                activeOpacity={0.75}
+              >
+                <Text style={s.tipIcon}>⏱</Text>
+                <Text style={[s.actionText, s.tipText]}>Чаевые +1 Д</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -1384,6 +1470,10 @@ const s = StyleSheet.create({
   reactPillMine: { borderColor: "rgba(201,168,76,0.5)", backgroundColor: "rgba(201,168,76,0.1)" },
   reactEmoji: { fontSize: 14 },
   reactCount: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: C.fg },
+  tipToastWrap: { position: "absolute", bottom: 110, left: 0, right: 0, alignItems: "center", zIndex: 20, pointerEvents: "none" },
+  tipToastLabel: { backgroundColor: "rgba(201,168,76,0.92)", color: "#0A0A0F", fontFamily: "Inter_700Bold", fontSize: 14, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, overflow: "hidden" },
+  tipIcon: { fontSize: 18 },
+  tipText: { color: C.primary },
   inputBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border, gap: 8, backgroundColor: C.bg },
   darminBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: C.primary, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(201,168,76,0.1)", flexShrink: 0 },
   darminBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: C.primary },

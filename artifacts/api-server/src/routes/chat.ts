@@ -241,6 +241,67 @@ router.post("/chat/transfer", async (req, res): Promise<void> => {
   res.json({ success: true, newBalance: (sender.balanceMinutes ?? 0) - amount });
 });
 
+// ── POST /chat/tip — quick +1 Д tip from chat ─────────────────────────────
+
+const chatTipSchema = z.object({
+  toCitizenId: z.number().int().positive(),
+});
+
+router.post("/chat/tip", async (req, res): Promise<void> => {
+  const me = await getAuthCitizen(req.headers.authorization);
+  if (!me) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const parsed = chatTipSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "toCitizenId обязателен" }); return; }
+
+  const { toCitizenId } = parsed.data;
+  if (toCitizenId === me.id) { res.status(400).json({ error: "Нельзя дать чаевые самому себе" }); return; }
+
+  const [sender] = await db
+    .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
+    .from(citizensTable).where(eq(citizensTable.id, me.id)).limit(1);
+  if (!sender) { res.status(404).json({ error: "Гражданин не найден" }); return; }
+
+  // Keep 1 Д родовой минуты — need balance > 1 to send a tip of 1 Д
+  if ((sender.balanceMinutes ?? 0) - 1 < 1) {
+    res.status(400).json({ error: "Недостаточно Дарминов для чаевых (нужно > 1 Д)" });
+    return;
+  }
+
+  const [recipient] = await db
+    .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
+    .from(citizensTable).where(eq(citizensTable.id, toCitizenId)).limit(1);
+  if (!recipient) { res.status(404).json({ error: "Получатель не найден" }); return; }
+
+  await db.update(citizensTable)
+    .set({ balanceMinutes: (sender.balanceMinutes ?? 0) - 1 })
+    .where(eq(citizensTable.id, me.id));
+  await db.update(citizensTable)
+    .set({ balanceMinutes: (recipient.balanceMinutes ?? 0) + 1 })
+    .where(eq(citizensTable.id, toCitizenId));
+
+  await db.insert(transactionsTable).values({
+    sessionId:          0,
+    fromCitizenId:      me.id,
+    toCitizenId:        toCitizenId,
+    fromCitizenName:    sender.name    ?? `ID ${me.id}`,
+    toCitizenName:      recipient.name ?? `ID ${toCitizenId}`,
+    minutesTransferred: 1,
+    durationSeconds:    0,
+  });
+
+  // WS push — notify recipient in real-time
+  pushToCitizen(toCitizenId, {
+    type: "tip_received",
+    fromCitizenId: me.id,
+    fromName: sender.name ?? `ID ${me.id}`,
+    amount: 1,
+  });
+
+  logger.info({ from: me.id, to: toCitizenId }, "Chat tip +1Д");
+  res.json({ ok: true, newBalance: (sender.balanceMinutes ?? 0) - 1 });
+});
+
 // ── GET /chat/conversations ────────────────────────────────────────────────
 
 router.get("/chat/conversations", async (req, res): Promise<void> => {
