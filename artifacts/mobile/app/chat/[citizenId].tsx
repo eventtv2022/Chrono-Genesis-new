@@ -265,30 +265,92 @@ export default function ConversationScreen() {
   // ── Send text message ─────────────────────────────────────────────────────
   async function sendMessage() {
     if (!input.trim() || !citizen) return;
-    const peerPub = peerPubKeyRef.current;
-    const sk = secretKeyRef.current;
-    if (!peerPub || !sk) { Alert.alert("Нет ключа", "Ключ шифрования ещё не загружен"); return; }
+    const text = input.trim();
+
+    // ── Optimistic UI: показываем сообщение мгновенно ─────────────────────
+    const tempId = -Date.now();
+    const tempMsg: DecryptedMessage = {
+      id: tempId,
+      from_citizen_id: citizen.id,
+      to_citizen_id: peerId,
+      ciphertext: "",
+      nonce: "",
+      msg_type: "text",
+      darmin_amount: null,
+      forwarded_from_id: null,
+      created_at: new Date().toISOString(),
+      delivered_at: null,
+      read_at: null,
+      reactions: [],
+      plaintext: text,
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+    setInput("");
+    setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
 
     setSending(true);
     try {
       const hdrs = await getStoredAuthHeaders();
-      if (!hdrs.Authorization) { Alert.alert("Сессия истекла", "Выйдите и войдите снова"); return; }
-      const { ciphertext, nonce } = encryptMsg(input.trim(), peerPub, sk);
+      if (!hdrs.Authorization) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        setInput(text);
+        Alert.alert("Сессия истекла", "Выйдите и войдите снова");
+        return;
+      }
+
+      // ── Получаем ключ peer (fetch on-demand если ещё не загружен) ────────
+      if (!peerPubKeyRef.current) {
+        await fetchPeerKey();
+      }
+      const peerPub = peerPubKeyRef.current;
+      const sk = secretKeyRef.current;
+
+      if (!peerPub || !sk) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        setInput(text);
+        Alert.alert("Ошибка ключа", "Не удалось загрузить ключ шифрования. Попробуйте ещё раз.");
+        return;
+      }
+
+      // ── Шифруем ──────────────────────────────────────────────────────────
+      let ciphertext: string, nonce: string;
+      try {
+        const enc = encryptMsg(text, peerPub, sk);
+        ciphertext = enc.ciphertext;
+        nonce = enc.nonce;
+      } catch (encErr) {
+        console.error("SEND_MESSAGE_ENCRYPT_ERROR:", encErr);
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        setInput(text);
+        Alert.alert("Ошибка шифрования", String(encErr instanceof Error ? encErr.message : encErr));
+        return;
+      }
+
+      // ── Отправляем на сервер ─────────────────────────────────────────────
       const res = await fetch(`${BASE_URL}/api/chat/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...hdrs },
         body: JSON.stringify({ toCitizenId: peerId, ciphertext, nonce }),
       });
       if (!res.ok) {
-        const err = (await res.json()) as { error?: string };
-        Alert.alert("Ошибка", err.error ?? "Не удалось отправить"); return;
+        const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+        console.error("SEND_MESSAGE_SERVER_ERROR:", res.status, errBody);
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        setInput(text);
+        Alert.alert("Ошибка", errBody.error ?? `Ошибка сервера ${res.status}`);
+        return;
       }
       const { message: sent } = (await res.json()) as { message: RawMessage };
-      setMessages((prev) => [...prev, { ...sent, plaintext: input.trim() }]);
-      setInput("");
-      setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
-    } catch { Alert.alert("Ошибка", "Сетевая ошибка"); }
-    finally { setSending(false); }
+      // Заменяем временное сообщение реальным
+      setMessages((prev) => prev.map((m) => m.id === tempId ? { ...sent, plaintext: text } : m));
+    } catch (err) {
+      console.error("SEND_MESSAGE_ERROR:", err);
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setInput(text);
+      Alert.alert("Ошибка", "Сетевая ошибка при отправке");
+    } finally {
+      setSending(false);
+    }
   }
 
   // ── Reactions ─────────────────────────────────────────────────────────────

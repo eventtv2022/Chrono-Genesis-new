@@ -64,7 +64,7 @@ export default function NewGroupScreen() {
     if (!groupName.trim()) { Alert.alert("Ошибка", "Введите название группы"); return; }
     if (selected.size === 0) { Alert.alert("Ошибка", "Выберите хотя бы одного участника"); return; }
 
-    // Read token fresh from AsyncStorage — bypasses any stale React state closure
+    // Read token fresh from AsyncStorage — bypasses stale React state closure
     const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
     if (!token) {
       Alert.alert("Сессия истекла", "Выйдите из аккаунта и войдите снова");
@@ -73,29 +73,38 @@ export default function NewGroupScreen() {
 
     setCreating(true);
     try {
+      const body = JSON.stringify({
+        name: groupName.trim(),
+        description: groupDesc.trim() || undefined,
+        memberIds: [...selected],
+      });
+      console.log("createGroup: POST /api/chat/groups", body);
+
       const res = await fetch(`${BASE_URL}/api/chat/groups`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: groupName.trim(),
-          description: groupDesc.trim() || undefined,
-          memberIds: [...selected],
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body,
       });
-      if (res.status === 401) {
-        Alert.alert("Сессия истекла", "Выйдите из аккаунта и войдите снова"); return;
-      }
+
+      const data = (await res.json().catch(() => ({}))) as { group?: { id: number }; error?: string };
+      console.log("createGroup: response", res.status, JSON.stringify(data));
+
       if (!res.ok) {
-        const err = (await res.json()) as { error?: string };
-        Alert.alert("Ошибка", err.error ?? "Не удалось создать группу"); return;
+        Alert.alert("Ошибка создания группы", data.error ?? `Сервер вернул ${res.status}`);
+        return;
       }
-      const { group } = (await res.json()) as { group: { id: number } };
-      router.replace(`/chat/group/${group.id}`);
-    } catch { Alert.alert("Ошибка", "Сетевая ошибка"); }
-    finally { setCreating(false); }
+      if (!data.group?.id) {
+        Alert.alert("Ошибка", "Сервер не вернул ID группы");
+        return;
+      }
+
+      router.push(`/chat/group/${data.group.id}`);
+    } catch (err) {
+      console.error("createGroup ERROR:", err);
+      Alert.alert("Сетевая ошибка", String(err instanceof Error ? err.message : err));
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (

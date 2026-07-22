@@ -411,28 +411,40 @@ router.post("/chat/groups", async (req, res): Promise<void> => {
   if (!me) { res.status(401).json({ error: "Требуется авторизация" }); return; }
 
   const parsed = createGroupSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Некорректные данные" }); return; }
+  if (!parsed.success) {
+    const msg = parsed.error.issues[0]?.message ?? "Некорректные данные";
+    logger.warn({ body: req.body, issues: parsed.error.issues }, "createGroup: validation failed");
+    res.status(400).json({ error: msg });
+    return;
+  }
 
   const { name, description, memberIds } = parsed.data;
 
-  const [group] = await db.insert(groupChatsTable).values({ name, description, createdBy: me.id }).returning();
-  if (!group) { res.status(500).json({ error: "Ошибка создания группы" }); return; }
+  try {
+    const [group] = await db.insert(groupChatsTable).values({ name, description, createdBy: me.id }).returning();
+    if (!group) { res.status(500).json({ error: "Ошибка создания группы" }); return; }
 
-  // Add creator as admin + all members
-  const allMemberIds = [...new Set([me.id, ...memberIds])];
-  await db.insert(groupMembersTable).values(
-    allMemberIds.map((cid) => ({ groupId: group.id, citizenId: cid, isAdmin: cid === me.id }))
-  ).onConflictDoNothing();
+    // Add creator as admin + all members (skip unknown citizenIds gracefully)
+    const allMemberIds = [...new Set([me.id, ...memberIds])];
+    await db.insert(groupMembersTable).values(
+      allMemberIds.map((cid) => ({ groupId: group.id, citizenId: cid, isAdmin: cid === me.id }))
+    ).onConflictDoNothing();
 
-  // Notify all members
-  for (const cid of allMemberIds) {
-    if (cid !== me.id) {
-      pushToCitizen(cid, { type: "group_created", group: { id: group.id, name, createdBy: me.id, creatorName: me.name } });
+    // Notify members (non-blocking, errors are silent)
+    for (const cid of allMemberIds) {
+      if (cid !== me.id) {
+        try {
+          pushToCitizen(cid, { type: "group_created", group: { id: group.id, name, createdBy: me.id, creatorName: me.name } });
+        } catch { /* silent — WS notification is best-effort */ }
+      }
     }
-  }
 
-  logger.info({ groupId: group.id, createdBy: me.id, members: allMemberIds.length }, "Group created");
-  res.status(201).json({ group });
+    logger.info({ groupId: group.id, createdBy: me.id, members: allMemberIds.length }, "Group created");
+    res.status(201).json({ group });
+  } catch (err) {
+    logger.error({ err, body: req.body, citizenId: me.id }, "createGroup: DB error");
+    res.status(500).json({ error: "Ошибка базы данных при создании группы" });
+  }
 });
 
 // ── GET /chat/groups/:groupId — group info + members ─────────────────────
