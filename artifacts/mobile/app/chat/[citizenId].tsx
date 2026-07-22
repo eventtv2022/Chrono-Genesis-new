@@ -18,6 +18,9 @@ import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { decodeBase64 } from "tweetnacl-util";
 import { Audio } from "expo-av";
+import type { MediaStream } from "react-native-webrtc";
+import { WebRTCService } from "@/lib/webrtcService";
+import CallScreen, { type CallState } from "./CallScreen";
 
 import { useCitizen } from "@/context/CitizenContext";
 import { getBaseUrl } from "@/lib/api";
@@ -121,6 +124,19 @@ export default function ConversationScreen() {
   const wsRef = useRef<WebSocket | null>(null);
   const forwardMsgRef = useRef<DecryptedMessage | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
+  // ── Call state ────────────────────────────────────────────────────────────
+  const [callState, setCallState] = useState<CallState>("idle");
+  const [callType, setCallType] = useState<"audio" | "video">("audio");
+  const [callDuration, setCallDuration] = useState(0);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCameraOn, setIsCameraOn] = useState(true);
+  const [incomingSdp, setIncomingSdp] = useState<{ type: string; sdp: string } | null>(null);
+  const [incomingCallType, setIncomingCallType] = useState<"audio" | "video">("audio");
+  const callStateRef = useRef<CallState>("idle");
+  const webrtcRef = useRef(new WebRTCService());
+  const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Step 1: Init MY local secret key (server registration is in CitizenContext) ──
@@ -274,11 +290,142 @@ export default function ConversationScreen() {
             return { ...m, reactions: m.reactions.filter((r) => !(r.citizenId === cid && r.emoji === emoji)) };
           }));
         }
+
+        // ── Call signaling ─────────────────────────────────────────────────
+        if (msg["type"] === "call:offer") {
+          const { fromId, sdp, callType: ct } = msg as { fromId: number; sdp: { type: string; sdp: string }; callType: "audio" | "video" };
+          if (fromId !== peerId) return;
+          if (callStateRef.current !== "idle") {
+            wsRef.current?.send(JSON.stringify({ type: "call:end", toCitizenId: fromId }));
+            return;
+          }
+          setIncomingSdp({ type: sdp.type, sdp: sdp.sdp ?? "" });
+          setIncomingCallType(ct ?? "audio");
+          setCallType(ct ?? "audio");
+          callStateRef.current = "incoming";
+          setCallState("incoming");
+        }
+
+        if (msg["type"] === "call:answer") {
+          const { sdp } = msg as { sdp: { type: string; sdp: string } };
+          void webrtcRef.current.setRemoteAnswer({ type: sdp.type, sdp: sdp.sdp ?? "" }).catch(() => {});
+        }
+
+        if (msg["type"] === "call:ice-candidate") {
+          const { candidate } = msg as { candidate: { candidate: string; sdpMLineIndex?: number | null; sdpMid?: string | null } };
+          void webrtcRef.current.addIceCandidate(candidate).catch(() => {});
+        }
+
+        if (msg["type"] === "call:reject") {
+          Alert.alert("Вызов отклонён", `${peer?.name ?? peerName} отклонил(а) вызов`);
+          cleanupCallState();
+        }
+
+        if (msg["type"] === "call:end") {
+          cleanupCallState();
+        }
+
+        if (msg["type"] === "call:busy") {
+          Alert.alert("Занято", `${peer?.name ?? peerName} сейчас в другом вызове`);
+          cleanupCallState();
+        }
       } catch { /* ignore */ }
     };
 
-    return () => { ws.close(); wsRef.current = null; };
+    return () => {
+      ws.close();
+      wsRef.current = null;
+      webrtcRef.current.cleanup();
+      if (callTimerRef.current) clearInterval(callTimerRef.current);
+    };
   }, [citizen, peerId]);
+
+  // ── Call helpers ──────────────────────────────────────────────────────────
+  function cleanupCallState() {
+    if (callTimerRef.current) { clearInterval(callTimerRef.current); callTimerRef.current = null; }
+    webrtcRef.current.cleanup();
+    callStateRef.current = "idle";
+    setCallState("idle");
+    setCallDuration(0);
+    setLocalStream(null);
+    setRemoteStream(null);
+    setIsMuted(false);
+    setIsCameraOn(true);
+    setIncomingSdp(null);
+  }
+
+  async function startCall(type: "audio" | "video") {
+    if (callStateRef.current !== "idle" || !citizen) return;
+    setCallType(type);
+    callStateRef.current = "calling";
+    setCallState("calling");
+    setCallDuration(0);
+    const svc = webrtcRef.current;
+    try {
+      const stream = await svc.initLocalStream(type === "video");
+      setLocalStream(stream);
+      setIsCameraOn(type === "video");
+      svc.onIceCandidate = (c) => {
+        wsRef.current?.send(JSON.stringify({ type: "call:ice-candidate", toCitizenId: peerId, candidate: (c as unknown as { toJSON: () => RTCIceCandidateInit }).toJSON() }));
+      };
+      svc.onRemoteStream = (s) => setRemoteStream(s);
+      svc.onConnectionStateChange = (state) => {
+        if (state === "connected") {
+          callStateRef.current = "connected";
+          setCallState("connected");
+          callTimerRef.current = setInterval(() => setCallDuration((d) => d + 1), 1000);
+        } else if (state === "disconnected" || state === "failed" || state === "closed") {
+          cleanupCallState();
+        }
+      };
+      const offer = await svc.createOffer();
+      wsRef.current?.send(JSON.stringify({ type: "call:offer", toCitizenId: peerId, sdp: offer, callType: type }));
+    } catch (e) {
+      Alert.alert("Ошибка", "Не удалось начать вызов: " + String(e instanceof Error ? e.message : e));
+      cleanupCallState();
+    }
+  }
+
+  async function acceptCall() {
+    if (callStateRef.current !== "incoming" || !incomingSdp || !citizen) return;
+    callStateRef.current = "connecting";
+    setCallState("connecting");
+    const svc = webrtcRef.current;
+    try {
+      const stream = await svc.initLocalStream(incomingCallType === "video");
+      setLocalStream(stream);
+      setCallType(incomingCallType);
+      setIsCameraOn(incomingCallType === "video");
+      svc.onIceCandidate = (c) => {
+        wsRef.current?.send(JSON.stringify({ type: "call:ice-candidate", toCitizenId: peerId, candidate: (c as unknown as { toJSON: () => RTCIceCandidateInit }).toJSON() }));
+      };
+      svc.onRemoteStream = (s) => setRemoteStream(s);
+      svc.onConnectionStateChange = (state) => {
+        if (state === "connected") {
+          callStateRef.current = "connected";
+          setCallState("connected");
+          callTimerRef.current = setInterval(() => setCallDuration((d) => d + 1), 1000);
+        } else if (state === "disconnected" || state === "failed" || state === "closed") {
+          cleanupCallState();
+        }
+      };
+      const answer = await svc.createAnswer(incomingSdp);
+      wsRef.current?.send(JSON.stringify({ type: "call:answer", toCitizenId: peerId, sdp: answer }));
+    } catch (e) {
+      Alert.alert("Ошибка", "Не удалось принять вызов: " + String(e instanceof Error ? e.message : e));
+      cleanupCallState();
+    }
+  }
+
+  function rejectCall() {
+    wsRef.current?.send(JSON.stringify({ type: "call:reject", toCitizenId: peerId }));
+    cleanupCallState();
+  }
+
+  function endCall() {
+    wsRef.current?.send(JSON.stringify({ type: "call:end", toCitizenId: peerId }));
+    cleanupCallState();
+  }
 
   // ── Send text message ─────────────────────────────────────────────────────
   async function sendMessage() {
@@ -586,6 +733,26 @@ export default function ConversationScreen() {
         </View>
         <TouchableOpacity onPress={() => { setShowSearch((v) => !v); setSearchQuery(""); }} activeOpacity={0.7} style={{ marginRight: 8 }}>
           <Feather name={showSearch ? "x" : "search"} size={18} color={showSearch ? C.primary : C.muted} />
+        </TouchableOpacity>
+        {/* Audio call */}
+        <TouchableOpacity
+          onPress={() => void startCall("audio")}
+          activeOpacity={0.7}
+          disabled={callState !== "idle"}
+          style={{ marginRight: 8 }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Feather name="phone" size={18} color={callState !== "idle" ? C.muted : C.fg} />
+        </TouchableOpacity>
+        {/* Video call */}
+        <TouchableOpacity
+          onPress={() => void startCall("video")}
+          activeOpacity={0.7}
+          disabled={callState !== "idle"}
+          style={{ marginRight: 8 }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Feather name="video" size={18} color={callState !== "idle" ? C.muted : C.fg} />
         </TouchableOpacity>
         {!peerNoKey && myPubKeyB64Ref.current && peerPubKeyB64Ref.current && (
           <TouchableOpacity
@@ -928,6 +1095,24 @@ export default function ConversationScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Call screen ──────────────────────────────────────────────────── */}
+      <CallScreen
+        visible={callState !== "idle"}
+        peerName={peerName}
+        callType={callType}
+        callState={callState}
+        duration={callDuration}
+        localStream={localStream}
+        remoteStream={remoteStream}
+        isMuted={isMuted}
+        isCameraOn={isCameraOn}
+        onAccept={() => void acceptCall()}
+        onReject={rejectCall}
+        onMute={() => { const enabled = webrtcRef.current.toggleMute(); setIsMuted(!enabled); }}
+        onCamera={() => { const enabled = webrtcRef.current.toggleVideo(); setIsCameraOn(enabled); }}
+        onEnd={endCall}
+      />
     </SafeAreaView>
   );
 }

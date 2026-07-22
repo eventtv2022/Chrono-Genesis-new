@@ -14,9 +14,20 @@
       "backgroundColor": "#0D1B2A"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "TimeNation использует микрофон для аудио- и видеозвонков",
+        "NSCameraUsageDescription": "TimeNation использует камеру для видеозвонков"
+      }
     },
-    "android": {},
+    "android": {
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.INTERNET"
+      ]
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
@@ -36,7 +47,8 @@
           "color": "#C9A84C",
           "sounds": []
         }
-      ]
+      ],
+      "react-native-webrtc"
     ],
     "experiments": {
       "typedRoutes": true,

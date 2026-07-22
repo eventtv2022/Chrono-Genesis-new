@@ -34,6 +34,8 @@ export interface WsPayload {
 const citizenSockets = new Map<number, Set<AuthedSocket>>();
 const globalSubscribers = new Set<AuthedSocket>();
 const qrWaiters = new Map<string, AuthedSocket>();
+// citizenId → peerId they are currently in a call with
+const activeCalls = new Map<number, number>();
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -241,10 +243,103 @@ export function attachSocialAlarmWs(server: Server) {
         pushToCitizen(ws.citizenId, anthemPayload);
         send(ws, { type: "anthem_mobile_sent" });
       }
+
+      // ── CALL SIGNALING ────────────────────────────────────────────────────
+
+      if (m["type"] === "call:offer") {
+        if (!ws.citizenId) return;
+        const toCitizenId = typeof m["toCitizenId"] === "number" ? m["toCitizenId"] : null;
+        if (!toCitizenId) return;
+
+        // Check if callee is already in a call
+        if (activeCalls.has(toCitizenId)) {
+          send(ws, { type: "call:busy", fromId: toCitizenId });
+          return;
+        }
+
+        activeCalls.set(ws.citizenId, toCitizenId);
+
+        pushToCitizen(toCitizenId, {
+          type: "call:offer",
+          fromId: ws.citizenId,
+          fromName: ws.citizenName ?? String(ws.citizenId),
+          sdp: m["sdp"],
+          callType: m["callType"] ?? "audio",
+        });
+        logger.info({ from: ws.citizenId, to: toCitizenId }, "WS: call:offer relayed");
+      }
+
+      if (m["type"] === "call:answer") {
+        if (!ws.citizenId) return;
+        const toCitizenId = typeof m["toCitizenId"] === "number" ? m["toCitizenId"] : null;
+        if (!toCitizenId) return;
+
+        if (!activeCalls.has(toCitizenId)) {
+          activeCalls.set(ws.citizenId, toCitizenId);
+        }
+
+        pushToCitizen(toCitizenId, {
+          type: "call:answer",
+          fromId: ws.citizenId,
+          sdp: m["sdp"],
+        });
+        logger.info({ from: ws.citizenId, to: toCitizenId }, "WS: call:answer relayed");
+      }
+
+      if (m["type"] === "call:ice-candidate") {
+        if (!ws.citizenId) return;
+        const toCitizenId = typeof m["toCitizenId"] === "number" ? m["toCitizenId"] : null;
+        if (!toCitizenId) return;
+
+        pushToCitizen(toCitizenId, {
+          type: "call:ice-candidate",
+          fromId: ws.citizenId,
+          candidate: m["candidate"],
+        });
+      }
+
+      if (m["type"] === "call:reject") {
+        if (!ws.citizenId) return;
+        const toCitizenId = typeof m["toCitizenId"] === "number" ? m["toCitizenId"] : null;
+        if (!toCitizenId) return;
+
+        activeCalls.delete(ws.citizenId);
+        activeCalls.delete(toCitizenId);
+
+        pushToCitizen(toCitizenId, {
+          type: "call:reject",
+          fromId: ws.citizenId,
+        });
+        logger.info({ from: ws.citizenId, to: toCitizenId }, "WS: call:reject relayed");
+      }
+
+      if (m["type"] === "call:end") {
+        if (!ws.citizenId) return;
+        const toCitizenId = typeof m["toCitizenId"] === "number" ? m["toCitizenId"] : null;
+        if (!toCitizenId) return;
+
+        activeCalls.delete(ws.citizenId);
+        activeCalls.delete(toCitizenId);
+
+        pushToCitizen(toCitizenId, {
+          type: "call:end",
+          fromId: ws.citizenId,
+        });
+        logger.info({ from: ws.citizenId, to: toCitizenId }, "WS: call:end relayed");
+      }
     });
 
     ws.on("close", () => {
-      if (ws.citizenId != null) removeFromRoom(ws.citizenId, ws);
+      if (ws.citizenId != null) {
+        // Auto-end call if citizen was in one
+        const peerId = activeCalls.get(ws.citizenId);
+        if (peerId != null) {
+          activeCalls.delete(ws.citizenId);
+          activeCalls.delete(peerId);
+          pushToCitizen(peerId, { type: "call:end", fromId: ws.citizenId });
+        }
+        removeFromRoom(ws.citizenId, ws);
+      }
       if (ws.qrWaitToken) { qrWaiters.delete(ws.qrWaitToken); ws.qrWaitToken = undefined; }
     });
 

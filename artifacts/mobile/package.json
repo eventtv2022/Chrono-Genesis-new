@@ -67,6 +67,7 @@
     "open-location-code": "^1.0.3",
     "react-leaflet": "^4.2.1",
     "react-native-signature-canvas": "^5.0.2",
+    "react-native-webrtc": "^124.0.7",
     "react-native-webview": "^13.15.0",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1"
