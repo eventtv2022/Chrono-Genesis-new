@@ -18,8 +18,36 @@ import { pushToCitizen, getOnlineCitizenIds, isCitizenOnline } from "../services
 import { getBot } from "../services/telegramService";
 import nacl from "tweetnacl";
 import { encodeBase64 } from "tweetnacl-util";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 
 const router: IRouter = Router();
+
+// ── Chat attachment vault ──────────────────────────────────────────────────
+const CHAT_VAULT = path.resolve(process.cwd(), "secure_vault", "chat");
+if (!fs.existsSync(CHAT_VAULT)) fs.mkdirSync(CHAT_VAULT, { recursive: true });
+
+const chatUploadStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, CHAT_VAULT),
+  filename: (_req, _file, cb) => {
+    const ext = path.extname(_file.originalname).toLowerCase() || ".bin";
+    cb(null, `att_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`);
+  },
+});
+const chatUpload = multer({
+  storage: chatUploadStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+});
+
+export type AttachmentMeta = { url: string; type: "image" | "video" | "audio" | "document"; name: string; size: number };
+
+function mimeToAttachmentType(mime: string): AttachmentMeta["type"] {
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  return "document";
+}
 
 // ── Auth helper ────────────────────────────────────────────────────────────
 
@@ -33,6 +61,63 @@ async function getAuthCitizen(authHeader: string | undefined) {
     .limit(1);
   return citizen ?? null;
 }
+
+// ── POST /chat/upload — upload chat attachment (max 10 MB) ────────────────
+router.post("/chat/upload", chatUpload.single("file"), async (req, res): Promise<void> => {
+  const authHeader = req.headers["authorization"];
+  const queryToken = typeof req.query["token"] === "string" ? req.query["token"] : null;
+  const rawToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : queryToken;
+  if (!rawToken) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const [me] = await db.select({ id: citizensTable.id }).from(citizensTable)
+    .where(eq(citizensTable.authToken, rawToken)).limit(1);
+  if (!me) { res.status(401).json({ error: "Неверный токен" }); return; }
+
+  const file = req.file;
+  if (!file) { res.status(400).json({ error: "Файл не приложен" }); return; }
+
+  const meta: AttachmentMeta = {
+    url: `/api/chat/attachment/${file.filename}`,
+    type: mimeToAttachmentType(file.mimetype),
+    name: file.originalname,
+    size: file.size,
+  };
+  logger.info({ citizenId: me.id, filename: file.filename, size: file.size }, "Chat attachment uploaded");
+  res.json(meta);
+});
+
+// ── GET /chat/attachment/:filename — serve attachment (auth via header or ?token) ──
+router.get("/chat/attachment/:filename", async (req, res): Promise<void> => {
+  const authHeader = req.headers["authorization"];
+  const queryToken = typeof req.query["token"] === "string" ? req.query["token"] : null;
+  const rawToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : queryToken;
+  if (!rawToken) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const [me] = await db.select({ id: citizensTable.id }).from(citizensTable)
+    .where(eq(citizensTable.authToken, rawToken)).limit(1);
+  if (!me) { res.status(401).json({ error: "Неверный токен" }); return; }
+
+  const filename = req.params["filename"] ?? "";
+  if (!filename || filename.includes("..") || filename.includes("/")) {
+    res.status(400).json({ error: "Некорректное имя файла" }); return;
+  }
+
+  const absPath = path.resolve(CHAT_VAULT, filename);
+  if (!fs.existsSync(absPath)) { res.status(404).json({ error: "Файл не найден" }); return; }
+
+  const ext = path.extname(absPath).toLowerCase();
+  const mimeMap: Record<string, string> = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+    ".gif": "image/gif", ".mp4": "video/mp4", ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4", ".aac": "audio/aac",
+    ".ogg": "audio/ogg", ".pdf": "application/pdf",
+    ".doc": "application/msword", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  };
+  const mime = mimeMap[ext] ?? "application/octet-stream";
+  res.setHeader("Content-Type", mime);
+  res.setHeader("Cache-Control", "private, max-age=86400");
+  res.sendFile(absPath);
+});
 
 // ── POST /chat/key — upload NaCl public key ────────────────────────────────
 
@@ -277,6 +362,7 @@ router.get("/chat/messages/:withCitizenId", async (req, res): Promise<void> => {
       reply_to_id: m.replyToId ?? null,
       reply_sender_name: m.replySenderName ?? null,
       reply_content: m.replyContent ?? null,
+      attachments: m.attachments ? (JSON.parse(m.attachments) as AttachmentMeta[]) : null,
       created_at: m.createdAt,
       delivered_at: m.deliveredAt ?? null,
       read_at: m.readAt ?? null,
@@ -286,6 +372,13 @@ router.get("/chat/messages/:withCitizenId", async (req, res): Promise<void> => {
 });
 
 // ── POST /chat/messages — send encrypted message ──────────────────────────
+
+const attachmentSchema = z.object({
+  url: z.string(),
+  type: z.enum(["image", "video", "audio", "document"]),
+  name: z.string(),
+  size: z.number(),
+});
 
 const sendMsgSchema = z.object({
   toCitizenId: z.number().int().positive(),
@@ -297,6 +390,7 @@ const sendMsgSchema = z.object({
   replyToId: z.number().int().positive().optional(),
   replySenderName: z.string().max(100).optional(),
   replyContent: z.string().max(500).optional(),
+  attachments: z.array(attachmentSchema).max(5).optional(),
 });
 
 router.post("/chat/messages", async (req, res): Promise<void> => {
@@ -306,7 +400,8 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
   const parsed = sendMsgSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Некорректные данные" }); return; }
 
-  const { toCitizenId, ciphertext, nonce, msgType, darminAmount, forwardedFromId, replyToId, replySenderName, replyContent } = parsed.data;
+  const { toCitizenId, ciphertext, nonce, msgType, darminAmount, forwardedFromId, replyToId, replySenderName, replyContent, attachments } = parsed.data;
+  const attachmentsJson = attachments && attachments.length > 0 ? JSON.stringify(attachments) : null;
 
   if (toCitizenId === me.id) { res.status(400).json({ error: "Нельзя отправить сообщение самому себе" }); return; }
 
@@ -320,7 +415,7 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
 
   const [inserted] = await db
     .insert(dmMessagesTable)
-    .values({ fromCitizenId: me.id, toCitizenId, ciphertext, nonce, msgType, darminAmount: darminAmount ?? null, forwardedFromId: forwardedFromId ?? null, replyToId: replyToId ?? null, replySenderName: replySenderName ?? null, replyContent: replyContent ?? null })
+    .values({ fromCitizenId: me.id, toCitizenId, ciphertext, nonce, msgType, darminAmount: darminAmount ?? null, forwardedFromId: forwardedFromId ?? null, replyToId: replyToId ?? null, replySenderName: replySenderName ?? null, replyContent: replyContent ?? null, attachments: attachmentsJson })
     .returning();
 
   if (!inserted) { res.status(500).json({ error: "Ошибка сохранения" }); return; }
@@ -340,6 +435,7 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
       reply_to_id: replyToId ?? null,
       reply_sender_name: replySenderName ?? null,
       reply_content: replyContent ?? null,
+      attachments: attachments ?? null,
       created_at: inserted.createdAt,
       delivered_at: null,
       read_at: null,
@@ -389,6 +485,7 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
       reply_to_id: inserted.replyToId ?? null,
       reply_sender_name: inserted.replySenderName ?? null,
       reply_content: inserted.replyContent ?? null,
+      attachments: inserted.attachments ? (JSON.parse(inserted.attachments) as AttachmentMeta[]) : null,
       created_at: inserted.createdAt,
       delivered_at: inserted.deliveredAt ?? null,
       read_at: inserted.readAt ?? null,

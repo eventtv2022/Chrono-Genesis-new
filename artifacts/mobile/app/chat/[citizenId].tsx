@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -27,6 +28,7 @@ import { getBaseUrl } from "@/lib/api";
 import { getStoredAuthHeaders, getStoredToken } from "@/lib/authStorage";
 import { decryptMsg, encryptMsg, getOrCreateKeyPair, getSafetyCode } from "@/lib/e2ee";
 import { CitizenAvatar } from "@/components/CitizenAvatar";
+import { AttachmentPreviewStrip, AttachmentBubble, type AttachmentMeta } from "@/components/ChatAttachments";
 
 const BASE_URL = getBaseUrl();
 
@@ -40,6 +42,13 @@ const C = {
 };
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+
+interface PendingFile {
+  uri: string;
+  name: string;
+  size: number;
+  mimeType: string;
+}
 
 interface RawMessage {
   id: number;
@@ -57,6 +66,7 @@ interface RawMessage {
   reply_to_id: number | null;
   reply_sender_name: string | null;
   reply_content: string | null;
+  attachments: AttachmentMeta[] | null;
 }
 
 interface DecryptedMessage extends RawMessage {
@@ -116,6 +126,7 @@ export default function ConversationScreen() {
 
   const [safetyModal, setSafetyModal] = useState(false);
   const [replyTo, setReplyTo] = useState<{ id: number; text: string; senderName: string } | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
 
   const flatRef = useRef<FlatList>(null);
   const secretKeyRef = useRef<Uint8Array | null>(null);
@@ -446,7 +457,7 @@ export default function ConversationScreen() {
 
   // ── Send text message ─────────────────────────────────────────────────────
   async function sendMessage() {
-    if (!input.trim() || !citizen) return;
+    if ((!input.trim() && pendingFiles.length === 0) || !citizen) return;
     const text = input.trim();
 
     // ── Optimistic UI: показываем сообщение мгновенно ─────────────────────
@@ -463,6 +474,7 @@ export default function ConversationScreen() {
       reply_to_id: replyTo?.id ?? null,
       reply_sender_name: replyTo?.senderName ?? null,
       reply_content: replyTo?.text.slice(0, 400) ?? null,
+      attachments: null,
       created_at: new Date().toISOString(),
       delivered_at: null,
       read_at: null,
@@ -472,6 +484,8 @@ export default function ConversationScreen() {
     setMessages((prev) => [...prev, tempMsg]);
     setInput("");
     setReplyTo(null);
+    const capturedFiles = pendingFiles;
+    setPendingFiles([]);
     setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
 
     setSending(true);
@@ -482,6 +496,20 @@ export default function ConversationScreen() {
         setInput(text);
         Alert.alert("Сессия истекла", "Выйдите и войдите снова");
         return;
+      }
+      const rawToken = hdrs.Authorization.replace(/^Bearer\s+/i, "").trim();
+
+      // ── Загружаем файлы-вложения ──────────────────────────────────────────
+      let uploadedAttachments: AttachmentMeta[] | undefined;
+      if (capturedFiles.length > 0) {
+        try {
+          uploadedAttachments = await uploadPendingFiles(rawToken);
+        } catch (uploadErr) {
+          setMessages((prev) => prev.filter((m) => m.id !== tempId));
+          setPendingFiles(capturedFiles);
+          Alert.alert("Ошибка загрузки", String(uploadErr instanceof Error ? uploadErr.message : uploadErr));
+          return;
+        }
       }
 
       // ── Получаем ключ peer (fetch on-demand если ещё не загружен) ────────
@@ -501,7 +529,7 @@ export default function ConversationScreen() {
       // ── Шифруем ──────────────────────────────────────────────────────────
       let ciphertext: string, nonce: string;
       try {
-        const enc = encryptMsg(text, peerPub, sk);
+        const enc = encryptMsg(text || "[вложение]", peerPub, sk);
         ciphertext = enc.ciphertext;
         nonce = enc.nonce;
       } catch (encErr) {
@@ -516,7 +544,11 @@ export default function ConversationScreen() {
       const res = await fetch(`${BASE_URL}/api/chat/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...hdrs },
-        body: JSON.stringify({ toCitizenId: peerId, ciphertext, nonce, ...(replyTo ? { replyToId: replyTo.id, replySenderName: replyTo.senderName, replyContent: replyTo.text.slice(0, 400) } : {}) }),
+        body: JSON.stringify({
+          toCitizenId: peerId, ciphertext, nonce,
+          ...(replyTo ? { replyToId: replyTo.id, replySenderName: replyTo.senderName, replyContent: replyTo.text.slice(0, 400) } : {}),
+          ...(uploadedAttachments && uploadedAttachments.length > 0 ? { attachments: uploadedAttachments } : {}),
+        }),
       });
       if (!res.ok) {
         const errBody = (await res.json().catch(() => ({}))) as { error?: string };
@@ -557,6 +589,61 @@ export default function ConversationScreen() {
       });
     }
     setSelectedMsg(null);
+  }
+
+  // ── File attachment picker ────────────────────────────────────────────────
+  async function pickAttachment() {
+    if (pendingFiles.length >= 5) { Alert.alert("Лимит", "Максимум 5 файлов за раз"); return; }
+    try {
+      // Dynamic import to avoid require at module level
+      const DocumentPicker = await import("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      const sizeBytes = asset.size ?? 0;
+      if (sizeBytes > 10 * 1024 * 1024) {
+        Alert.alert("Файл слишком большой", "Максимальный размер — 10 МБ");
+        return;
+      }
+      setPendingFiles((prev) => [
+        ...prev,
+        {
+          uri: asset.uri,
+          name: asset.name ?? "file",
+          size: sizeBytes,
+          mimeType: asset.mimeType ?? "application/octet-stream",
+        },
+      ]);
+    } catch { /* user cancelled or permission denied */ }
+  }
+
+  // ── Upload pending files to server, return AttachmentMeta[] ──────────────
+  async function uploadPendingFiles(token: string): Promise<AttachmentMeta[]> {
+    const results: AttachmentMeta[] = [];
+    for (const pf of pendingFiles) {
+      const form = new FormData();
+      form.append("file", {
+        uri: pf.uri,
+        name: pf.name,
+        type: pf.mimeType,
+      } as unknown as Blob);
+      const res = await fetch(`${BASE_URL}/api/chat/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? `Ошибка загрузки файла (${res.status})`);
+      }
+      const meta = await res.json() as AttachmentMeta;
+      results.push(meta);
+    }
+    return results;
   }
 
   // ── Forward message ───────────────────────────────────────────────────────
@@ -887,7 +974,17 @@ export default function ConversationScreen() {
                           </View>
                         </View>
                       )}
-                      <Text style={[s.bubbleText, isMine ? s.bubbleTextMine : s.bubbleTextTheirs]}>{m.plaintext}</Text>
+                      {/* Attachments */}
+                      {m.attachments && m.attachments.length > 0 && (
+                        <View style={{ gap: 4, marginBottom: m.plaintext && m.plaintext !== "[вложение]" ? 6 : 0 }}>
+                          {m.attachments.map((att: AttachmentMeta, idx: number) => (
+                            <AttachmentBubble key={idx} att={att} isMine={isMine} />
+                          ))}
+                        </View>
+                      )}
+                      {m.plaintext && m.plaintext !== "[вложение]" && (
+                        <Text style={[s.bubbleText, isMine ? s.bubbleTextMine : s.bubbleTextTheirs]}>{m.plaintext}</Text>
+                      )}
                       <View style={s.msgMeta}>
                         <Text style={s.msgTime}>{formatTime(m.created_at)}</Text>
                         <Ticks msg={m} myId={citizen.id} />
@@ -941,38 +1038,44 @@ export default function ConversationScreen() {
           </View>
         )}
         {!isRecording && (
-          <View style={s.inputBar}>
-            <TouchableOpacity style={[s.darminBtn, peerNoKey && { opacity: 0.4 }]} onPress={() => !peerNoKey && setDarminModal(true)} disabled={peerNoKey} activeOpacity={0.75}>
-              <Text style={s.darminBtnText}>Д</Text>
-            </TouchableOpacity>
-            <TextInput
-              style={[s.input, !canSend && { opacity: 0.5 }]}
-              placeholder={peerNoKey ? "Собеседник не подключил чат" : "Сообщение..."}
-              placeholderTextColor={C.muted}
-              value={input}
-              onChangeText={setInput}
-              multiline
-              maxLength={2000}
-              editable={canSend}
-              returnKeyType="send"
-              onSubmitEditing={sendMessage}
-            />
-            {canSend && !input.trim() && Platform.OS !== "web" && (
-              <TouchableOpacity style={s.micBtn} onLongPress={startRecording} onPressOut={isRecording ? stopAndSendRecording : undefined} activeOpacity={0.75}>
-                <Feather name="mic" size={18} color={C.muted} />
+          <>
+            <AttachmentPreviewStrip files={pendingFiles} onRemove={(i) => setPendingFiles((p) => p.filter((_, idx) => idx !== i))} />
+            <View style={s.inputBar}>
+              <TouchableOpacity style={[s.darminBtn, peerNoKey && { opacity: 0.4 }]} onPress={() => !peerNoKey && setDarminModal(true)} disabled={peerNoKey} activeOpacity={0.75}>
+                <Text style={s.darminBtnText}>Д</Text>
               </TouchableOpacity>
-            )}
-            {(input.trim() || !canSend) && (
-              <TouchableOpacity
-                style={[s.sendBtn, (!canSend || !input.trim() || sending) && s.sendBtnDis]}
-                onPress={sendMessage}
-                disabled={!canSend || !input.trim() || sending}
-                activeOpacity={0.75}
-              >
-                {sending ? <ActivityIndicator size="small" color="#0A0A0F" /> : <Feather name="send" size={16} color="#0A0A0F" />}
+              <TouchableOpacity style={s.attachBtn} onPress={pickAttachment} activeOpacity={0.75} disabled={!canSend}>
+                <Feather name="paperclip" size={18} color={canSend ? C.muted : C.border} />
               </TouchableOpacity>
-            )}
-          </View>
+              <TextInput
+                style={[s.input, !canSend && { opacity: 0.5 }]}
+                placeholder={peerNoKey ? "Собеседник не подключил чат" : "Сообщение..."}
+                placeholderTextColor={C.muted}
+                value={input}
+                onChangeText={setInput}
+                multiline
+                maxLength={2000}
+                editable={canSend}
+                returnKeyType="send"
+                onSubmitEditing={sendMessage}
+              />
+              {canSend && !input.trim() && pendingFiles.length === 0 && Platform.OS !== "web" && (
+                <TouchableOpacity style={s.micBtn} onLongPress={startRecording} onPressOut={isRecording ? stopAndSendRecording : undefined} activeOpacity={0.75}>
+                  <Feather name="mic" size={18} color={C.muted} />
+                </TouchableOpacity>
+              )}
+              {(input.trim() || pendingFiles.length > 0 || !canSend) && (
+                <TouchableOpacity
+                  style={[s.sendBtn, (!canSend || (!input.trim() && pendingFiles.length === 0) || sending) && s.sendBtnDis]}
+                  onPress={sendMessage}
+                  disabled={!canSend || (!input.trim() && pendingFiles.length === 0) || sending}
+                  activeOpacity={0.75}
+                >
+                  {sending ? <ActivityIndicator size="small" color="#0A0A0F" /> : <Feather name="send" size={16} color="#0A0A0F" />}
+                </TouchableOpacity>
+              )}
+            </View>
+          </>
         )}
       </KeyboardAvoidingView>
 
@@ -1206,6 +1309,7 @@ const s = StyleSheet.create({
   darminBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: C.primary },
   input: { flex: 1, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, color: C.fg, fontFamily: "Inter_400Regular", fontSize: 15, maxHeight: 120 },
   micBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  attachBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.primary, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   sendBtnDis: { opacity: 0.4 },
   recordingBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: "rgba(201,168,76,0.08)", gap: 12 },
