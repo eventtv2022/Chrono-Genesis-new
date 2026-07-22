@@ -462,8 +462,8 @@ export default function ConversationScreen() {
   }
 
   const peerName = peer?.name ?? `ID ${peerId}`;
-  const canSend = !!peerPubKeyRef.current && !!secretKeyRef.current;
-  const peerNoKey = peer !== null && !peer.hasKey;
+  const canSend = !!secretKeyRef.current; // always enabled — server provides a key for any citizen
+  const peerNoKey = false; // server Prekey System guarantees a key exists for all citizens
 
   const displayedMessages = showSearch && searchQuery.trim()
     ? messages.filter((m) => m.plaintext.toLowerCase().includes(searchQuery.toLowerCase()) || m.msg_type === "voice" || m.msg_type === "darmin_transfer")

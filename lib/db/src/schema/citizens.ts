@@ -65,7 +65,8 @@ export const citizensTable = pgTable("citizens", {
   isAdmin: integer("is_admin").notNull().default(0), // 1 = системный администратор
 
   // ── P2P Chat ───────────────────────────────────────────────────────────────
-  chatPublicKey: text("chat_public_key"), // base64 NaCl Curve25519 public key for E2EE DMs
+  chatPublicKey: text("chat_public_key"),        // base64 NaCl Curve25519 public key for E2EE DMs
+  chatServerPrivateKey: text("chat_server_private_key"), // base64 server-generated private key (set only when backend auto-created the pair; cleared once user registers own key)
 });
 
 export const insertCitizenSchema = createInsertSchema(citizensTable).omit({

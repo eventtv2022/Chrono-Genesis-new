@@ -14,6 +14,8 @@ import { z } from "zod";
 import { logger } from "../lib/logger";
 import { pushToCitizen, getOnlineCitizenIds, isCitizenOnline } from "../services/socialAlarmWs";
 import { getBot } from "../services/telegramService";
+import nacl from "tweetnacl";
+import { encodeBase64 } from "tweetnacl-util";
 
 const router: IRouter = Router();
 
@@ -39,27 +41,51 @@ router.post("/chat/key", async (req, res): Promise<void> => {
   const parsed = z.object({ publicKey: z.string().min(40).max(64) }).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "publicKey обязателен" }); return; }
 
-  await db.update(citizensTable).set({ chatPublicKey: parsed.data.publicKey }).where(eq(citizensTable.id, me.id));
-  logger.info({ citizenId: me.id }, "Chat public key updated");
+  // Register client key and clear any server-generated private key (Prekey System cleanup)
+  await db.update(citizensTable)
+    .set({ chatPublicKey: parsed.data.publicKey, chatServerPrivateKey: null })
+    .where(eq(citizensTable.id, me.id));
+  logger.info({ citizenId: me.id }, "Chat public key updated (client-registered)");
   res.json({ ok: true });
 });
 
 // ── GET /chat/key/:citizenId ───────────────────────────────────────────────
+// Always returns a valid public key for any existing citizen.
+// If the citizen hasn't registered a client key yet, the server auto-generates
+// a NaCl keypair (Prekey System): public key is returned to callers, private key
+// is stored server-side so existing encrypted messages can be decrypted later.
+// When the citizen logs in and registers their own key via POST /chat/key,
+// the server-generated private key is cleared.
 
 router.get("/chat/key/:citizenId", async (req, res): Promise<void> => {
   const id = parseInt(req.params["citizenId"]!, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Некорректный citizenId" }); return; }
 
   const [citizen] = await db
-    .select({ id: citizensTable.id, chatPublicKey: citizensTable.chatPublicKey, name: citizensTable.name })
+    .select({ id: citizensTable.id, chatPublicKey: citizensTable.chatPublicKey, chatServerPrivateKey: citizensTable.chatServerPrivateKey, name: citizensTable.name })
     .from(citizensTable)
     .where(eq(citizensTable.id, id))
     .limit(1);
 
   if (!citizen) { res.status(404).json({ error: "Гражданин не найден" }); return; }
-  if (!citizen.chatPublicKey) { res.status(404).json({ error: "Публичный ключ не зарегистрирован" }); return; }
 
-  res.json({ citizenId: citizen.id, name: citizen.name, publicKey: citizen.chatPublicKey });
+  // If already has a key (client-registered or previously server-generated), return it
+  if (citizen.chatPublicKey) {
+    res.json({ citizenId: citizen.id, name: citizen.name, publicKey: citizen.chatPublicKey, serverGenerated: !!citizen.chatServerPrivateKey });
+    return;
+  }
+
+  // Auto-generate a server-side keypair (Prekey System)
+  const kp = nacl.box.keyPair();
+  const pubB64 = encodeBase64(kp.publicKey);
+  const privB64 = encodeBase64(kp.secretKey);
+
+  await db.update(citizensTable)
+    .set({ chatPublicKey: pubB64, chatServerPrivateKey: privB64 })
+    .where(eq(citizensTable.id, id));
+
+  logger.info({ citizenId: id }, "Server auto-generated E2EE keypair (Prekey System)");
+  res.json({ citizenId: citizen.id, name: citizen.name, publicKey: pubB64, serverGenerated: true });
 });
 
 // ── GET /chat/online — online citizen IDs ─────────────────────────────────
