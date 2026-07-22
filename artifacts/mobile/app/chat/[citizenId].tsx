@@ -22,7 +22,7 @@ import { Audio } from "expo-av";
 import { useCitizen } from "@/context/CitizenContext";
 import { getBaseUrl } from "@/lib/api";
 import { getStoredAuthHeaders, getStoredToken } from "@/lib/authStorage";
-import { decryptMsg, encryptMsg, getOrCreateKeyPair } from "@/lib/e2ee";
+import { decryptMsg, encryptMsg, getOrCreateKeyPair, getSafetyCode } from "@/lib/e2ee";
 
 const BASE_URL = getBaseUrl();
 
@@ -107,9 +107,13 @@ export default function ConversationScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
 
+  const [safetyModal, setSafetyModal] = useState(false);
+
   const flatRef = useRef<FlatList>(null);
   const secretKeyRef = useRef<Uint8Array | null>(null);
+  const myPubKeyB64Ref = useRef<string | null>(null);
   const peerPubKeyRef = useRef<Uint8Array | null>(null);
+  const peerPubKeyB64Ref = useRef<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -118,7 +122,10 @@ export default function ConversationScreen() {
   useEffect(() => {
     if (!citizen) return;
     getOrCreateKeyPair()
-      .then((kp) => { secretKeyRef.current = kp.secretKey; })
+      .then((kp) => {
+        secretKeyRef.current = kp.secretKey;
+        myPubKeyB64Ref.current = kp.publicKeyB64;
+      })
       .catch(() => {});
   }, [citizen]);
 
@@ -130,6 +137,7 @@ export default function ConversationScreen() {
       if (keyRes.ok) {
         const d = (await keyRes.json()) as { citizenId: number; name: string; publicKey: string };
         peerPubKeyRef.current = decodeBase64(d.publicKey);
+        peerPubKeyB64Ref.current = d.publicKey;
         setPeer({ id: d.citizenId, name: d.name, rank: null, hasKey: true });
         setMessages((prev) => redecrypt(prev));
         return;
@@ -571,6 +579,16 @@ export default function ConversationScreen() {
         <TouchableOpacity onPress={() => { setShowSearch((v) => !v); setSearchQuery(""); }} activeOpacity={0.7} style={{ marginRight: 8 }}>
           <Feather name={showSearch ? "x" : "search"} size={18} color={showSearch ? C.primary : C.muted} />
         </TouchableOpacity>
+        {!peerNoKey && myPubKeyB64Ref.current && peerPubKeyB64Ref.current && (
+          <TouchableOpacity
+            onPress={() => setSafetyModal(true)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={{ marginRight: 6 }}
+          >
+            <Feather name="shield" size={15} color={C.primary} />
+          </TouchableOpacity>
+        )}
         <View style={[s.e2eeBadge, peerNoKey && s.e2eeBadgeWarn]}>
           <Feather name={peerNoKey ? "unlock" : "lock"} size={9} color={peerNoKey ? "#C97C4C" : C.primary} />
           <Text style={[s.e2eeText, peerNoKey && { color: "#C97C4C" }]}>{peerNoKey ? "Нет ключа" : "E2EE"}</Text>
@@ -827,6 +845,43 @@ export default function ConversationScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Safety Code Modal */}
+      <Modal visible={safetyModal} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={[s.modalSheet, { alignItems: "center" }]}>
+            <View style={s.modalHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Feather name="shield" size={18} color={C.primary} />
+                <Text style={s.modalTitle}>Код безопасности E2EE</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSafetyModal(false)}>
+                <Feather name="x" size={20} color={C.fg} />
+              </TouchableOpacity>
+            </View>
+            <Text style={[s.modalSubtitle, { textAlign: "center", marginBottom: 4 }]}>
+              Ваш код для переписки с {peerName}:
+            </Text>
+            <View style={s.safetyCodeBox}>
+              {(myPubKeyB64Ref.current && peerPubKeyB64Ref.current
+                ? getSafetyCode(myPubKeyB64Ref.current, peerPubKeyB64Ref.current)
+                : "------"
+              ).split("").map((digit, i) => (
+                <View key={i} style={s.safetyDigit}>
+                  <Text style={s.safetyDigitText}>{digit}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={[s.modalSubtitle, { textAlign: "center", lineHeight: 19, marginTop: 8 }]}>
+              Сверьте этот код с собеседником вне данного чата (лично, звонок или другой канал).{"\n"}
+              Совпадение кода подтверждает отсутствие атаки «Человек посередине».
+            </Text>
+            <TouchableOpacity onPress={() => setSafetyModal(false)} style={s.safetyCloseBtn} activeOpacity={0.8}>
+              <Text style={s.safetyCloseBtnText}>Понятно</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -899,9 +954,14 @@ const s = StyleSheet.create({
   actionText: { fontSize: 16, fontFamily: "Inter_400Regular", color: C.fg },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
   modalSheet: { backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 36, gap: 12 },
-  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", width: "100%" },
   modalTitle: { fontSize: 18, fontFamily: "Inter_700Bold", color: C.fg },
   modalSubtitle: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.muted },
+  safetyCodeBox: { flexDirection: "row", gap: 8, marginVertical: 12 },
+  safetyDigit: { width: 38, height: 52, borderRadius: 10, backgroundColor: "rgba(201,168,76,0.1)", borderWidth: 1.5, borderColor: "rgba(201,168,76,0.4)", alignItems: "center", justifyContent: "center" },
+  safetyDigitText: { fontSize: 26, fontFamily: "Inter_700Bold", color: C.primary },
+  safetyCloseBtn: { marginTop: 8, backgroundColor: C.primary, borderRadius: 12, paddingHorizontal: 32, paddingVertical: 12, width: "100%", alignItems: "center" },
+  safetyCloseBtnText: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#0A0A0F" },
   modalInput: { backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: C.fg, fontFamily: "Inter_400Regular", fontSize: 16 },
   fwdItem: { flexDirection: "row", alignItems: "center", paddingVertical: 10, gap: 12 },
   fwdAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(201,168,76,0.12)", alignItems: "center", justifyContent: "center", flexShrink: 0 },

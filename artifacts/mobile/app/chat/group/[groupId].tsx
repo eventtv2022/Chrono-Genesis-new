@@ -19,6 +19,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCitizen } from "@/context/CitizenContext";
 import { getBaseUrl } from "@/lib/api";
 import { getStoredAuthHeaders } from "@/lib/authStorage";
+import {
+  getOrCreateKeyPair,
+  generateGroupKey,
+  encryptGroupKeyForMember,
+  decryptGroupKey,
+  encryptGroupMsg,
+  decryptGroupMsg,
+} from "@/lib/e2ee";
+import { decodeBase64 } from "tweetnacl-util";
 
 const BASE_URL = getBaseUrl();
 
@@ -36,6 +45,8 @@ interface GrpMsg {
   content: string; msg_type: string; darmin_amount: number | null;
   forwarded_from_dm_id: number | null; created_at: string;
   sender_name: string | null; sender_rank: string | null;
+  // E2EE fields — present when message is encrypted
+  ciphertext?: string | null; msg_nonce?: string | null;
 }
 
 function formatTime(iso: string | Date | null | undefined): string {
@@ -64,27 +75,90 @@ export default function GroupConversationScreen() {
   const [darminAmount, setDarminAmount] = useState("");
   const [darminNote, setDarminNote] = useState("");
   const [transferring, setTransferring] = useState(false);
+  const [isE2EE, setIsE2EE] = useState(false);
+
   const flatRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const groupKeyRef = useRef<Uint8Array | null>(null);
+  const mySecretKeyRef = useRef<Uint8Array | null>(null);
+  const myPubKeyB64Ref = useRef<string | null>(null);
+
+  // ── Decrypt a message if group key is available ───────────────────────────
+  function decryptIfNeeded(m: GrpMsg): GrpMsg {
+    if (m.ciphertext && m.msg_nonce && groupKeyRef.current) {
+      const plain = decryptGroupMsg(m.ciphertext, m.msg_nonce, groupKeyRef.current);
+      return { ...m, content: plain ?? "🔒 [не удалось расшифровать]" };
+    }
+    return m;
+  }
+
+  // ── Load + distribute group E2EE key ─────────────────────────────────────
+  async function loadGroupKeyWith(grp: GroupInfo | null, mbrs: Member[], hdrs: Record<string, string>) {
+    if (!grp || !mySecretKeyRef.current || !myPubKeyB64Ref.current) return;
+    try {
+      const res = await fetch(`${BASE_URL}/api/chat/groups/${grp.id}/key`, { headers: hdrs });
+      if (res.ok) {
+        const d = (await res.json()) as { encryptedKey: string; encNonce: string; creatorPublicKey: string };
+        const creatorPub = decodeBase64(d.creatorPublicKey);
+        const gk = decryptGroupKey(d.encryptedKey, d.encNonce, creatorPub, mySecretKeyRef.current!);
+        if (gk) { groupKeyRef.current = gk; setIsE2EE(true); return; }
+      }
+      // Key not found — if I'm the creator, generate + distribute to all members
+      if (citizen && grp.created_by === citizen.id) {
+        const newKey = generateGroupKey();
+        const entries: Array<{ citizenId: number; encryptedKey: string; encNonce: string; creatorPublicKey: string }> = [];
+        for (const m of mbrs) {
+          try {
+            const kr = await fetch(`${BASE_URL}/api/chat/key/${m.citizen_id}`);
+            if (!kr.ok) continue;
+            const { publicKey } = (await kr.json()) as { publicKey: string };
+            const { encryptedKey, encNonce } = encryptGroupKeyForMember(
+              newKey, decodeBase64(publicKey), mySecretKeyRef.current!,
+            );
+            entries.push({ citizenId: m.citizen_id, encryptedKey, encNonce, creatorPublicKey: myPubKeyB64Ref.current! });
+          } catch { /* skip members with no key */ }
+        }
+        if (entries.length > 0) {
+          await fetch(`${BASE_URL}/api/chat/groups/${grp.id}/key`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...hdrs },
+            body: JSON.stringify({ keys: entries }),
+          });
+          groupKeyRef.current = newKey;
+          setIsE2EE(true);
+        }
+      }
+    } catch { /* E2EE setup is non-critical */ }
+  }
 
   // ── Load group + messages ─────────────────────────────────────────────────
   const loadGroup = useCallback(async () => {
     if (!groupId) { setLoading(false); return; }
     setLoading(true);
     try {
+      // Load my keypair first (needed for E2EE)
+      if (!mySecretKeyRef.current) {
+        const kp = await getOrCreateKeyPair();
+        mySecretKeyRef.current = kp.secretKey;
+        myPubKeyB64Ref.current = kp.publicKeyB64;
+      }
       const hdrs = await getStoredAuthHeaders();
       const [infoRes, msgRes] = await Promise.all([
         fetch(`${BASE_URL}/api/chat/groups/${groupId}`, { headers: hdrs }),
         fetch(`${BASE_URL}/api/chat/groups/${groupId}/messages?limit=100`, { headers: hdrs }),
       ]);
+      let grp: GroupInfo | null = null;
+      let mbrs: Member[] = [];
       if (infoRes.ok) {
         const d = (await infoRes.json()) as { group: GroupInfo; members: Member[] };
-        setGroup(d.group);
-        setMembers(d.members ?? []);
+        grp = d.group; mbrs = d.members ?? [];
+        setGroup(grp); setMembers(mbrs);
       }
+      // Load E2EE group key before rendering messages
+      await loadGroupKeyWith(grp, mbrs, hdrs);
       if (msgRes.ok) {
         const d = (await msgRes.json()) as { messages: GrpMsg[] };
-        setMessages(d.messages ?? []);
+        setMessages((d.messages ?? []).map(decryptIfNeeded));
       }
       // Mark as read
       fetch(`${BASE_URL}/api/chat/groups/${groupId}/read`, { method: "PATCH", headers: hdrs }).catch(() => {});
@@ -93,7 +167,8 @@ export default function GroupConversationScreen() {
     } finally {
       setLoading(false);
     }
-  }, [groupId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupId, citizen?.id]);
 
   useEffect(() => { loadGroup(); }, [loadGroup]);
 
@@ -112,7 +187,8 @@ export default function GroupConversationScreen() {
       try {
         const msg = JSON.parse(evt.data as string) as { type: string; message?: GrpMsg };
         if (msg.type === "group_message" && msg.message && msg.message.group_id === groupId) {
-          setMessages((prev) => [...prev, msg.message!]);
+          const incoming = decryptIfNeeded(msg.message);
+          setMessages((prev) => [...prev, incoming]);
           setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
           getStoredAuthHeaders().then((h) =>
             fetch(`${BASE_URL}/api/chat/groups/${groupId}/read`, { method: "PATCH", headers: h }).catch(() => {})
@@ -127,20 +203,29 @@ export default function GroupConversationScreen() {
   async function sendMessage() {
     if (!input.trim() || !citizen) return;
     setSending(true);
+    const plaintext = input.trim();
     try {
       const hdrs = await getStoredAuthHeaders();
       if (!hdrs.Authorization) { Alert.alert("Сессия истекла", "Выйдите и войдите снова"); return; }
+      let body: object;
+      if (groupKeyRef.current) {
+        const { ciphertext, msgNonce } = encryptGroupMsg(plaintext, groupKeyRef.current);
+        body = { content: "", ciphertext, msgNonce, msgType: "text" };
+      } else {
+        body = { content: plaintext, msgType: "text" };
+      }
       const res = await fetch(`${BASE_URL}/api/chat/groups/${groupId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...hdrs },
-        body: JSON.stringify({ content: input.trim(), msgType: "text" }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const err = (await res.json()) as { error?: string };
         Alert.alert("Ошибка", err.error ?? "Не удалось отправить"); return;
       }
       const { message: sent } = (await res.json()) as { message: GrpMsg };
-      setMessages((prev) => [...prev, sent]);
+      // Show plaintext locally (we know what we sent)
+      setMessages((prev) => [...prev, { ...sent, content: plaintext }]);
       setInput("");
       setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
     } catch { Alert.alert("Ошибка", "Сетевая ошибка"); }
@@ -194,9 +279,9 @@ export default function GroupConversationScreen() {
             <Text style={s.memberCount}>{members.length} участников</Text>
           </View>
         </TouchableOpacity>
-        <View style={s.serverBadge}>
-          <Feather name="server" size={9} color={C.muted} />
-          <Text style={s.serverText}>Сервер</Text>
+        <View style={[s.serverBadge, isE2EE && { borderColor: "rgba(201,168,76,0.4)", backgroundColor: "rgba(201,168,76,0.08)" }]}>
+          <Feather name={isE2EE ? "lock" : "server"} size={9} color={isE2EE ? C.primary : C.muted} />
+          <Text style={[s.serverText, isE2EE && { color: C.primary }]}>{isE2EE ? "E2EE" : "Сервер"}</Text>
         </View>
       </View>
 

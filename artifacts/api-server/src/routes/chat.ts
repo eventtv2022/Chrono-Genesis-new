@@ -9,6 +9,7 @@ import {
   groupMembersTable,
   groupMessagesTable,
   groupMessageReadsTable,
+  groupKeysTable,
   transactionsTable,
 } from "@workspace/db";
 import { z } from "zod";
@@ -624,6 +625,84 @@ router.delete("/chat/groups/:groupId/members/:citizenId", async (req, res): Prom
   res.json({ ok: true });
 });
 
+// ── GET /chat/groups/:groupId/key — fetch my encrypted group key ──────────
+
+router.get("/chat/groups/:groupId/key", async (req, res): Promise<void> => {
+  const me = await getAuthCitizen(req.headers.authorization);
+  if (!me) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const groupId = parseInt(req.params["groupId"]!, 10);
+  if (isNaN(groupId)) { res.status(400).json({ error: "Некорректный groupId" }); return; }
+
+  const [membership] = await db.select().from(groupMembersTable)
+    .where(and(eq(groupMembersTable.groupId, groupId), eq(groupMembersTable.citizenId, me.id))).limit(1);
+  if (!membership) { res.status(403).json({ error: "Нет доступа" }); return; }
+
+  const [row] = await db.select().from(groupKeysTable)
+    .where(and(eq(groupKeysTable.groupId, groupId), eq(groupKeysTable.citizenId, me.id))).limit(1);
+
+  if (!row) { res.status(404).json({ error: "Ключ не найден" }); return; }
+
+  res.json({
+    encryptedKey: row.encryptedKey,
+    encNonce: row.encNonce,
+    creatorPublicKey: row.creatorPublicKey,
+  });
+});
+
+// ── POST /chat/groups/:groupId/key — store encrypted keys for members ─────
+
+const groupKeySchema = z.object({
+  keys: z.array(z.object({
+    citizenId: z.number().int().positive(),
+    encryptedKey: z.string().min(1),
+    encNonce: z.string().min(1),
+    creatorPublicKey: z.string().min(1),
+  })).min(1).max(100),
+});
+
+router.post("/chat/groups/:groupId/key", async (req, res): Promise<void> => {
+  const me = await getAuthCitizen(req.headers.authorization);
+  if (!me) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const groupId = parseInt(req.params["groupId"]!, 10);
+  if (isNaN(groupId)) { res.status(400).json({ error: "Некорректный groupId" }); return; }
+
+  // Only the group creator can distribute keys
+  const [group] = await db.select().from(groupChatsTable).where(eq(groupChatsTable.id, groupId)).limit(1);
+  if (!group) { res.status(404).json({ error: "Группа не найдена" }); return; }
+  if (group.createdBy !== me.id) { res.status(403).json({ error: "Только создатель группы может распределять ключи" }); return; }
+
+  const parsed = groupKeySchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Некорректные данные" }); return; }
+
+  const { keys } = parsed.data;
+
+  // Verify all citizenIds are group members
+  const members = await db.select({ citizenId: groupMembersTable.citizenId })
+    .from(groupMembersTable).where(eq(groupMembersTable.groupId, groupId));
+  const memberSet = new Set(members.map((m) => m.citizenId));
+
+  const validKeys = keys.filter((k) => memberSet.has(k.citizenId));
+  if (validKeys.length === 0) { res.status(400).json({ error: "Нет допустимых участников" }); return; }
+
+  await db.insert(groupKeysTable)
+    .values(validKeys.map((k) => ({
+      groupId,
+      citizenId: k.citizenId,
+      creatorPublicKey: k.creatorPublicKey,
+      encryptedKey: k.encryptedKey,
+      encNonce: k.encNonce,
+    })))
+    .onConflictDoUpdate({
+      target: [groupKeysTable.groupId, groupKeysTable.citizenId],
+      set: { encryptedKey: sql`excluded.encrypted_key`, encNonce: sql`excluded.enc_nonce`, creatorPublicKey: sql`excluded.creator_public_key` },
+    });
+
+  logger.info({ groupId, by: me.id, count: validKeys.length }, "Group E2EE keys distributed");
+  res.json({ ok: true, distributed: validKeys.length });
+});
+
 // ── GET /chat/groups/:groupId/messages ────────────────────────────────────
 
 router.get("/chat/groups/:groupId/messages", async (req, res): Promise<void> => {
@@ -655,7 +734,9 @@ router.get("/chat/groups/:groupId/messages", async (req, res): Promise<void> => 
 // ── POST /chat/groups/:groupId/messages — send group message ──────────────
 
 const groupMsgSchema = z.object({
-  content: z.string().min(1).max(4000),
+  content: z.string().max(4000).optional(),
+  ciphertext: z.string().max(10000).optional(),
+  msgNonce: z.string().max(200).optional(),
   msgType: z.enum(["text", "darmin_transfer", "voice"]).default("text"),
   darminAmount: z.number().positive().optional(),
   forwardedFromDmId: z.number().int().positive().optional(),
@@ -675,10 +756,24 @@ router.post("/chat/groups/:groupId/messages", async (req, res): Promise<void> =>
   const parsed = groupMsgSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Некорректные данные" }); return; }
 
-  const { content, msgType, darminAmount, forwardedFromDmId } = parsed.data;
+  const { content, ciphertext, msgNonce, msgType, darminAmount, forwardedFromDmId } = parsed.data;
+
+  // Must have either plaintext content or E2EE ciphertext+nonce
+  if (!content && !(ciphertext && msgNonce)) {
+    res.status(400).json({ error: "Необходимо передать content или ciphertext+msgNonce" }); return;
+  }
 
   const [inserted] = await db.insert(groupMessagesTable)
-    .values({ groupId, fromCitizenId: me.id, content, msgType, darminAmount: darminAmount ?? null, forwardedFromDmId: forwardedFromDmId ?? null })
+    .values({
+      groupId,
+      fromCitizenId: me.id,
+      content: content ?? "",  // empty string placeholder when E2EE
+      ciphertext: ciphertext ?? null,
+      msgNonce: msgNonce ?? null,
+      msgType,
+      darminAmount: darminAmount ?? null,
+      forwardedFromDmId: forwardedFromDmId ?? null,
+    })
     .returning();
 
   if (!inserted) { res.status(500).json({ error: "Ошибка сохранения" }); return; }
@@ -693,6 +788,8 @@ router.post("/chat/groups/:groupId/messages", async (req, res): Promise<void> =>
     group_id: inserted.groupId,
     from_citizen_id: inserted.fromCitizenId,
     content: inserted.content,
+    ciphertext: inserted.ciphertext ?? null,
+    msg_nonce: inserted.msgNonce ?? null,
     msg_type: inserted.msgType,
     darmin_amount: inserted.darminAmount ?? null,
     forwarded_from_dm_id: inserted.forwardedFromDmId ?? null,

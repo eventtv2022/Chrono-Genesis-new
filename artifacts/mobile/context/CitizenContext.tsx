@@ -1,12 +1,11 @@
 import { getBaseUrl } from "@/lib/api";
-import { getStoredAuthHeaders } from "@/lib/authStorage";
+import { getStoredToken, getStoredAuthHeaders, setStoredToken, deleteStoredToken } from "@/lib/authStorage";
 import { getOrCreateKeyPair } from "@/lib/e2ee";
 import React, { createContext, useContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const BASE_URL = getBaseUrl();
-const STORAGE_KEY = "@timenation/citizen";
-const AUTH_TOKEN_KEY = "@timenation/auth_token";
+const STORAGE_KEY = "@timenation/citizen"; // non-sensitive profile, AsyncStorage ok
 
 export interface CitizenProfile {
   id: number;
@@ -58,7 +57,7 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     Promise.all([
       AsyncStorage.getItem(STORAGE_KEY),
-      AsyncStorage.getItem(AUTH_TOKEN_KEY),
+      getStoredToken(), // reads from SecureStore (with legacy AsyncStorage migration)
     ]).then(([raw, token]) => {
       let resolvedToken = token;
 
@@ -66,15 +65,12 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
         try {
           const stored = JSON.parse(raw) as CitizenProfile & { authToken?: string };
 
-          // ── MIGRATION: old code stored authToken inside the citizen JSON ──
-          // If the separate auth_token key is missing, recover it from the profile.
+          // MIGRATION: old code stored authToken inside the citizen JSON
           if (!resolvedToken && stored.authToken) {
             resolvedToken = stored.authToken;
-            // Save under the correct key so future reads work
-            AsyncStorage.setItem(AUTH_TOKEN_KEY, stored.authToken);
+            setStoredToken(stored.authToken).catch(() => {});
           }
 
-          // Store citizen WITHOUT the authToken field (keep keys separate)
           const { authToken: _drop, ...profile } = stored;
           setCitizenState(profile as CitizenProfile);
         } catch {}
@@ -85,10 +81,7 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // ── Register E2EE public key globally when citizen is authenticated ─────────
-  // This runs whenever the citizen logs in or app restarts with a saved session.
-  // Ensures every user's public key is on the server so anyone can message them
-  // without the recipient having to open a specific chat first.
+  // Register E2EE public key on the server whenever citizen is authenticated
   useEffect(() => {
     if (!citizen) return;
     (async () => {
@@ -97,16 +90,16 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
         const checkRes = await fetch(`${BASE_URL}/api/chat/key/${citizen.id}`);
         if (checkRes.ok) {
           const existing = (await checkRes.json()) as { publicKey?: string };
-          if (existing.publicKey === kp.publicKeyB64) return; // already registered
+          if (existing.publicKey === kp.publicKeyB64) return;
         }
         const hdrs = await getStoredAuthHeaders();
-        if (!hdrs.Authorization) return; // no token yet — will retry on next citizen change
+        if (!hdrs.Authorization) return;
         await fetch(`${BASE_URL}/api/chat/key`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...hdrs },
           body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
         });
-      } catch { /* non-critical, silent */ }
+      } catch { /* non-critical */ }
     })();
   }, [citizen?.id]);
 
@@ -128,7 +121,7 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(c));
     } else {
       AsyncStorage.removeItem(STORAGE_KEY);
-      AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+      deleteStoredToken().catch(() => {});
       setAuthTokenState(null);
     }
   }
@@ -136,9 +129,9 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
   function setAuthToken(token: string | null) {
     setAuthTokenState(token);
     if (token) {
-      AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+      setStoredToken(token).catch(() => {}); // fire-and-forget to SecureStore
     } else {
-      AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+      deleteStoredToken().catch(() => {});
     }
   }
 
