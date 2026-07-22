@@ -355,15 +355,17 @@ export default function ConversationScreen() {
   }
 
   async function startCall(type: "audio" | "video") {
-    if (Platform.OS === "web") {
-      Alert.alert("Недоступно", "Звонки поддерживаются только в мобильном приложении (Android / iOS)");
-      return;
-    }
-    if (callStateRef.current !== "idle" || !citizen) return;
+    console.log("[Call] button pressed, type=", type, "platform=", Platform.OS, "callState=", callStateRef.current);
+    if (callStateRef.current !== "idle") return;
     setCallType(type);
     callStateRef.current = "calling";
     setCallState("calling");
     setCallDuration(0);
+    // On web: just open the "not supported" modal (CallScreen web stub) and return
+    if (Platform.OS === "web") {
+      return;
+    }
+    if (!citizen) { cleanupCallState(); return; }
     const svc = webrtcRef.current;
     try {
       const stream = await svc.initLocalStream(type === "video");
@@ -427,7 +429,10 @@ export default function ConversationScreen() {
   }
 
   function endCall() {
-    wsRef.current?.send(JSON.stringify({ type: "call:end", toCitizenId: peerId }));
+    // Only send WS message on native (no real call was started on web)
+    if (Platform.OS !== "web") {
+      wsRef.current?.send(JSON.stringify({ type: "call:end", toCitizenId: peerId }));
+    }
     cleanupCallState();
   }
 
@@ -740,23 +745,21 @@ export default function ConversationScreen() {
         </TouchableOpacity>
         {/* Audio call */}
         <TouchableOpacity
-          onPress={() => void startCall("audio")}
-          activeOpacity={0.7}
-          disabled={callState !== "idle"}
-          style={{ marginRight: 8 }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={() => { void startCall("audio"); }}
+          activeOpacity={0.6}
+          style={{ marginRight: 8, padding: 4 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Feather name="phone" size={18} color={callState !== "idle" ? C.muted : C.fg} />
+          <Feather name="phone" size={19} color={callState !== "idle" ? C.primary : C.fg} />
         </TouchableOpacity>
         {/* Video call */}
         <TouchableOpacity
-          onPress={() => void startCall("video")}
-          activeOpacity={0.7}
-          disabled={callState !== "idle"}
-          style={{ marginRight: 8 }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={() => { void startCall("video"); }}
+          activeOpacity={0.6}
+          style={{ marginRight: 8, padding: 4 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Feather name="video" size={18} color={callState !== "idle" ? C.muted : C.fg} />
+          <Feather name="video" size={19} color={callState !== "idle" ? C.primary : C.fg} />
         </TouchableOpacity>
         {!peerNoKey && myPubKeyB64Ref.current && peerPubKeyB64Ref.current && (
           <TouchableOpacity
