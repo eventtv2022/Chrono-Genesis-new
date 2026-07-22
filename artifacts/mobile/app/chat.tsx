@@ -188,7 +188,12 @@ export default function ChatListScreen() {
     <SafeAreaView style={s.safe}>
       {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
+        <TouchableOpacity
+          onPress={() => { if (router.canGoBack()) { router.back(); } else { router.push("/"); } }}
+          activeOpacity={0.7}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={s.backBtn}
+        >
           <Feather name="arrow-left" size={22} color={C.primary} />
         </TouchableOpacity>
         <View style={s.headerCenter}>
@@ -388,6 +393,7 @@ export default function ChatListScreen() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border, gap: 12 },
+  backBtn: { minWidth: 40, minHeight: 40, alignItems: "center", justifyContent: "center", zIndex: 10 },
   headerCenter: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 },
   title: { fontSize: 20, fontFamily: "Inter_700Bold", color: C.fg },
   e2eeBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(201,168,76,0.12)", borderWidth: 1, borderColor: "rgba(201,168,76,0.3)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
