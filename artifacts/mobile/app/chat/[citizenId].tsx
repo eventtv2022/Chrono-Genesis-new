@@ -50,6 +50,9 @@ interface RawMessage {
   delivered_at: string | null;
   read_at: string | null;
   reactions: { citizenId: number; emoji: string }[];
+  reply_to_id: number | null;
+  reply_sender_name: string | null;
+  reply_content: string | null;
 }
 
 interface DecryptedMessage extends RawMessage {
@@ -108,6 +111,7 @@ export default function ConversationScreen() {
   const [recordingDuration, setRecordingDuration] = useState(0);
 
   const [safetyModal, setSafetyModal] = useState(false);
+  const [replyTo, setReplyTo] = useState<{ id: number; text: string; senderName: string } | null>(null);
 
   const flatRef = useRef<FlatList>(null);
   const secretKeyRef = useRef<Uint8Array | null>(null);
@@ -115,6 +119,7 @@ export default function ConversationScreen() {
   const peerPubKeyRef = useRef<Uint8Array | null>(null);
   const peerPubKeyB64Ref = useRef<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const forwardMsgRef = useRef<DecryptedMessage | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -291,6 +296,9 @@ export default function ConversationScreen() {
       msg_type: "text",
       darmin_amount: null,
       forwarded_from_id: null,
+      reply_to_id: replyTo?.id ?? null,
+      reply_sender_name: replyTo?.senderName ?? null,
+      reply_content: replyTo?.text.slice(0, 400) ?? null,
       created_at: new Date().toISOString(),
       delivered_at: null,
       read_at: null,
@@ -299,6 +307,7 @@ export default function ConversationScreen() {
     };
     setMessages((prev) => [...prev, tempMsg]);
     setInput("");
+    setReplyTo(null);
     setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
 
     setSending(true);
@@ -343,7 +352,7 @@ export default function ConversationScreen() {
       const res = await fetch(`${BASE_URL}/api/chat/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...hdrs },
-        body: JSON.stringify({ toCitizenId: peerId, ciphertext, nonce }),
+        body: JSON.stringify({ toCitizenId: peerId, ciphertext, nonce, ...(replyTo ? { replyToId: replyTo.id, replySenderName: replyTo.senderName, replyContent: replyTo.text.slice(0, 400) } : {}) }),
       });
       if (!res.ok) {
         const errBody = (await res.json().catch(() => ({}))) as { error?: string };
@@ -388,7 +397,6 @@ export default function ConversationScreen() {
 
   // ── Forward message ───────────────────────────────────────────────────────
   async function openForward() {
-    setSelectedMsg(null);
     try {
       const res = await fetch(`${BASE_URL}/api/citizens`);
       const all = (await res.json()) as CitizenItem[];
@@ -398,7 +406,7 @@ export default function ConversationScreen() {
   }
 
   async function forwardTo(targetId: number) {
-    const msg = selectedMsg;
+    const msg = forwardMsgRef.current;
     if (!msg || !citizen) return;
     const sk = secretKeyRef.current;
     if (!sk) return;
@@ -676,6 +684,15 @@ export default function ConversationScreen() {
                     </TouchableOpacity>
                   ) : (
                     <View style={[s.bubble, isMine ? s.bubbleMine : s.bubbleTheirs]}>
+                      {m.reply_to_id && (
+                        <View style={s.quoteBubble}>
+                          <View style={s.quoteStripe} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.quoteName}>{m.reply_sender_name ?? "Ответ"}</Text>
+                            <Text style={s.quoteText} numberOfLines={2}>{m.reply_content ?? "Сообщение"}</Text>
+                          </View>
+                        </View>
+                      )}
                       <Text style={[s.bubbleText, isMine ? s.bubbleTextMine : s.bubbleTextTheirs]}>{m.plaintext}</Text>
                       <View style={s.msgMeta}>
                         <Text style={s.msgTime}>{formatTime(m.created_at)}</Text>
@@ -708,6 +725,18 @@ export default function ConversationScreen() {
 
       {/* Input bar */}
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
+        {replyTo && (
+          <View style={s.replyBanner}>
+            <View style={s.replyStripe} />
+            <View style={{ flex: 1, overflow: "hidden" }}>
+              <Text style={s.replyName}>{replyTo.senderName}</Text>
+              <Text style={s.replyText} numberOfLines={1}>{replyTo.text}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Feather name="x" size={16} color={C.muted} />
+            </TouchableOpacity>
+          </View>
+        )}
         {isRecording && (
           <View style={s.recordingBar}>
             <View style={s.recordingDot} />
@@ -774,11 +803,28 @@ export default function ConversationScreen() {
             {/* Forward */}
             <TouchableOpacity
               style={s.actionItem}
-              onPress={() => { const m = selectedMsg; setSelectedMsg(null); if (m?.msg_type === "text" || m?.msg_type === "voice") { setTimeout(() => { setSelectedMsg(m); openForward(); }, 100); } else { openForward(); } }}
+              onPress={() => { forwardMsgRef.current = selectedMsg; setSelectedMsg(null); openForward(); }}
               activeOpacity={0.75}
             >
               <Feather name="corner-up-right" size={18} color={C.fg} />
               <Text style={s.actionText}>Переслать</Text>
+            </TouchableOpacity>
+            {/* Reply */}
+            <TouchableOpacity
+              style={s.actionItem}
+              onPress={() => {
+                if (selectedMsg) {
+                  const senderName = selectedMsg.from_citizen_id === citizen.id
+                    ? "Вы"
+                    : (peer?.name ?? `ID ${selectedMsg.from_citizen_id}`);
+                  setReplyTo({ id: selectedMsg.id, text: selectedMsg.plaintext, senderName });
+                  setSelectedMsg(null);
+                }
+              }}
+              activeOpacity={0.75}
+            >
+              <Feather name="corner-up-left" size={18} color={C.fg} />
+              <Text style={s.actionText}>Ответить</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -924,6 +970,14 @@ const s = StyleSheet.create({
   darminBubble: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(201,168,76,0.12)", borderWidth: 1, borderColor: "rgba(201,168,76,0.35)", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 },
   darminAmt: { fontSize: 18, fontFamily: "Inter_700Bold", color: C.primary },
   darminLbl: { fontSize: 11, fontFamily: "Inter_400Regular", color: C.muted },
+  replyBanner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.bg, gap: 10 },
+  replyStripe: { width: 3, alignSelf: "stretch", backgroundColor: C.primary, borderRadius: 2, flexShrink: 0 },
+  replyName: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: C.primary, marginBottom: 2 },
+  replyText: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.muted },
+  quoteBubble: { flexDirection: "row", marginBottom: 4, borderRadius: 8, overflow: "hidden", backgroundColor: "rgba(201,168,76,0.07)", paddingVertical: 4, paddingRight: 8 },
+  quoteStripe: { width: 3, backgroundColor: C.primary, marginRight: 6, flexShrink: 0 },
+  quoteName: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: C.primary, marginBottom: 1 },
+  quoteText: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.muted, lineHeight: 16 },
   voiceBubble: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, maxWidth: 200 },
   voiceBubbleMine: { backgroundColor: C.mine, borderColor: C.mineBorder },
   voiceBubbleTheirs: { backgroundColor: C.theirs, borderColor: C.theirsBorder },

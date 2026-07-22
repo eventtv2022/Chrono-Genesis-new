@@ -28,6 +28,9 @@ export const groupMessagesTable = pgTable("group_messages", {
   msgType: text("msg_type").default("text").notNull(),
   darminAmount: real("darmin_amount"),
   forwardedFromDmId: integer("forwarded_from_dm_id"),
+  replyToId: integer("reply_to_id"),
+  replySenderName: text("reply_sender_name"),
+  replyContent: text("reply_content"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

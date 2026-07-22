@@ -26,6 +26,7 @@ import {
   decryptGroupKey,
   encryptGroupMsg,
   decryptGroupMsg,
+  encryptMsg,
 } from "@/lib/e2ee";
 import { decodeBase64 } from "tweetnacl-util";
 
@@ -40,13 +41,17 @@ const C = {
 
 interface GroupInfo { id: number; name: string; description: string | null; created_by: number; }
 interface Member { citizen_id: number; name: string | null; rank: string | null; is_admin: boolean; }
+interface CitizenItem { id: number; name: string | null; rank: string | null; }
+
 interface GrpMsg {
   id: number; group_id: number; from_citizen_id: number;
   content: string; msg_type: string; darmin_amount: number | null;
   forwarded_from_dm_id: number | null; created_at: string;
   sender_name: string | null; sender_rank: string | null;
-  // E2EE fields — present when message is encrypted
+  // E2EE fields
   ciphertext?: string | null; msg_nonce?: string | null;
+  // Reply fields
+  reply_to_id?: number | null; reply_sender_name?: string | null; reply_content?: string | null;
 }
 
 function formatTime(iso: string | Date | null | undefined): string {
@@ -76,12 +81,19 @@ export default function GroupConversationScreen() {
   const [darminNote, setDarminNote] = useState("");
   const [transferring, setTransferring] = useState(false);
   const [isE2EE, setIsE2EE] = useState(false);
+  const [selectedMsg, setSelectedMsg] = useState<GrpMsg | null>(null);
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const [forwardCitizens, setForwardCitizens] = useState<CitizenItem[]>([]);
+  const [forwardSearch, setForwardSearch] = useState("");
+  const [forwardingTo, setForwardingTo] = useState<number | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: number; text: string; senderName: string } | null>(null);
 
   const flatRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const groupKeyRef = useRef<Uint8Array | null>(null);
   const mySecretKeyRef = useRef<Uint8Array | null>(null);
   const myPubKeyB64Ref = useRef<string | null>(null);
+  const forwardMsgRef = useRef<GrpMsg | null>(null);
 
   // ── Decrypt a message if group key is available ───────────────────────────
   function decryptIfNeeded(m: GrpMsg): GrpMsg {
@@ -129,6 +141,40 @@ export default function GroupConversationScreen() {
         }
       }
     } catch { /* E2EE setup is non-critical */ }
+  }
+
+  // ── Forward group message to personal DM ─────────────────────────────────
+  async function openGroupForward() {
+    try {
+      const res = await fetch(`${BASE_URL}/api/citizens`);
+      const all = (await res.json()) as CitizenItem[];
+      setForwardCitizens(all.filter((c) => c.id !== citizen?.id).slice(0, 100));
+    } catch { setForwardCitizens([]); }
+    setShowForwardModal(true);
+  }
+
+  async function forwardToUser(targetId: number) {
+    const msg = forwardMsgRef.current;
+    const sk = mySecretKeyRef.current;
+    if (!msg || !citizen || !sk) return;
+    setForwardingTo(targetId);
+    try {
+      const keyRes = await fetch(`${BASE_URL}/api/chat/key/${targetId}`);
+      if (!keyRes.ok) { Alert.alert("Ошибка", "Получатель не подключил E2EE"); return; }
+      const { publicKey } = (await keyRes.json()) as { publicKey: string };
+      const targetPub = decodeBase64(publicKey);
+      const hdrs = await getStoredAuthHeaders();
+      const { ciphertext, nonce } = encryptMsg(msg.content, targetPub, sk);
+      await fetch(`${BASE_URL}/api/chat/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...hdrs },
+        body: JSON.stringify({ toCitizenId: targetId, ciphertext, nonce }),
+      });
+      setShowForwardModal(false);
+      setForwardSearch("");
+      Alert.alert("✓", "Сообщение переслано");
+    } catch { Alert.alert("Ошибка", "Не удалось переслать"); }
+    finally { setForwardingTo(null); }
   }
 
   // ── Load group + messages ─────────────────────────────────────────────────
@@ -207,12 +253,15 @@ export default function GroupConversationScreen() {
     try {
       const hdrs = await getStoredAuthHeaders();
       if (!hdrs.Authorization) { Alert.alert("Сессия истекла", "Выйдите и войдите снова"); return; }
+      const replyFields = replyTo
+        ? { replyToId: replyTo.id, replySenderName: replyTo.senderName, replyContent: replyTo.text.slice(0, 400) }
+        : {};
       let body: object;
       if (groupKeyRef.current) {
         const { ciphertext, msgNonce } = encryptGroupMsg(plaintext, groupKeyRef.current);
-        body = { content: "", ciphertext, msgNonce, msgType: "text" };
+        body = { content: "", ciphertext, msgNonce, msgType: "text", ...replyFields };
       } else {
-        body = { content: plaintext, msgType: "text" };
+        body = { content: plaintext, msgType: "text", ...replyFields };
       }
       const res = await fetch(`${BASE_URL}/api/chat/groups/${groupId}/messages`, {
         method: "POST",
@@ -224,9 +273,14 @@ export default function GroupConversationScreen() {
         Alert.alert("Ошибка", err.error ?? "Не удалось отправить"); return;
       }
       const { message: sent } = (await res.json()) as { message: GrpMsg };
-      // Show plaintext locally (we know what we sent)
-      setMessages((prev) => [...prev, { ...sent, content: plaintext }]);
+      setMessages((prev) => [...prev, {
+        ...sent, content: plaintext,
+        reply_to_id: replyTo?.id ?? null,
+        reply_sender_name: replyTo?.senderName ?? null,
+        reply_content: replyTo?.text.slice(0, 400) ?? null,
+      }]);
       setInput("");
+      setReplyTo(null);
       setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
     } catch { Alert.alert("Ошибка", "Сетевая ошибка"); }
     finally { setSending(false); }
@@ -303,7 +357,11 @@ export default function GroupConversationScreen() {
             const isMine = Number(m.from_citizen_id) === Number(citizen.id);
             const isDarmin = m.msg_type === "darmin_transfer";
             return (
-              <View style={[s.msgRow, isMine ? s.msgRowMine : s.msgRowTheirs]}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onLongPress={() => { forwardMsgRef.current = m; setSelectedMsg(m); }}
+                style={[s.msgRow, isMine ? s.msgRowMine : s.msgRowTheirs]}
+              >
                 <View style={{ alignSelf: isMine ? "flex-end" : "flex-start", maxWidth: "82%" }}>
                   {!isMine && (
                     <Text style={s.senderName}>{m.sender_name ?? `ID ${m.from_citizen_id}`}</Text>
@@ -316,6 +374,15 @@ export default function GroupConversationScreen() {
                     </View>
                   ) : (
                     <View style={[s.bubble, isMine ? s.bubbleMine : s.bubbleTheirs]}>
+                      {m.reply_to_id && (
+                        <View style={s.quoteBubble}>
+                          <View style={s.quoteStripe} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.quoteName}>{m.reply_sender_name ?? "Ответ"}</Text>
+                            <Text style={s.quoteText} numberOfLines={2}>{m.reply_content ?? "Сообщение"}</Text>
+                          </View>
+                        </View>
+                      )}
                       <Text style={[s.bubbleText, isMine ? s.bubbleTextMine : s.bubbleTextTheirs]}>
                         {m.content}
                       </Text>
@@ -323,7 +390,7 @@ export default function GroupConversationScreen() {
                     </View>
                   )}
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           }}
         />
@@ -331,6 +398,18 @@ export default function GroupConversationScreen() {
 
       {/* Input */}
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
+        {replyTo && (
+          <View style={s.replyBanner}>
+            <View style={s.replyStripe} />
+            <View style={{ flex: 1, overflow: "hidden" }}>
+              <Text style={s.replyName}>{replyTo.senderName}</Text>
+              <Text style={s.replyText} numberOfLines={1}>{replyTo.text}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Feather name="x" size={16} color={C.muted} />
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={s.inputBar}>
           <TouchableOpacity style={s.darminBtn} onPress={() => setDarminModal(true)} activeOpacity={0.75}>
             <Text style={s.darminBtnText}>Д</Text>
@@ -385,6 +464,81 @@ export default function GroupConversationScreen() {
         </View>
       </Modal>
 
+      {/* Action sheet modal */}
+      <Modal visible={!!selectedMsg} transparent animationType="fade">
+        <TouchableOpacity style={s.actionOverlay} activeOpacity={1} onPress={() => setSelectedMsg(null)}>
+          <View style={s.actionSheet}>
+            <View style={s.actionDivider} />
+            <TouchableOpacity
+              style={s.actionItem}
+              onPress={() => {
+                if (selectedMsg) {
+                  const senderName = selectedMsg.from_citizen_id === citizen.id
+                    ? "Вы"
+                    : (selectedMsg.sender_name ?? `ID ${selectedMsg.from_citizen_id}`);
+                  setReplyTo({ id: selectedMsg.id, text: selectedMsg.content, senderName });
+                  setSelectedMsg(null);
+                }
+              }}
+              activeOpacity={0.75}
+            >
+              <Feather name="corner-up-left" size={18} color={C.fg} />
+              <Text style={s.actionText}>Ответить</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.actionItem}
+              onPress={() => { forwardMsgRef.current = selectedMsg; setSelectedMsg(null); openGroupForward(); }}
+              activeOpacity={0.75}
+            >
+              <Feather name="corner-up-right" size={18} color={C.fg} />
+              <Text style={s.actionText}>Переслать</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Forward Modal */}
+      <Modal visible={showForwardModal} transparent animationType="slide">
+        <View style={s.modalOverlay}>
+          <View style={s.modalSheet}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Переслать сообщение</Text>
+              <TouchableOpacity onPress={() => { setShowForwardModal(false); setForwardSearch(""); }}>
+                <Feather name="x" size={20} color={C.fg} />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={s.modalInput}
+              placeholder="Поиск граждан..."
+              placeholderTextColor={C.muted}
+              value={forwardSearch}
+              onChangeText={setForwardSearch}
+              autoFocus
+            />
+            <FlatList
+              data={forwardSearch.trim() ? forwardCitizens.filter((c) => (c.name ?? "").toLowerCase().includes(forwardSearch.toLowerCase())) : forwardCitizens}
+              keyExtractor={(c) => String(c.id)}
+              style={{ maxHeight: 300 }}
+              renderItem={({ item: c }) => (
+                <TouchableOpacity
+                  style={s.fwdItem}
+                  onPress={() => forwardToUser(c.id)}
+                  disabled={forwardingTo === c.id}
+                  activeOpacity={0.75}
+                >
+                  <View style={s.fwdAvatar}><Text style={s.fwdAvatarText}>{(c.name ?? "?")[0]?.toUpperCase()}</Text></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fwdName}>{c.name ?? `ID ${c.id}`}</Text>
+                    {c.rank && <Text style={s.fwdRank}>{c.rank}</Text>}
+                  </View>
+                  {forwardingTo === c.id ? <ActivityIndicator color={C.primary} size="small" /> : <Feather name="send" size={16} color={C.muted} />}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
       {/* Darmin Modal */}
       <Modal visible={darminModal} transparent animationType="slide">
         <View style={s.modalOverlay}>
@@ -432,6 +586,24 @@ const s = StyleSheet.create({
   darminBubble: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(201,168,76,0.12)", borderWidth: 1, borderColor: "rgba(201,168,76,0.35)", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 },
   darminText: { fontSize: 18, fontFamily: "Inter_700Bold", color: C.primary },
   darminLabel: { fontSize: 11, fontFamily: "Inter_400Regular", color: C.muted },
+  replyBanner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.bg, gap: 10 },
+  replyStripe: { width: 3, alignSelf: "stretch", backgroundColor: C.primary, borderRadius: 2, flexShrink: 0 },
+  replyName: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: C.primary, marginBottom: 2 },
+  replyText: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.muted },
+  quoteBubble: { flexDirection: "row", marginBottom: 6, borderRadius: 8, overflow: "hidden", backgroundColor: "rgba(201,168,76,0.07)", paddingVertical: 4, paddingRight: 8 },
+  quoteStripe: { width: 3, backgroundColor: C.primary, marginRight: 6, flexShrink: 0 },
+  quoteName: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: C.primary, marginBottom: 1 },
+  quoteText: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.muted, lineHeight: 16 },
+  actionOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  actionSheet: { backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 36 },
+  actionDivider: { height: 1, backgroundColor: C.border, marginBottom: 12 },
+  actionItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
+  actionText: { fontSize: 16, fontFamily: "Inter_400Regular", color: C.fg },
+  fwdItem: { flexDirection: "row", alignItems: "center", paddingVertical: 10, gap: 12 },
+  fwdAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(201,168,76,0.12)", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  fwdAvatarText: { fontSize: 16, fontFamily: "Inter_700Bold", color: C.primary },
+  fwdName: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: C.fg },
+  fwdRank: { fontSize: 11, fontFamily: "Inter_400Regular", color: C.muted },
   inputBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border, gap: 8, backgroundColor: C.bg },
   darminBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: C.primary, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(201,168,76,0.1)", flexShrink: 0 },
   darminBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: C.primary },

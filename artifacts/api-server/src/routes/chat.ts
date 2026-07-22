@@ -274,6 +274,9 @@ router.get("/chat/messages/:withCitizenId", async (req, res): Promise<void> => {
       msg_type: m.msgType,
       darmin_amount: m.darminAmount ?? null,
       forwarded_from_id: m.forwardedFromId ?? null,
+      reply_to_id: m.replyToId ?? null,
+      reply_sender_name: m.replySenderName ?? null,
+      reply_content: m.replyContent ?? null,
       created_at: m.createdAt,
       delivered_at: m.deliveredAt ?? null,
       read_at: m.readAt ?? null,
@@ -291,6 +294,9 @@ const sendMsgSchema = z.object({
   msgType: z.enum(["text", "darmin_transfer", "voice"]).default("text"),
   darminAmount: z.number().positive().optional(),
   forwardedFromId: z.number().int().positive().optional(),
+  replyToId: z.number().int().positive().optional(),
+  replySenderName: z.string().max(100).optional(),
+  replyContent: z.string().max(500).optional(),
 });
 
 router.post("/chat/messages", async (req, res): Promise<void> => {
@@ -300,7 +306,7 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
   const parsed = sendMsgSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Некорректные данные" }); return; }
 
-  const { toCitizenId, ciphertext, nonce, msgType, darminAmount, forwardedFromId } = parsed.data;
+  const { toCitizenId, ciphertext, nonce, msgType, darminAmount, forwardedFromId, replyToId, replySenderName, replyContent } = parsed.data;
 
   if (toCitizenId === me.id) { res.status(400).json({ error: "Нельзя отправить сообщение самому себе" }); return; }
 
@@ -314,7 +320,7 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
 
   const [inserted] = await db
     .insert(dmMessagesTable)
-    .values({ fromCitizenId: me.id, toCitizenId, ciphertext, nonce, msgType, darminAmount: darminAmount ?? null, forwardedFromId: forwardedFromId ?? null })
+    .values({ fromCitizenId: me.id, toCitizenId, ciphertext, nonce, msgType, darminAmount: darminAmount ?? null, forwardedFromId: forwardedFromId ?? null, replyToId: replyToId ?? null, replySenderName: replySenderName ?? null, replyContent: replyContent ?? null })
     .returning();
 
   if (!inserted) { res.status(500).json({ error: "Ошибка сохранения" }); return; }
@@ -331,6 +337,9 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
       msg_type: msgType,
       darmin_amount: darminAmount ?? null,
       forwarded_from_id: forwardedFromId ?? null,
+      reply_to_id: replyToId ?? null,
+      reply_sender_name: replySenderName ?? null,
+      reply_content: replyContent ?? null,
       created_at: inserted.createdAt,
       delivered_at: null,
       read_at: null,
@@ -377,6 +386,9 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
       msg_type: inserted.msgType,
       darmin_amount: inserted.darminAmount ?? null,
       forwarded_from_id: inserted.forwardedFromId ?? null,
+      reply_to_id: inserted.replyToId ?? null,
+      reply_sender_name: inserted.replySenderName ?? null,
+      reply_content: inserted.replyContent ?? null,
       created_at: inserted.createdAt,
       delivered_at: inserted.deliveredAt ?? null,
       read_at: inserted.readAt ?? null,
@@ -740,6 +752,9 @@ const groupMsgSchema = z.object({
   msgType: z.enum(["text", "darmin_transfer", "voice"]).default("text"),
   darminAmount: z.number().positive().optional(),
   forwardedFromDmId: z.number().int().positive().optional(),
+  replyToId: z.number().int().positive().optional(),
+  replySenderName: z.string().max(100).optional(),
+  replyContent: z.string().max(500).optional(),
 });
 
 router.post("/chat/groups/:groupId/messages", async (req, res): Promise<void> => {
@@ -756,7 +771,7 @@ router.post("/chat/groups/:groupId/messages", async (req, res): Promise<void> =>
   const parsed = groupMsgSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Некорректные данные" }); return; }
 
-  const { content, ciphertext, msgNonce, msgType, darminAmount, forwardedFromDmId } = parsed.data;
+  const { content, ciphertext, msgNonce, msgType, darminAmount, forwardedFromDmId, replyToId, replySenderName, replyContent } = parsed.data;
 
   // Must have either plaintext content or E2EE ciphertext+nonce
   if (!content && !(ciphertext && msgNonce)) {
@@ -773,6 +788,9 @@ router.post("/chat/groups/:groupId/messages", async (req, res): Promise<void> =>
       msgType,
       darminAmount: darminAmount ?? null,
       forwardedFromDmId: forwardedFromDmId ?? null,
+      replyToId: replyToId ?? null,
+      replySenderName: replySenderName ?? null,
+      replyContent: replyContent ?? null,
     })
     .returning();
 
@@ -790,6 +808,9 @@ router.post("/chat/groups/:groupId/messages", async (req, res): Promise<void> =>
     content: inserted.content,
     ciphertext: inserted.ciphertext ?? null,
     msg_nonce: inserted.msgNonce ?? null,
+    reply_to_id: inserted.replyToId ?? null,
+    reply_sender_name: inserted.replySenderName ?? null,
+    reply_content: inserted.replyContent ?? null,
     msg_type: inserted.msgType,
     darmin_amount: inserted.darminAmount ?? null,
     forwarded_from_dm_id: inserted.forwardedFromDmId ?? null,
