@@ -279,7 +279,23 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
   }
 
   logger.info({ from: me.id, to: toCitizenId, msgType, wsDelivered }, "DM sent");
-  res.status(201).json({ message: { ...inserted, reactions: [] } });
+  // Map Drizzle camelCase to snake_case expected by the mobile client
+  res.status(201).json({
+    message: {
+      id: inserted.id,
+      from_citizen_id: inserted.fromCitizenId,
+      to_citizen_id: inserted.toCitizenId,
+      ciphertext: inserted.ciphertext,
+      nonce: inserted.nonce,
+      msg_type: inserted.msgType,
+      darmin_amount: inserted.darminAmount ?? null,
+      forwarded_from_id: inserted.forwardedFromId ?? null,
+      created_at: inserted.createdAt,
+      delivered_at: inserted.deliveredAt ?? null,
+      read_at: inserted.readAt ?? null,
+      reactions: [],
+    },
+  });
 });
 
 // ── PATCH /chat/messages/read/:withCitizenId ──────────────────────────────
@@ -585,20 +601,27 @@ router.post("/chat/groups/:groupId/messages", async (req, res): Promise<void> =>
   const members = await db.select({ citizenId: groupMembersTable.citizenId }).from(groupMembersTable)
     .where(eq(groupMembersTable.groupId, groupId));
 
-  const payload = {
-    type: "group_message",
-    message: {
-      ...inserted,
-      sender_name: me.name,
-      sender_rank: me.rank,
-    },
+  // Map Drizzle camelCase to snake_case expected by the mobile client
+  const msgSnake = {
+    id: inserted.id,
+    group_id: inserted.groupId,
+    from_citizen_id: inserted.fromCitizenId,
+    content: inserted.content,
+    msg_type: inserted.msgType,
+    darmin_amount: inserted.darminAmount ?? null,
+    forwarded_from_dm_id: inserted.forwardedFromDmId ?? null,
+    created_at: inserted.createdAt,
+    sender_name: me.name,
+    sender_rank: me.rank,
   };
+
+  const payload = { type: "group_message", message: msgSnake };
 
   for (const { citizenId } of members) {
     if (citizenId !== me.id) pushToCitizen(citizenId, payload);
   }
 
-  res.status(201).json({ message: { ...inserted, sender_name: me.name, sender_rank: me.rank } });
+  res.status(201).json({ message: msgSnake });
 });
 
 // ── PATCH /chat/groups/:groupId/read ─────────────────────────────────────

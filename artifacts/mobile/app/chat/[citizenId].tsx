@@ -59,8 +59,11 @@ interface DecryptedMessage extends RawMessage {
 interface PeerInfo { id: number; name: string | null; rank: string | null; hasKey: boolean; }
 interface CitizenItem { id: number; name: string | null; rank: string | null; }
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+function formatTime(iso: string | Date | null | undefined): string {
+  if (!iso) return "Только что";
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  if (isNaN(d.getTime())) return "Только что";
+  return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 }
 
 // ── Tick marks ────────────────────────────────────────────────────────────────
