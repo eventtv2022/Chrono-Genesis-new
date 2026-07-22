@@ -61,7 +61,9 @@ interface CitizenItem { id: number; name: string | null; rank: string | null; }
 
 function formatTime(iso: string | Date | null | undefined): string {
   if (!iso) return "Только что";
-  const d = typeof iso === "string" ? new Date(iso) : iso;
+  // PostgreSQL returns "YYYY-MM-DD HH:mm:ss+00" (space, not T). Normalise to ISO.
+  const s = typeof iso === "string" ? iso.replace(" ", "T") : iso;
+  const d = new Date(s);
   if (isNaN(d.getTime())) return "Только что";
   return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 }

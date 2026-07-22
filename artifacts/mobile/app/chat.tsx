@@ -64,8 +64,12 @@ interface Citizen {
   citizenNumber: string | null;
 }
 
-function formatTime(iso: string): string {
-  const d = new Date(iso);
+function formatTime(iso: string | Date | null | undefined): string {
+  if (!iso) return "";
+  // PostgreSQL returns "YYYY-MM-DD HH:mm:ss+00" (space, not T). Normalise to ISO.
+  const s = typeof iso === "string" ? iso.replace(" ", "T") : iso;
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return "";
   const now = new Date();
   if (now.getTime() - d.getTime() < 86400000)
     return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });

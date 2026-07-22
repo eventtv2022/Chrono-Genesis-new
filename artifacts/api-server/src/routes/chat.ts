@@ -102,45 +102,56 @@ router.get("/chat/conversations", async (req, res): Promise<void> => {
   const me = await getAuthCitizen(req.headers.authorization);
   if (!me) { res.status(401).json({ error: "Требуется авторизация" }); return; }
 
+  // Use a CTE so that peer_id is a stable column name — avoids the
+  // "DISTINCT ON expression must match initial ORDER BY expression" error
+  // that occurs when Drizzle injects separate $N params for each ${me.id}.
+  const myId = me.id;
   const rows = await db.execute(sql`
+    WITH msgs AS (
+      SELECT
+        id, from_citizen_id, to_citizen_id,
+        ciphertext, nonce, msg_type, darmin_amount,
+        created_at, read_at, delivered_at,
+        CASE WHEN from_citizen_id = ${myId} THEN to_citizen_id
+             ELSE from_citizen_id END AS peer_id
+      FROM dm_messages
+      WHERE from_citizen_id = ${myId} OR to_citizen_id = ${myId}
+    ),
+    latest AS (
+      SELECT DISTINCT ON (peer_id)
+        id, from_citizen_id, to_citizen_id,
+        ciphertext, nonce, msg_type, darmin_amount,
+        created_at, read_at, delivered_at,
+        peer_id
+      FROM msgs
+      ORDER BY peer_id, created_at DESC
+    )
     SELECT
-      sub.peer_id,
-      sub.id,
-      sub.from_citizen_id,
-      sub.to_citizen_id,
-      sub.ciphertext,
-      sub.nonce,
-      sub.msg_type,
-      sub.darmin_amount,
-      sub.created_at,
-      sub.read_at,
-      sub.delivered_at,
-      c.name           AS peer_name,
-      c.rank           AS peer_rank,
-      c.merit_score    AS peer_merit_score,
+      l.peer_id,
+      l.id,
+      l.from_citizen_id,
+      l.to_citizen_id,
+      l.ciphertext,
+      l.nonce,
+      l.msg_type,
+      l.darmin_amount,
+      l.created_at,
+      l.read_at,
+      l.delivered_at,
+      c.name            AS peer_name,
+      c.rank            AS peer_rank,
+      c.merit_score     AS peer_merit_score,
       c.chat_public_key AS peer_chat_public_key,
       (
         SELECT COUNT(*)
         FROM dm_messages u
-        WHERE u.to_citizen_id = ${me.id}
-          AND u.from_citizen_id = sub.peer_id
+        WHERE u.to_citizen_id   = ${myId}
+          AND u.from_citizen_id = l.peer_id
           AND u.read_at IS NULL
       ) AS unread_count
-    FROM (
-      SELECT DISTINCT ON (
-        CASE WHEN from_citizen_id = ${me.id} THEN to_citizen_id ELSE from_citizen_id END
-      )
-        CASE WHEN from_citizen_id = ${me.id} THEN to_citizen_id ELSE from_citizen_id END AS peer_id,
-        id, from_citizen_id, to_citizen_id, ciphertext, nonce, msg_type, darmin_amount,
-        created_at, read_at, delivered_at
-      FROM dm_messages
-      WHERE from_citizen_id = ${me.id} OR to_citizen_id = ${me.id}
-      ORDER BY
-        CASE WHEN from_citizen_id = ${me.id} THEN to_citizen_id ELSE from_citizen_id END,
-        created_at DESC
-    ) sub
-    JOIN citizens c ON c.id = sub.peer_id
-    ORDER BY sub.created_at DESC
+    FROM latest l
+    JOIN citizens c ON c.id = l.peer_id
+    ORDER BY l.created_at DESC
   `);
 
   res.json({ conversations: rows.rows });
