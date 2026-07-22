@@ -100,7 +100,7 @@ function buildPassportHtml(opts: {
                       </tr>
                       <tr>
                         <td style="font-size:12px;color:#9a9ab0;">Стартовый баланс</td>
-                        <td style="font-size:14px;color:#E8EDF2;">60 Д (минут)</td>
+                        <td style="font-size:14px;color:#E8EDF2;">1 Д</td>
                       </tr>
                     </table>
                   </td>

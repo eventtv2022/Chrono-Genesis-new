@@ -110,7 +110,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       phone,
       passwordHash,
       authToken: newAuthToken,
-      balanceMinutes: 60,
+      balanceMinutes: 1,
       surname:    encryptNullable(surname ?? null),
       givenNames: encryptNullable(givenNames ?? null),
       dateOfBirth: dateOfBirth || null,
