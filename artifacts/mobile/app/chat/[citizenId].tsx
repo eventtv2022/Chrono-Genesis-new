@@ -18,7 +18,7 @@ import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { decodeBase64 } from "tweetnacl-util";
 import { Audio } from "expo-av";
-import type { MediaStream } from "react-native-webrtc";
+import type { WebRTCStream } from "@/lib/webrtcService";
 import { WebRTCService } from "@/lib/webrtcService";
 import CallScreen, { type CallState } from "./CallScreen";
 
@@ -128,8 +128,8 @@ export default function ConversationScreen() {
   const [callState, setCallState] = useState<CallState>("idle");
   const [callType, setCallType] = useState<"audio" | "video">("audio");
   const [callDuration, setCallDuration] = useState(0);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [localStream, setLocalStream] = useState<WebRTCStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<WebRTCStream | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [incomingSdp, setIncomingSdp] = useState<{ type: string; sdp: string } | null>(null);
@@ -355,6 +355,10 @@ export default function ConversationScreen() {
   }
 
   async function startCall(type: "audio" | "video") {
+    if (Platform.OS === "web") {
+      Alert.alert("Недоступно", "Звонки поддерживаются только в мобильном приложении (Android / iOS)");
+      return;
+    }
     if (callStateRef.current !== "idle" || !citizen) return;
     setCallType(type);
     callStateRef.current = "calling";
