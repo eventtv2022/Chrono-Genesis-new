@@ -977,6 +977,11 @@ export default function TimerScreen() {
   // ── Logout (single-tap, optimistic, blocks repeat clicks) ──────────────────
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  // Reset spinner when a citizen appears/changes (login or account switch)
+  useEffect(() => {
+    if (citizen?.id) setIsLoggingOut(false);
+  }, [citizen?.id]);
+
   const handleLogoutPress = useCallback(() => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
