@@ -519,14 +519,30 @@ export default function ConversationScreen() {
       }
       const rawToken = hdrs.Authorization.replace(/^Bearer\s+/i, "").trim();
 
-      // ── Загружаем файлы-вложения ──────────────────────────────────────────
+      // ── Загружаем OWN ключ если ещё не готов (ref не тригерит ре-рендер) ─
+      if (!secretKeyRef.current) {
+        try {
+          const kp = await getOrCreateKeyPair();
+          secretKeyRef.current = kp.secretKey;
+          myPubKeyB64Ref.current = kp.publicKeyB64;
+        } catch (keyErr) {
+          console.error("OWN_KEY_LOAD_ERROR:", keyErr);
+          rollback();
+          Alert.alert("Ошибка ключа", "Не удалось инициализировать ключ шифрования. Попробуйте ещё раз.");
+          return;
+        }
+      }
+
+      // ── Загружаем файлы-вложения параллельно ─────────────────────────────
       let uploadedAttachments: AttachmentMeta[] | undefined;
       if (capturedFiles.length > 0) {
         try {
-          uploadedAttachments = await uploadPendingFiles(rawToken);
+          uploadedAttachments = await uploadFiles(capturedFiles, rawToken);
+          console.log("FILES_UPLOADED:", uploadedAttachments.length, uploadedAttachments.map((a) => a.url));
         } catch (uploadErr) {
+          console.error("UPLOAD_ERROR:", uploadErr);
           rollback();
-          Alert.alert("Ошибка загрузки", String(uploadErr instanceof Error ? uploadErr.message : uploadErr));
+          Alert.alert("Ошибка загрузки файла", String(uploadErr instanceof Error ? uploadErr.message : uploadErr));
           return;
         }
       }
@@ -539,17 +555,16 @@ export default function ConversationScreen() {
       const sk = secretKeyRef.current;
 
       if (!peerPub || !sk) {
+        console.error("KEY_MISSING: peerPub=", !!peerPub, "sk=", !!sk);
         rollback();
         Alert.alert("Ошибка ключа", "Не удалось загрузить ключ шифрования. Попробуйте ещё раз.");
         return;
       }
 
-      // ── Шифруем ──────────────────────────────────────────────────────────
-      // Текст для шифрования: если только вложения — служебный маркер
-      const plainForEncrypt = text || (capturedFiles.length > 0 ? "" : "");
+      // ── Шифруем (текст или пробел-маркер для attachment-only сообщений) ──
       let ciphertext: string, nonce: string;
       try {
-        const enc = encryptMsg(plainForEncrypt || "\u200b", peerPub, sk);
+        const enc = encryptMsg(text || "\u200b", peerPub, sk);
         ciphertext = enc.ciphertext;
         nonce = enc.nonce;
       } catch (encErr) {
@@ -643,10 +658,9 @@ export default function ConversationScreen() {
     } catch { /* user cancelled or permission denied */ }
   }
 
-  // ── Upload pending files to server, return AttachmentMeta[] ──────────────
-  async function uploadPendingFiles(token: string): Promise<AttachmentMeta[]> {
-    const results: AttachmentMeta[] = [];
-    for (const pf of pendingFiles) {
+  // ── Upload files to server in parallel, return AttachmentMeta[] ──────────
+  async function uploadFiles(files: PendingFile[], token: string): Promise<AttachmentMeta[]> {
+    const uploadOne = async (pf: PendingFile): Promise<AttachmentMeta> => {
       const form = new FormData();
       form.append("file", {
         uri: pf.uri,
@@ -659,13 +673,12 @@ export default function ConversationScreen() {
         body: form,
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? `Ошибка загрузки файла (${res.status})`);
+        const err = await res.json().catch(() => ({}) as object) as { error?: string };
+        throw new Error(err.error ?? `Ошибка загрузки файла «${pf.name}» (HTTP ${res.status})`);
       }
-      const meta = await res.json() as AttachmentMeta;
-      results.push(meta);
-    }
-    return results;
+      return res.json() as Promise<AttachmentMeta>;
+    };
+    return Promise.all(files.map(uploadOne));
   }
 
   // ── Forward message ───────────────────────────────────────────────────────
@@ -818,7 +831,8 @@ export default function ConversationScreen() {
   }
 
   const peerName = peer?.name ?? `ID ${peerId}`;
-  const canSend = !!secretKeyRef.current; // always enabled — server provides a key for any citizen
+  // canSend is always true — key loads on-demand inside sendMessage (ref doesn't trigger re-render)
+  const canSend = true;
   const peerNoKey = false; // server Prekey System guarantees a key exists for all citizens
 
   const displayedMessages = showSearch && searchQuery.trim()
