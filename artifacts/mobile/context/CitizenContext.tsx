@@ -27,6 +27,7 @@ export interface CitizenProfile {
   potentialLaborDepositedMinutes?: number;
   skillsAuditedAt?: string | null;
   reviewScoreCount?: number;
+  photoUrl?: string | null;
 }
 
 interface CitizenContextType {

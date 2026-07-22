@@ -11,6 +11,7 @@ import {
   Platform,
   TouchableOpacity,
 } from "react-native";
+import { CitizenAvatar } from "@/components/CitizenAvatar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
@@ -28,6 +29,7 @@ interface Citizen {
   balanceMinutes: number;
   totalGiven: number;
   totalReceived: number;
+  photoUrl?: string | null;
 }
 
 const RANK_COLORS: Record<string, string> = {
@@ -74,9 +76,13 @@ export default function CitizensScreen() {
       <View style={styles.row}>
         <Text style={styles.idx}>{index + 1}</Text>
         <View style={styles.rowMain}>
-          <View style={styles.avatar}>
-            <Text style={[styles.avatarText, { color: rankColor }]}>{c.name.charAt(0).toUpperCase()}</Text>
-          </View>
+          <CitizenAvatar
+            citizenId={c.id}
+            name={c.name}
+            hasPhoto={!!c.photoUrl}
+            size={36}
+            rankColor={rankColor}
+          />
           <View style={styles.nameBlock}>
             <Text style={styles.name} numberOfLines={1}>{c.name}</Text>
           </View>

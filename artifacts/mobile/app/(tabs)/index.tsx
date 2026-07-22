@@ -24,6 +24,7 @@ import { UI } from "@/lib/i18n";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
 import { AnimatedHourglass } from "@/components/AnimatedHourglass";
+import { CitizenAvatar } from "@/components/CitizenAvatar";
 import { ContextualGuideModal } from "@/components/ContextualGuideModal";
 import { useContextualGuide } from "@/hooks/useContextualGuide";
 import { DiscussionModal } from "@/components/DiscussionModal";
@@ -724,9 +725,12 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
                   onPress={() => { setSelRecipient(c); setRecipientError(false); }}
                   activeOpacity={0.8}
                 >
-                  <View style={[s.avatar, { backgroundColor: colors.surface }]}>
-                    <Text style={[s.avatarText, { color: colors.primary }]}>{c.name.charAt(0).toUpperCase()}</Text>
-                  </View>
+                  <CitizenAvatar
+                    citizenId={c.id}
+                    name={c.name}
+                    hasPhoto={!!(c as { photoUrl?: string | null }).photoUrl}
+                    size={36}
+                  />
                   <Text style={[s.selName, { color: colors.foreground }]}>{c.name}</Text>
                   <Text style={[s.selBalance, { color: colors.mutedForeground }]}>{c.balanceMinutes} Д</Text>
                   {selRecipient?.id === c.id && <Feather name="check-circle" size={18} color={colors.primary} />}
@@ -1138,9 +1142,14 @@ export default function TimerScreen() {
       {citizen ? (
         <View style={styles.passportCard}>
           <View style={styles.passportLeft}>
-            <View style={styles.passportAvatar}>
-              <Text style={styles.passportAvatarText}>{citizen.name.charAt(0).toUpperCase()}</Text>
-            </View>
+            <CitizenAvatar
+              citizenId={citizen.id}
+              name={citizen.name}
+              hasPhoto={!!citizen.photoUrl}
+              size={38}
+              editable={true}
+              onPhotoUpdated={() => void refreshCitizen()}
+            />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.passportName} numberOfLines={1}>{citizen.name}</Text>
               <Text style={styles.passportId}>ID #{citizen.id}</Text>

@@ -26,6 +26,7 @@ import { useCitizen } from "@/context/CitizenContext";
 import { getBaseUrl } from "@/lib/api";
 import { getStoredAuthHeaders, getStoredToken } from "@/lib/authStorage";
 import { decryptMsg, encryptMsg, getOrCreateKeyPair, getSafetyCode } from "@/lib/e2ee";
+import { CitizenAvatar } from "@/components/CitizenAvatar";
 
 const BASE_URL = getBaseUrl();
 
@@ -62,7 +63,7 @@ interface DecryptedMessage extends RawMessage {
   plaintext: string;
 }
 
-interface PeerInfo { id: number; name: string | null; rank: string | null; hasKey: boolean; }
+interface PeerInfo { id: number; name: string | null; rank: string | null; hasKey: boolean; photoUrl?: string | null; }
 interface CitizenItem { id: number; name: string | null; rank: string | null; }
 
 function formatTime(iso: string | Date | null | undefined): string {
@@ -167,8 +168,8 @@ export default function ConversationScreen() {
     try {
       const citRes = await fetch(`${BASE_URL}/api/citizens/${peerId}`);
       if (citRes.ok) {
-        const c = (await citRes.json()) as { id: number; name: string | null; rank: string | null };
-        if (c?.id) setPeer((prev) => prev?.hasKey ? prev : { id: c.id, name: c.name, rank: c.rank, hasKey: false });
+        const c = (await citRes.json()) as { id: number; name: string | null; rank: string | null; photoUrl?: string | null };
+        if (c?.id) setPeer((prev) => prev?.hasKey ? prev : { id: c.id, name: c.name, rank: c.rank, hasKey: false, photoUrl: c.photoUrl });
         return;
       }
     } catch { /* silent */ }
@@ -734,9 +735,12 @@ export default function ConversationScreen() {
 
         {/* Peer info — flex: 1 + minWidth: 0 to allow truncation */}
         <View style={s.peerInfo}>
-          <View style={s.peerAvatar}>
-            <Text style={s.peerAvatarText}>{peerName[0]?.toUpperCase()}</Text>
-          </View>
+          <CitizenAvatar
+            citizenId={peerId}
+            name={peerName}
+            hasPhoto={!!peer?.photoUrl}
+            size={36}
+          />
           <View style={s.peerNameBlock}>
             <Text style={s.peerName} numberOfLines={1} ellipsizeMode="tail">{peerName}</Text>
             {peer?.rank && <Text style={s.peerRank} numberOfLines={1}>{peer.rank}</Text>}

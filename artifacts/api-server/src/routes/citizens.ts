@@ -18,6 +18,7 @@ import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionServ
 import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
 import { logCitizenIssuedToSheets } from "../lib/googleSheets";
+import { requireAuth } from "../middleware/auth";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
 export const VAULT_DIR = path.join(process.cwd(), "secure_vault");
@@ -301,6 +302,68 @@ router.get("/citizens", async (req, res): Promise<void> => {
     .from(citizensTable)
     .orderBy(citizensTable.createdAt);
   res.json(citizens.map(formatCitizenRow));
+});
+
+// ── GET /citizens/:id/photo ───────────────────────────────────────────────────
+// Serves vault-stored passport photo for the given citizen (auth required).
+router.get("/citizens/:id/photo", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params["id"] ?? "0"), 10);
+  if (!id) { res.status(400).json({ error: "Неверный ID" }); return; }
+
+  const [row] = await db
+    .select({ photoUrl: citizensTable.photoUrl })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, id))
+    .limit(1);
+
+  if (!row?.photoUrl) { res.status(404).json({ error: "Фото не найдено" }); return; }
+
+  // Resolve vault-relative path to absolute filesystem path
+  const rel = row.photoUrl.startsWith("vault:") ? row.photoUrl.slice("vault:".length) : row.photoUrl;
+  const absPath = path.resolve(path.join(process.cwd(), "secure_vault", rel));
+
+  if (!fs.existsSync(absPath)) { res.status(404).json({ error: "Файл не найден" }); return; }
+
+  const ext = path.extname(absPath).toLowerCase();
+  const mime = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+  res.setHeader("Content-Type", mime);
+  res.setHeader("Cache-Control", "private, max-age=86400");
+  res.sendFile(absPath);
+});
+
+// ── POST /citizens/me/photo ───────────────────────────────────────────────────
+// Upload or replace the authenticated citizen's passport photo.
+const photoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, VAULT_PHOTOS_DIR),
+    filename: (_req, _file, cb) => cb(null, `photo_${Date.now()}.jpg`),
+  }),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Только изображения разрешены"));
+  },
+});
+
+router.post("/citizens/me/photo", requireAuth, photoUpload.single("photo"), async (req, res): Promise<void> => {
+  const citizen = req.citizen!;
+  const file = req.file;
+  if (!file) { res.status(400).json({ error: "Файл не загружен" }); return; }
+
+  // Delete old photo file if exists
+  if (citizen.photoUrl) {
+    const rel = citizen.photoUrl.startsWith("vault:") ? citizen.photoUrl.slice("vault:".length) : null;
+    if (rel) {
+      const oldPath = path.join(process.cwd(), "secure_vault", rel);
+      fs.unlink(oldPath, () => {/* ignore */});
+    }
+  }
+
+  const vaultRef = `vault:photos/${file.filename}`;
+  await db.update(citizensTable).set({ photoUrl: vaultRef }).where(eq(citizensTable.id, citizen.id));
+
+  req.log.info({ citizenId: citizen.id }, "Photo updated");
+  res.json({ success: true });
 });
 
 // ── POST /citizens ────────────────────────────────────────────────────────────
