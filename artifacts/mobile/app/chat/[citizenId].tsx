@@ -21,6 +21,7 @@ import { Audio } from "expo-av";
 
 import { useCitizen } from "@/context/CitizenContext";
 import { getBaseUrl } from "@/lib/api";
+import { getStoredAuthHeaders, getStoredToken } from "@/lib/authStorage";
 import { decryptMsg, encryptMsg, getOrCreateKeyPair } from "@/lib/e2ee";
 
 const BASE_URL = getBaseUrl();
@@ -78,7 +79,7 @@ export default function ConversationScreen() {
   const router = useRouter();
   const { citizenId: rawId } = useLocalSearchParams<{ citizenId: string }>();
   const peerId = parseInt(rawId ?? "0", 10);
-  const { citizen, authToken, authHeaders } = useCitizen();
+  const { citizen, authToken } = useCitizen();
 
   const [peer, setPeer] = useState<PeerInfo | null>(null);
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
@@ -110,7 +111,7 @@ export default function ConversationScreen() {
 
   // ── Step 1: Init MY keypair ───────────────────────────────────────────────
   useEffect(() => {
-    if (!citizen || !authToken) return;
+    if (!citizen) return;
     (async () => {
       try {
         const kp = await getOrCreateKeyPair();
@@ -118,15 +119,16 @@ export default function ConversationScreen() {
         const checkRes = await fetch(`${BASE_URL}/api/chat/key/${citizen.id}`);
         const checkData = (await checkRes.json()) as { publicKey?: string };
         if (checkData.publicKey !== kp.publicKeyB64) {
+          const hdrs = await getStoredAuthHeaders();
           await fetch(`${BASE_URL}/api/chat/key`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...authHeaders },
+            headers: { "Content-Type": "application/json", ...hdrs },
             body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
           });
         }
       } catch { /* silent */ }
     })();
-  }, [citizen, authToken]);
+  }, [citizen]);
 
   // ── Step 2: Load peer info ────────────────────────────────────────────────
   useEffect(() => {
@@ -156,20 +158,21 @@ export default function ConversationScreen() {
 
   // ── Step 3: Load messages ─────────────────────────────────────────────────
   const loadMessages = useCallback(async () => {
-    if (!authToken || !peerId) { setLoading(false); return; }
+    if (!peerId) { setLoading(false); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/chat/messages/${peerId}?limit=100`, { headers: authHeaders });
+      const hdrs = await getStoredAuthHeaders();
+      const res = await fetch(`${BASE_URL}/api/chat/messages/${peerId}?limit=100`, { headers: hdrs });
       if (!res.ok) { setLoading(false); return; }
       const data = (await res.json()) as { messages: RawMessage[] };
       setMessages((data.messages ?? []).map(decryptOne));
-      fetch(`${BASE_URL}/api/chat/messages/read/${peerId}`, { method: "PATCH", headers: authHeaders }).catch(() => {});
+      fetch(`${BASE_URL}/api/chat/messages/read/${peerId}`, { method: "PATCH", headers: hdrs }).catch(() => {});
     } catch {
       Alert.alert("Ошибка", "Не удалось загрузить сообщения");
     } finally {
       setLoading(false);
     }
-  }, [authToken, peerId]);
+  }, [peerId]);
 
   useEffect(() => { loadMessages(); }, [loadMessages]);
 
@@ -200,7 +203,7 @@ export default function ConversationScreen() {
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!citizen || !authToken) return;
+    if (!citizen) return;
     const wsUrl = BASE_URL.replace(/^https?/, (m) => (m === "https" ? "wss" : "ws")) + "/api/ws";
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -219,7 +222,9 @@ export default function ConversationScreen() {
           setMessages((prev) => [...prev, decryptOne(m)]);
           setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
           if (m.from_citizen_id === peerId) {
-            fetch(`${BASE_URL}/api/chat/messages/read/${peerId}`, { method: "PATCH", headers: authHeaders }).catch(() => {});
+            getStoredAuthHeaders().then((h) =>
+              fetch(`${BASE_URL}/api/chat/messages/read/${peerId}`, { method: "PATCH", headers: h }).catch(() => {})
+            );
           }
         }
 
@@ -257,21 +262,23 @@ export default function ConversationScreen() {
     };
 
     return () => { ws.close(); wsRef.current = null; };
-  }, [citizen, authToken, peerId]);
+  }, [citizen, peerId]);
 
   // ── Send text message ─────────────────────────────────────────────────────
   async function sendMessage() {
-    if (!input.trim() || !citizen || !authToken) return;
+    if (!input.trim() || !citizen) return;
     const peerPub = peerPubKeyRef.current;
     const sk = secretKeyRef.current;
     if (!peerPub || !sk) { Alert.alert("Нет ключа", "Ключ шифрования ещё не загружен"); return; }
 
     setSending(true);
     try {
+      const hdrs = await getStoredAuthHeaders();
+      if (!hdrs.Authorization) { Alert.alert("Сессия истекла", "Выйдите и войдите снова"); return; }
       const { ciphertext, nonce } = encryptMsg(input.trim(), peerPub, sk);
       const res = await fetch(`${BASE_URL}/api/chat/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json", ...hdrs },
         body: JSON.stringify({ toCitizenId: peerId, ciphertext, nonce }),
       });
       if (!res.ok) {
@@ -288,17 +295,18 @@ export default function ConversationScreen() {
 
   // ── Reactions ─────────────────────────────────────────────────────────────
   async function toggleReaction(messageId: number, emoji: string) {
-    if (!authToken) return;
+    if (!citizen) return;
     const msg = messages.find((m) => m.id === messageId);
     if (!msg) return;
-    const myId = citizen!.id;
+    const myId = citizen.id;
     const hasIt = msg.reactions.some((r) => r.citizenId === myId && r.emoji === emoji);
+    const hdrs = await getStoredAuthHeaders();
     if (hasIt) {
-      await fetch(`${BASE_URL}/api/chat/reactions/${messageId}/${encodeURIComponent(emoji)}`, { method: "DELETE", headers: authHeaders });
+      await fetch(`${BASE_URL}/api/chat/reactions/${messageId}/${encodeURIComponent(emoji)}`, { method: "DELETE", headers: hdrs });
     } else {
       await fetch(`${BASE_URL}/api/chat/reactions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json", ...hdrs },
         body: JSON.stringify({ messageId, emoji }),
       });
     }
@@ -318,23 +326,22 @@ export default function ConversationScreen() {
 
   async function forwardTo(targetId: number) {
     const msg = selectedMsg;
-    if (!msg || !authToken || !citizen) return;
+    if (!msg || !citizen) return;
     const sk = secretKeyRef.current;
     if (!sk) return;
 
     setForwardingTo(targetId);
     try {
-      // Get target's public key
       const keyRes = await fetch(`${BASE_URL}/api/chat/key/${targetId}`);
       if (!keyRes.ok) { Alert.alert("Ошибка", "Получатель не подключил E2EE"); return; }
       const keyData = (await keyRes.json()) as { publicKey: string };
       const targetPub = decodeBase64(keyData.publicKey);
 
-      const textToForward = msg.plaintext;
-      const { ciphertext, nonce } = encryptMsg(textToForward, targetPub, sk);
+      const hdrs = await getStoredAuthHeaders();
+      const { ciphertext, nonce } = encryptMsg(msg.plaintext, targetPub, sk);
       await fetch(`${BASE_URL}/api/chat/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json", ...hdrs },
         body: JSON.stringify({ toCitizenId: targetId, ciphertext, nonce, forwardedFromId: msg.id }),
       });
       setShowForwardModal(false);
@@ -372,7 +379,7 @@ export default function ConversationScreen() {
     recordingRef.current = null;
     const sk = secretKeyRef.current;
     const peerPub = peerPubKeyRef.current;
-    if (!sk || !peerPub || !citizen || !authToken) return;
+    if (!sk || !peerPub || !citizen) return;
 
     setSending(true);
     try {
@@ -380,7 +387,6 @@ export default function ConversationScreen() {
       const uri = rec.getURI();
       if (!uri) { setSending(false); return; }
 
-      // Read as base64
       let base64Audio = "";
       if (Platform.OS !== "web") {
         const FS = await import("expo-file-system");
@@ -388,10 +394,11 @@ export default function ConversationScreen() {
         base64Audio = await readFn(uri, { encoding: "base64" as "base64" });
       }
 
+      const hdrs = await getStoredAuthHeaders();
       const { ciphertext, nonce } = encryptMsg(base64Audio || "voice", peerPub, sk);
       const res = await fetch(`${BASE_URL}/api/chat/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json", ...hdrs },
         body: JSON.stringify({ toCitizenId: peerId, ciphertext, nonce, msgType: "voice" }),
       });
       if (!res.ok) { Alert.alert("Ошибка", "Не удалось отправить голосовое"); return; }
@@ -423,12 +430,14 @@ export default function ConversationScreen() {
   // ── Transfer Darmins ──────────────────────────────────────────────────────
   async function transferDarmins() {
     const amount = parseFloat(darminAmount);
-    if (!citizen || !authToken || isNaN(amount) || amount <= 0) { Alert.alert("Ошибка", "Введите корректную сумму"); return; }
+    if (!citizen || isNaN(amount) || amount <= 0) { Alert.alert("Ошибка", "Введите корректную сумму"); return; }
     setTransferring(true);
     try {
+      const hdrs = await getStoredAuthHeaders();
+      if (!hdrs.Authorization) { Alert.alert("Сессия истекла", "Выйдите и войдите снова"); return; }
       const txRes = await fetch(`${BASE_URL}/api/transactions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json", ...hdrs },
         body: JSON.stringify({ fromCitizenId: citizen.id, toCitizenId: peerId, minutes: amount, note: darminNote || "Перевод из чата" }),
       });
       if (!txRes.ok) { const err = (await txRes.json()) as { error?: string }; Alert.alert("Ошибка", err.error ?? "Транзакция не выполнена"); return; }
@@ -439,7 +448,7 @@ export default function ConversationScreen() {
         const { ciphertext, nonce } = encryptMsg(noteText, peerPub, sk);
         await fetch(`${BASE_URL}/api/chat/messages`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders },
+          headers: { "Content-Type": "application/json", ...hdrs },
           body: JSON.stringify({ toCitizenId: peerId, ciphertext, nonce, msgType: "darmin_transfer", darminAmount: amount }),
         });
       }

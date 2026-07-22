@@ -18,6 +18,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useCitizen } from "@/context/CitizenContext";
 import { getBaseUrl } from "@/lib/api";
+import { getStoredAuthHeaders } from "@/lib/authStorage";
 
 const BASE_URL = getBaseUrl();
 
@@ -46,7 +47,7 @@ export default function GroupConversationScreen() {
   const router = useRouter();
   const { groupId: rawId } = useLocalSearchParams<{ groupId: string }>();
   const groupId = parseInt(rawId ?? "0", 10);
-  const { citizen, authToken, authHeaders } = useCitizen();
+  const { citizen } = useCitizen();
 
   const [group, setGroup] = useState<GroupInfo | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -64,12 +65,13 @@ export default function GroupConversationScreen() {
 
   // ── Load group + messages ─────────────────────────────────────────────────
   const loadGroup = useCallback(async () => {
-    if (!authToken || !groupId) { setLoading(false); return; }
+    if (!groupId) { setLoading(false); return; }
     setLoading(true);
     try {
+      const hdrs = await getStoredAuthHeaders();
       const [infoRes, msgRes] = await Promise.all([
-        fetch(`${BASE_URL}/api/chat/groups/${groupId}`, { headers: authHeaders }),
-        fetch(`${BASE_URL}/api/chat/groups/${groupId}/messages?limit=100`, { headers: authHeaders }),
+        fetch(`${BASE_URL}/api/chat/groups/${groupId}`, { headers: hdrs }),
+        fetch(`${BASE_URL}/api/chat/groups/${groupId}/messages?limit=100`, { headers: hdrs }),
       ]);
       if (infoRes.ok) {
         const d = (await infoRes.json()) as { group: GroupInfo; members: Member[] };
@@ -81,13 +83,13 @@ export default function GroupConversationScreen() {
         setMessages(d.messages ?? []);
       }
       // Mark as read
-      fetch(`${BASE_URL}/api/chat/groups/${groupId}/read`, { method: "PATCH", headers: authHeaders }).catch(() => {});
+      fetch(`${BASE_URL}/api/chat/groups/${groupId}/read`, { method: "PATCH", headers: hdrs }).catch(() => {});
     } catch {
       Alert.alert("Ошибка", "Не удалось загрузить группу");
     } finally {
       setLoading(false);
     }
-  }, [authToken, groupId]);
+  }, [groupId]);
 
   useEffect(() => { loadGroup(); }, [loadGroup]);
 
@@ -97,7 +99,7 @@ export default function GroupConversationScreen() {
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!citizen || !authToken) return;
+    if (!citizen) return;
     const wsUrl = BASE_URL.replace(/^https?/, (m) => (m === "https" ? "wss" : "ws")) + "/api/ws";
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -108,21 +110,25 @@ export default function GroupConversationScreen() {
         if (msg.type === "group_message" && msg.message && msg.message.group_id === groupId) {
           setMessages((prev) => [...prev, msg.message!]);
           setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
-          fetch(`${BASE_URL}/api/chat/groups/${groupId}/read`, { method: "PATCH", headers: authHeaders }).catch(() => {});
+          getStoredAuthHeaders().then((h) =>
+            fetch(`${BASE_URL}/api/chat/groups/${groupId}/read`, { method: "PATCH", headers: h }).catch(() => {})
+          );
         }
       } catch { /* ignore */ }
     };
     return () => { ws.close(); wsRef.current = null; };
-  }, [citizen, authToken, groupId]);
+  }, [citizen, groupId]);
 
   // ── Send message ──────────────────────────────────────────────────────────
   async function sendMessage() {
-    if (!input.trim() || !citizen || !authToken) return;
+    if (!input.trim() || !citizen) return;
     setSending(true);
     try {
+      const hdrs = await getStoredAuthHeaders();
+      if (!hdrs.Authorization) { Alert.alert("Сессия истекла", "Выйдите и войдите снова"); return; }
       const res = await fetch(`${BASE_URL}/api/chat/groups/${groupId}/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json", ...hdrs },
         body: JSON.stringify({ content: input.trim(), msgType: "text" }),
       });
       if (!res.ok) {
@@ -140,23 +146,24 @@ export default function GroupConversationScreen() {
   // ── Transfer Darmins in group ─────────────────────────────────────────────
   async function transferDarmins() {
     const amount = parseFloat(darminAmount);
-    if (!citizen || !authToken || isNaN(amount) || amount <= 0) {
+    if (!citizen || isNaN(amount) || amount <= 0) {
       Alert.alert("Ошибка", "Введите корректную сумму"); return;
     }
-    // For group darmin transfer, we send individual transactions to all members
     setTransferring(true);
     try {
+      const hdrs = await getStoredAuthHeaders();
+      if (!hdrs.Authorization) { Alert.alert("Сессия истекла", "Выйдите и войдите снова"); return; }
       const targets = members.filter((m) => m.citizen_id !== citizen.id);
       for (const target of targets) {
         await fetch(`${BASE_URL}/api/transactions`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders },
+          headers: { "Content-Type": "application/json", ...hdrs },
           body: JSON.stringify({ fromCitizenId: citizen.id, toCitizenId: target.citizen_id, minutes: amount, note: darminNote || `Групповой перевод` }),
         });
       }
       await fetch(`${BASE_URL}/api/chat/groups/${groupId}/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json", ...hdrs },
         body: JSON.stringify({ content: darminNote || `Перевод ${amount} Д всем участникам`, msgType: "darmin_transfer", darminAmount: amount }),
       });
       setDarminModal(false); setDarminAmount(""); setDarminNote("");
