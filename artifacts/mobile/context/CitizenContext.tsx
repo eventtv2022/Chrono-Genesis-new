@@ -60,13 +60,27 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
       AsyncStorage.getItem(STORAGE_KEY),
       AsyncStorage.getItem(AUTH_TOKEN_KEY),
     ]).then(([raw, token]) => {
+      let resolvedToken = token;
+
       if (raw) {
         try {
-          const stored = JSON.parse(raw) as CitizenProfile;
-          setCitizenState(stored);
+          const stored = JSON.parse(raw) as CitizenProfile & { authToken?: string };
+
+          // ── MIGRATION: old code stored authToken inside the citizen JSON ──
+          // If the separate auth_token key is missing, recover it from the profile.
+          if (!resolvedToken && stored.authToken) {
+            resolvedToken = stored.authToken;
+            // Save under the correct key so future reads work
+            AsyncStorage.setItem(AUTH_TOKEN_KEY, stored.authToken);
+          }
+
+          // Store citizen WITHOUT the authToken field (keep keys separate)
+          const { authToken: _drop, ...profile } = stored;
+          setCitizenState(profile as CitizenProfile);
         } catch {}
       }
-      if (token) setAuthTokenState(token);
+
+      if (resolvedToken) setAuthTokenState(resolvedToken);
       setIsLoading(false);
     });
   }, []);
