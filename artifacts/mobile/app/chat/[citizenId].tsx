@@ -154,25 +154,32 @@ export default function ConversationScreen() {
   // ── Step 2: Load peer info + key ─────────────────────────────────────────
   const fetchPeerKey = useCallback(async () => {
     if (!peerId) return;
+
+    // Try to get the encryption key first
     try {
       const keyRes = await fetch(`${BASE_URL}/api/chat/key/${peerId}`);
       if (keyRes.ok) {
         const d = (await keyRes.json()) as { citizenId: number; name: string; publicKey: string };
         peerPubKeyRef.current = decodeBase64(d.publicKey);
         peerPubKeyB64Ref.current = d.publicKey;
-        setPeer({ id: d.citizenId, name: d.name, rank: null, hasKey: true });
+        setPeer((prev) => ({ id: d.citizenId, name: d.name, rank: prev?.rank ?? null, hasKey: true, photoUrl: prev?.photoUrl ?? null }));
         setMessages((prev) => redecrypt(prev));
-        return;
       }
     } catch { /* fall through */ }
+
+    // Always fetch full citizen profile to get photoUrl and rank
     try {
       const citRes = await fetch(`${BASE_URL}/api/citizens/${peerId}`);
       if (citRes.ok) {
         const c = (await citRes.json()) as { id: number; name: string | null; rank: string | null; photoUrl?: string | null };
-        if (c?.id) setPeer((prev) => prev?.hasKey ? prev : { id: c.id, name: c.name, rank: c.rank, hasKey: false, photoUrl: c.photoUrl });
-        return;
+        if (c?.id) {
+          setPeer((prev) => prev
+            ? { ...prev, rank: c.rank ?? prev.rank, photoUrl: c.photoUrl ?? prev.photoUrl }
+            : { id: c.id, name: c.name, rank: c.rank, hasKey: false, photoUrl: c.photoUrl });
+        }
       }
     } catch { /* silent */ }
+
     setPeer((prev) => prev ?? { id: peerId, name: null, rank: null, hasKey: false });
   }, [peerId]);
 
