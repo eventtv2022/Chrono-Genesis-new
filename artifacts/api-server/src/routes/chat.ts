@@ -9,6 +9,7 @@ import {
   groupMembersTable,
   groupMessagesTable,
   groupMessageReadsTable,
+  transactionsTable,
 } from "@workspace/db";
 import { z } from "zod";
 import { logger } from "../lib/logger";
@@ -94,6 +95,64 @@ router.get("/chat/online", async (req, res): Promise<void> => {
   const me = await getAuthCitizen(req.headers.authorization);
   if (!me) { res.status(401).json({ error: "Требуется авторизация" }); return; }
   res.json({ online: getOnlineCitizenIds() });
+});
+
+// ── POST /chat/transfer — direct P2P Darmin transfer from chat ────────────
+
+const chatTransferSchema = z.object({
+  toCitizenId: z.number().int().positive(),
+  amount:      z.number().positive(),
+  note:        z.string().max(200).optional(),
+});
+
+router.post("/chat/transfer", async (req, res): Promise<void> => {
+  const me = await getAuthCitizen(req.headers.authorization);
+  if (!me) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const parsed = chatTransferSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Некорректные данные" }); return; }
+
+  const { toCitizenId, amount } = parsed.data;
+
+  if (toCitizenId === me.id) { res.status(400).json({ error: "Нельзя перевести самому себе" }); return; }
+
+  const [sender] = await db
+    .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
+    .from(citizensTable).where(eq(citizensTable.id, me.id)).limit(1);
+  if (!sender) { res.status(404).json({ error: "Отправитель не найден" }); return; }
+
+  // 1 Д — родовая минута, не передаётся
+  if ((sender.balanceMinutes ?? 0) - amount < 1) {
+    res.status(400).json({ error: `Недостаточно Дарминов. Доступно: ${Math.max(0, (sender.balanceMinutes ?? 0) - 1)} Д` });
+    return;
+  }
+
+  const [recipient] = await db
+    .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
+    .from(citizensTable).where(eq(citizensTable.id, toCitizenId)).limit(1);
+  if (!recipient) { res.status(404).json({ error: "Получатель не найден" }); return; }
+
+  // Update balances
+  await db.update(citizensTable)
+    .set({ balanceMinutes: (sender.balanceMinutes ?? 0) - amount })
+    .where(eq(citizensTable.id, me.id));
+  await db.update(citizensTable)
+    .set({ balanceMinutes: (recipient.balanceMinutes ?? 0) + amount })
+    .where(eq(citizensTable.id, toCitizenId));
+
+  // Log in transactions (sessionId=0 = direct chat transfer sentinel)
+  await db.insert(transactionsTable).values({
+    sessionId:          0,
+    fromCitizenId:      me.id,
+    toCitizenId:        toCitizenId,
+    fromCitizenName:    sender.name    ?? `ID ${me.id}`,
+    toCitizenName:      recipient.name ?? `ID ${toCitizenId}`,
+    minutesTransferred: amount,
+    durationSeconds:    0,
+  });
+
+  logger.info({ from: me.id, to: toCitizenId, amount }, "Chat P2P transfer");
+  res.json({ success: true, newBalance: (sender.balanceMinutes ?? 0) - amount });
 });
 
 // ── GET /chat/conversations ────────────────────────────────────────────────
@@ -203,7 +262,23 @@ router.get("/chat/messages/:withCitizenId", async (req, res): Promise<void> => {
     }
   }
 
-  res.json({ messages: reversed.map((m) => ({ ...m, reactions: reactionMap[m.id] ?? [] })) });
+  // Map Drizzle camelCase to snake_case expected by the mobile client
+  res.json({
+    messages: reversed.map((m) => ({
+      id: m.id,
+      from_citizen_id: m.fromCitizenId,
+      to_citizen_id: m.toCitizenId,
+      ciphertext: m.ciphertext,
+      nonce: m.nonce,
+      msg_type: m.msgType,
+      darmin_amount: m.darminAmount ?? null,
+      forwarded_from_id: m.forwardedFromId ?? null,
+      created_at: m.createdAt,
+      delivered_at: m.deliveredAt ?? null,
+      read_at: m.readAt ?? null,
+      reactions: reactionMap[m.id] ?? [],
+    })),
+  });
 });
 
 // ── POST /chat/messages — send encrypted message ──────────────────────────

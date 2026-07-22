@@ -25,8 +25,8 @@ const BASE_URL = getBaseUrl();
 const C = {
   bg: "#0A0A0F", surface: "#12121A", border: "#1E1E2E",
   primary: "#C9A84C", fg: "#E8E8F0", muted: "#6B6B7E",
-  mine: "#1E3A2A", mineBorder: "#2D5A3D",
-  theirs: "#12121A", theirsBorder: "#1E1E2E",
+  mine: "#1C3526", mineBorder: "#2D5A3D",
+  theirs: "#1A1E30", theirsBorder: "#252A44",
 };
 
 interface GroupInfo { id: number; name: string; description: string | null; created_by: number; }
@@ -159,10 +159,10 @@ export default function GroupConversationScreen() {
       if (!hdrs.Authorization) { Alert.alert("Сессия истекла", "Выйдите и войдите снова"); return; }
       const targets = members.filter((m) => m.citizen_id !== citizen.id);
       for (const target of targets) {
-        await fetch(`${BASE_URL}/api/transactions`, {
+        await fetch(`${BASE_URL}/api/chat/transfer`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...hdrs },
-          body: JSON.stringify({ fromCitizenId: citizen.id, toCitizenId: target.citizen_id, minutes: amount, note: darminNote || `Групповой перевод` }),
+          body: JSON.stringify({ toCitizenId: target.citizen_id, amount, note: darminNote || `Групповой перевод` }),
         });
       }
       await fetch(`${BASE_URL}/api/chat/groups/${groupId}/messages`, {
@@ -215,27 +215,29 @@ export default function GroupConversationScreen() {
           keyExtractor={(m) => String(m.id)}
           contentContainerStyle={s.msgList}
           renderItem={({ item: m }) => {
-            const isMine = m.from_citizen_id === citizen.id;
+            const isMine = Number(m.from_citizen_id) === Number(citizen.id);
             const isDarmin = m.msg_type === "darmin_transfer";
             return (
               <View style={[s.msgRow, isMine ? s.msgRowMine : s.msgRowTheirs]}>
-                {!isMine && (
-                  <Text style={s.senderName}>{m.sender_name ?? `ID ${m.from_citizen_id}`}</Text>
-                )}
-                {isDarmin ? (
-                  <View style={s.darminBubble}>
-                    <Feather name="send" size={14} color={C.primary} />
-                    <Text style={s.darminText}>{m.darmin_amount ?? "?"} Д</Text>
-                    <Text style={s.darminLabel}>{isMine ? "Отправлено всем" : "Получено"}</Text>
-                  </View>
-                ) : (
-                  <View style={[s.bubble, isMine ? s.bubbleMine : s.bubbleTheirs]}>
-                    <Text style={[s.bubbleText, isMine ? s.bubbleTextMine : s.bubbleTextTheirs]}>
-                      {m.content}
-                    </Text>
-                    <Text style={s.msgTime}>{formatTime(m.created_at)}</Text>
-                  </View>
-                )}
+                <View style={{ alignSelf: isMine ? "flex-end" : "flex-start", maxWidth: "82%" }}>
+                  {!isMine && (
+                    <Text style={s.senderName}>{m.sender_name ?? `ID ${m.from_citizen_id}`}</Text>
+                  )}
+                  {isDarmin ? (
+                    <View style={s.darminBubble}>
+                      <Feather name="send" size={14} color={C.primary} />
+                      <Text style={s.darminText}>{m.darmin_amount ?? "?"} Д</Text>
+                      <Text style={s.darminLabel}>{isMine ? "Отправлено всем" : "Получено"}</Text>
+                    </View>
+                  ) : (
+                    <View style={[s.bubble, isMine ? s.bubbleMine : s.bubbleTheirs]}>
+                      <Text style={[s.bubbleText, isMine ? s.bubbleTextMine : s.bubbleTextTheirs]}>
+                        {m.content}
+                      </Text>
+                      <Text style={s.msgTime}>{formatTime(m.created_at)}</Text>
+                    </View>
+                  )}
+                </View>
               </View>
             );
           }}
@@ -331,9 +333,9 @@ const s = StyleSheet.create({
   serverBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(107,107,126,0.12)", borderWidth: 1, borderColor: "rgba(107,107,126,0.25)", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8 },
   serverText: { fontSize: 9, fontFamily: "Inter_600SemiBold", color: C.muted },
   msgList: { padding: 12, gap: 2, flexGrow: 1 },
-  msgRow: { flexDirection: "row", marginBottom: 4 },
-  msgRowMine: { justifyContent: "flex-end" },
-  msgRowTheirs: { justifyContent: "flex-start", flexDirection: "column" },
+  msgRow: { marginBottom: 4 },
+  msgRowMine: { alignItems: "flex-end" },
+  msgRowTheirs: { alignItems: "flex-start" },
   senderName: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: C.primary, marginLeft: 4, marginBottom: 2 },
   bubble: { maxWidth: "78%", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1 },
   bubbleMine: { backgroundColor: C.mine, borderColor: C.mineBorder, borderBottomRightRadius: 4 },

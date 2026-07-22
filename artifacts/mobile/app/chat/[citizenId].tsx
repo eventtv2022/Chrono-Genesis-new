@@ -29,8 +29,8 @@ const BASE_URL = getBaseUrl();
 const C = {
   bg: "#0A0A0F", surface: "#12121A", border: "#1E1E2E",
   primary: "#C9A84C", fg: "#E8E8F0", muted: "#6B6B7E",
-  mine: "#1E3A2A", mineBorder: "#2D5A3D",
-  theirs: "#12121A", theirsBorder: "#1E1E2E",
+  mine: "#1C3526", mineBorder: "#2D5A3D",
+  theirs: "#1A1E30", theirsBorder: "#252A44",
   warn: "#2A1E0A", warnBorder: "#5A3D0D",
   online: "#3CB878",
 };
@@ -500,10 +500,10 @@ export default function ConversationScreen() {
     try {
       const hdrs = await getStoredAuthHeaders();
       if (!hdrs.Authorization) { Alert.alert("Сессия истекла", "Выйдите и войдите снова"); return; }
-      const txRes = await fetch(`${BASE_URL}/api/transactions`, {
+      const txRes = await fetch(`${BASE_URL}/api/chat/transfer`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...hdrs },
-        body: JSON.stringify({ fromCitizenId: citizen.id, toCitizenId: peerId, minutes: amount, note: darminNote || "Перевод из чата" }),
+        body: JSON.stringify({ toCitizenId: peerId, amount, note: darminNote || "Перевод из чата" }),
       });
       if (!txRes.ok) { const err = (await txRes.json()) as { error?: string }; Alert.alert("Ошибка", err.error ?? "Транзакция не выполнена"); return; }
       const peerPub = peerPubKeyRef.current;
@@ -620,7 +620,7 @@ export default function ConversationScreen() {
           keyExtractor={(m) => String(m.id)}
           contentContainerStyle={s.msgList}
           renderItem={({ item: m }) => {
-            const isMine = m.from_citizen_id === citizen.id;
+            const isMine = Number(m.from_citizen_id) === Number(citizen.id);
             const isDarmin = m.msg_type === "darmin_transfer";
             const isVoice = m.msg_type === "voice";
             const isForwarded = !!m.forwarded_from_id;
@@ -632,7 +632,7 @@ export default function ConversationScreen() {
                 onLongPress={() => setSelectedMsg(m)}
                 style={[s.msgRow, isMine ? s.msgRowMine : s.msgRowTheirs]}
               >
-                <View>
+                <View style={{ alignSelf: isMine ? "flex-end" : "flex-start", maxWidth: "82%" }}>
                   {isForwarded && (
                     <View style={[s.forwardedLabel, isMine ? { alignSelf: "flex-end" } : { alignSelf: "flex-start" }]}>
                       <Feather name="corner-up-right" size={10} color={C.muted} />
@@ -852,9 +852,9 @@ const s = StyleSheet.create({
   retryKeyBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: "rgba(201,124,76,0.4)" },
   retryKeyText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#C97C4C" },
   msgList: { padding: 12, gap: 4, flexGrow: 1 },
-  msgRow: { flexDirection: "row", marginBottom: 6 },
-  msgRowMine: { justifyContent: "flex-end" },
-  msgRowTheirs: { justifyContent: "flex-start" },
+  msgRow: { marginBottom: 6 },
+  msgRowMine: { alignItems: "flex-end" },
+  msgRowTheirs: { alignItems: "flex-start" },
   forwardedLabel: { flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 2 },
   forwardedText: { fontSize: 10, fontFamily: "Inter_400Regular", color: C.muted, fontStyle: "italic" },
   bubble: { maxWidth: "78%", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1 },
