@@ -307,8 +307,24 @@ router.get("/citizens", async (req, res): Promise<void> => {
 });
 
 // ── GET /citizens/:id/photo ───────────────────────────────────────────────────
-// Serves vault-stored passport photo for the given citizen (auth required).
-router.get("/citizens/:id/photo", requireAuth, async (req, res): Promise<void> => {
+// Serves vault-stored passport photo.
+// Auth: Authorization: Bearer <token>  OR  ?token=<token>  (web <img> workaround)
+router.get("/citizens/:id/photo", async (req, res): Promise<void> => {
+  // Resolve token from header OR query param (web Image tags can't set headers)
+  const authHeader = req.headers["authorization"];
+  const queryToken = typeof req.query["token"] === "string" ? req.query["token"] : null;
+  const rawToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : queryToken;
+
+  if (!rawToken) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const [authed] = await db
+    .select({ id: citizensTable.id })
+    .from(citizensTable)
+    .where(eq(citizensTable.authToken, rawToken))
+    .limit(1);
+
+  if (!authed) { res.status(401).json({ error: "Неверный токен" }); return; }
+
   const id = parseInt(String(req.params["id"] ?? "0"), 10);
   if (!id) { res.status(400).json({ error: "Неверный ID" }); return; }
 
@@ -320,7 +336,6 @@ router.get("/citizens/:id/photo", requireAuth, async (req, res): Promise<void> =
 
   if (!row?.photoUrl) { res.status(404).json({ error: "Фото не найдено" }); return; }
 
-  // Resolve vault-relative path to absolute filesystem path
   const rel = row.photoUrl.startsWith("vault:") ? row.photoUrl.slice("vault:".length) : row.photoUrl;
   const absPath = path.resolve(path.join(process.cwd(), "secure_vault", rel));
 

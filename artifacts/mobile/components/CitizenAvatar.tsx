@@ -10,8 +10,7 @@ import {
   Platform,
 } from "react-native";
 import { getBaseUrl } from "@/lib/api";
-import { getStoredAuthHeaders } from "@/lib/authStorage";
-import { useQueryClient } from "@tanstack/react-query";
+import { getStoredAuthHeaders, getStoredToken } from "@/lib/authStorage";
 
 interface Props {
   citizenId: number;
@@ -37,26 +36,55 @@ export function CitizenAvatar({
   const radius = size / 2;
   const fontSize = Math.round(size * 0.44);
 
-  const [headers, setHeaders] = useState<Record<string, string> | null>(null);
+  // imageUrl is set once token is loaded; null = still loading
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // version counter — bumped after upload to bust cache
+  const [version, setVersion] = useState(0);
   const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
-    if (hasPhoto) {
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Build the photo URL whenever citizenId / hasPhoto / version changes
+  useEffect(() => {
+    setImageError(false);
+    if (!hasPhoto) { setImageUrl(null); return; }
+
+    void (async () => {
+      const base = getBaseUrl();
+      if (Platform.OS === "web") {
+        // Browsers can't set custom headers on <img> — pass token in query string
+        const token = await getStoredToken();
+        if (!token) { setImageUrl(null); return; }
+        const url = `${base}/api/citizens/${citizenId}/photo?token=${encodeURIComponent(token)}&v=${version}`;
+        if (mountedRef.current) setImageUrl(url);
+      } else {
+        // Native: React Native Image supports source.headers
+        const hdrs = await getStoredAuthHeaders();
+        if (!hdrs.Authorization) { setImageUrl(null); return; }
+        // Encode auth headers into a sentinel URL; handled below in Image source
+        if (mountedRef.current) setImageUrl(`${base}/api/citizens/${citizenId}/photo?v=${version}`);
+      }
+    })();
+  }, [hasPhoto, citizenId, version]);
+
+  // Auth headers for native Image source (not used on web)
+  const [nativeHeaders, setNativeHeaders] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (Platform.OS !== "web" && hasPhoto) {
       getStoredAuthHeaders().then((h) => {
-        if (mountedRef.current) setHeaders(h);
+        if (mountedRef.current) setNativeHeaders(h);
       });
     }
-    return () => { mountedRef.current = false; };
   }, [hasPhoto, citizenId]);
 
-  // Reset error state when citizenId/hasPhoto changes
-  useEffect(() => { setImageError(false); }, [citizenId, hasPhoto]);
+  const showImage = hasPhoto && !imageError && imageUrl !== null;
 
-  const showImage = hasPhoto && !imageError && headers !== null;
-
+  // ── Upload handler ────────────────────────────────────────────────────────
   async function pickAndUpload() {
     if (!editable) return;
     try {
@@ -79,10 +107,17 @@ export function CitizenAvatar({
       const authHeaders = await getStoredAuthHeaders();
 
       const form = new FormData();
-      const uriParts = (asset.uri ?? "").split(".");
-      const ext = uriParts[uriParts.length - 1] ?? "jpg";
-      // @ts-expect-error — RN FormData accepts { uri, name, type }
-      form.append("photo", { uri: asset.uri, name: `photo.${ext}`, type: `image/${ext}` });
+      if (Platform.OS === "web") {
+        // Web: fetch the blob from URI and append as File
+        const response = await fetch(asset.uri ?? "");
+        const blob = await response.blob();
+        form.append("photo", blob, "photo.jpg");
+      } else {
+        const uriParts = (asset.uri ?? "").split(".");
+        const ext = uriParts[uriParts.length - 1] ?? "jpg";
+        // @ts-expect-error — RN FormData accepts { uri, name, type }
+        form.append("photo", { uri: asset.uri, name: `photo.${ext}`, type: `image/${ext}` });
+      }
 
       const res = await fetch(`${getBaseUrl()}/api/citizens/me/photo`, {
         method: "POST",
@@ -95,17 +130,17 @@ export function CitizenAvatar({
         Alert.alert("Ошибка", err.error ?? "Не удалось загрузить фото");
       } else {
         setImageError(false);
-        const newHeaders = await getStoredAuthHeaders();
-        if (mountedRef.current) setHeaders({ ...newHeaders });
+        setVersion((v) => v + 1); // bust cache → re-fetch photo
         onPhotoUpdated?.();
       }
-    } catch (e) {
+    } catch {
       Alert.alert("Ошибка", "Не удалось загрузить фото");
     } finally {
       if (mountedRef.current) setUploading(false);
     }
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
   const initial = name?.[0]?.toUpperCase() || "?";
 
   const inner = uploading ? (
@@ -114,13 +149,17 @@ export function CitizenAvatar({
     </View>
   ) : showImage ? (
     <Image
-      source={{
-        uri: `${getBaseUrl()}/api/citizens/${citizenId}/photo?t=${Object.keys(headers).length}`,
-        headers,
-      }}
+      source={
+        Platform.OS === "web"
+          ? { uri: imageUrl! }
+          : { uri: imageUrl!, headers: nativeHeaders }
+      }
       style={{ width: size, height: size, borderRadius: radius }}
       resizeMode="cover"
-      onError={() => setImageError(true)}
+      onError={(e) => {
+        console.warn("[CitizenAvatar] image load error", citizenId, e.nativeEvent?.error ?? "");
+        setImageError(true);
+      }}
     />
   ) : (
     <View
