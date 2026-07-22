@@ -19,6 +19,8 @@ import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
 import { logCitizenIssuedToSheets } from "../lib/googleSheets";
 import { requireAuth } from "../middleware/auth";
+import { sendPassportEmail, sendAdminTelegramNotify } from "../services/emailService";
+import { sendDirectMessage } from "../services/telegramService";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
 export const VAULT_DIR = path.join(process.cwd(), "secure_vault");
@@ -452,6 +454,28 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
     availableAt: availableAt.toISOString(),
     registrationStatus: "pending",
   });
+
+  // ── Fire-and-forget: email to citizen + Telegram to admin ─────────────────
+  const decryptedEmail = tryDecrypt(citizen!.email) ?? null;
+  const createdAt = citizen!.createdAt ?? new Date();
+
+  // Email to citizen (skipped silently if SMTP not configured or no email)
+  sendPassportEmail({
+    name: citizen!.name,
+    citizenNumber,
+    rank: citizen!.rank,
+    email: decryptedEmail,
+  }).catch((err) => req.log.warn({ err }, "sendPassportEmail failed (non-critical)"));
+
+  // Telegram to admin (skipped silently if ADMIN_TELEGRAM_ID not set)
+  sendAdminTelegramNotify({
+    sendDirectMessage,
+    name: citizen!.name,
+    email: decryptedEmail,
+    citizenNumber,
+    citizenId: citizen!.id,
+    createdAt,
+  }).catch((err) => req.log.warn({ err }, "sendAdminTelegramNotify failed (non-critical)"));
 });
 
 // ── GET /citizens/by-phone/:phone ─────────────────────────────────────────────
