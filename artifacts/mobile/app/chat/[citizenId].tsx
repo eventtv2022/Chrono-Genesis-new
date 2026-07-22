@@ -728,52 +728,61 @@ export default function ConversationScreen() {
     <SafeAreaView style={s.safe}>
       {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={{ flexShrink: 0 }}>
           <Feather name="arrow-left" size={22} color={C.primary} />
         </TouchableOpacity>
+
+        {/* Peer info — flex: 1 + minWidth: 0 to allow truncation */}
         <View style={s.peerInfo}>
           <View style={s.peerAvatar}>
             <Text style={s.peerAvatarText}>{peerName[0]?.toUpperCase()}</Text>
           </View>
-          <View>
-            <Text style={s.peerName}>{peerName}</Text>
-            {peer?.rank && <Text style={s.peerRank}>{peer.rank}</Text>}
+          <View style={s.peerNameBlock}>
+            <Text style={s.peerName} numberOfLines={1} ellipsizeMode="tail">{peerName}</Text>
+            {peer?.rank && <Text style={s.peerRank} numberOfLines={1}>{peer.rank}</Text>}
           </View>
         </View>
-        <TouchableOpacity onPress={() => { setShowSearch((v) => !v); setSearchQuery(""); }} activeOpacity={0.7} style={{ marginRight: 8 }}>
-          <Feather name={showSearch ? "x" : "search"} size={18} color={showSearch ? C.primary : C.muted} />
-        </TouchableOpacity>
-        {/* Audio call */}
-        <TouchableOpacity
-          onPress={() => { void startCall("audio"); }}
-          activeOpacity={0.6}
-          style={{ marginRight: 8, padding: 4 }}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Feather name="phone" size={19} color={callState !== "idle" ? C.primary : C.fg} />
-        </TouchableOpacity>
-        {/* Video call */}
-        <TouchableOpacity
-          onPress={() => { void startCall("video"); }}
-          activeOpacity={0.6}
-          style={{ marginRight: 8, padding: 4 }}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Feather name="video" size={19} color={callState !== "idle" ? C.primary : C.fg} />
-        </TouchableOpacity>
-        {!peerNoKey && myPubKeyB64Ref.current && peerPubKeyB64Ref.current && (
+
+        {/* Action buttons — fixed, never shrink */}
+        <View style={s.headerActions}>
           <TouchableOpacity
-            onPress={() => setSafetyModal(true)}
+            onPress={() => { setShowSearch((v) => !v); setSearchQuery(""); }}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={{ marginRight: 6 }}
           >
-            <Feather name="shield" size={15} color={C.primary} />
+            <Feather name={showSearch ? "x" : "search"} size={18} color={showSearch ? C.primary : C.muted} />
           </TouchableOpacity>
-        )}
-        <View style={[s.e2eeBadge, peerNoKey && s.e2eeBadgeWarn]}>
-          <Feather name={peerNoKey ? "unlock" : "lock"} size={9} color={peerNoKey ? "#C97C4C" : C.primary} />
-          <Text style={[s.e2eeText, peerNoKey && { color: "#C97C4C" }]}>{peerNoKey ? "Нет ключа" : "E2EE"}</Text>
+
+          <TouchableOpacity
+            onPress={() => { void startCall("audio"); }}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Feather name="phone" size={19} color={callState !== "idle" ? C.primary : C.fg} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => { void startCall("video"); }}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Feather name="video" size={19} color={callState !== "idle" ? C.primary : C.fg} />
+          </TouchableOpacity>
+
+          {!peerNoKey && myPubKeyB64Ref.current && peerPubKeyB64Ref.current && (
+            <TouchableOpacity
+              onPress={() => setSafetyModal(true)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Feather name="shield" size={15} color={C.primary} />
+            </TouchableOpacity>
+          )}
+
+          <View style={[s.e2eeBadge, peerNoKey && s.e2eeBadgeWarn]}>
+            <Feather name={peerNoKey ? "unlock" : "lock"} size={9} color={peerNoKey ? "#C97C4C" : C.primary} />
+            <Text style={[s.e2eeText, peerNoKey && { color: "#C97C4C" }]}>{peerNoKey ? "Нет ключа" : "E2EE"}</Text>
+          </View>
         </View>
       </View>
 
@@ -1129,11 +1138,13 @@ const s = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   muted: { color: C.muted, fontSize: 15 },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border, gap: 12 },
-  peerInfo: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
-  peerAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(201,168,76,0.15)", borderWidth: 1, borderColor: "rgba(201,168,76,0.3)", alignItems: "center", justifyContent: "center" },
+  peerInfo: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0 },
+  peerAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(201,168,76,0.15)", borderWidth: 1, borderColor: "rgba(201,168,76,0.3)", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   peerAvatarText: { fontSize: 16, fontFamily: "Inter_700Bold", color: C.primary },
+  peerNameBlock: { flex: 1, minWidth: 0 },
   peerName: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: C.fg },
   peerRank: { fontSize: 10, fontFamily: "Inter_400Regular", color: C.primary },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 0 },
   e2eeBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(201,168,76,0.1)", borderWidth: 1, borderColor: "rgba(201,168,76,0.25)", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8 },
   e2eeBadgeWarn: { backgroundColor: "rgba(201,124,76,0.1)", borderColor: "rgba(201,124,76,0.3)" },
   e2eeText: { fontSize: 9, fontFamily: "Inter_600SemiBold", color: C.primary },
