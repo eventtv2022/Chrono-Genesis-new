@@ -232,13 +232,33 @@ export default function ConversationScreen() {
   }, [messages.length]);
 
   // ── Decrypt helpers ───────────────────────────────────────────────────────
+  // Parse decrypted string: may be plain text (old msgs) or JSON { text, attachments }
+  function parseDecrypted(raw: string, m: RawMessage): { plaintext: string; attachments: AttachmentMeta[] | null } {
+    if (raw.startsWith("{")) {
+      try {
+        const p = JSON.parse(raw) as { text?: string; attachments?: AttachmentMeta[] };
+        if (typeof p === "object" && p !== null) {
+          const atts = (Array.isArray(p.attachments) && p.attachments.length > 0)
+            ? p.attachments
+            : (m.attachments ?? null);
+          return { plaintext: p.text ?? "", attachments: atts };
+        }
+      } catch { /* fall through */ }
+    }
+    // Legacy plain-text format — attachments from DB field
+    return { plaintext: raw, attachments: m.attachments ?? null };
+  }
+
   function decryptOne(m: RawMessage): DecryptedMessage {
     if (m.msg_type === "darmin_transfer") return { ...m, plaintext: `💸 ${m.darmin_amount ?? "?"} Д` };
     if (m.msg_type === "voice") return { ...m, plaintext: "__voice__" };
     const sk = secretKeyRef.current;
     const pub = peerPubKeyRef.current;
     if (!sk || !pub) return { ...m, plaintext: "🔒" };
-    return { ...m, plaintext: decryptMsg(m.ciphertext, m.nonce, pub, sk) ?? "🔒" };
+    const raw = decryptMsg(m.ciphertext, m.nonce, pub, sk);
+    if (!raw) return { ...m, plaintext: "🔒" };
+    const { plaintext, attachments } = parseDecrypted(raw, m);
+    return { ...m, plaintext, attachments };
   }
 
   function redecrypt(prev: DecryptedMessage[]): DecryptedMessage[] {
@@ -248,7 +268,10 @@ export default function ConversationScreen() {
     return prev.map((m) => {
       if (m.msg_type === "darmin_transfer" || m.msg_type === "voice") return m;
       if (!m.plaintext.startsWith("🔒")) return m;
-      return { ...m, plaintext: decryptMsg(m.ciphertext, m.nonce, pub, sk) ?? "🔒" };
+      const raw = decryptMsg(m.ciphertext, m.nonce, pub, sk);
+      if (!raw) return m;
+      const { plaintext, attachments } = parseDecrypted(raw, m);
+      return { ...m, plaintext, attachments };
     });
   }
 
@@ -561,16 +584,22 @@ export default function ConversationScreen() {
         return;
       }
 
-      // ── Шифруем (текст или пробел-маркер для attachment-only сообщений) ──
+      // ── Шифруем JSON-пейлоад { text, attachments } целиком (E2EE) ──────────
+      // Получатель разбирает JSON после расшифровки через parseDecrypted()
+      const msgPayload = JSON.stringify({
+        text: text || "",
+        ...(uploadedAttachments && uploadedAttachments.length > 0 ? { attachments: uploadedAttachments } : {}),
+      });
       let ciphertext: string, nonce: string;
       try {
-        const enc = encryptMsg(text || "\u200b", peerPub, sk);
+        const enc = encryptMsg(msgPayload, peerPub, sk);
         ciphertext = enc.ciphertext;
         nonce = enc.nonce;
+        console.log("ENCRYPTED_PAYLOAD_LEN:", msgPayload.length, "hasAtts:", !!uploadedAttachments?.length);
       } catch (encErr) {
         console.error("SEND_MESSAGE_ENCRYPT_ERROR:", encErr);
         rollback();
-        Alert.alert("Ошибка шифрования", String(encErr instanceof Error ? encErr.message : encErr));
+        Alert.alert("Ошибка E2EE", "Не удалось зашифровать сообщение: " + String(encErr instanceof Error ? encErr.message : encErr));
         return;
       }
 
@@ -581,6 +610,7 @@ export default function ConversationScreen() {
         body: JSON.stringify({
           toCitizenId: peerId, ciphertext, nonce,
           ...(capturedReplyTo ? { replyToId: capturedReplyTo.id, replySenderName: capturedReplyTo.senderName, replyContent: capturedReplyTo.text.slice(0, 400) } : {}),
+          // attachments encrypted in ciphertext — also send for DB indexing/fallback
           ...(uploadedAttachments && uploadedAttachments.length > 0 ? { attachments: uploadedAttachments } : {}),
         }),
       });
@@ -662,11 +692,23 @@ export default function ConversationScreen() {
   async function uploadFiles(files: PendingFile[], token: string): Promise<AttachmentMeta[]> {
     const uploadOne = async (pf: PendingFile): Promise<AttachmentMeta> => {
       const form = new FormData();
-      form.append("file", {
-        uri: pf.uri,
-        name: pf.name,
-        type: pf.mimeType,
-      } as unknown as Blob);
+
+      if (Platform.OS === "web") {
+        // Web: uri is a blob: or data: URL — fetch it to get a real Blob
+        let blob: Blob;
+        try {
+          blob = await fetch(pf.uri).then((r) => r.blob());
+        } catch {
+          throw new Error(`Не удалось прочитать файл «${pf.name}»`);
+        }
+        const file = new File([blob], pf.name, { type: pf.mimeType || blob.type || "application/octet-stream" });
+        form.append("file", file);
+      } else {
+        // Native: React Native patches FormData to accept { uri, name, type }
+        form.append("file", { uri: pf.uri, name: pf.name, type: pf.mimeType } as unknown as Blob);
+      }
+
+      console.log(`UPLOADING file=${pf.name} size=${pf.size} to ${BASE_URL}/api/chat/upload`);
       const res = await fetch(`${BASE_URL}/api/chat/upload`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -674,9 +716,11 @@ export default function ConversationScreen() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}) as object) as { error?: string };
-        throw new Error(err.error ?? `Ошибка загрузки файла «${pf.name}» (HTTP ${res.status})`);
+        throw new Error(err.error ?? `Ошибка загрузки «${pf.name}» (HTTP ${res.status})`);
       }
-      return res.json() as Promise<AttachmentMeta>;
+      const meta = await res.json() as AttachmentMeta;
+      console.log(`UPLOADED ${pf.name} → ${meta.url}`);
+      return meta;
     };
     return Promise.all(files.map(uploadOne));
   }
