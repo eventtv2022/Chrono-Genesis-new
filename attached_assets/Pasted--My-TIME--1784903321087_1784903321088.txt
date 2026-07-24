@@ -1,0 +1,71 @@
+Логика вывода на аукцион из раздела **«My TIME»** отличная: гражданин видит список своих забронированных/приобретенных минут и может прямо в один клик выставить любую из них на P2P-торги.
+
+Кстати, на скриншоте первой стоит минута **`01.01.1 00:01`** (первая минута тысячелетия/столетия) — благодаря ранее заложенному правилу, при попытке выставить ее систему сработает блокировка **«Неотчуждаемая Государственная Собственность»**.
+
+Ниже готовый **промпт для Replit**, который добавит действие «Выставить на аукцион» к каждой минуте в этом окне.
+
+---
+
+## 🚀 Промпт для Replit: Добавление кнопки «Выставить на аукцион» в окно My TIME
+
+```markdown
+# TASK: Add "Sell on Auction" Action to Time Slot Cards in "My TIME" Modal
+
+## OBJECTIVE
+Allow citizens to list any of their owned Time Slots directly on the Auction market from the "My TIME" window (`MyTimeModal.tsx` or similar).
+
+---
+
+## IMPLEMENTATION REQUIREMENTS
+
+### 1. Enhance Time Slot Item UI (`MyTimeModal.tsx`)
+In each time slot row inside the "My TIME" view:
+- Add an action button/icon **`🏛️ На аукцион`** (or expandable menu on click).
+- **Validation Before Opening**:
+  - If the selected minute is a **Century Boundary Minute** (e.g. `01.01.0001 00:01` or last minute), display the `StatePropertyModal` error: *"Эта минута является неотчуждаемой государственной собственностью."*
+
+### 2. Create Auction Modal Trigger (`CreateAuctionModal.tsx`)
+When clicking **"На аукцион"** on an eligible minute:
+Open a modal pre-filled with the selected minute's metadata:
+- **Selected Minute**: `{formattedDate}` (e.g., `11.01.2026 14:00`).
+- **Input Field 1**: Initial Bid / Starting Price (Д) (Default: e.g. 1 Д).
+- **Input Field 2**: Auction Duration (e.g., 24 hours, 48 hours).
+- **Tax Notice**: *"Платформа берет 2% комиссии с завершенной сделки."*
+- **Submit Button**: `[ Выставить на продажу ]`
+
+### 3. API Integration (`POST /api/auctions/create`)
+- Create endpoint to convert an owned time slot into an active auction listing:
+  ```ts
+  // Verify ownership & boundary lock
+  if (isCenturyBoundaryMinute(timeSlot.timestamp)) {
+    return res.status(403).json({ error: "Century boundary minutes cannot be auctioned." });
+  }
+
+  // Create auction entry
+  await db.insert(auctions).values({
+    sellerId: currentUserId,
+    timeSlotId: timeSlot.id,
+    startingPrice,
+    currentBid: startingPrice,
+    status: 'ACTIVE',
+    expiresAt,
+  });
+
+```
+
+### 4. UI Status Update
+
+* Once listed, update the card status in "My TIME" to show a badge: `🏷️ На аукционе`.
+
+---
+
+## VERIFICATION CHECKLIST
+
+1. Open "My TIME" menu.
+2. Click "На аукцион" next to `11.01.2026 14:00`.
+3. Enter starting price (e.g., 5 Д) and confirm.
+4. Check that the lot instantly appears on the main Auction market list.
+
+```
+
+```

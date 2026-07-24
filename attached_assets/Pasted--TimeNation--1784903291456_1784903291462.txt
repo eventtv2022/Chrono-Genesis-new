@@ -1,0 +1,81 @@
+Это сильное концептуальное решение в духе цифровой идеологии **TimeNation**! По сути, граничные минуты столетий (например, первая и последняя минуты века) объявляются **Национальным Достоянием / Священным Хроно-Фондом**.
+
+Они не подлежат продаже или передаче в частные руки, а их статус закреплен как **Неотчуждаемая Государственная Собственность**.
+
+Ниже представлен готовый **промпт для Replit**, который внедрит эту проверку в механизм бронирования/покупки минут и выведет красивое системное уведомление при попытке их выкупить.
+
+---
+
+## 🚀 Промпт для Replit: Блокировка Первых и Последних Минут Столетий
+
+```markdown
+# TASK: Lock Century Boundary Minutes as Non-Transferable State Property
+
+## OBJECTIVE
+Make the absolute first minute and last minute of every century completely non-transferable (Non-Auctionable State Property). 
+When a citizen attempts to buy, reserve, or bid on these specific minutes, block the transaction and display a formal State Law notification.
+
+---
+
+## LOGIC & SPECIFICATION
+
+### 1. Boundary Minutes Definition
+A minute is flagged as `IS_STATE_PROPERTY` if:
+- **First Minute of a Century**: Year ending in `01` (or `00` depending on calendar rule), Date: `Jan 1`, Time: `00:00`.
+  *(e.g., 2001-01-01 00:00:00, 2101-01-01 00:00:00)*
+- **Last Minute of a Century**: Year ending in `00` (or `99`), Date: `Dec 31`, Time: `23:59`.
+  *(e.g., 2000-12-31 23:59:00, 2099-12-31 23:59:00)*
+
+### 2. Backend Validation Guard (`/api/time-capsules/reserve` & `/api/auctions/bid`)
+Add a check function `isCenturyBoundaryMinute(timestamp: Date/string): boolean`.
+
+Before processing any reservation, auction creation, or purchase:
+```ts
+if (isCenturyBoundaryMinute(targetTimestamp)) {
+  return res.status(403).json({
+    code: 'CENTURY_STATE_PROPERTY',
+    error: 'Эта минута является неотчуждаемой государственной собственностью TimeNation.'
+  });
+}
+
+```
+
+### 3. Frontend Interactive Modal (`StatePropertyModal.tsx`)
+
+If the API returns `CENTURY_STATE_PROPERTY` or when previewing a minute marked as state property, display a dedicated modal popup:
+
+```tsx
+<div className="bg-zinc-950 border-2 border-amber-500/60 rounded-2xl p-6 text-center max-w-md mx-auto shadow-2xl">
+  <div className="w-16 h-16 mx-auto mb-4 bg-amber-500/10 rounded-full flex items-center justify-center border border-amber-500/40">
+    <span className="text-3xl">🏛️</span>
+  </div>
+  
+  <h3 className="text-amber-400 font-bold text-lg mb-2">
+    НЕОТЧУЖДАЕМАЯ ГОСУДАРСТВЕННАЯ СОБСТВЕННОСТЬ
+  </h3>
+  
+  <p className="text-zinc-300 text-sm leading-relaxed mb-6">
+    Первые и последние минуты каждого столетия принадлежат **Национальному Хроно-Фонду TimeNation**. Данная минута не подлежит частному бронированию, выкупу или передаче.
+  </p>
+  
+  <button 
+    onClick={closeModal}
+    className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 rounded-xl transition-colors"
+  >
+    Принято
+  </button>
+</div>
+
+```
+
+---
+
+## VERIFICATION CHECKLIST
+
+1. Try to select or bid on `2101-01-01 00:00` or `2099-12-31 23:59`.
+2. Ensure the system blocks the action and pops up the **State Property Warning**.
+3. Verify that standard minutes remain fully available for normal reservation/trading.
+
+```
+
+```

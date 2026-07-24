@@ -16,12 +16,127 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { LogoBrand } from "@/components/LogoBrand";
+
+// ── Century boundary guard (client-side mirror of backend centuryGuard.ts) ─────
+function isCenturyBoundaryCoord(coord: string): boolean {
+  if (!coord || coord.length !== 12) return false;
+  const year   = parseInt(coord.slice(0, 4), 10);
+  const month  = parseInt(coord.slice(4, 6), 10);
+  const day    = parseInt(coord.slice(6, 8), 10);
+  const hour   = parseInt(coord.slice(8, 10), 10);
+  const minute = parseInt(coord.slice(10, 12), 10);
+  const isFirst = year % 100 === 1 && month === 1  && day === 1  && hour === 0  && minute === 0;
+  const isLast  = year % 100 === 0 && year > 0     && month === 12 && day === 31 && hour === 23 && minute === 59;
+  return isFirst || isLast;
+}
+
+// ── StatePropertyModal ─────────────────────────────────────────────────────────
+function StatePropertyModal({ visible, onClose, colors }: { visible: boolean; onClose: () => void; colors: ReturnType<typeof useColors> }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", padding: 24 }}>
+        <View style={{ backgroundColor: colors.background, borderWidth: 2, borderColor: "#f59e0b99", borderRadius: 20, padding: 28, width: "100%", alignItems: "center" }}>
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#f59e0b18", borderWidth: 1, borderColor: "#f59e0b55", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+            <Text style={{ fontSize: 30 }}>🏛️</Text>
+          </View>
+          <Text style={{ fontSize: 15, fontWeight: "800", color: "#f59e0b", textAlign: "center", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Неотчуждаемая{"\n"}государственная собственность
+          </Text>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center", lineHeight: 20, marginBottom: 24 }}>
+            Первые и последние минуты каждого столетия принадлежат{" "}
+            <Text style={{ color: colors.foreground, fontWeight: "600" }}>Национальному Хроно-Фонду TimeNation</Text>.
+            Данная минута не подлежит частному бронированию, выкупу или передаче.
+          </Text>
+          <TouchableOpacity
+            onPress={onClose}
+            style={{ width: "100%", backgroundColor: "#f59e0b", borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
+          >
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#000" }}>Принято</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ── TimeAnchorAuctionModal ─────────────────────────────────────────────────────
+interface AnchorAuctionModalProps {
+  anchor: { timelineCoord: string } | null;
+  visible: boolean;
+  onClose: () => void;
+  onSubmit: (data: { startingPrice: number; durationHours: number }) => void;
+  submitting: boolean;
+  colors: ReturnType<typeof useColors>;
+}
+
+function TimeAnchorAuctionModal({ anchor, visible, onClose, onSubmit, submitting, colors }: AnchorAuctionModalProps) {
+  const [priceInput, setPriceInput]       = useState("1");
+  const [durationInput, setDurationInput] = useState("24");
+
+  const c = anchor?.timelineCoord ?? "";
+  const label = c.length === 12
+    ? `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)} ${c.slice(8,10)}:${c.slice(10,12)}`
+    : c;
+
+  const handleConfirm = () => {
+    const price = parseFloat(priceInput);
+    const hours = parseInt(durationInput, 10);
+    if (isNaN(price) || price <= 0)     { Alert.alert("⚠️", "Укажите стартовую цену больше 0"); return; }
+    if (isNaN(hours) || hours < 1 || hours > 168) { Alert.alert("⚠️", "Длительность: от 1 до 168 часов"); return; }
+    onSubmit({ startingPrice: price, durationHours: hours });
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
+        <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#555", alignSelf: "center", marginBottom: 16 }} />
+          <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground, marginBottom: 4 }}>🏷️ Выставить на аукцион</Text>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, marginBottom: 20 }}>{label}</Text>
+
+          <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 20, flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Feather name="info" size={14} color={colors.primary} />
+            <Text style={{ flex: 1, fontSize: 12, color: colors.mutedForeground, lineHeight: 17 }}>
+              Координата будет заблокирована на время торгов. Победитель получает право собственности. Комиссия Казначейства: 2%.
+            </Text>
+          </View>
+
+          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Стартовая цена (Д)</Text>
+          <TextInput
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 16, color: colors.foreground, backgroundColor: colors.card, marginBottom: 14 }}
+            placeholder="1.00" placeholderTextColor={colors.mutedForeground}
+            value={priceInput} onChangeText={setPriceInput} keyboardType="decimal-pad" autoFocus
+          />
+
+          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Длительность (часов)</Text>
+          <TextInput
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 16, color: colors.foreground, backgroundColor: colors.card, marginBottom: 24 }}
+            placeholder="24" placeholderTextColor={colors.mutedForeground}
+            value={durationInput} onChangeText={setDurationInput} keyboardType="number-pad"
+          />
+
+          <TouchableOpacity
+            onPress={handleConfirm} disabled={submitting}
+            style={{ backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10, opacity: submitting ? 0.6 : 1 }}
+          >
+            {submitting
+              ? <ActivityIndicator color={colors.primaryForeground} />
+              : <Text style={{ fontSize: 16, fontWeight: "700", color: colors.primaryForeground }}>Выставить на продажу →</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={{ alignItems: "center", padding: 10 }}>
+            <Text style={{ fontSize: 15, color: colors.mutedForeground }}>Отмена</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 const BASE_URL = getBaseUrl();
 
@@ -52,8 +167,9 @@ function getMonthNames(lang: string): string[] {
 export default function TimelineScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { citizen } = useCitizen();
+  const { citizen, authHeaders } = useCitizen();
   const { t, lang } = useLanguage();
+  const qc = useQueryClient();
 
   const MONTH_NAMES = getMonthNames(lang);
 
@@ -77,8 +193,46 @@ export default function TimelineScreen() {
   const [showCapsule, setShowCapsule] = useState(false);
   const [capsuleText, setCapsuleText] = useState("");
   const [capsuleSaving, setCapsuleSaving] = useState(false);
+  const [showStateProperty, setShowStateProperty] = useState(false);
+  const [showAnchorAuction, setShowAnchorAuction] = useState(false);
 
   const router = useRouter();
+
+  // ── Anchor auction mutation ──────────────────────────────────────────────────
+  const anchorAuctionMutation = useMutation({
+    mutationFn: async (data: { startingPrice: number; durationHours: number }) => {
+      if (!selectedAnchor) throw new Error("Нет выбранной координаты");
+      const res = await fetch(`${BASE_URL}/api/auctions/anchor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ timelineCoord: selectedAnchor.timelineCoord, startingPrice: data.startingPrice, durationHours: data.durationHours }),
+      });
+      const json = await res.json() as { error?: string; code?: string; id?: number };
+      if (!res.ok) {
+        if (json.code === "CENTURY_STATE_PROPERTY") {
+          setShowAnchorAuction(false);
+          setShowAnchorActions(false);
+          setTimeout(() => setShowStateProperty(true), 350);
+          throw new Error(json.error ?? "Государственная собственность");
+        }
+        throw new Error(json.error ?? "Ошибка при создании аукциона");
+      }
+      return json;
+    },
+    onSuccess: () => {
+      setShowAnchorAuction(false);
+      setShowAnchorActions(false);
+      qc.invalidateQueries({ queryKey: ["myAnchors", citizen?.id] });
+      qc.invalidateQueries({ queryKey: ["auctions"] });
+      void refetchMyAnchors();
+      Alert.alert("✅", "Временная координата выставлена на аукцион");
+    },
+    onError: (e: Error) => {
+      if (!e.message.includes("Государственная собственность")) {
+        Alert.alert("Ошибка", e.message);
+      }
+    },
+  });
 
   const { data: myAnchors = [], refetch: refetchMyAnchors } = useQuery<
     { timelineCoord: string; status: string; createdAt: string }[]
@@ -299,6 +453,11 @@ export default function TimelineScreen() {
                   ]}
                   onPress={() => {
                     if (ownerId) return;
+                    // 🏛️ Block century boundary minutes
+                    if (isCenturyBoundaryCoord(coord)) {
+                      setShowStateProperty(true);
+                      return;
+                    }
                     setAnchorResult(null);
                     setConfirmCoord(coord);
                   }}
@@ -397,9 +556,20 @@ export default function TimelineScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() => {
+              if (!selectedAnchor) return;
+              // 🏛️ Century boundary — cannot auction
+              if (isCenturyBoundaryCoord(selectedAnchor.timelineCoord)) {
+                setShowAnchorActions(false);
+                setTimeout(() => setShowStateProperty(true), 350);
+                return;
+              }
+              // Already on auction
+              if (selectedAnchor.status === "on_auction") {
+                Alert.alert("🏷️", "Эта координата уже выставлена на аукцион");
+                return;
+              }
               setShowAnchorActions(false);
-              setShowMyAnchors(false);
-              setTimeout(() => router.push("/(tabs)/auctions" as never), 400);
+              setTimeout(() => setShowAnchorAuction(true), 350);
             }}>
               <View style={[styles.asIconBox, { backgroundColor: "#e6952222" }]}>
                 <Feather name="tag" size={18} color="#e69522" />
@@ -408,6 +578,11 @@ export default function TimelineScreen() {
                 <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_to_auction}</Text>
                 <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_to_auction_sub}</Text>
               </View>
+              {selectedAnchor?.status === "on_auction" && (
+                <View style={[styles.asSoon, { backgroundColor: "#e6952222" }]}>
+                  <Text style={[styles.asSoonText, { color: "#e69522" }]}>На торгах</Text>
+                </View>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() =>
@@ -548,11 +723,23 @@ export default function TimelineScreen() {
                 return (
                   <TouchableOpacity
                     activeOpacity={0.75}
-                    style={[styles.maRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    style={[styles.maRow, { backgroundColor: colors.card, borderColor: a.status === "on_auction" ? "#e6952255" : colors.border }]}
                     onPress={() => { setSelectedAnchor(a); setShowAnchorActions(true); }}
                   >
                     <View style={styles.maRowLeft}>
-                      <Text style={[styles.maCoordLabel, { color: colors.foreground }]}>{label}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Text style={[styles.maCoordLabel, { color: colors.foreground }]}>{label}</Text>
+                        {a.status === "on_auction" && (
+                          <View style={{ backgroundColor: "#e6952222", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#e69522" }}>🏷️ На торгах</Text>
+                          </View>
+                        )}
+                        {isCenturyBoundaryCoord(c) && (
+                          <View style={{ backgroundColor: "#f59e0b22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🏛️ Фонд</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={[styles.maCoordRaw, { color: colors.mutedForeground }]}>{c}</Text>
                     </View>
                     <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
@@ -563,6 +750,23 @@ export default function TimelineScreen() {
           )}
         </View>
       </Modal>
+
+      {/* 🏛️ State Property Modal */}
+      <StatePropertyModal
+        visible={showStateProperty}
+        onClose={() => setShowStateProperty(false)}
+        colors={colors}
+      />
+
+      {/* 🏷️ Time Anchor Auction Modal */}
+      <TimeAnchorAuctionModal
+        anchor={selectedAnchor}
+        visible={showAnchorAuction}
+        onClose={() => setShowAnchorAuction(false)}
+        onSubmit={(data) => anchorAuctionMutation.mutate(data)}
+        submitting={anchorAuctionMutation.isPending}
+        colors={colors}
+      />
 
       <View style={[styles.legend, { paddingBottom: insets.bottom + 80 }]}>
         {[

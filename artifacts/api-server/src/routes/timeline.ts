@@ -5,6 +5,7 @@ import { citizensTable, timelineAnchorsTable, timelineCapsulesTable } from "@wor
 import { z } from "zod";
 import { logTimelineAnchorToSheets } from "../lib/googleSheets";
 import { sendTransactionNotification } from "../services/telegramService";
+import { isCenturyBoundaryMinute, CENTURY_STATE_PROPERTY_CODE, CENTURY_STATE_PROPERTY_MSG } from "../lib/centuryGuard";
 
 const router: IRouter = Router();
 
@@ -54,6 +55,12 @@ router.post("/timeline/anchor", async (req, res): Promise<void> => {
   const validErr = validateCoord(timelineCoord);
   if (validErr) {
     res.status(400).json({ error: validErr });
+    return;
+  }
+
+  // 🏛️ Century boundary minutes are Non-Transferable State Property
+  if (isCenturyBoundaryMinute(timelineCoord)) {
+    res.status(403).json({ code: CENTURY_STATE_PROPERTY_CODE, error: CENTURY_STATE_PROPERTY_MSG });
     return;
   }
 

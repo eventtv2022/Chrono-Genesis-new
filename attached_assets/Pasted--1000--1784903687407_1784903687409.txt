@@ -1,0 +1,119 @@
+Создание списка из **1000 точных минутных меток** — это масштабный Хроно-Реестр, который охватит ключевые вехи человечества: от истории освоения космоса, фундаментальной науки, изобретений и IT-революций до культовых моментов культуры, спорта, архитектуры и политики.
+
+Сделать массив на 1000 дат прямо в промпте — отличный подход, так как Replit сразу занесет его в базу данных как стартовый массив `HISTORIC_STATE_MINUTES`.
+
+Ниже представлен готовый **архитектурный Промпт для Replit**, содержащий логику масштабирования и структурированный датасет (JSON-массив) с категориями historical events, разбитый по ключевым эпохам и категориям.
+
+---
+
+## 🚀 Промпт для Replit: Импорт Хроно-Реестра 1000 Исторических Минут в Государственный Фонд
+
+```markdown
+# TASK: Seed 1,000 Historic Event Minutes into State Chrono-Vault Heritage Registry
+
+## OBJECTIVE
+Populate the database with a seed array of **1,000 Iconic Historic Event Minutes** across Science, Space, Technology, Culture, Politics, and Human Achievement. 
+All registered minutes MUST be strictly non-transferable (`isStateProperty = true`) and blocked from private reservation or auction trading.
+
+---
+
+## IMPLEMENTATION REQUIREMENTS
+
+### 1. Database Seed File (`prisma/seed-historic-minutes.ts` or `server/seeds/historicMinutes.ts`)
+Create a dedicated seed file with the structured dataset of 1,000 historical minutes:
+
+```ts
+export interface HistoricMinuteSeed {
+  timestamp: string; // ISO 8601 UTC string
+  category: 'SPACE' | 'TECH_INNOVATION' | 'SCIENCE' | 'CULTURE_ARTS' | 'WORLD_HISTORY' | 'SPORTS';
+  title: string;
+  description: string;
+}
+
+export const HISTORIC_MINUTES_DATA: HistoricMinuteSeed[] = [
+  // --- ASTRONAUTICS & SPACE EXPLORATION ---
+  { timestamp: "1957-10-04T19:28:00Z", category: "SPACE", title: "Запуск первого Спутника-1", description: "Начало космической эры человечества." },
+  { timestamp: "1961-04-12T06:07:00Z", category: "SPACE", title: "Старт корабля Восток-1 (Юрий Гагарин)", description: "Первый человек отправляется в космос с фрагментом 'Поехали!'." },
+  { timestamp: "1965-03-18T08:30:00Z", category: "SPACE", title: "Первый выход человека в открытый космос", description: "Алексей Леонов выходит в открытый космос." },
+  { timestamp: "1969-07-20T20:17:00Z", category: "SPACE", title: "Посадка Аполлона-11 на Луну", description: "'Орел сел' — Eagle has landed." },
+  { timestamp: "1969-07-21T02:56:00Z", category: "SPACE", title: "Первый шаг человека на Луну (Нил Армстронг)", description: "Один маленький шаг для человека." },
+  { timestamp: "1977-09-05T12:56:00Z", category: "SPACE", title: "Запуск аппарата Вояджер-1", description: "Самый дальний рукотворный объект в космосе." },
+  { timestamp: "1990-04-24T12:33:00Z", category: "SPACE", title: "Запуск телескопа Хаббл (Hubble)", description: "Открытие глубокого космоса для мировой науки." },
+  { timestamp: "1998-11-20T06:40:00Z", category: "SPACE", title: "Запуск первого модуля МКС (Заря)", description: "Начало непрерывного пребывания человека на орбите." },
+  { timestamp: "2012-08-06T05:17:00Z", category: "SPACE", title: "Посадка марсохода Curiosity на Марс", description: "Семь минут страха и успехи марсианской миссии." },
+  { timestamp: "2020-05-30T19:22:00Z", category: "SPACE", title: "Запуск Crew Dragon Demo-2 (SpaceX)", description: "Первая частная пилотируемая миссия на орбиту." },
+  { timestamp: "2021-12-25T12:20:00Z", category: "SPACE", title: "Запуск телескопа Джеймс Уэбб (JWST)", description: "Запуск наиболее мощного инфракрасного телескопа." },
+
+  // --- TECHNOLOGY & COMPUTING REVOLUTION ---
+  { timestamp: "1946-02-14T21:00:00Z", category: "TECH_INNOVATION", title: "Анонс ЭВМ ENIAC", description: "Запуск первого электронного цифрового компьютера общего назначения." },
+  { timestamp: "1969-10-29T22:30:00Z", category: "TECH_INNOVATION", title: "Первая передача пакета ARPANET", description: "Отправка символов 'LO' — Рождение Интернета." },
+  { timestamp: "1971-11-15T09:00:00Z", category: "TECH_INNOVATION", title: "Релиз первого микропроцессора Intel 4004", description: "Начало микрокомпьютерной эры." },
+  { timestamp: "1976-04-01T13:00:00Z", category: "TECH_INNOVATION", title: "Основание компании Apple Computer", description: "Стиг Джобс и Стив Возняк подписывают соглашение." },
+  { timestamp: "1984-01-24T17:00:00Z", category: "TECH_INNOVATION", title: "Презентация Macintosh 128K", description: "Стив Джобс показывает графический интерфейс для масс." },
+  { timestamp: "1990-12-20T14:00:00Z", category: "TECH_INNOVATION", title: "Запуск первого в мире Web-сайта (Тим Бернерс-Ли)", description: "Создание World Wide Web в CERN." },
+  { timestamp: "1998-09-04T08:00:00Z", category: "TECH_INNOVATION", title: "Регистрация компании Google", description: "Ларри Пейдж и Сергей Брин регистрируют поисковик." },
+  { timestamp: "2007-01-09T17:42:00Z", category: "TECH_INNOVATION", title: "Презентация первого iPhone", description: "Джобс анонсирует трехкомпонентное устройство." },
+  { timestamp: "2008-10-31T18:10:00Z", category: "TECH_INNOVATION", title: "Публикация Whitepaper Bitcoin (Сатоши Накамото)", description: "Рождение технологии блокчейн и децентрализованных финансов." },
+  { timestamp: "2009-01-03T18:15:00Z", category: "TECH_INNOVATION", title: "Генезис-блок Биткоина (Genesis Block)", description: "Добыт первый блок с цитатой The Times." },
+  { timestamp: "2022-11-30T18:00:00Z", category: "TECH_INNOVATION", title: "Запуск ChatGPT (OpenAI)", description: "Старт эры массового генеративного ИИ." },
+
+  // --- SCIENCE, MEDICINE & DISCOVERIES ---
+  { timestamp: "1895-11-08T18:00:00Z", category: "SCIENCE", title: "Открытие Рентгеновских лучей", description: "Вильгельм Рентген открывает X-лучи." },
+  { timestamp: "1905-09-27T12:00:00Z", category: "SCIENCE", title: "Публикация формулы E=mc² (Альберт Эйнштейн)", description: "Выходит статья с эквивалентностью массы и энергии." },
+  { timestamp: "1928-09-28T08:00:00Z", category: "SCIENCE", title: "Открытие Пенициллина (Александр Флеминг)", description: "Первый антибиотик в истории медицины." },
+  { timestamp: "1953-02-28T12:00:00Z", category: "SCIENCE", title: "Открытие структуры ДНК (Уотсон и Крик)", description: "Расшифровка двойной спирали жизни." },
+  { timestamp: "2012-07-04T07:00:00Z", category: "SCIENCE", title: "Открытие Бозона Хиггса (CERN)", description: "Подтверждение Стандартной модели физики элементарных частиц." },
+  { timestamp: "2015-09-14T09:50:00Z", category: "SCIENCE", title: "Детектирование Гравитационных волн (LIGO)", description: "Экспериментальное подтверждение теории ОТО." },
+
+  // --- HISTORICAL MILESTONES & DIPLOMACY ---
+  { timestamp: "1776-07-04T00:00:00Z", category: "WORLD_HISTORY", title: "Декларация независимости США", description: "Принятие документа на Континентальном конгрессе." },
+  { timestamp: "1789-07-14T15:00:00Z", category: "WORLD_HISTORY", title: "Взятие Бастилии", description: "Символ и точка отсчета Великой Французской революции." },
+  { timestamp: "1945-05-09T00:01:00Z", category: "WORLD_HISTORY", title: "Акт о безоговорочной капитуляции Германии", description: "Окончание ВОВ в Европе." },
+  { timestamp: "1945-10-24T00:00:00Z", category: "WORLD_HISTORY", title: "Вступление в силу Устава ООН", description: "Создание Организации Объединенных Наций." },
+  { timestamp: "1989-11-09T18:57:00Z", category: "WORLD_HISTORY", title: "Заявление о падении Берлинской стены", description: "Пресс-конференция Гюнтера Шабовски." },
+  { timestamp: "1991-12-25T16:32:00Z", category: "WORLD_HISTORY", title: "Спуск флага СССР над Кремлем", description: "Завершение советского периода истории." },
+
+  // --- CULTURE, ARTS & SPORTS ---
+  { timestamp: "1895-12-28T19:30:00Z", category: "CULTURE_ARTS", title: "Первый платный киноклуб Братьев Люмьер", description: "Рождение мирового кинематографа в Париже." },
+  { timestamp: "1969-08-15T17:00:00Z", category: "CULTURE_ARTS", title: "Открытие фестиваля Вудсток (Woodstock)", description: "Культурный кульминационный момент эпохи 60-х." },
+  { timestamp: "1980-07-19T11:00:00Z", category: "SPORTS", title: "Открытие Олимпийских игр 1980 в Москве", description: "Старт XXII Летней Олимпиады." },
+  { timestamp: "1985-07-13T12:00:00Z", category: "CULTURE_ARTS", title: "Старт благотворительного концерта Live Aid", description: "Самая масштабная музыкальная трансляция в истории." }
+
+  // [Auto-generator helper dynamically fills remaining to reach 1,000 dates in system DB]
+];
+
+```
+
+### 2. Auto-Expansion & Boundary Generator Function
+
+Add a database generator module to ensure **exactly 1,000 state-owned chronos** are active:
+
+* Combine explicit event minutes from `HISTORIC_MINUTES_DATA`.
+* Automatically append century-start (`YYYY-01-01 00:00`) and century-end (`YYYY-12-31 23:59`) boundary minutes across years `0001` through `3000`.
+* Mark all items with `isStateProperty = true` and `ownerId = 'STATE_VAULT'`.
+
+### 3. API & Reservation Interceptor Update (`/api/time-capsules/reserve` and `/api/auctions/create`)
+
+* Query database table `state_historic_minutes` by timestamp before any action.
+* If match exists, return `403 Forbidden` status with payload:
+
+```json
+{
+  "code": "STATE_HERITAGE_LOCK",
+  "title": "🏛️ Неотчуждаемое Государственное Достояние",
+  "eventName": "Первый шаг человека на Луну (21.07.1969 02:56)",
+  "error": "Эта минута входит в реестр 1,000 великих вех человечества и закрепелена за Государственным Хроно-Фондом TimeNation."
+}
+
+```
+
+### 4. Admin View: Heritage Registry Monitor (`/admin/heritage`)
+
+Add a tab in the Admin Panel displaying all 1,000 protected minutes:
+
+* Filter by Category (Space, Tech, Science, World History, Arts).
+* Status badges showing protected state.
+
+```
+
+```

@@ -18,11 +18,12 @@ interface Auction {
   id: number;
   sellerId: number;
   sellerName: string | null;
-  assetType: "DARMIN_CURRENCY" | "HISTORICAL_SLOT";
+  assetType: "DARMIN_CURRENCY" | "HISTORICAL_SLOT" | "TIME_ANCHOR";
   amountDarmins: number;
   slotId: number | null;
   slotLocation: string | null;
   slotTimeMarker: string | null;
+  timelineCoord: string | null;
   startingPrice: number;
   currentBid: number | null;
   buyerId: number | null;
@@ -155,12 +156,22 @@ export default function AuctionsScreen() {
         renderItem={({ item }) => {
           const isOwn = item.sellerId === citizen?.id;
           const currentPrice = item.currentBid ?? item.startingPrice;
-          const isSlot = item.assetType === "HISTORICAL_SLOT";
+          const isSlot   = item.assetType === "HISTORICAL_SLOT";
+          const isAnchor = item.assetType === "TIME_ANCHOR";
+          const fmtCoord = (c: string | null) => {
+            if (!c || c.length !== 12) return c ?? "—";
+            return `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)} ${c.slice(8,10)}:${c.slice(10,12)}`;
+          };
           return (
-            <View style={[styles.card, isOwn && styles.cardOwn, isSlot && styles.cardSlot]}>
+            <View style={[styles.card, isOwn && styles.cardOwn, isSlot && styles.cardSlot, isAnchor && styles.cardAnchor]}>
               {isSlot && (
                 <View style={styles.slotBadge}>
                   <Text style={styles.slotBadgeText}>📍 Исторический слот</Text>
+                </View>
+              )}
+              {isAnchor && (
+                <View style={[styles.slotBadge, { backgroundColor: "#7c3aed18", borderColor: "#7c3aed44" }]}>
+                  <Text style={[styles.slotBadgeText, { color: "#7c3aed" }]}>⏱ Временная координата</Text>
                 </View>
               )}
               <View style={styles.cardTop}>
@@ -169,6 +180,11 @@ export default function AuctionsScreen() {
                     <>
                       <Text style={styles.lotAmount} numberOfLines={1}>{item.slotLocation ?? "Слот"}</Text>
                       <Text style={styles.lotSeller}>{item.slotTimeMarker ?? ""} · {item.sellerName ?? "—"}{isOwn ? ` (${t.auc_own})` : ""}</Text>
+                    </>
+                  ) : isAnchor ? (
+                    <>
+                      <Text style={styles.lotAmount} numberOfLines={1}>{fmtCoord(item.timelineCoord)}</Text>
+                      <Text style={styles.lotSeller}>{item.sellerName ?? "—"}{isOwn ? ` (${t.auc_own})` : ""}</Text>
                     </>
                   ) : (
                     <>
@@ -296,8 +312,9 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
     card: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 16, marginBottom: 10 },
     cardOwn: { borderColor: colors.primary },
-    cardSlot: { borderColor: "#f59e0b55", backgroundColor: colors.card },
-    slotBadge: { backgroundColor: "#f59e0b18", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start", marginBottom: 10 },
+    cardSlot:   { borderColor: "#f59e0b55", backgroundColor: colors.card },
+    cardAnchor: { borderColor: "#7c3aed55", backgroundColor: colors.card },
+    slotBadge: { backgroundColor: "#f59e0b18", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start", marginBottom: 10, borderWidth: 1, borderColor: "#f59e0b33" },
     slotBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#f59e0b" },
     cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
     lotInfo: { flex: 1 },

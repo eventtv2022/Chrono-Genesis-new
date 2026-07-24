@@ -24,17 +24,18 @@ export type AuctionLog = typeof auctionLogsTable.$inferSelect;
 // assetType='HISTORICAL_SLOT': non-fungible chronopedia slot (slotId locked via isLocked flag)
 
 export const auctionsTable = pgTable("auctions", {
-  id:            serial("id").primaryKey(),
-  sellerId:      integer("seller_id").notNull(),
-  assetType:     text("asset_type").notNull().default("DARMIN_CURRENCY"),
-  amountDarmins: integer("amount_darmins").notNull().default(0), // 0 for HISTORICAL_SLOT
-  slotId:        integer("slot_id"),                              // null for DARMIN_CURRENCY
-  startingPrice: real("starting_price").notNull(),
-  currentBid:    real("current_bid"),
-  buyerId:       integer("buyer_id"),
-  status:        text("status").notNull().default("active"),
-  endsAt:        timestamp("ends_at", { withTimezone: true }).notNull(),
-  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  id:             serial("id").primaryKey(),
+  sellerId:       integer("seller_id").notNull(),
+  assetType:      text("asset_type").notNull().default("DARMIN_CURRENCY"),
+  amountDarmins:  integer("amount_darmins").notNull().default(0), // 0 for HISTORICAL_SLOT / TIME_ANCHOR
+  slotId:         integer("slot_id"),                              // null for DARMIN_CURRENCY / TIME_ANCHOR
+  timelineCoord:  text("timeline_coord"),                          // null for DARMIN_CURRENCY / HISTORICAL_SLOT
+  startingPrice:  real("starting_price").notNull(),
+  currentBid:     real("current_bid"),
+  buyerId:        integer("buyer_id"),
+  status:         text("status").notNull().default("active"),
+  endsAt:         timestamp("ends_at", { withTimezone: true }).notNull(),
+  createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const insertAuctionSchema = createInsertSchema(auctionsTable).omit({
