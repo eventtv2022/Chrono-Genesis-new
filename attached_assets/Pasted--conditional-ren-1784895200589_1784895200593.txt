@@ -1,0 +1,57 @@
+По скриншоту отлично видно, что произошла классическая проблема **условия отрисовки (conditional rendering)**:
+
+1. Кнопка «+1Д» под входящими сообщениями уже добавлена!
+2. А вот кнопка «Платного разговора» не появляется, потому что у пользователя `Lev Lerner` в базе данных **значение `consultationRate` по умолчанию либо равно `0`, либо `null**`, из-за чего условие `{user.consultationRate > 0 && <PaidButton/>}` просто не срабатывает.
+3. Кроме того, в самом UI нет fallback-кнопки (например, иконки монеты/часов в верхней панели), которая позволяла бы принудительно предложить/запросить платный разговор.
+
+Ниже жесткий баг-фикс промпт для Replit, который заставит отобразить эту кнопку **всегда** (с логикой установки ставки) и починит списание баланса.
+
+---
+
+## 🚀 Промпт для Replit: Принудительный вывод UI платного разговора и фикс списания
+
+```markdown
+# CRITICAL FIX: Paid Consultation Button Missing & Tipping Balance Not Updating
+
+## CAUSE ANALYSIS
+1. The "Paid Consultation" button is hidden because it relies on `partner.consultationRate > 0`. Since new users default to `null` or `0`, the button never renders in the header.
+2. Tipping (+1Д) works on click, but the local balance state (`user.balanceMinutes`) isn't reactively updated on the sender's client.
+
+---
+
+## REQUIRED CHANGES
+
+### 1. Header UI Override (`ChatHeader.tsx`)
+- **Always Render Action Button**: Display a "Paid Talk" button (e.g., a clock/coin icon or badge `⏱️ Платный разговор`) in the top right header next to the call/video icons, REGARDLESS of whether `consultationRate` is set or 0.
+- **Dynamic Behavior on Click**:
+  - **If partner rate > 0**: Open confirmation modal: `"Start paid chat at {rate} Darmins/15min?"`
+  - **If partner rate == 0 / null**: Open modal allowing the current user to set a proposed rate or prompt the partner to set their consultation rate.
+
+### 2. Add Floating Status Banner when Session is Active
+When a paid session is started, replace or stack a top notification bar below the header:
+```tsx
+<div className="bg-amber-500/20 text-amber-300 p-2 text-center text-xs flex justify-between items-center">
+  <span>⏱️ Идет платный разговор ({rate} Д/15мин)</span>
+  <button onClick={stopSession} className="bg-red-500/80 px-2 py-1 rounded text-white">Завершить</button>
+</div>
+
+```
+
+### 3. Tipping Balance Instant Sync (`MessageTipping.tsx`)
+
+In the `handleTip` function for the `+1Д` button:
+
+* Ensure the API response returns the updated `senderBalance`.
+* Immediately trigger a context/state update (e.g., `setCitizen({ ...citizen, balanceMinutes: response.data.newBalance })`).
+* Do NOT require a page refresh to see the decreased balance in the app header or user profile.
+
+---
+
+## VERIFICATION CHECKLIST
+
+1. Open any chat — the Paid Talk button/icon MUST be visible in the top header.
+2. Click "+1Д" on a message — check that the top-bar user balance instantly decreases by 1 Darmin.
+
+```
+
+```

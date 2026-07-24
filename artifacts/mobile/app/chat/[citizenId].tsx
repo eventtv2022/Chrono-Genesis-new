@@ -143,6 +143,8 @@ export default function ConversationScreen() {
 
   // ── Paid Consultation session state ───────────────────────────────────────
   const [consultModal, setConsultModal] = useState(false);
+  const [proposeModal, setProposeModal] = useState(false);
+  const [proposeRate, setProposeRate]   = useState("");
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionStartMs, setSessionStartMs] = useState<number | null>(null);
   const [sessionElapsedSec, setSessionElapsedSec] = useState(0);
@@ -1031,15 +1033,19 @@ export default function ConversationScreen() {
 
         {/* Action buttons — fixed, never shrink */}
         <View style={s.headerActions}>
-          {/* Paid consultation trigger — shown when peer charges and no session is active */}
-          {(peer?.consultationRate ?? 0) > 0 && !sessionActive && (
+          {/* Paid consultation trigger — ALWAYS visible (rate>0 → start session, rate==0 → propose) */}
+          {!sessionActive && (
             <TouchableOpacity
-              onPress={() => setConsultModal(true)}
+              onPress={() => (peer?.consultationRate ?? 0) > 0 ? setConsultModal(true) : setProposeModal(true)}
               activeOpacity={0.7}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={s.consultHeaderBtn}
             >
-              <Feather name="clock" size={15} color="#C97C4C" />
+              <Feather
+                name="clock"
+                size={15}
+                color={(peer?.consultationRate ?? 0) > 0 ? "#C97C4C" : C.muted}
+              />
             </TouchableOpacity>
           )}
 
@@ -1336,6 +1342,67 @@ export default function ConversationScreen() {
           </>
         )}
       </KeyboardAvoidingView>
+
+      {/* Propose paid session modal — partner has no rate set */}
+      <Modal visible={proposeModal} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={[s.modalSheet, { alignItems: "center", gap: 0, paddingBottom: 36 }]}>
+            <View style={s.consultIconWrap}>
+              <Feather name="clock" size={28} color={C.muted} />
+            </View>
+            <Text style={[s.modalTitle, { marginTop: 14 }]}>Платный разговор</Text>
+            <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: C.muted, textAlign: "center", lineHeight: 20, marginTop: 8 }}>
+              {peerName} пока не установил тариф.{"\n"}Вы можете предложить свой.
+            </Text>
+
+            <View style={s.consultDivider} />
+
+            {/* Rate input */}
+            <View style={{ width: "100%", gap: 6 }}>
+              <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: C.muted }}>Предложить тариф (Д / 15 мин)</Text>
+              <View style={s.proposeInputWrap}>
+                <Feather name="clock" size={14} color={C.muted} style={{ marginRight: 6 }} />
+                <TextInput
+                  style={s.proposeInput}
+                  value={proposeRate}
+                  onChangeText={setProposeRate}
+                  keyboardType="number-pad"
+                  placeholder="например, 10"
+                  placeholderTextColor={C.muted}
+                  maxLength={5}
+                />
+                <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: C.muted }}>Д</Text>
+              </View>
+            </View>
+
+            {/* Send proposal as message */}
+            <TouchableOpacity
+              style={[s.transferBtn, { marginTop: 20, width: "100%", opacity: proposeRate.trim() ? 1 : 0.4 }]}
+              disabled={!proposeRate.trim()}
+              onPress={() => {
+                const rate = parseInt(proposeRate.trim(), 10);
+                if (!rate || rate <= 0) return;
+                // Pre-fill the chat input so user can review and tap Send
+                setInput(`⏱ Предлагаю тариф платного разговора: ${rate} Д / 15 мин`);
+                setProposeModal(false);
+                setProposeRate("");
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={s.transferBtnText}>Предложить</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => { setProposeModal(false); setProposeRate(""); }}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+              style={{ marginTop: 16 }}
+            >
+              <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: C.muted }}>Отмена</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Paid consultation start modal */}
       <Modal visible={consultModal && !sessionActive} transparent animationType="fade">
@@ -1681,6 +1748,9 @@ const s = StyleSheet.create({
   consultWarnText: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#E05050", flex: 1, lineHeight: 17 },
   // Disabled transfer button state
   transferBtnDisabled: { opacity: 0.4 },
+  // Propose rate input
+  proposeInputWrap: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "rgba(255,255,255,0.04)" },
+  proposeInput: { flex: 1, fontSize: 16, fontFamily: "Inter_600SemiBold", color: C.fg },
   inputBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border, gap: 8, backgroundColor: C.bg },
   darminBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: C.primary, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(201,168,76,0.1)", flexShrink: 0 },
   darminBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: C.primary },
