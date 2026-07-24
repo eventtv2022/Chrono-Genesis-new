@@ -9,6 +9,7 @@ import { notifyTaxCollected } from "../services/telegramService";
 import { getOnlineCitizenIds, pushToCitizen } from "../services/socialAlarmWs";
 import { TREASURY_CITIZEN_ID } from "../services/videoStorage";
 import { isCenturyBoundaryMinute, CENTURY_STATE_PROPERTY_CODE, CENTURY_STATE_PROPERTY_MSG } from "../lib/centuryGuard";
+import { isStateHeritageCoord, HERITAGE_LOCK_CODE, HERITAGE_LOCK_TITLE, HERITAGE_LOCK_MSG } from "../lib/heritageGuard";
 
 const router: IRouter = Router();
 
@@ -81,6 +82,11 @@ router.post("/auctions", requireAuth, async (req, res): Promise<void> => {
   if (parsed.data.assetType === "TIME_ANCHOR") {
     if (isCenturyBoundaryMinute(parsed.data.timelineCoord)) {
       res.status(403).json({ code: CENTURY_STATE_PROPERTY_CODE, error: CENTURY_STATE_PROPERTY_MSG });
+      return;
+    }
+    const heritage = await isStateHeritageCoord(parsed.data.timelineCoord);
+    if (heritage) {
+      res.status(403).json({ code: HERITAGE_LOCK_CODE, title: HERITAGE_LOCK_TITLE, eventName: heritage.title, error: HERITAGE_LOCK_MSG });
       return;
     }
   }
@@ -173,6 +179,11 @@ router.post("/auctions/anchor", requireAuth, async (req, res): Promise<void> => 
 
   if (isCenturyBoundaryMinute(timelineCoord)) {
     res.status(403).json({ code: CENTURY_STATE_PROPERTY_CODE, error: CENTURY_STATE_PROPERTY_MSG });
+    return;
+  }
+  const heritageAnchor = await isStateHeritageCoord(timelineCoord);
+  if (heritageAnchor) {
+    res.status(403).json({ code: HERITAGE_LOCK_CODE, title: HERITAGE_LOCK_TITLE, eventName: heritageAnchor.title, error: HERITAGE_LOCK_MSG });
     return;
   }
 

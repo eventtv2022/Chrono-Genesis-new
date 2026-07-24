@@ -270,7 +270,13 @@ export function Admin() {
   const [citizens, setCitizens] = useState<AdminCitizen[]>([]);
   const [transactions, setTransactions] = useState<AdminTx[]>([]);
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<"overview" | "citizens" | "transactions" | "emit" | "transfer" | "treasury">("overview");
+  const [tab, setTab] = useState<"overview" | "citizens" | "transactions" | "emit" | "transfer" | "treasury" | "heritage">("overview");
+  const [heritageRows, setHeritageRows] = useState<{ id: number; timelineCoord: string; category: string; title: string; description: string }[]>([]);
+  const [heritageTotal, setHeritageTotal] = useState(0);
+  const [heritageCategory, setHeritageCategory] = useState("ALL");
+  const [heritageQ, setHeritageQ] = useState("");
+  const [heritageLoading, setHeritageLoading] = useState(false);
+  const [heritageSeeding, setHeritageSeeding] = useState(false);
   const [showEmitModal, setShowEmitModal] = useState(false);
 
   useEffect(() => { document.title = "Администратор | TimeNation"; }, []);
@@ -317,6 +323,7 @@ export function Admin() {
   const TABS = [
     { id: "overview",      label: "Обзор" },
     { id: "treasury",      label: "🏦 Казначейство" },
+    { id: "heritage",      label: "🏛️ Хроно-Реестр" },
     { id: "citizens",      label: "Граждане" },
     { id: "transactions",  label: "Транзакции" },
     { id: "emit",          label: "Эмиссия" },
@@ -605,6 +612,151 @@ export function Admin() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* HERITAGE REGISTRY */}
+        {tab === "heritage" && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-foreground font-mono">🏛️ Государственный Хроно-Реестр</h2>
+                <p className="text-xs text-muted-foreground font-mono mt-0.5">Неотчуждаемые минуты истории человечества · всего: {heritageTotal}</p>
+              </div>
+              <button
+                className="ml-auto px-4 py-2 text-xs font-mono bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-lg hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+                disabled={heritageSeeding}
+                onClick={async () => {
+                  setHeritageSeeding(true);
+                  try {
+                    const r = await fetch("/api/admin/heritage/seed", { method: "POST", headers: authHeaders });
+                    const d = await r.json() as { total?: number; inserted?: number };
+                    setHeritageTotal(d.total ?? 0);
+                    // reload rows
+                    const rows = await fetch(`/api/heritage?limit=100&category=${heritageCategory}`, { headers: authHeaders }).then(r2 => r2.json()) as { total: number; rows: typeof heritageRows };
+                    setHeritageRows(rows.rows ?? []);
+                    setHeritageTotal(rows.total ?? 0);
+                  } finally { setHeritageSeeding(false); }
+                }}
+              >
+                {heritageSeeding ? "Заполняю…" : "⚡ Заполнить реестр (1000)"}
+              </button>
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap gap-2 items-center">
+              {["ALL","SPACE","TECH_INNOVATION","SCIENCE","WORLD_HISTORY","CULTURE_ARTS","SPORTS","CENTURY_BOUNDARY","YEAR_BOUNDARY"].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setHeritageCategory(cat);
+                    setHeritageLoading(true);
+                    void fetch(`/api/heritage?category=${cat}&q=${heritageQ}&limit=100`, { headers: authHeaders })
+                      .then(r => r.json())
+                      .then((d: { total: number; rows: typeof heritageRows }) => { setHeritageRows(d.rows); setHeritageTotal(d.total); })
+                      .finally(() => setHeritageLoading(false));
+                  }}
+                  className={`px-3 py-1 text-xs font-mono rounded-full border transition-colors ${heritageCategory === cat ? "bg-primary/20 border-primary text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+                >
+                  {cat === "ALL" ? "Все" : cat === "YEAR_BOUNDARY" ? "Год. рубеж" : cat === "CENTURY_BOUNDARY" ? "Вековой рубеж" : cat.replace("_"," ")}
+                </button>
+              ))}
+              <input
+                className="ml-auto px-3 py-1.5 text-xs font-mono rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                placeholder="Поиск…"
+                value={heritageQ}
+                onChange={e => {
+                  const q = e.target.value;
+                  setHeritageQ(q);
+                  clearTimeout((window as unknown as { _hTimer?: number })._hTimer);
+                  (window as unknown as { _hTimer?: number })._hTimer = window.setTimeout(() => {
+                    setHeritageLoading(true);
+                    void fetch(`/api/heritage?category=${heritageCategory}&q=${q}&limit=100`, { headers: authHeaders })
+                      .then(r => r.json())
+                      .then((d: { total: number; rows: typeof heritageRows }) => { setHeritageRows(d.rows); setHeritageTotal(d.total); })
+                      .finally(() => setHeritageLoading(false));
+                  }, 400);
+                }}
+              />
+            </div>
+
+            {/* Load button if no data */}
+            {heritageRows.length === 0 && !heritageLoading && (
+              <div className="text-center py-10">
+                <p className="text-muted-foreground text-sm font-mono mb-4">Реестр пуст — нажмите «Заполнить реестр» или загрузите данные</p>
+                <button
+                  className="px-4 py-2 text-sm font-mono bg-card border border-border rounded-lg text-foreground hover:border-primary transition-colors"
+                  onClick={() => {
+                    setHeritageLoading(true);
+                    void fetch(`/api/heritage?category=${heritageCategory}&limit=100`, { headers: authHeaders })
+                      .then(r => r.json())
+                      .then((d: { total: number; rows: typeof heritageRows }) => { setHeritageRows(d.rows); setHeritageTotal(d.total); })
+                      .finally(() => setHeritageLoading(false));
+                  }}
+                >
+                  Загрузить реестр
+                </button>
+              </div>
+            )}
+
+            {heritageLoading && <div className="text-center py-6 text-muted-foreground text-sm font-mono">Загружаю…</div>}
+
+            {/* Table */}
+            {heritageRows.length > 0 && (
+              <div className="bg-card border border-border rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs font-mono">
+                    <thead>
+                      <tr className="text-muted-foreground uppercase tracking-wider border-b border-border bg-secondary/30">
+                        <th className="text-left px-4 py-2.5">Координата</th>
+                        <th className="text-left px-4 py-2.5">Категория</th>
+                        <th className="text-left px-4 py-2.5">Событие</th>
+                        <th className="text-left px-4 py-2.5 hidden md:table-cell">Описание</th>
+                        <th className="text-center px-4 py-2.5">Статус</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/30">
+                      {heritageRows.map(row => {
+                        const c = row.timelineCoord;
+                        const label = c.length === 12
+                          ? `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)} ${c.slice(8,10)}:${c.slice(10,12)}`
+                          : c;
+                        const catColor: Record<string, string> = {
+                          SPACE:            "bg-blue-500/20 text-blue-300",
+                          TECH_INNOVATION:  "bg-purple-500/20 text-purple-300",
+                          SCIENCE:          "bg-emerald-500/20 text-emerald-300",
+                          WORLD_HISTORY:    "bg-red-500/20 text-red-300",
+                          CULTURE_ARTS:     "bg-pink-500/20 text-pink-300",
+                          SPORTS:           "bg-orange-500/20 text-orange-300",
+                          CENTURY_BOUNDARY: "bg-amber-500/20 text-amber-300",
+                          YEAR_BOUNDARY:    "bg-zinc-500/20 text-zinc-400",
+                        };
+                        return (
+                          <tr key={row.id} className="hover:bg-secondary/20 transition-colors">
+                            <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">{label}</td>
+                            <td className="px-4 py-2">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${catColor[row.category] ?? "bg-zinc-500/20 text-zinc-400"}`}>
+                                {row.category.replace("_"," ")}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-foreground max-w-[200px] truncate">{row.title}</td>
+                            <td className="px-4 py-2 text-muted-foreground max-w-[240px] truncate hidden md:table-cell">{row.description}</td>
+                            <td className="px-4 py-2 text-center">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300">🔒 Защищено</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {heritageTotal > heritageRows.length && (
+                  <div className="px-4 py-2.5 border-t border-border text-xs text-muted-foreground font-mono text-right">
+                    Показано {heritageRows.length} из {heritageTotal} записей
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { logTimelineAnchorToSheets } from "../lib/googleSheets";
 import { sendTransactionNotification } from "../services/telegramService";
 import { isCenturyBoundaryMinute, CENTURY_STATE_PROPERTY_CODE, CENTURY_STATE_PROPERTY_MSG } from "../lib/centuryGuard";
+import { isStateHeritageCoord, HERITAGE_LOCK_CODE, HERITAGE_LOCK_TITLE, HERITAGE_LOCK_MSG } from "../lib/heritageGuard";
 
 const router: IRouter = Router();
 
@@ -61,6 +62,18 @@ router.post("/timeline/anchor", async (req, res): Promise<void> => {
   // 🏛️ Century boundary minutes are Non-Transferable State Property
   if (isCenturyBoundaryMinute(timelineCoord)) {
     res.status(403).json({ code: CENTURY_STATE_PROPERTY_CODE, error: CENTURY_STATE_PROPERTY_MSG });
+    return;
+  }
+
+  // 🏛️ Heritage Registry check
+  const heritage = await isStateHeritageCoord(timelineCoord);
+  if (heritage) {
+    res.status(403).json({
+      code: HERITAGE_LOCK_CODE,
+      title: HERITAGE_LOCK_TITLE,
+      eventName: heritage.title,
+      error: HERITAGE_LOCK_MSG,
+    });
     return;
   }
 
