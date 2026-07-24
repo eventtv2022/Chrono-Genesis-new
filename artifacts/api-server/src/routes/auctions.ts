@@ -6,6 +6,7 @@ import { z } from "zod";
 import { logger } from "../lib/logger";
 import { requireAuth } from "../middleware/auth";
 import { notifyTaxCollected } from "../services/telegramService";
+import { getOnlineCitizenIds, pushToCitizen } from "../services/socialAlarmWs";
 
 const router: IRouter = Router();
 
@@ -81,11 +82,13 @@ router.post("/auctions/:id/bid", requireAuth, async (req, res): Promise<void> =>
   if (isNaN(id)) { res.status(400).json({ error: "Invalid auction ID" }); return; }
 
   const parsed = BidBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (!parsed.success) { res.status(400).json({ error: "Некорректная ставка" }); return; }
 
-  const buyerId = req.citizen!.id;
+  const buyer  = req.citizen!;
+  const buyerId = buyer.id;
   const { bid } = parsed.data;
 
+  // ── Fetch auction ────────────────────────────────────────────────────────
   const [auction] = await db
     .select()
     .from(auctionsTable)
@@ -93,20 +96,53 @@ router.post("/auctions/:id/bid", requireAuth, async (req, res): Promise<void> =>
     .limit(1);
 
   if (!auction) { res.status(404).json({ error: "Активный аукцион не найден" }); return; }
-  if (new Date() > auction.endsAt) { res.status(400).json({ error: "Аукцион истёк" }); return; }
+  if (new Date() > auction.endsAt) { res.status(400).json({ error: "Аукцион уже завершён" }); return; }
   if (auction.sellerId === buyerId) { res.status(400).json({ error: "Нельзя делать ставку на собственный лот" }); return; }
 
   const minBid = auction.currentBid ?? auction.startingPrice;
   if (bid <= minBid) {
-    res.status(400).json({ error: `Ставка должна быть выше ${minBid}` });
+    res.status(400).json({ error: `Ставка должна быть выше текущей (${minBid.toFixed(2)} Д)` });
     return;
   }
 
-  await db
-    .update(auctionsTable)
-    .set({ currentBid: bid, buyerId })
-    .where(eq(auctionsTable.id, id));
+  // ── Ancestral Minute check: buyer must keep at least 1 Д ────────────────
+  if (buyer.balanceMinutes - bid < 1) {
+    res.status(400).json({ error: `Недостаточно средств. Ставка ${bid.toFixed(2)} Д превышает доступный баланс (${Math.max(0, buyer.balanceMinutes - 1).toFixed(2)} Д)` });
+    return;
+  }
 
+  // ── Atomic update inside a transaction ──────────────────────────────────
+  try {
+    await db.transaction(async (tx) => {
+      // Re-read auction inside tx to avoid race conditions
+      const [fresh] = await tx
+        .select({ currentBid: auctionsTable.currentBid, startingPrice: auctionsTable.startingPrice, status: auctionsTable.status })
+        .from(auctionsTable)
+        .where(eq(auctionsTable.id, id))
+        .limit(1);
+
+      if (!fresh || fresh.status !== "active") throw new Error("Аукцион уже завершён");
+      const freshMin = fresh.currentBid ?? fresh.startingPrice;
+      if (bid <= freshMin) throw new Error(`Ставка должна быть выше текущей (${freshMin.toFixed(2)} Д)`);
+
+      await tx
+        .update(auctionsTable)
+        .set({ currentBid: bid, buyerId })
+        .where(eq(auctionsTable.id, id));
+    });
+  } catch (err: unknown) {
+    const msg = (err as { message?: string }).message ?? "Ошибка при размещении ставки";
+    res.status(400).json({ error: msg });
+    return;
+  }
+
+  // ── Broadcast real-time bid update to all connected clients ─────────────
+  const onlineIds = getOnlineCitizenIds();
+  for (const cid of onlineIds) {
+    pushToCitizen(cid, { type: "auction_bid_updated", auctionId: id, currentBid: bid, buyerId });
+  }
+
+  req.log.info({ auctionId: id, buyerId, bid }, "Auction bid placed");
   res.json({ ok: true, currentBid: bid, buyerId });
 });
 

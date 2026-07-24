@@ -224,18 +224,36 @@ export default function AuctionsScreen() {
             <Text style={styles.modalSub}>{bidModal?.amountDarmins} Д · {bidModal?.sellerName}</Text>
             <Text style={styles.bidCurrentLabel}>{t.auc_current_bid}: {(bidModal?.currentBid ?? bidModal?.startingPrice ?? 0).toFixed(2)} Д</Text>
             <TextInput style={styles.input} placeholder={t.auc_bid_ph} placeholderTextColor={colors.mutedForeground}
-              value={bidAmount} onChangeText={setBidAmount} keyboardType="decimal-pad" />
+              value={bidAmount} onChangeText={setBidAmount} keyboardType="decimal-pad" autoFocus />
             <TouchableOpacity
               style={[styles.submitBtn, bidMutation.isPending && { opacity: 0.6 }]}
-              onPress={() => bidModal && bidMutation.mutate({ auctionId: bidModal.id, bid: parseFloat(bidAmount) })}
-              disabled={bidMutation.isPending || !bidAmount}
+              onPress={() => {
+                if (!bidModal) return;
+                const numericBid = parseFloat(bidAmount);
+                const minBid = bidModal.currentBid ?? bidModal.startingPrice;
+                if (isNaN(numericBid) || numericBid <= 0) {
+                  Alert.alert("⚠️", "Введите корректную сумму ставки");
+                  return;
+                }
+                if (numericBid <= minBid) {
+                  Alert.alert("⚠️", `Ставка должна быть больше текущей (${minBid.toFixed(2)} Д)`);
+                  return;
+                }
+                const balance = citizen?.balanceMinutes ?? 0;
+                if (balance - numericBid < 1) {
+                  Alert.alert("⚠️", `Недостаточно средств. Доступно: ${Math.max(0, balance - 1).toFixed(2)} Д`);
+                  return;
+                }
+                bidMutation.mutate({ auctionId: bidModal.id, bid: numericBid });
+              }}
+              disabled={bidMutation.isPending || !bidAmount.trim()}
               activeOpacity={0.8}
             >
               {bidMutation.isPending
                 ? <ActivityIndicator color={colors.primaryForeground} />
                 : <Text style={styles.submitBtnText}>{t.auc_bid_confirm}</Text>}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelBtn} onPress={() => setBidModal(null)} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setBidModal(null); setBidAmount(""); }} activeOpacity={0.8}>
               <Text style={styles.cancelBtnText}>{t.cancel}</Text>
             </TouchableOpacity>
           </View>

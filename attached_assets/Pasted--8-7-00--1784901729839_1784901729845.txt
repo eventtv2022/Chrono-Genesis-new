@@ -1,0 +1,76 @@
+Судя по скриншоту, форма ввода ставки заполнена (введено «8» при текущей «7.00 Д»), но при нажатии на кнопку **«Подтвердить ставку»** ничего не происходит.
+
+Чаще всего в таких модулях это вызвано одной из трёх причин:
+
+1. **Валидация типов (Type Mismatch)**: Инпут отдаёт строку (`"8"`), а сервер или функция обработки ожидает число (`number`), из-за чего обработчик падает до отправки запроса.
+2. **Отсутствие валидации минимального шага/баланса**: Сервер или клиент тишком блокируют ставку, не выводя пользователю сообщение об ошибке (`toast` / `alert`).
+3. **Отсутствие или зависание `onSubmit` / `onClick**`: На кнопке «Подтвердить ставку» висит заблокированное состояние `disabled` либо необработанный `async/await` без `try/catch`.
+
+Ниже готовый баг-фикс промпт для Replit, который исправит отправку ставки и добавит наглядные уведомления об ошибках.
+
+---
+
+## 🚀 Промпт для Replit: Исправление подтверждения ставки на аукционе
+
+```markdown
+# BUGFIX: "Подтвердить ставку" (Confirm Bid) Button Unresponsive in Auction Modal
+
+## PROBLEM DESCRIPTION
+In the Auction Bid Modal, entering a valid new bid (e.g., 8 D when current is 7.00 D) and clicking "Подтвердить ставку" fails to submit the request, freezes, or produces no response/feedback in the UI.
+
+---
+
+## CAUSES & REQUIRED FIXES
+
+### 1. Form Handling & Data Parsing (`BidModal.tsx`)
+- Ensure the input value is correctly parsed from `string` to `number` before validation or sending to API:
+  ```ts
+  const numericBid = parseFloat(bidInput);
+  if (isNaN(numericBid) || numericBid <= currentBid) {
+    toast.error(`Ставка должна быть больше текущей (${currentBid} Д)`);
+    return;
+  }
+
+```
+
+### 2. Missing Error Toast / Catch Block (`POST /api/auctions/:id/bid`)
+
+* Wrap the API call in a `try/catch` block.
+* If the server rejects the bid (e.g., due to insufficient balance, rule of 1.0 Ancestral Minute, or out-of-date auction status), display the exact server error message via Toast notification instead of failing silently.
+
+### 3. Button Loading & Pending State Fix
+
+* Ensure the submit button isn't stuck in a `disabled` or transparent layer state (`pointer-events: none`).
+* Add a visual loading spinner inside the button while `isSubmitting` is true:
+```tsx
+<button 
+  onClick={handleConfirmBid}
+  disabled={isSubmitting}
+  className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 rounded-xl disabled:opacity-50"
+>
+  {isSubmitting ? "Отправка..." : "Подтвердить ставку"}
+</button>
+
+```
+
+
+
+### 4. API & Escrow Balance Validation (`/api/auctions/:id/bid`)
+
+On the backend:
+
+* Check that `user.balanceMinutes - numericBid >= 1.0` (Ancestral Minute Limit).
+* Atomically update `currentBid` and `currentWinnerId` in the DB inside a transaction.
+* Emit a real-time WebSocket event (`AUCTION_BID_UPDATED`) to refresh all connected clients immediately.
+
+---
+
+## EXPECTED BEHAVIOR
+
+* Clicking "Подтвердить ставку" triggers an immediate API request with clear loading feedback.
+* On success: Modal closes, the new bid (8.00 D) displays in the auction list, and a success sound/toast is triggered.
+* On failure: An explicit error message (e.g. "Недостаточно средств") is shown directly on the screen.
+
+```
+
+```
