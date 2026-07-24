@@ -16,7 +16,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
+// Type-only import — compile-time, no runtime crash in Expo Go
+import type * as NotificationsNS from "expo-notifications";
 import { Audio } from "expo-av";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
@@ -24,6 +26,16 @@ import { useLanguage } from "@/context/LanguageContext";
 import { LogoBrand } from "@/components/LogoBrand";
 
 const BASE_URL = getBaseUrl();
+
+// ── expo-notifications: guarded lazy load (removed from Expo Go in SDK 53) ───
+const isExpoGo = Constants.appOwnership === "expo";
+// `Notifications` is null in Expo Go and on web; non-null on native dev/prod builds.
+let Notifications: typeof NotificationsNS | null = null;
+if (!isExpoGo && Platform.OS !== "web") {
+  try {
+    Notifications = require("expo-notifications") as typeof NotificationsNS;
+  } catch { /* not available in this environment */ }
+}
 
 // ── World clock zones — 24 UTC offsets ────────────────────────────────────────
 
@@ -631,9 +643,9 @@ export default function TimeUtilsScreen() {
     });
   };
 
-  // ── Notification setup (native only) ────────────────────────────────────────
+  // ── Notification setup (native only, skipped in Expo Go SDK 53+) ────────────
   useEffect(() => {
-    if (Platform.OS === "web") return;
+    if (Platform.OS === "web" || !Notifications) return;
 
     // Show banner + play sound even when app is foregrounded
     Notifications.setNotificationHandler({
@@ -674,7 +686,7 @@ export default function TimeUtilsScreen() {
 
   // ── Schedule / cancel system notifications (native) ─────────────────────────
   const syncScheduledAlarms = useCallback(async () => {
-    if (Platform.OS === "web") return;
+    if (Platform.OS === "web" || !Notifications) return;
 
     // Cancel all previously scheduled alarm notifications
     const existing = await Notifications.getAllScheduledNotificationsAsync();
@@ -707,7 +719,7 @@ export default function TimeUtilsScreen() {
             hour: alarmHour,
             minute: alarmMinute,
             repeats: true,
-          } as Notifications.WeeklyTriggerInput,
+          } as NotificationsNS.WeeklyTriggerInput,
         })
       )
     );

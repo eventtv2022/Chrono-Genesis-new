@@ -1,0 +1,87 @@
+Суть ошибки видна прямо на красном экране:
+
+> **`expo-notifications: Android Push notifications ... was removed from Expo Go with the release of SDK 53.`**
+
+### 💡 В чём проблема?
+
+Начиная с **Expo SDK 53**, команда Expo полностью **удалила поддержку push-уведомлений из приложения Expo Go** для Android.
+
+Как только код делает `import * as Notifications from 'expo-notifications'` в файле `timeutils.tsx` (строка 19), Expo Go на смартфоне моментально падаeт с этой фатальной ошибкой (`Uncaught Error`).
+
+---
+
+### 🛠️ Как это исправить?
+
+Чтобы приложение снова работало в **Expo Go** без сбоев, необходимо сделать **безопасный импорт (safe wrapper)** или временно приглушить/обернуть инициализацию уведомлений, если приложение запущено внутри Expo Go (`Constants.appOwnership === 'expo'`).
+
+Отправьте Replit этот готовый промпт для автоматического исправления:
+
+---
+
+## 🚀 Промпт для Replit: Фикс падения Expo Go из-за expo-notifications (SDK 53)
+
+```markdown
+# BUGFIX: Crash in Expo Go due to expo-notifications in SDK 53/54
+
+## CRITICAL ERROR DETAILS
+`Uncaught Error: expo-notifications: Android Push notifications functionality provided by expo-notifications was removed from Expo Go with the release of SDK 53.`
+Error originates at `timeutils.tsx:19` (and any other files importing `expo-notifications`).
+
+---
+
+## REQUIRED FIX
+
+### 1. Safely Handle Notifications in `timeutils.tsx` and Notification Helpers
+Check if the execution environment is Expo Go before calling or initializing Expo Notifications.
+
+Update `timeutils.tsx` (and any notification service module):
+
+```ts
+import Constants from 'expo-constants';
+import * as Device from 'expo-device';
+
+// Check if app is running inside Expo Go client
+export const isExpoGo = Constants.appOwnership === 'expo';
+
+let Notifications: typeof import('expo-notifications') | null = null;
+
+// Only load expo-notifications dynamically if NOT running in Expo Go OR wrap calls safely
+if (!isExpoGo) {
+  try {
+    Notifications = require('expo-notifications');
+  } catch (e) {
+    console.warn('Notifications module could not be loaded:', e);
+  }
+}
+
+// Wrapper for scheduling or pushing local/remote notifications
+export async function safeScheduleNotification(options: any) {
+  if (isExpoGo) {
+    console.log('[Expo Go Guard] Notification suppressed in Expo Go mode:', options);
+    return;
+  }
+  if (Notifications) {
+    return await Notifications.scheduleNotificationAsync(options);
+  }
+}
+
+```
+
+### 2. Update Global Listeners / Registration Logic
+
+Find all occurrences of `Notifications.addPushTokenListener`, `getExpoPushTokenAsync`, or `setNotificationHandler` across the codebase (e.g. `App.tsx` or notification contexts):
+
+* Wrap all setup calls with `if (!isExpoGo) { ... }`.
+* Prevent `getExpoPushTokenAsync()` from firing automatically inside Expo Go.
+
+---
+
+## VERIFICATION CHECK
+
+1. Reload Expo Go on the Android device.
+2. The red error screen should disappear immediately.
+3. The app should load normally without throwing the Expo SDK 53 notification uncaught error.
+
+```
+
+```
