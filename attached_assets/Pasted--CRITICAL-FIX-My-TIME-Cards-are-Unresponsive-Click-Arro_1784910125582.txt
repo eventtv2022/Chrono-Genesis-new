@@ -1,0 +1,64 @@
+# CRITICAL FIX: "My TIME" Cards are Unresponsive (Click Arrow ">" Not Working)
+
+## ISSUE DIAGNOSIS
+In `MyTimeModal.tsx` (or `MyTimeCard.tsx`), the right arrow icon (`chevron-right` / `>`) is rendered purely as a static SVG icon without an `onClick` event, or the parent `div` lacks an interactive cursor/handler. Users click the arrow expecting action buttons (like "Выставить на аукцион"), but nothing happens.
+
+---
+
+## REQUIRED CODE CHANGES
+
+### 1. Refactor Card Action Area (`MyTimeModal.tsx`)
+DO NOT use decorative right arrows that do nothing. Instead, make the entire card clickable OR render explicit action buttons inside each row item.
+
+Replace the item renderer logic with the following pattern:
+
+```tsx
+// Inside MyTimeModal component where time slots are mapped:
+{timeSlots.map((slot) => {
+  const isAuctioned = slot.status === 'AUCTIONED' || slot.isListedOnAuction;
+
+  return (
+    <div 
+      key={slot.id} 
+      className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between hover:border-amber-500/50 transition-all cursor-pointer mb-3"
+      onClick={() => handleSelectSlot(slot)} // Make the whole row clickable
+    >
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <span className="text-white font-bold text-base font-mono">{slot.formattedDate}</span>
+          {isAuctioned && (
+            <span className="bg-amber-500/20 text-amber-400 text-xs px-2 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
+              🏷️ На торгах
+            </span>
+          )}
+        </div>
+        <span className="text-zinc-500 text-xs font-mono">{slot.code}</span>
+      </div>
+
+      {/* EXPLICIT ACTION BUTTON (Replacing dummy arrow) */}
+      <div className="flex items-center gap-2">
+        {!isAuctioned ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation(); // Avoid triggering card click
+              handleOpenAuctionModal(slot);
+            }}
+            className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-black font-bold text-xs px-3 py-2 rounded-xl transition-all shadow-md"
+          >
+            🏛️ Продать
+          </button>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleViewAuctionDetails(slot);
+            }}
+            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs px-3 py-2 rounded-xl transition-all"
+          >
+            Смотреть
+          </button>
+        )}
+      </div>
+    </div>
+  );
+})}

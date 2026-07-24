@@ -1137,11 +1137,16 @@ export default function TimelineScreen() {
                 renderItem={({ item: a }) => {
                   const c = a.timelineCoord;
                   const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)}  ${c.slice(8,10)}:${c.slice(10,12)}`;
+                  const onOpen = () => { setSelectedAnchor(a); setShowAnchorActions(true); };
                   return (
-                    <TouchableOpacity
-                      activeOpacity={0.75}
-                      style={[styles.maRow, { backgroundColor: colors.card, borderColor: a.status === "on_auction" ? "#e6952255" : colors.border }]}
-                      onPress={() => { setSelectedAnchor(a); setShowAnchorActions(true); }}
+                    <Pressable
+                      style={({ pressed }) => [styles.maRow, {
+                        backgroundColor: colors.card,
+                        borderColor: a.status === "on_auction" ? "#e6952255" : colors.border,
+                        opacity: pressed ? 0.72 : 1,
+                        cursor: "pointer" as never,
+                      }]}
+                      onPress={onOpen}
                     >
                       <View style={styles.maRowLeft}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -1159,15 +1164,14 @@ export default function TimelineScreen() {
                         </View>
                         <Text style={[styles.maCoordRaw, { color: colors.mutedForeground }]}>{c}</Text>
                       </View>
-                      <TouchableOpacity
-                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                        style={{ padding: 8, marginRight: -8 }}
-                        onPress={() => { setSelectedAnchor(a); setShowAnchorActions(true); }}
-                        activeOpacity={0.6}
+                      <Pressable
+                        hitSlop={16}
+                        style={{ paddingVertical: 10, paddingLeft: 16, paddingRight: 4, cursor: "pointer" as never }}
+                        onPress={onOpen}
                       >
-                        <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
-                      </TouchableOpacity>
-                    </TouchableOpacity>
+                        <Feather name="chevron-right" size={20} color={colors.primary} />
+                      </Pressable>
+                    </Pressable>
                   );
                 }}
               />
@@ -1188,50 +1192,52 @@ export default function TimelineScreen() {
                 keyExtractor={(s) => String(s.id)}
                 contentContainerStyle={styles.maList}
                 showsVerticalScrollIndicator={false}
-                renderItem={({ item: s }) => (
-                  <TouchableOpacity
-                    activeOpacity={0.75}
-                    style={[styles.maRow, {
-                      backgroundColor: colors.card,
-                      borderColor: s.isLocked ? "#f59e0b55" : s.isCapsuleSealed ? "#7c3aed55" : colors.border,
-                      cursor: "pointer" as never,
-                    }]}
-                    onPress={() => { setSelectedSlot(s); setShowSlotActions(true); }}
-                  >
-                    <View style={{ flex: 1 }}>
-                      {/* Location + badges row */}
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
-                        <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground, flexShrink: 1 }} numberOfLines={1}>{s.locationName}</Text>
-                        {s.isCapsuleSealed && (
-                          <View style={{ backgroundColor: "#7c3aed22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#7c3aed" }}>📜 Капсула</Text>
-                          </View>
-                        )}
-                        {s.isLocked && (
-                          <View style={{ backgroundColor: "#f59e0b22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🔥 Аукцион</Text>
-                          </View>
-                        )}
-                      </View>
-                      {/* Time marker */}
-                      <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{s.timeMarker}</Text>
-                      {/* Capsule title preview */}
-                      {s.isCapsuleSealed && s.capsuleTitle && (
-                        <Text style={{ fontSize: 11, color: "#7c3aed", marginTop: 2 }} numberOfLines={1}>📜 {s.capsuleTitle}</Text>
-                      )}
-                      {/* Event count */}
-                      <Text style={{ fontSize: 10, color: colors.mutedForeground, marginTop: 2 }}>{s.eventCount} событий</Text>
-                    </View>
-                    <TouchableOpacity
-                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                      style={{ padding: 8, marginRight: -8 }}
-                      onPress={() => { setSelectedSlot(s); setShowSlotActions(true); }}
-                      activeOpacity={0.6}
+                renderItem={({ item: s }) => {
+                  const onOpen = () => { setSelectedSlot(s); setShowSlotActions(true); };
+                  return (
+                    <Pressable
+                      style={({ pressed }) => [styles.maRow, {
+                        backgroundColor: colors.card,
+                        borderColor: s.isLocked ? "#f59e0b55" : s.isCapsuleSealed ? "#7c3aed55" : colors.border,
+                        opacity: pressed ? 0.72 : 1,
+                        cursor: "pointer" as never,
+                      }]}
+                      onPress={onOpen}
                     >
-                      <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                )}
+                      <View style={{ flex: 1 }}>
+                        {/* Location + badges row */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground, flexShrink: 1 }} numberOfLines={1}>{s.locationName}</Text>
+                          {s.isCapsuleSealed && (
+                            <View style={{ backgroundColor: "#7c3aed22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#7c3aed" }}>📜 Капсула</Text>
+                            </View>
+                          )}
+                          {s.isLocked && (
+                            <View style={{ backgroundColor: "#f59e0b22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🔥 Аукцион</Text>
+                            </View>
+                          )}
+                        </View>
+                        {/* Time marker */}
+                        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{s.timeMarker}</Text>
+                        {/* Capsule title preview */}
+                        {s.isCapsuleSealed && s.capsuleTitle && (
+                          <Text style={{ fontSize: 11, color: "#7c3aed", marginTop: 2 }} numberOfLines={1}>📜 {s.capsuleTitle}</Text>
+                        )}
+                        {/* Event count */}
+                        <Text style={{ fontSize: 10, color: colors.mutedForeground, marginTop: 2 }}>{s.eventCount} событий</Text>
+                      </View>
+                      <Pressable
+                        hitSlop={16}
+                        style={{ paddingVertical: 10, paddingLeft: 16, paddingRight: 4, cursor: "pointer" as never }}
+                        onPress={onOpen}
+                      >
+                        <Feather name="chevron-right" size={20} color={colors.primary} />
+                      </Pressable>
+                    </Pressable>
+                  );
+                }}
               />
             )
           )}
