@@ -171,7 +171,7 @@ export default function AuctionsScreen() {
               )}
               {isAnchor && (
                 <View style={[styles.slotBadge, { backgroundColor: "#7c3aed18", borderColor: "#7c3aed44" }]}>
-                  <Text style={[styles.slotBadgeText, { color: "#7c3aed" }]}>⏱ Временная координата</Text>
+                  <Text style={[styles.slotBadgeText, { color: "#7c3aed" }]}>⏱ Точка на таймлайне истории</Text>
                 </View>
               )}
               <View style={styles.cardTop}>
