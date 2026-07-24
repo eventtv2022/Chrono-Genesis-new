@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { citizensTable, timelineAnchorsTable, timelineCapsulesTable } from "@workspace/db";
 import { z } from "zod";
@@ -206,11 +206,32 @@ router.get("/timeline/my-anchors", async (req, res): Promise<void> => {
     .where(eq(timelineAnchorsTable.citizenId, citizenId))
     .orderBy(timelineAnchorsTable.timelineCoord);
 
+  // Fetch the latest capsule text for each anchor in one query
+  const coords = anchors.map((a) => a.timelineCoord);
+  const capsuleMap = new Map<string, string>();
+  if (coords.length > 0) {
+    const capsules = await db
+      .select()
+      .from(timelineCapsulesTable)
+      .where(
+        and(
+          eq(timelineCapsulesTable.citizenId, citizenId),
+          inArray(timelineCapsulesTable.timelineCoord, coords)
+        )
+      )
+      .orderBy(timelineCapsulesTable.createdAt);
+    // Keep the latest per coord (last wins since ordered ASC)
+    for (const cap of capsules) {
+      capsuleMap.set(cap.timelineCoord, cap.text);
+    }
+  }
+
   res.json(
     anchors.map((a) => ({
       timelineCoord: a.timelineCoord,
       status: a.status,
       createdAt: a.createdAt.toISOString(),
+      capsuleText: capsuleMap.get(a.timelineCoord) ?? null,
     }))
   );
 });
@@ -254,6 +275,16 @@ router.post("/timeline/capsule", async (req, res): Promise<void> => {
     res.status(403).json({ error: "Эта координата вам не принадлежит" });
     return;
   }
+
+  // Upsert: remove any existing capsule for this anchor, then insert fresh
+  await db
+    .delete(timelineCapsulesTable)
+    .where(
+      and(
+        eq(timelineCapsulesTable.citizenId, citizenId),
+        eq(timelineCapsulesTable.timelineCoord, timelineCoord)
+      )
+    );
 
   const [capsule] = await db
     .insert(timelineCapsulesTable)

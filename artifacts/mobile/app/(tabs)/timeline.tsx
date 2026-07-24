@@ -533,7 +533,7 @@ export default function TimelineScreen() {
   const [jumpMonth, setJumpMonth] = useState("");
   const [jumpDay, setJumpDay] = useState("");
   const [showMyAnchors, setShowMyAnchors] = useState(false);
-  const [selectedAnchor, setSelectedAnchor] = useState<{ timelineCoord: string; status: string; createdAt: string } | null>(null);
+  const [selectedAnchor, setSelectedAnchor] = useState<{ timelineCoord: string; status: string; createdAt: string; capsuleText: string | null } | null>(null);
   const [showAnchorActions, setShowAnchorActions] = useState(false);
   const [showCapsule, setShowCapsule] = useState(false);
   const [capsuleText, setCapsuleText] = useState("");
@@ -587,7 +587,7 @@ export default function TimelineScreen() {
   });
 
   const { data: myAnchors = [], refetch: refetchMyAnchors } = useQuery<
-    { timelineCoord: string; status: string; createdAt: string }[]
+    { timelineCoord: string; status: string; createdAt: string; capsuleText: string | null }[]
   >({
     queryKey: ["myAnchors", citizen?.id],
     queryFn: async () => {
@@ -938,7 +938,7 @@ export default function TimelineScreen() {
 
             <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => {
               setShowAnchorActions(false);
-              setTimeout(() => { setCapsuleText(""); setShowCapsule(true); }, 350);
+              setTimeout(() => { setCapsuleText(selectedAnchor?.capsuleText ?? ""); setShowCapsule(true); }, 350);
             }}>
               <View style={[styles.asIconBox, { backgroundColor: "#7c3aed22" }]}>
                 <Feather name="box" size={18} color="#7c3aed" />
@@ -1150,6 +1150,11 @@ export default function TimelineScreen() {
                           {isCenturyBoundaryCoord(c) && (
                             <View style={{ backgroundColor: "#f59e0b22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
                               <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🏛️ Фонд</Text>
+                            </View>
+                          )}
+                          {a.capsuleText && (
+                            <View style={{ backgroundColor: "#7c3aed22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#7c3aed" }}>📜 Капсула</Text>
                             </View>
                           )}
                         </View>
