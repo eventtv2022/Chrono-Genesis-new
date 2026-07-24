@@ -201,8 +201,8 @@ function SlotActionModal({ slot, visible, onClose, onCapsule, onAuction, onTimel
           </View>
 
           {/* Action: Capsule */}
-          <TouchableOpacity
-            style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 10 }}
+          <Pressable
+            style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 10, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never })}
             onPress={() => { onClose(); setTimeout(onCapsule, 350); }}
           >
             <View style={{ width: 42, height: 42, borderRadius: 11, backgroundColor: "#7c3aed22", alignItems: "center", justifyContent: "center" }}>
@@ -215,11 +215,11 @@ function SlotActionModal({ slot, visible, onClose, onCapsule, onAuction, onTimel
               </Text>
             </View>
             <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-          </TouchableOpacity>
+          </Pressable>
 
           {/* Action: Auction */}
-          <TouchableOpacity
-            style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: slot.isLocked ? "#f59e0b55" : colors.border, marginBottom: 10, opacity: slot.isLocked ? 0.6 : 1 }}
+          <Pressable
+            style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: slot.isLocked ? "#f59e0b55" : colors.border, marginBottom: 10, opacity: slot.isLocked ? 0.6 : pressed ? 0.7 : 1, cursor: "pointer" as never })}
             onPress={() => { if (slot.isLocked) { Alert.alert("🔥", "Слот уже выставлен на аукцион"); return; } onClose(); setTimeout(onAuction, 350); }}
           >
             <View style={{ width: 42, height: 42, borderRadius: 11, backgroundColor: "#f59e0b22", alignItems: "center", justifyContent: "center" }}>
@@ -232,11 +232,11 @@ function SlotActionModal({ slot, visible, onClose, onCapsule, onAuction, onTimel
               </Text>
             </View>
             {!slot.isLocked && <Feather name="chevron-right" size={16} color={colors.mutedForeground} />}
-          </TouchableOpacity>
+          </Pressable>
 
           {/* Action: Go to Timeline */}
-          <TouchableOpacity
-            style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 16 }}
+          <Pressable
+            style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 16, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never })}
             onPress={() => { onClose(); setTimeout(onTimeline, 350); }}
           >
             <View style={{ width: 42, height: 42, borderRadius: 11, backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }}>
@@ -247,11 +247,11 @@ function SlotActionModal({ slot, visible, onClose, onCapsule, onAuction, onTimel
               <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>Открыть временну́ю координату на карте</Text>
             </View>
             <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity style={{ alignItems: "center", paddingVertical: 10 }} onPress={onClose}>
+          <Pressable style={{ alignItems: "center", paddingVertical: 10, cursor: "pointer" as never }} onPress={onClose}>
             <Text style={{ fontSize: 15, color: colors.mutedForeground }}>Отмена</Text>
-          </TouchableOpacity>
+          </Pressable>
         </Pressable>
       </Pressable>
     </Modal>
@@ -373,28 +373,28 @@ function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colo
           <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Видимость</Text>
           <View style={{ flexDirection: "row", gap: 10, marginBottom: 24 }}>
             {(["public", "private"] as const).map(v => (
-              <TouchableOpacity
+              <Pressable
                 key={v}
-                style={{ flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: visibility === v ? colors.primary : colors.border, backgroundColor: visibility === v ? colors.primary + "18" : colors.card, alignItems: "center" }}
+                style={({ pressed }) => ({ flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: visibility === v ? colors.primary : colors.border, backgroundColor: visibility === v ? colors.primary + "18" : colors.card, alignItems: "center", opacity: pressed ? 0.7 : 1, cursor: "pointer" as never })}
                 onPress={() => setVisibility(v)}
               >
                 <Text style={{ fontSize: 14, fontWeight: "700", color: visibility === v ? colors.primary : colors.mutedForeground }}>
                   {v === "public" ? "🌐 Публичная" : "🔒 Приватная"}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             ))}
           </View>
 
           {/* Save button */}
-          <TouchableOpacity
-            style={{ backgroundColor: "#7c3aed", borderRadius: 14, paddingVertical: 15, alignItems: "center", opacity: saving ? 0.6 : 1 }}
+          <Pressable
+            style={({ pressed }) => ({ backgroundColor: "#7c3aed", borderRadius: 14, paddingVertical: 15, alignItems: "center", opacity: saving ? 0.6 : pressed ? 0.8 : 1, cursor: "pointer" as never })}
             disabled={saving}
             onPress={() => void handleSave()}
           >
             {saving
               ? <ActivityIndicator color="#fff" />
               : <Text style={{ fontSize: 16, fontWeight: "800", color: "#fff" }}>📜 Запечатать Капсулу</Text>}
-          </TouchableOpacity>
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
@@ -915,7 +915,7 @@ export default function TimelineScreen() {
               );
             })()}
 
-            <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() => {
+            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => {
               if (!selectedAnchor) return;
               const c = selectedAnchor.timelineCoord;
               setSelectedYear(parseInt(c.slice(0,4),10));
@@ -934,9 +934,9 @@ export default function TimelineScreen() {
                 <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_go_to_minute}</Text>
                 <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_open_timeline}</Text>
               </View>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() => {
+            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => {
               setShowAnchorActions(false);
               setTimeout(() => { setCapsuleText(""); setShowCapsule(true); }, 350);
             }}>
@@ -947,17 +947,15 @@ export default function TimelineScreen() {
                 <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_create_capsule}</Text>
                 <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_capsule_sub}</Text>
               </View>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() => {
+            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => {
               if (!selectedAnchor) return;
-              // 🏛️ Century boundary — cannot auction
               if (isCenturyBoundaryCoord(selectedAnchor.timelineCoord)) {
                 setShowAnchorActions(false);
                 setTimeout(() => setShowStateProperty(true), 350);
                 return;
               }
-              // Already on auction
               if (selectedAnchor.status === "on_auction") {
                 Alert.alert("🏷️", "Эта координата уже выставлена на аукцион");
                 return;
@@ -977,11 +975,9 @@ export default function TimelineScreen() {
                   <Text style={[styles.asSoonText, { color: "#e69522" }]}>На торгах</Text>
                 </View>
               )}
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() =>
-              Alert.alert(t.soon, t.tl_swap_free_sub)
-            }>
+            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => Alert.alert(t.soon, t.tl_swap_free_sub)}>
               <View style={[styles.asIconBox, { backgroundColor: "#0ea5e922" }]}>
                 <Feather name="refresh-cw" size={18} color="#0ea5e9" />
               </View>
@@ -990,11 +986,9 @@ export default function TimelineScreen() {
                 <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_swap_free_sub}</Text>
               </View>
               <View style={styles.asSoon}><Text style={styles.asSoonText}>{t.soon}</Text></View>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity style={[styles.asRow, { borderBottomColor: colors.border }]} onPress={() =>
-              Alert.alert(t.soon, t.tl_swap_occ_sub)
-            }>
+            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => Alert.alert(t.soon, t.tl_swap_occ_sub)}>
               <View style={[styles.asIconBox, { backgroundColor: "#e6394622" }]}>
                 <Feather name="users" size={18} color="#e63946" />
               </View>
@@ -1003,11 +997,11 @@ export default function TimelineScreen() {
                 <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_swap_occ_sub}</Text>
               </View>
               <View style={styles.asSoon}><Text style={styles.asSoonText}>{t.soon}</Text></View>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity style={styles.asCancel} onPress={() => setShowAnchorActions(false)}>
+            <Pressable style={({ pressed }) => [styles.asCancel, { opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => setShowAnchorActions(false)}>
               <Text style={[styles.asCancelText, { color: colors.mutedForeground }]}>{t.cancel}</Text>
-            </TouchableOpacity>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
