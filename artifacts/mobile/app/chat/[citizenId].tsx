@@ -52,6 +52,13 @@ interface PendingFile {
   mimeType: string;
 }
 
+interface PaidRateOfferMeta {
+  rate: number;
+  intervalMinutes: number;
+  offerStatus: "pending" | "accepted" | "declined";
+  dealId?: number;
+}
+
 interface RawMessage {
   id: number;
   from_citizen_id: number;
@@ -69,6 +76,7 @@ interface RawMessage {
   reply_sender_name: string | null;
   reply_content: string | null;
   attachments: AttachmentMeta[] | null;
+  metadata?: string | null; // JSON string
 }
 
 interface DecryptedMessage extends RawMessage {
@@ -142,6 +150,7 @@ export default function ConversationScreen() {
   const [tipToastText, setTipToastText] = useState<string>("");
 
   // ── Paid Consultation session state ───────────────────────────────────────
+  const [acceptingOfferId, setAcceptingOfferId] = useState<number | null>(null);
   const [consultModal, setConsultModal] = useState(false);
   const [proposeModal, setProposeModal] = useState(false);
   const [proposeRate, setProposeRate]   = useState("");
@@ -291,6 +300,7 @@ export default function ConversationScreen() {
   function decryptOne(m: RawMessage): DecryptedMessage {
     if (m.msg_type === "darmin_transfer") return { ...m, plaintext: `💸 ${m.darmin_amount ?? "?"} Д` };
     if (m.msg_type === "voice") return { ...m, plaintext: "__voice__" };
+    if (m.msg_type === "paid_rate_offer") return { ...m, plaintext: "__paid_offer__" };
     const sk = secretKeyRef.current;
     const pub = peerPubKeyRef.current;
     if (!sk || !pub) return { ...m, plaintext: "🔒" };
@@ -305,7 +315,7 @@ export default function ConversationScreen() {
     const pub = peerPubKeyRef.current;
     if (!sk || !pub) return prev;
     return prev.map((m) => {
-      if (m.msg_type === "darmin_transfer" || m.msg_type === "voice") return m;
+      if (m.msg_type === "darmin_transfer" || m.msg_type === "voice" || m.msg_type === "paid_rate_offer") return m;
       if (!m.plaintext.startsWith("🔒")) return m;
       const raw = decryptMsg(m.ciphertext, m.nonce, pub, sk);
       if (!raw) return m;
@@ -422,6 +432,32 @@ export default function ConversationScreen() {
         if (msg["type"] === "call:busy") {
           Alert.alert("Занято", `${peer?.name ?? peerName} сейчас в другом вызове`);
           cleanupCallState();
+        }
+
+        // ── Paid session events ──────────────────────────────────────────────
+        if (msg["type"] === "paid_session_started") {
+          const { messageId, rate, intervalMinutes } = msg as { messageId: number; rate: number; intervalMinutes: number; dealId: number; acceptorId: number; proposerId: number };
+          // Update the offer card to "accepted"
+          setMessages((prev) => prev.map((m) => {
+            if (m.id !== messageId) return m;
+            const meta: PaidRateOfferMeta = { rate, intervalMinutes, offerStatus: "accepted" };
+            return { ...m, metadata: JSON.stringify(meta) };
+          }));
+          // Start session timer for acceptor (the one who accepted pays)
+          setSessionActive(true);
+          setSessionStartMs(Date.now());
+          setSessionElapsedSec(0);
+        }
+
+        if (msg["type"] === "offer_declined") {
+          const { messageId } = msg as { messageId: number; declinerId: number };
+          setMessages((prev) => prev.map((m) => {
+            if (m.id !== messageId) return m;
+            try {
+              const meta: PaidRateOfferMeta = m.metadata ? { ...(JSON.parse(m.metadata) as PaidRateOfferMeta), offerStatus: "declined" } : { rate: 0, intervalMinutes: 15, offerStatus: "declined" };
+              return { ...m, metadata: JSON.stringify(meta) };
+            } catch { return m; }
+          }));
         }
       } catch { /* ignore */ }
     };
@@ -726,6 +762,41 @@ export default function ConversationScreen() {
     } finally {
       setTippingMsgId(null);
     }
+  }
+
+  // ── Paid session accept / decline ─────────────────────────────────────────
+  async function acceptOffer(messageId: number) {
+    if (acceptingOfferId !== null) return;
+    setAcceptingOfferId(messageId);
+    try {
+      const hdrs = await getStoredAuthHeaders();
+      const res = await fetch(`${BASE_URL}/api/chat/paid-session/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...hdrs },
+        body: JSON.stringify({ messageId }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        Alert.alert("Ошибка", err.error ?? "Не удалось принять оффер");
+        return;
+      }
+      // WS event handles UI update
+    } catch {
+      Alert.alert("Ошибка", "Сетевая ошибка");
+    } finally {
+      setAcceptingOfferId(null);
+    }
+  }
+
+  async function declineOffer(messageId: number) {
+    try {
+      const hdrs = await getStoredAuthHeaders();
+      await fetch(`${BASE_URL}/api/chat/paid-session/decline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...hdrs },
+        body: JSON.stringify({ messageId }),
+      });
+    } catch { /* silent */ }
   }
 
   // ── Reactions ─────────────────────────────────────────────────────────────
@@ -1166,6 +1237,7 @@ export default function ConversationScreen() {
             const isMine = Number(m.from_citizen_id) === Number(citizen.id);
             const isDarmin = m.msg_type === "darmin_transfer";
             const isVoice = m.msg_type === "voice";
+            const isPaidOffer = m.msg_type === "paid_rate_offer";
             const isForwarded = !!m.forwarded_from_id;
             const aggReactions = aggregateReactions(m.reactions ?? []);
 
@@ -1188,7 +1260,53 @@ export default function ConversationScreen() {
                       <Text style={s.darminAmt}>{m.darmin_amount ?? "?"} Д</Text>
                       <Text style={s.darminLbl}>{isMine ? "Отправлено" : "Получено"}</Text>
                     </View>
-                  ) : isVoice ? (
+                  ) : isPaidOffer ? (() => {
+                    let offerMeta: PaidRateOfferMeta = { rate: 0, intervalMinutes: 15, offerStatus: "pending" };
+                    try { if (m.metadata) offerMeta = JSON.parse(m.metadata) as PaidRateOfferMeta; } catch { /* */ }
+                    const statusColor = offerMeta.offerStatus === "accepted" ? "#4CAF50" : offerMeta.offerStatus === "declined" ? "#E05050" : C.muted;
+                    const statusLabel = offerMeta.offerStatus === "accepted" ? "✓ Принято" : offerMeta.offerStatus === "declined" ? "✗ Отклонено" : "Ожидает ответа...";
+                    return (
+                      <View style={s.offerCard}>
+                        <View style={s.offerHeader}>
+                          <View style={s.offerIconWrap}>
+                            <Feather name="clock" size={16} color={C.primary} />
+                          </View>
+                          <Text style={s.offerTitle}>Платная консультация</Text>
+                        </View>
+                        <View style={s.offerRateRow}>
+                          <Text style={s.offerRate}>{offerMeta.rate} Д</Text>
+                          <Text style={s.offerRateSub}> / {offerMeta.intervalMinutes} мин</Text>
+                        </View>
+                        {offerMeta.offerStatus === "pending" && !isMine ? (
+                          <View style={s.offerActions}>
+                            <TouchableOpacity
+                              style={s.offerAcceptBtn}
+                              onPress={() => acceptOffer(m.id)}
+                              disabled={acceptingOfferId !== null}
+                              activeOpacity={0.8}
+                            >
+                              {acceptingOfferId === m.id
+                                ? <ActivityIndicator size="small" color="#0A0A0F" />
+                                : <Text style={s.offerAcceptText}>Принять ({offerMeta.rate} Д / {offerMeta.intervalMinutes} мин)</Text>
+                              }
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={s.offerDeclineBtn}
+                              onPress={() => declineOffer(m.id)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={s.offerDeclineText}>Отклонить</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <View style={[s.offerStatusRow, { borderTopColor: "rgba(255,255,255,0.06)" }]}>
+                            <Text style={[s.offerStatusText, { color: statusColor }]}>{statusLabel}</Text>
+                          </View>
+                        )}
+                        <Text style={s.msgTime}>{formatTime(m.created_at)}</Text>
+                      </View>
+                    );
+                  })() : isVoice ? (
                     <TouchableOpacity
                       style={[s.voiceBubble, isMine ? s.voiceBubbleMine : s.voiceBubbleTheirs]}
                       onPress={() => playVoice(m)}
@@ -1244,7 +1362,7 @@ export default function ConversationScreen() {
                     </ScrollView>
                   )}
                   {/* Inline tip button — visible on all peer text/attachment messages */}
-                  {!isMine && !isDarmin && !isVoice && (
+                  {!isMine && !isDarmin && !isVoice && !isPaidOffer && (
                     <TouchableOpacity
                       style={s.inlineTipBtn}
                       onPress={() => sendTip(m.from_citizen_id, m.id)}
@@ -1379,13 +1497,28 @@ export default function ConversationScreen() {
             <TouchableOpacity
               style={[s.transferBtn, { marginTop: 20, width: "100%", opacity: proposeRate.trim() ? 1 : 0.4 }]}
               disabled={!proposeRate.trim()}
-              onPress={() => {
+              onPress={async () => {
                 const rate = parseInt(proposeRate.trim(), 10);
                 if (!rate || rate <= 0) return;
-                // Pre-fill the chat input so user can review and tap Send
-                setInput(`⏱ Предлагаю тариф платного разговора: ${rate} Д / 15 мин`);
                 setProposeModal(false);
                 setProposeRate("");
+                try {
+                  const hdrs = await getStoredAuthHeaders();
+                  const meta: PaidRateOfferMeta = { rate, intervalMinutes: 15, offerStatus: "pending" };
+                  await fetch(`${BASE_URL}/api/chat/messages`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", ...hdrs },
+                    body: JSON.stringify({
+                      toCitizenId: peerId,
+                      ciphertext: "__paid_offer__",
+                      nonce: "__offer__",
+                      msgType: "paid_rate_offer",
+                      metadata: JSON.stringify(meta),
+                    }),
+                  });
+                } catch {
+                  Alert.alert("Ошибка", "Не удалось отправить оффер");
+                }
               }}
               activeOpacity={0.85}
             >
@@ -1751,6 +1884,21 @@ const s = StyleSheet.create({
   // Propose rate input
   proposeInputWrap: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "rgba(255,255,255,0.04)" },
   proposeInput: { flex: 1, fontSize: 16, fontFamily: "Inter_600SemiBold", color: C.fg },
+  // Paid rate offer card
+  offerCard: { backgroundColor: "rgba(201,168,76,0.07)", borderWidth: 1.5, borderColor: "rgba(201,168,76,0.25)", borderRadius: 16, padding: 14, minWidth: 220, gap: 10 },
+  offerHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  offerIconWrap: { width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(201,168,76,0.15)", alignItems: "center", justifyContent: "center" },
+  offerTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: C.fg },
+  offerRateRow: { flexDirection: "row", alignItems: "baseline", paddingHorizontal: 2 },
+  offerRate: { fontSize: 22, fontFamily: "Inter_700Bold", color: C.primary },
+  offerRateSub: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.muted },
+  offerActions: { gap: 8, marginTop: 2 },
+  offerAcceptBtn: { backgroundColor: C.primary, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14, alignItems: "center" },
+  offerAcceptText: { fontSize: 13, fontFamily: "Inter_700Bold", color: "#0A0A0F" },
+  offerDeclineBtn: { borderWidth: 1, borderColor: "rgba(255,255,255,0.15)", borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14, alignItems: "center" },
+  offerDeclineText: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.muted },
+  offerStatusRow: { borderTopWidth: 1, paddingTop: 8, marginTop: 2, alignItems: "center" },
+  offerStatusText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   inputBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border, gap: 8, backgroundColor: C.bg },
   darminBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: C.primary, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(201,168,76,0.1)", flexShrink: 0 },
   darminBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: C.primary },

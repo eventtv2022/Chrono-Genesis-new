@@ -13,6 +13,7 @@ export const dmMessagesTable = pgTable("dm_messages", {
   replySenderName: text("reply_sender_name"),
   replyContent: text("reply_content"),
   attachments: text("attachments"), // JSON: [{url,type,name,size}]
+  metadata: text("metadata"),       // JSON: offer/session data (not encrypted)
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   readAt: timestamp("read_at", { withTimezone: true }),

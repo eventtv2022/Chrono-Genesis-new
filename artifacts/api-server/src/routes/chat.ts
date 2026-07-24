@@ -11,6 +11,7 @@ import {
   groupMessageReadsTable,
   groupKeysTable,
   transactionsTable,
+  dealsTable,
 } from "@workspace/db";
 import { z } from "zod";
 import { logger } from "../lib/logger";
@@ -449,12 +450,133 @@ router.get("/chat/messages/:withCitizenId", async (req, res): Promise<void> => {
       reply_sender_name: m.replySenderName ?? null,
       reply_content: m.replyContent ?? null,
       attachments: m.attachments ? (JSON.parse(m.attachments) as AttachmentMeta[]) : null,
+      metadata: m.metadata ?? null,
       created_at: m.createdAt,
       delivered_at: m.deliveredAt ?? null,
       read_at: m.readAt ?? null,
       reactions: reactionMap[m.id] ?? [],
     })),
   });
+});
+
+// ── POST /chat/paid-session/accept ─────────────────────────────────────────
+
+router.post("/chat/paid-session/accept", async (req, res): Promise<void> => {
+  const me = await getAuthCitizen(req.headers.authorization);
+  if (!me) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const parsed = z.object({ messageId: z.number().int().positive() }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "messageId обязателен" }); return; }
+
+  const { messageId } = parsed.data;
+
+  // Load the offer message — must be addressed to me
+  const [msg] = await db
+    .select()
+    .from(dmMessagesTable)
+    .where(and(eq(dmMessagesTable.id, messageId), eq(dmMessagesTable.toCitizenId, me.id)))
+    .limit(1);
+
+  if (!msg) { res.status(404).json({ error: "Оффер не найден" }); return; }
+  if (msg.msgType !== "paid_rate_offer") { res.status(400).json({ error: "Не является оффером" }); return; }
+
+  const meta = msg.metadata ? (JSON.parse(msg.metadata) as { rate: number; intervalMinutes: number; offerStatus: string; dealId?: number }) : null;
+  if (!meta) { res.status(400).json({ error: "Некорректный оффер" }); return; }
+  if (meta.offerStatus !== "pending") { res.status(400).json({ error: "Оффер уже обработан" }); return; }
+
+  const { rate } = meta;
+
+  // Check acceptor (me) has enough balance — keep 1 ancestral minute
+  const [acceptor] = await db
+    .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
+    .from(citizensTable).where(eq(citizensTable.id, me.id)).limit(1);
+  if (!acceptor) { res.status(404).json({ error: "Гражданин не найден" }); return; }
+  if ((acceptor.balanceMinutes ?? 0) - 1 < rate) {
+    res.status(400).json({ error: `Недостаточно Дарминов (нужно ${rate} Д + 1 родовая минута)` });
+    return;
+  }
+
+  let dealId = 0;
+  try {
+    await db.transaction(async (tx) => {
+      // Lock rate Darmins from acceptor (escrow via dealsTable)
+      await tx.update(citizensTable)
+        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} - ${rate}` })
+        .where(eq(citizensTable.id, me.id));
+
+      // Create deal record as escrow
+      const [deal] = await tx.insert(dealsTable).values({
+        senderId: me.id,             // acceptor pays
+        receiverId: msg.fromCitizenId, // proposer receives when session ends
+        amount: rate,
+        description: `Платная консультация ${rate} Д / ${meta.intervalMinutes} мин`,
+        status: "paid_session",
+        snapshotMinuteRate: 1.0,
+      }).returning({ id: dealsTable.id });
+      dealId = deal!.id;
+
+      // Update message metadata
+      const updatedMeta = { ...meta, offerStatus: "accepted", dealId };
+      await tx.update(dmMessagesTable)
+        .set({ metadata: JSON.stringify(updatedMeta) })
+        .where(eq(dmMessagesTable.id, messageId));
+    });
+  } catch (err: unknown) {
+    const e = err as { message?: string };
+    res.status(500).json({ error: e.message ?? "Ошибка транзакции" });
+    return;
+  }
+
+  // Notify both parties via WS
+  const payload = {
+    type: "paid_session_started",
+    messageId,
+    dealId,
+    rate,
+    intervalMinutes: meta.intervalMinutes,
+    acceptorId: me.id,
+    proposerId: msg.fromCitizenId,
+  };
+  pushToCitizen(me.id, payload);
+  pushToCitizen(msg.fromCitizenId, payload);
+
+  logger.info({ acceptor: me.id, proposer: msg.fromCitizenId, dealId, rate }, "Paid session started");
+  res.json({ ok: true, dealId, rate });
+});
+
+// ── POST /chat/paid-session/decline ────────────────────────────────────────
+
+router.post("/chat/paid-session/decline", async (req, res): Promise<void> => {
+  const me = await getAuthCitizen(req.headers.authorization);
+  if (!me) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const parsed = z.object({ messageId: z.number().int().positive() }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "messageId обязателен" }); return; }
+
+  const { messageId } = parsed.data;
+
+  const [msg] = await db
+    .select()
+    .from(dmMessagesTable)
+    .where(and(eq(dmMessagesTable.id, messageId), eq(dmMessagesTable.toCitizenId, me.id)))
+    .limit(1);
+
+  if (!msg || msg.msgType !== "paid_rate_offer") { res.status(404).json({ error: "Оффер не найден" }); return; }
+
+  const meta = msg.metadata ? (JSON.parse(msg.metadata) as { rate: number; intervalMinutes: number; offerStatus: string }) : null;
+  if (!meta || meta.offerStatus !== "pending") { res.status(400).json({ error: "Оффер уже обработан" }); return; }
+
+  const updatedMeta = { ...meta, offerStatus: "declined" };
+  await db.update(dmMessagesTable)
+    .set({ metadata: JSON.stringify(updatedMeta) })
+    .where(eq(dmMessagesTable.id, messageId));
+
+  const payload = { type: "offer_declined", messageId, declinerId: me.id };
+  pushToCitizen(me.id, payload);
+  pushToCitizen(msg.fromCitizenId, payload);
+
+  logger.info({ decliner: me.id, proposer: msg.fromCitizenId }, "Paid session offer declined");
+  res.json({ ok: true });
 });
 
 // ── POST /chat/messages — send encrypted message ──────────────────────────
@@ -470,13 +592,14 @@ const sendMsgSchema = z.object({
   toCitizenId: z.number().int().positive(),
   ciphertext: z.string().min(1),
   nonce: z.string().min(1),
-  msgType: z.enum(["text", "darmin_transfer", "voice"]).default("text"),
+  msgType: z.enum(["text", "darmin_transfer", "voice", "paid_rate_offer"]).default("text"),
   darminAmount: z.number().positive().optional(),
   forwardedFromId: z.number().int().positive().optional(),
   replyToId: z.number().int().positive().optional(),
   replySenderName: z.string().max(100).optional(),
   replyContent: z.string().max(500).optional(),
   attachments: z.array(attachmentSchema).max(5).optional(),
+  metadata: z.string().optional(), // JSON: offer/session data (not encrypted)
 });
 
 router.post("/chat/messages", async (req, res): Promise<void> => {
@@ -486,7 +609,7 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
   const parsed = sendMsgSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Некорректные данные" }); return; }
 
-  const { toCitizenId, ciphertext, nonce, msgType, darminAmount, forwardedFromId, replyToId, replySenderName, replyContent, attachments } = parsed.data;
+  const { toCitizenId, ciphertext, nonce, msgType, darminAmount, forwardedFromId, replyToId, replySenderName, replyContent, attachments, metadata } = parsed.data;
   const attachmentsJson = attachments && attachments.length > 0 ? JSON.stringify(attachments) : null;
 
   if (toCitizenId === me.id) { res.status(400).json({ error: "Нельзя отправить сообщение самому себе" }); return; }
@@ -501,7 +624,7 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
 
   const [inserted] = await db
     .insert(dmMessagesTable)
-    .values({ fromCitizenId: me.id, toCitizenId, ciphertext, nonce, msgType, darminAmount: darminAmount ?? null, forwardedFromId: forwardedFromId ?? null, replyToId: replyToId ?? null, replySenderName: replySenderName ?? null, replyContent: replyContent ?? null, attachments: attachmentsJson })
+    .values({ fromCitizenId: me.id, toCitizenId, ciphertext, nonce, msgType, darminAmount: darminAmount ?? null, forwardedFromId: forwardedFromId ?? null, replyToId: replyToId ?? null, replySenderName: replySenderName ?? null, replyContent: replyContent ?? null, attachments: attachmentsJson, metadata: metadata ?? null })
     .returning();
 
   if (!inserted) { res.status(500).json({ error: "Ошибка сохранения" }); return; }
@@ -522,6 +645,7 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
       reply_sender_name: replySenderName ?? null,
       reply_content: replyContent ?? null,
       attachments: attachments ?? null,
+      metadata: metadata ?? null,
       created_at: inserted.createdAt,
       delivered_at: null,
       read_at: null,
@@ -572,6 +696,7 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
       reply_sender_name: inserted.replySenderName ?? null,
       reply_content: inserted.replyContent ?? null,
       attachments: inserted.attachments ? (JSON.parse(inserted.attachments) as AttachmentMeta[]) : null,
+      metadata: inserted.metadata ?? null,
       created_at: inserted.createdAt,
       delivered_at: inserted.deliveredAt ?? null,
       read_at: inserted.readAt ?? null,

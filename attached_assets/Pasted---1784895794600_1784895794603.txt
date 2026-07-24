@@ -1,0 +1,75 @@
+Вы подняли главный вопрос экономической безопасности системы!
+
+Если Граждане начнут совершать «фиктивные» звонки другу для накрутки баланса, возникнет **гиперинфляция Дарминов** (необеспеченная эмиссия).
+
+Однако в философии и архитектуре **TimeNation** заложен фундаментальный принцип:
+
+> **Платный звонок НЕ создает (НЕ эмитирует) новые Дармины. Он лишь ПЕРЕРАСПРЕДЕЛЯЕТ (переводит) уже существующие Дармины от слушателя к эксперту.**
+
+Если у Слушателя на балансе 100 Дарминов, а у Эксперта 50, то после 15 минут звонка (при ставке 15 Дарм/15 мин) баланс Слушателя станет **85**, а Эксперта — **65**. Общая сумма в системе не изменилась. Накрутить «бесконечные» деньги из воздуха таким способом невозможно.
+
+---
+
+### 🛡️ Когда риск всё-таки возникает?
+
+Риск появляется, если в системе есть:
+
+1. **Базовый гарантированный доход (Unconditional Basic Income)** — если гражданам ежедневно начисляет бесплатные Дармины сама система («из воздуха»), и они переливают их на один аккаунт-сборщик через мошеннические звонки.
+2. **Займы в Часовом Банке (Time Bank Loans)** — если берут кредит под фиктивный звонок и не возвращают.
+
+---
+
+## 🔍 Как системе автоматически проверять и пресекать фрод (Scam/Abuse Detection)
+
+Чтобы предотвратить сговоры, схемы «мультиаккаунтинга» и накрутки, в движок внедряются следующие проверки на стороне сервера:
+
+### 1. Proof-of-Presence & Audio Stream Validation (Проверка реальности разговора)
+
+* **Анализ WebRTC-трафика**: Сервер проверяет наличие реального двустороннего аудиопотока.
+* **Детекция тишины / Зацикленного звука**: Если в звонке включена заглушка, тишина или закольцованная фонограмма, алгоритм VAD (*Voice Activity Detection*) помечает сессию как фейковую и замораживает перевод средств.
+
+### 2. Граф связей и «Петли ликвидности» (Circulating Loops)
+
+* **Анализ взаимных переводов**: Если Гражданин А постоянно звонит Гражданину Б, а Гражданин Б тут же возвращает эти Дармины через чаевые или обратно через звонки, система фиксирует *Circular Wash Trading*.
+* **Штрафные санкции**: Автоматическая понижающая корректировка социальный рейтинга (**Merit**) обоим участникам.
+
+### 3. Защита Родовой минуты (Ancestral Minute Limit)
+
+* Пользователь **никогда не может потратить баланс ниже 1.0 Родовой минуты**. Это предотвращает полное «высасывание» аккаунтов-ботов.
+
+---
+
+## 🚀 Готовый Промт для Replit: Добавление Анти-Фрод защиты для платных звонков
+
+Если вы хотите, чтобы Replit сразу запрограммировал защиту от сговоров и накруток в модуль платных разговоров, отправьте ему этот промпт:
+
+```markdown
+# TASK: Implement Anti-Fraud & Abuse Detection for Paid Consultation Sessions
+
+## OBJECTIVE
+Prevent citizens from colluding, loop-trading, or executing dummy paid calls to farm/wash Darmins or exploit system mechanisms.
+
+---
+
+## IMPLEMENTATION REQUIREMENTS
+
+### 1. Strict Balance Transfer Engine (No Free Emission)
+- Ensure paid calls DO NOT generate/mint new Darmins. They strictly execute a zero-sum transfer:
+  `Sender.balance -= rate` and `Receiver.balance += rate`.
+- **Enforce Lower Bound**: The caller's balance CANNOT drop below `1.0 Ancestral Minute`. If balance hits 1.0, automatically terminate the call session immediately with status `INSUFFICIENT_FUNDS`.
+
+### 2. Fraud & Loop Detection Middleware (`/api/deals/paid-session/security`)
+- **Circular Wash Trading Detector**:
+  - Before starting/finalizing a paid session, query transaction history between Citizen A and Citizen B for the last 48 hours.
+  - If cyclic transfers are detected (e.g., A pays B 50 Darmins, B tips A 50 Darmins back), flag the session as `SUSPICIOUS_CIRCULAR_ACTIVITY`.
+  - Block Darmins payout and hold funds in Escrow for manual Review/Embassy Audit.
+
+### 3. Voice Activity & Duration Validation
+- Record WebRTC connection stats (or duration metrics).
+- If total voice stream time is < 80% of the session time (or total silence detected), flag session as `DUMMY_CALL`.
+- Reduce both participants' `Merit Points` by -0.5 for fraudulent system exploitation attempts.
+
+### 4. Rate Limiting
+- A citizen cannot execute more than 3 paid sessions per hour with the SAME counterpart.
+
+```
