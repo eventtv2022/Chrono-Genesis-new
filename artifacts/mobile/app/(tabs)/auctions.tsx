@@ -24,6 +24,7 @@ interface Auction {
   slotLocation: string | null;
   slotTimeMarker: string | null;
   timelineCoord: string | null;
+  capsuleText: string | null;
   startingPrice: number;
   currentBid: number | null;
   buyerId: number | null;
@@ -48,6 +49,7 @@ export default function AuctionsScreen() {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [bidModal, setBidModal] = useState<Auction | null>(null);
+  const [capsuleModal, setCapsuleModal] = useState<Auction | null>(null);
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState("");
   const [hours, setHours] = useState("24");
@@ -198,6 +200,18 @@ export default function AuctionsScreen() {
                   <Text style={styles.priceValue}>{currentPrice.toFixed(2)} Д</Text>
                 </View>
               </View>
+              {/* Capsule preview strip — only for TIME_ANCHOR with a capsule */}
+              {isAnchor && item.capsuleText && (
+                <TouchableOpacity
+                  style={styles.capsuleStrip}
+                  onPress={() => setCapsuleModal(item)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.capsuleStripIcon}>📜</Text>
+                  <Text style={styles.capsuleStripText} numberOfLines={2}>{item.capsuleText}</Text>
+                  <Feather name="chevron-right" size={14} color="#7c3aed" />
+                </TouchableOpacity>
+              )}
               <View style={styles.cardBottom}>
                 <View style={styles.timerRow}>
                   <Feather name="clock" size={12} color={colors.mutedForeground} />
@@ -248,6 +262,38 @@ export default function AuctionsScreen() {
               <Text style={styles.cancelBtnText}>{t.cancel}</Text>
             </TouchableOpacity>
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* 📜 Capsule preview modal */}
+      <Modal visible={!!capsuleModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { padding: 24, maxHeight: "80%" as never }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <Text style={{ fontSize: 24 }}>📜</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, { marginBottom: 0 }]}>Капсула Времени</Text>
+                {capsuleModal?.timelineCoord && (() => {
+                  const c = capsuleModal.timelineCoord!;
+                  const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)} ${c.slice(8,10)}:${c.slice(10,12)}`;
+                  return <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }}>{label} · {c}</Text>;
+                })()}
+              </View>
+            </View>
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              <View style={{ backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33", borderRadius: 14, padding: 16, marginBottom: 8 }}>
+                <Text style={{ fontSize: 15, lineHeight: 24, color: colors.foreground }}>
+                  {capsuleModal?.capsuleText ?? ""}
+                </Text>
+              </View>
+            </ScrollView>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground, textAlign: "center", marginTop: 8, marginBottom: 16 }}>
+              Послание владельца этой минуты таймлайна истории
+            </Text>
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => setCapsuleModal(null)} activeOpacity={0.8}>
+              <Text style={styles.cancelBtnText}>Закрыть</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 
@@ -340,5 +386,8 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     submitBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.primaryForeground },
     cancelBtn: { alignItems: "center", padding: 12 },
     cancelBtnText: { fontSize: 15, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
+    capsuleStrip: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 },
+    capsuleStripIcon: { fontSize: 16 },
+    capsuleStripText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", color: colors.foreground, lineHeight: 17 },
   });
 }

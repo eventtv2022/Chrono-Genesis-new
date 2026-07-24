@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { auctionsTable, auctionLogsTable, citizensTable, chronopediaSlotsTable, stateTaxLogsTable, timelineAnchorsTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { auctionsTable, auctionLogsTable, citizensTable, chronopediaSlotsTable, stateTaxLogsTable, timelineAnchorsTable, timelineCapsulesTable } from "@workspace/db";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { requireAuth } from "../middleware/auth";
@@ -66,7 +66,26 @@ router.get("/auctions", async (_req, res): Promise<void> => {
     .leftJoin(chronopediaSlotsTable, eq(auctionsTable.slotId, chronopediaSlotsTable.id))
     .where(eq(auctionsTable.status, "active"));
 
-  res.json(auctions);
+  // Attach capsule text for TIME_ANCHOR lots
+  const anchorCoords = auctions
+    .filter(a => a.assetType === "TIME_ANCHOR" && a.timelineCoord)
+    .map(a => a.timelineCoord as string);
+
+  const capsuleMap = new Map<string, string>();
+  if (anchorCoords.length > 0) {
+    const capsules = await db
+      .select({ timelineCoord: timelineCapsulesTable.timelineCoord, text: timelineCapsulesTable.text })
+      .from(timelineCapsulesTable)
+      .where(inArray(timelineCapsulesTable.timelineCoord, anchorCoords));
+    for (const cap of capsules) capsuleMap.set(cap.timelineCoord, cap.text);
+  }
+
+  const result = auctions.map(a => ({
+    ...a,
+    capsuleText: a.timelineCoord ? (capsuleMap.get(a.timelineCoord) ?? null) : null,
+  }));
+
+  res.json(result);
 });
 
 // ── POST /api/auctions ─────────────────────────────────────────────────────────
