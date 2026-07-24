@@ -1,0 +1,35 @@
+# TASK: Implement P2P Auctioning for Specific Chronopedia Historical Slots
+
+## CONTEXT
+Currently, auctions (`/api/auctions`) only handle fungible Darmin currency balances. We need to extend the auction engine to allow Citizens to auction **specific, already-owned historical timeline minutes (`chronopedia_slots`)**.
+
+---
+
+## REQUIREMENTS TO IMPLEMENT
+
+### 1. Database Schema Extension (`auctions.ts`)
+Update the `auctions` table schema to support non-fungible slot items:
+- Add column `assetType`: Enum (`'DARMIN_CURRENCY'`, `'HISTORICAL_SLOT'`). Default: `'DARMIN_CURRENCY'`.
+- Add optional foreign key `slotId`: References `chronopedia_slots.id`.
+
+### 2. Creation API Endpoint Update (`POST /api/auctions`)
+Allow creating an auction by passing either `amount` (for currency) OR `slotId` (for historical slot):
+- **Validation for `HISTORICAL_SLOT`**:
+  1. Verify `slot.ownerCitizenId === req.citizen.id` (Caller must own the minute).
+  2. Verify the slot is active and not already listed in another open auction.
+  3. **Escrow Lock**: Set `chronopedia_slots.isLocked = true` so the seller cannot modify or transfer the historical minute while the auction is active.
+
+### 3. Slot Finalization Logic (`POST /api/auctions/:id/finalize`)
+When a historical slot auction ends:
+- **If Sold (Winner exists)**:
+  - Transfer slot ownership: `chronopedia_slots.ownerCitizenId = winnerId`.
+  - Unlock slot: `chronopedia_slots.isLocked = false`.
+  - Transfer highest bid Darmins from winner to seller (deducting 2% state fee).
+- **If Unsold / No Bids**:
+  - Unlock slot and return full ownership rights to seller (`isLocked = false`).
+
+### 4. UI / Integration in Chronopedia Slot Details
+- On the detail view of an owned historical minute (`SlotDetailsModal.tsx`):
+  - Add a button: **"Выставить эту минуту на аукцион"**.
+  - Open a modal asking for **Start Price (Дармины)**, **Min Step**, and **Auction Duration (e.g., 24h, 48h)**.
+- Display a badge on the timeline: `"🔥 На аукционе"` if a specific minute is currently on sale.

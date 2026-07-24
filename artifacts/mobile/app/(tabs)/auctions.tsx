@@ -18,7 +18,11 @@ interface Auction {
   id: number;
   sellerId: number;
   sellerName: string | null;
+  assetType: "DARMIN_CURRENCY" | "HISTORICAL_SLOT";
   amountDarmins: number;
+  slotId: number | null;
+  slotLocation: string | null;
+  slotTimeMarker: string | null;
   startingPrice: number;
   currentBid: number | null;
   buyerId: number | null;
@@ -151,12 +155,27 @@ export default function AuctionsScreen() {
         renderItem={({ item }) => {
           const isOwn = item.sellerId === citizen?.id;
           const currentPrice = item.currentBid ?? item.startingPrice;
+          const isSlot = item.assetType === "HISTORICAL_SLOT";
           return (
-            <View style={[styles.card, isOwn && styles.cardOwn]}>
+            <View style={[styles.card, isOwn && styles.cardOwn, isSlot && styles.cardSlot]}>
+              {isSlot && (
+                <View style={styles.slotBadge}>
+                  <Text style={styles.slotBadgeText}>📍 Исторический слот</Text>
+                </View>
+              )}
               <View style={styles.cardTop}>
                 <View style={styles.lotInfo}>
-                  <Text style={styles.lotAmount}>{item.amountDarmins} Д</Text>
-                  <Text style={styles.lotSeller}>{item.sellerName ?? "—"}{isOwn ? ` (${t.auc_own})` : ""}</Text>
+                  {isSlot ? (
+                    <>
+                      <Text style={styles.lotAmount} numberOfLines={1}>{item.slotLocation ?? "Слот"}</Text>
+                      <Text style={styles.lotSeller}>{item.slotTimeMarker ?? ""} · {item.sellerName ?? "—"}{isOwn ? ` (${t.auc_own})` : ""}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.lotAmount}>{item.amountDarmins} Д</Text>
+                      <Text style={styles.lotSeller}>{item.sellerName ?? "—"}{isOwn ? ` (${t.auc_own})` : ""}</Text>
+                    </>
+                  )}
                 </View>
                 <View style={styles.priceBlock}>
                   <Text style={styles.priceLabel}>{t.auc_bid_label}</Text>
@@ -277,6 +296,9 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
     card: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 16, marginBottom: 10 },
     cardOwn: { borderColor: colors.primary },
+    cardSlot: { borderColor: "#f59e0b55", backgroundColor: colors.card },
+    slotBadge: { backgroundColor: "#f59e0b18", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start", marginBottom: 10 },
+    slotBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#f59e0b" },
     cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
     lotInfo: { flex: 1 },
     lotAmount: { fontSize: 22, fontFamily: "Inter_700Bold", color: colors.foreground },

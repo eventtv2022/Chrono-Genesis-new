@@ -75,9 +75,12 @@ interface ChronopediaSlot {
   geoLat: number;
   geoLng: number;
   locationName: string;
+  ownerCitizenId: number | null;
+  isLocked: boolean;
   createdAt: string;
   eventCount: number;
   hasMyEvent: boolean;
+  isOnAuction?: boolean; // derived on client: isLocked && owner === me
 }
 
 interface ChronopediaEvent {
@@ -207,6 +210,85 @@ function FeedEventCard({
         </TouchableOpacity>
       )}
     </TouchableOpacity>
+  );
+}
+
+// ── SlotAuctionModal ──────────────────────────────────────────────────────────
+
+interface SlotAuctionModalProps {
+  slot: ChronopediaSlot;
+  visible: boolean;
+  onClose: () => void;
+  onSubmit: (data: { startingPrice: number; durationHours: number }) => void;
+  submitting: boolean;
+  colors: ReturnType<typeof useColors>;
+}
+
+function SlotAuctionModal({ slot, visible, onClose, onSubmit, submitting, colors }: SlotAuctionModalProps) {
+  const [priceInput, setPriceInput] = useState("1");
+  const [durationInput, setDurationInput] = useState("24");
+
+  const handleConfirm = () => {
+    const price = parseFloat(priceInput);
+    const hours = parseInt(durationInput, 10);
+    if (isNaN(price) || price <= 0) { Alert.alert("⚠️", "Укажите стартовую цену больше 0"); return; }
+    if (isNaN(hours) || hours < 1 || hours > 168) { Alert.alert("⚠️", "Длительность: от 1 до 168 часов"); return; }
+    onSubmit({ startingPrice: price, durationHours: hours });
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
+        <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#555", alignSelf: "center", marginBottom: 16 }} />
+          <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground, marginBottom: 4 }}>🔥 Выставить на аукцион</Text>
+          <Text style={{ fontSize: 13, color: colors.mutedForeground, marginBottom: 20, lineHeight: 18 }}>
+            {slot.locationName} · {slot.timeMarker}
+          </Text>
+
+          <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 20, flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Feather name="info" size={14} color={colors.primary} />
+            <Text style={{ flex: 1, fontSize: 12, color: colors.mutedForeground, lineHeight: 17 }}>
+              Слот будет заблокирован на время аукциона. Победитель становится новым владельцем. Налог Казначейства: 2%.
+            </Text>
+          </View>
+
+          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Стартовая цена (Д)</Text>
+          <TextInput
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 16, color: colors.foreground, backgroundColor: colors.card, marginBottom: 14 }}
+            placeholder="1.00"
+            placeholderTextColor={colors.mutedForeground}
+            value={priceInput}
+            onChangeText={setPriceInput}
+            keyboardType="decimal-pad"
+            autoFocus
+          />
+
+          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Длительность (часов)</Text>
+          <TextInput
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 16, color: colors.foreground, backgroundColor: colors.card, marginBottom: 24 }}
+            placeholder="24"
+            placeholderTextColor={colors.mutedForeground}
+            value={durationInput}
+            onChangeText={setDurationInput}
+            keyboardType="number-pad"
+          />
+
+          <TouchableOpacity
+            onPress={handleConfirm}
+            disabled={submitting}
+            style={{ backgroundColor: "#f59e0b", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10, opacity: submitting ? 0.6 : 1 }}
+          >
+            {submitting
+              ? <ActivityIndicator color="#000" />
+              : <Text style={{ fontSize: 16, fontWeight: "700", color: "#000" }}>Выставить на аукцион →</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={{ alignItems: "center", padding: 10 }}>
+            <Text style={{ fontSize: 15, color: colors.mutedForeground }}>Отмена</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -484,7 +566,7 @@ function AddModal({
 export default function ChronopediaScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { citizen } = useCitizen();
+  const { citizen, authHeaders } = useCitizen();
   const { t } = useLanguage();
   const qc = useQueryClient();
   const st = getStyles(colors);
@@ -498,6 +580,7 @@ export default function ChronopediaScreen() {
   const [pendingLng, setPendingLng] = useState<number | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addMode, setAddMode] = useState<"slot" | "event">("slot");
+  const [showSlotAuction, setShowSlotAuction] = useState(false);
   const [feedSlotInfo, setFeedSlotInfo] = useState<{ locationName: string; timeMarker: string } | null>(null);
 
   const [placeQuery, setPlaceQuery] = useState("");
@@ -630,6 +713,27 @@ export default function ChronopediaScreen() {
       qc.invalidateQueries({ queryKey: ["chronopediaSlot", selectedSlotId] });
       qc.invalidateQueries({ queryKey: ["chronopediaSlots"] });
       qc.invalidateQueries({ queryKey: ["chronopediaFeed"] });
+    },
+    onError: (e: Error) => Alert.alert("Ошибка", e.message),
+  });
+
+  const slotAuctionMutation = useMutation({
+    mutationFn: async (data: { slotId: number; startingPrice: number; durationHours: number }) => {
+      const res = await fetch(`${BASE_URL}/api/auctions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ assetType: "HISTORICAL_SLOT", slotId: data.slotId, startingPrice: data.startingPrice, durationHours: data.durationHours }),
+      });
+      const json = await res.json() as { error?: string; id?: number };
+      if (!res.ok) throw new Error(json.error ?? "Ошибка при создании аукциона");
+      return json;
+    },
+    onSuccess: () => {
+      setShowSlotAuction(false);
+      qc.invalidateQueries({ queryKey: ["chronopediaSlot", selectedSlotId] });
+      qc.invalidateQueries({ queryKey: ["chronopediaSlots"] });
+      qc.invalidateQueries({ queryKey: ["auctions"] });
+      Alert.alert("✅", "Исторический слот выставлен на аукцион");
     },
     onError: (e: Error) => Alert.alert("Ошибка", e.message),
   });
@@ -803,6 +907,11 @@ export default function ChronopediaScreen() {
                     <Text style={[st.panelTitle, { color: colors.foreground }]} numberOfLines={1}>
                       {slotDetail.slot.locationName}
                     </Text>
+                    {slotDetail.slot.isLocked && (
+                      <View style={{ backgroundColor: "#f59e0b22", borderColor: "#f59e0b55", borderWidth: 1, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🔥 На аукционе</Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={[st.panelTime, { color: colors.mutedForeground }]}>
                     {slotDetail.slot.timeMarker} · {slotDetail.events.length}
@@ -842,6 +951,15 @@ export default function ChronopediaScreen() {
                     <Feather name="plus" size={15} color={colors.primary} />
                     <Text style={[st.addOpinionBtnText, { color: colors.primary }]}>{t.chrono_add_opinion}</Text>
                   </TouchableOpacity>
+                  {/* Auction button — only for owner, only when not locked */}
+                  {citizen && slotDetail.slot.ownerCitizenId === citizen.id && !slotDetail.slot.isLocked && (
+                    <TouchableOpacity
+                      style={[st.mapsBtn, { borderColor: "#f59e0b55", backgroundColor: "#f59e0b18" }]}
+                      onPress={() => setShowSlotAuction(true)}
+                    >
+                      <Text style={{ fontSize: 14 }}>🔥</Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     style={[st.mapsBtn, { borderColor: colors.border }]}
                     onPress={() => openInGoogleMaps(slotDetail.slot)}
@@ -920,6 +1038,18 @@ export default function ChronopediaScreen() {
         >
           <Feather name="plus" size={24} color="#fff" />
         </TouchableOpacity>
+      )}
+
+      {/* Slot auction modal */}
+      {showSlotAuction && slotDetail?.slot && (
+        <SlotAuctionModal
+          slot={slotDetail.slot}
+          visible={showSlotAuction}
+          onClose={() => setShowSlotAuction(false)}
+          onSubmit={(data) => slotAuctionMutation.mutate({ slotId: slotDetail.slot.id, ...data })}
+          submitting={slotAuctionMutation.isPending}
+          colors={colors}
+        />
       )}
 
       {/* Add modal */}

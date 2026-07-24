@@ -176,7 +176,7 @@ router.post("/chronopedia/slots", async (req, res): Promise<void> => {
   try {
     const [inserted] = await db
       .insert(chronopediaSlotsTable)
-      .values({ timeMarker, placeId, geoLat, geoLng, locationName })
+      .values({ timeMarker, placeId, geoLat, geoLng, locationName, ownerCitizenId: citizenId })
       .returning({ id: chronopediaSlotsTable.id });
     slotId = inserted!.id;
     created = true;
