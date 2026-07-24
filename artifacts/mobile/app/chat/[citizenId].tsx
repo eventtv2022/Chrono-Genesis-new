@@ -75,8 +75,14 @@ interface DecryptedMessage extends RawMessage {
   plaintext: string;
 }
 
-interface PeerInfo { id: number; name: string | null; rank: string | null; hasKey: boolean; photoUrl?: string | null; meritScore?: number; citizenDays?: number; }
+interface PeerInfo { id: number; name: string | null; rank: string | null; hasKey: boolean; photoUrl?: string | null; meritScore?: number; citizenDays?: number; consultationRate?: number; }
 interface CitizenItem { id: number; name: string | null; rank: string | null; }
+
+function fmtSecs(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 function formatTime(iso: string | Date | null | undefined): string {
   if (!iso) return "Только что";
@@ -135,6 +141,13 @@ export default function ConversationScreen() {
   const tipToastAnim = useRef(new Animated.Value(0)).current;
   const [tipToastText, setTipToastText] = useState<string>("");
 
+  // ── Paid Consultation session state ───────────────────────────────────────
+  const [consultModal, setConsultModal] = useState(false);
+  const [sessionActive, setSessionActive] = useState(false);
+  const [sessionStartMs, setSessionStartMs] = useState<number | null>(null);
+  const [sessionElapsedSec, setSessionElapsedSec] = useState(0);
+  const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const flatRef = useRef<FlatList>(null);
   const secretKeyRef = useRef<Uint8Array | null>(null);
   const myPubKeyB64Ref = useRef<string | null>(null);
@@ -189,14 +202,16 @@ export default function ConversationScreen() {
     try {
       const citRes = await fetch(`${BASE_URL}/api/citizens/${peerId}`);
       if (citRes.ok) {
-        const c = (await citRes.json()) as { id: number; name: string | null; rank: string | null; photoUrl?: string | null; meritScore?: number; createdAt?: string };
+        const c = (await citRes.json()) as { id: number; name: string | null; rank: string | null; photoUrl?: string | null; meritScore?: number; createdAt?: string; consultationRate?: number };
         if (c?.id) {
           const citizenDays = c.createdAt
             ? Math.floor((Date.now() - new Date(c.createdAt).getTime()) / 86_400_000)
             : undefined;
+          const rate = c.consultationRate ?? 0;
           setPeer((prev) => prev
-            ? { ...prev, rank: c.rank ?? prev.rank, photoUrl: c.photoUrl ?? prev.photoUrl, meritScore: c.meritScore, citizenDays }
-            : { id: c.id, name: c.name, rank: c.rank, hasKey: false, photoUrl: c.photoUrl, meritScore: c.meritScore, citizenDays });
+            ? { ...prev, rank: c.rank ?? prev.rank, photoUrl: c.photoUrl ?? prev.photoUrl, meritScore: c.meritScore, citizenDays, consultationRate: rate }
+            : { id: c.id, name: c.name, rank: c.rank, hasKey: false, photoUrl: c.photoUrl, meritScore: c.meritScore, citizenDays, consultationRate: rate });
+          if (rate > 0) setConsultModal(true);
         }
       }
     } catch { /* silent */ }
@@ -205,6 +220,18 @@ export default function ConversationScreen() {
   }, [peerId]);
 
   useEffect(() => { fetchPeerKey(); }, [fetchPeerKey]);
+
+  // ── Session timer ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (sessionActive && sessionStartMs !== null) {
+      sessionTimerRef.current = setInterval(() => {
+        setSessionElapsedSec(Math.floor((Date.now() - sessionStartMs) / 1000));
+      }, 1000);
+    } else {
+      if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+    }
+    return () => { if (sessionTimerRef.current) clearInterval(sessionTimerRef.current); };
+  }, [sessionActive, sessionStartMs]);
 
   // Auto-poll for peer key every 15 s while key is missing
   useEffect(() => {
@@ -987,6 +1014,13 @@ export default function ConversationScreen() {
                 {peer.meritScore !== undefined ? ` · Merit ${peer.meritScore.toFixed(1)}` : ""}
               </Text>
             )}
+            {/* Consultation rate tag — shown when not in active session */}
+            {!sessionActive && (peer?.consultationRate ?? 0) > 0 && (
+              <View style={s.rateTag}>
+                <Feather name="clock" size={9} color="#C97C4C" />
+                <Text style={s.rateTagText}>{peer!.consultationRate} Д / 15 мин</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -1032,6 +1066,27 @@ export default function ConversationScreen() {
           </View>
         </View>
       </View>
+
+      {/* Active consultation session bar */}
+      {sessionActive && peer?.consultationRate && (
+        <View style={s.sessionBar}>
+          <Feather name="clock" size={12} color={C.primary} />
+          <Text style={s.sessionBarText}>
+            {fmtSecs(sessionElapsedSec)}
+          </Text>
+          <Text style={s.sessionBurnText}>
+            · {Math.floor(sessionElapsedSec / 900) * (peer.consultationRate ?? 0)} Д · {peer.consultationRate} Д/15 мин
+          </Text>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity
+            style={s.sessionEndBtn}
+            onPress={() => { setSessionActive(false); setSessionElapsedSec(0); setSessionStartMs(null); setDarminModal(true); }}
+            activeOpacity={0.8}
+          >
+            <Text style={s.sessionEndText}>Завершить</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Search bar */}
       {showSearch && (
@@ -1156,6 +1211,21 @@ export default function ConversationScreen() {
                       ))}
                     </ScrollView>
                   )}
+                  {/* Inline tip button — visible on all peer text/attachment messages */}
+                  {!isMine && !isDarmin && !isVoice && (
+                    <TouchableOpacity
+                      style={s.inlineTipBtn}
+                      onPress={() => sendTip(m.from_citizen_id, m.id)}
+                      disabled={tippingMsgId !== null}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
+                    >
+                      {tippingMsgId === m.id
+                        ? <ActivityIndicator size="small" color={C.primary} style={{ width: 40 }} />
+                        : <Text style={s.inlineTipText}>⏱ +1 Д</Text>
+                      }
+                    </TouchableOpacity>
+                  )}
                 </View>
               </TouchableOpacity>
             );
@@ -1240,6 +1310,41 @@ export default function ConversationScreen() {
           </>
         )}
       </KeyboardAvoidingView>
+
+      {/* Consultation rate confirmation modal */}
+      <Modal visible={consultModal && !sessionActive} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={[s.modalSheet, { alignItems: "center", gap: 20, paddingBottom: 40 }]}>
+            <View style={{ alignItems: "center", gap: 8 }}>
+              <View style={s.consultIconWrap}>
+                <Feather name="clock" size={28} color={C.primary} />
+              </View>
+              <Text style={s.modalTitle}>Платная консультация</Text>
+              <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: C.muted, textAlign: "center", lineHeight: 20 }}>
+                {peerName} проводит платные консультации.{"\n"}
+                <Text style={{ color: C.primary, fontFamily: "Inter_600SemiBold" }}>
+                  {peer?.consultationRate ?? 0} Д / 15 мин
+                </Text>
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={s.transferBtn}
+              onPress={() => {
+                setConsultModal(false);
+                setSessionActive(true);
+                setSessionStartMs(Date.now());
+                setSessionElapsedSec(0);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={s.transferBtnText}>⏱  Начать сессию</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setConsultModal(false)} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}>
+              <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: C.muted }}>Продолжить без сессии</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Long-press action sheet */}
       <Modal visible={!!selectedMsg} transparent animationType="fade">
@@ -1482,6 +1587,20 @@ const s = StyleSheet.create({
   tipToastLabel: { backgroundColor: "rgba(201,168,76,0.92)", color: "#0A0A0F", fontFamily: "Inter_700Bold", fontSize: 14, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, overflow: "hidden" },
   tipIcon: { fontSize: 18 },
   tipText: { color: C.primary },
+  // Inline tip button (directly on bubble)
+  inlineTipBtn: { alignSelf: "flex-start", marginTop: 3, flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: "rgba(201,168,76,0.35)", backgroundColor: "rgba(201,168,76,0.08)" },
+  inlineTipText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: C.primary },
+  // Consultation rate tag in header
+  rateTag: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
+  rateTagText: { fontSize: 9, fontFamily: "Inter_600SemiBold", color: "#C97C4C" },
+  // Active session bar
+  sessionBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 7, backgroundColor: "rgba(201,168,76,0.08)", borderBottomWidth: 1, borderBottomColor: "rgba(201,168,76,0.2)" },
+  sessionBarText: { fontSize: 13, fontFamily: "Inter_700Bold", color: C.primary },
+  sessionBurnText: { fontSize: 11, fontFamily: "Inter_400Regular", color: C.muted },
+  sessionEndBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: "rgba(201,168,76,0.4)", backgroundColor: "rgba(201,168,76,0.1)" },
+  sessionEndText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: C.primary },
+  // Consultation modal icon
+  consultIconWrap: { width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(201,168,76,0.12)", borderWidth: 1.5, borderColor: "rgba(201,168,76,0.35)", alignItems: "center", justifyContent: "center" },
   inputBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border, gap: 8, backgroundColor: C.bg },
   darminBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: C.primary, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(201,168,76,0.1)", flexShrink: 0 },
   darminBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: C.primary },
