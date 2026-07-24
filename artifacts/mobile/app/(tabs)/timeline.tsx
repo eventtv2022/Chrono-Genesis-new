@@ -54,12 +54,12 @@ function StatePropertyModal({ visible, onClose, colors }: { visible: boolean; on
             <Text style={{ color: colors.foreground, fontWeight: "600" }}>Национальному Хроно-Фонду TimeNation</Text>.
             Данная минута не подлежит частному бронированию, выкупу или передаче.
           </Text>
-          <TouchableOpacity
+          <Pressable
             onPress={onClose}
-            style={{ width: "100%", backgroundColor: "#f59e0b", borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
+            style={({ pressed }) => ({ width: "100%", backgroundColor: "#f59e0b", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: pressed ? 0.8 : 1, cursor: "pointer" as never })}
           >
             <Text style={{ fontSize: 15, fontWeight: "700", color: "#000" }}>Принято</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
     </Modal>
@@ -122,17 +122,17 @@ function TimeAnchorAuctionModal({ anchor, visible, onClose, onSubmit, submitting
             value={durationInput} onChangeText={setDurationInput} keyboardType="number-pad"
           />
 
-          <TouchableOpacity
+          <Pressable
             onPress={handleConfirm} disabled={submitting}
-            style={{ backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10, opacity: submitting ? 0.6 : 1 }}
+            style={({ pressed }) => ({ backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10, opacity: submitting ? 0.6 : pressed ? 0.8 : 1, cursor: "pointer" as never })}
           >
             {submitting
               ? <ActivityIndicator color={colors.primaryForeground} />
               : <Text style={{ fontSize: 16, fontWeight: "700", color: colors.primaryForeground }}>Выставить на продажу →</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onClose} style={{ alignItems: "center", padding: 10 }}>
+          </Pressable>
+          <Pressable onPress={onClose} style={{ alignItems: "center", padding: 10, cursor: "pointer" as never }}>
             <Text style={{ fontSize: 15, color: colors.mutedForeground }}>Отмена</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
     </Modal>
@@ -316,9 +316,9 @@ function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colo
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border }}>
             <Text style={{ fontSize: 20 }}>📜</Text>
             <Text style={{ fontSize: 17, fontWeight: "800", color: colors.foreground, flex: 1 }}>Капсула Смысла</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={8}>
+            <Pressable onPress={onClose} hitSlop={8} style={{ cursor: "pointer" as never }}>
               <Feather name="x" size={22} color={colors.foreground} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {/* Slot info badge */}
@@ -457,28 +457,28 @@ function CreateSlotAuctionModal({ slot, visible, onClose, onSubmit, submitting, 
           <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Длительность</Text>
           <View style={{ flexDirection: "row", gap: 8, marginBottom: 24 }}>
             {DURATIONS.map(d => (
-              <TouchableOpacity
+              <Pressable
                 key={d.value}
-                style={{ flex: 1, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5, borderColor: durationInput === d.value ? "#f59e0b" : colors.border, backgroundColor: durationInput === d.value ? "#f59e0b18" : colors.card, alignItems: "center" }}
+                style={({ pressed }) => ({ flex: 1, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5, borderColor: durationInput === d.value ? "#f59e0b" : colors.border, backgroundColor: durationInput === d.value ? "#f59e0b18" : colors.card, alignItems: "center", opacity: pressed ? 0.7 : 1, cursor: "pointer" as never })}
                 onPress={() => setDurationInput(d.value)}
               >
                 <Text style={{ fontSize: 13, fontWeight: "700", color: durationInput === d.value ? "#f59e0b" : colors.mutedForeground }}>{d.label}</Text>
-              </TouchableOpacity>
+              </Pressable>
             ))}
           </View>
 
-          <TouchableOpacity
+          <Pressable
             onPress={handleConfirm}
             disabled={submitting}
-            style={{ backgroundColor: "#f59e0b", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10, opacity: submitting ? 0.6 : 1 }}
+            style={({ pressed }) => ({ backgroundColor: "#f59e0b", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10, opacity: submitting ? 0.6 : pressed ? 0.8 : 1, cursor: "pointer" as never })}
           >
             {submitting
               ? <ActivityIndicator color="#000" />
               : <Text style={{ fontSize: 16, fontWeight: "700", color: "#000" }}>Выставить на аукцион →</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onClose} style={{ alignItems: "center", padding: 10 }}>
+          </Pressable>
+          <Pressable onPress={onClose} style={{ alignItems: "center", padding: 10, cursor: "pointer" as never }}>
             <Text style={{ fontSize: 15, color: colors.mutedForeground }}>Отмена</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
     </Modal>
@@ -1014,9 +1014,9 @@ export default function TimelineScreen() {
               <Feather name="box" size={18} color="#7c3aed" />
               <Text style={[styles.capHeaderTitle, { color: colors.foreground }]}>{t.tl_capsule_modal_title}</Text>
             </View>
-            <TouchableOpacity onPress={() => setShowCapsule(false)} style={styles.maClose}>
+            <Pressable onPress={() => setShowCapsule(false)} style={[styles.maClose, { cursor: "pointer" as never }]}>
               <Feather name="x" size={22} color={colors.foreground} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {selectedAnchor && (() => {
@@ -1044,8 +1044,8 @@ export default function TimelineScreen() {
           />
           <Text style={[styles.capCount, { color: colors.mutedForeground }]}>{capsuleText.length}/1000</Text>
 
-          <TouchableOpacity
-            style={[styles.capSaveBtn, { backgroundColor: capsuleText.trim() ? "#7c3aed" : colors.border, opacity: capsuleSaving ? 0.6 : 1 }]}
+          <Pressable
+            style={({ pressed }) => [styles.capSaveBtn, { backgroundColor: capsuleText.trim() ? "#7c3aed" : colors.border, opacity: capsuleSaving || !capsuleText.trim() ? 0.6 : pressed ? 0.8 : 1, cursor: "pointer" as never }]}
             disabled={!capsuleText.trim() || capsuleSaving}
             onPress={async () => {
               if (!citizen || !selectedAnchor || !capsuleText.trim()) return;
@@ -1073,7 +1073,7 @@ export default function TimelineScreen() {
             {capsuleSaving
               ? <ActivityIndicator color="#fff" />
               : <Text style={styles.capSaveBtnText}>{t.save}</Text>}
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </Modal>
 
@@ -1086,9 +1086,9 @@ export default function TimelineScreen() {
               <Feather name="map-pin" size={18} color={colors.primary} />
               <Text style={[styles.maHeaderTitle, { color: colors.foreground }]}>My TIME</Text>
             </View>
-            <TouchableOpacity onPress={() => setShowMyAnchors(false)} style={styles.maClose}>
+            <Pressable onPress={() => setShowMyAnchors(false)} style={[styles.maClose, { cursor: "pointer" as never }]}>
               <Feather name="x" size={22} color={colors.foreground} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {/* Tab switcher */}
@@ -1097,12 +1097,13 @@ export default function TimelineScreen() {
               { key: "anchors", label: "⏱ Анкоры", count: myAnchors.length },
               { key: "slots",   label: "📍 Слоты",  count: mySlots.length   },
             ] as const).map(tab => (
-              <TouchableOpacity
+              <Pressable
                 key={tab.key}
                 onPress={() => setMyTimeTab(tab.key)}
-                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5,
+                style={({ pressed }) => ({ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5,
                   borderColor: myTimeTab === tab.key ? colors.primary : colors.border,
-                  backgroundColor: myTimeTab === tab.key ? colors.primary + "18" : colors.card }}
+                  backgroundColor: myTimeTab === tab.key ? colors.primary + "18" : colors.card,
+                  opacity: pressed ? 0.75 : 1, cursor: "pointer" as never })}
               >
                 <Text style={{ fontSize: 13, fontWeight: "700", color: myTimeTab === tab.key ? colors.primary : colors.mutedForeground }}>{tab.label}</Text>
                 {tab.count > 0 && (
@@ -1110,7 +1111,7 @@ export default function TimelineScreen() {
                     <Text style={{ fontSize: 10, fontWeight: "800", color: myTimeTab === tab.key ? colors.primaryForeground : colors.mutedForeground }}>{tab.count}</Text>
                   </View>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             ))}
           </View>
 
