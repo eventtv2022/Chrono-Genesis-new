@@ -5,6 +5,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { requireAuth } from "../middleware/auth";
+import { notifyTaxCollected } from "../services/telegramService";
 
 const router: IRouter = Router();
 
@@ -155,6 +156,15 @@ router.post("/auctions/:id/finalize", async (req, res): Promise<void> => {
       tax2pct: tax,
     });
 
+    // Fire-and-forget Telegram alert (non-blocking)
+    const sellerNameForNotif = seller?.name ?? `ID ${auction.sellerId}`;
+    void notifyTaxCollected({
+      amount:          tax,
+      sourceType:      "AUCTION_TAX",
+      fromCitizenName: sellerNameForNotif,
+      referenceId:     id,
+    });
+
     req.log.info({ auctionId: id, finalPrice, tax }, "Auction finalized");
     res.json({ ok: true, finalPrice, tax, winner: auction.buyerId });
   } else {
@@ -237,6 +247,15 @@ export async function finalizeExpiredAuctions(): Promise<void> {
           sellerId: auction.sellerId,
           finalPrice,
           tax2pct: tax,
+        });
+
+        // Fire-and-forget Telegram alert (non-blocking)
+        const autoSellerName = seller?.name ?? `ID ${auction.sellerId}`;
+        void notifyTaxCollected({
+          amount:          tax,
+          sourceType:      "AUCTION_TAX",
+          fromCitizenName: autoSellerName,
+          referenceId:     auction.id,
         });
 
         logger.info({ auctionId: auction.id, finalPrice, tax }, "Auction auto-finalized (winner)");

@@ -1,0 +1,73 @@
+Отличная идея для оперативного контроля! Администратор должен сразу получать уведомление в Telegram-бот при каждом пополнении Государственного Казначейства (Tax Pool).
+
+Ниже представлен **готовый промпт для Replit**, который настроит отправку таких системных уведомлений в Telegram-бот при любой налоговой транзакции (аукционы, платные консультации, Escrow).
+
+---
+
+## 🚀 Промпт для Replit: Интеграция Telegram-уведомлений о пополнении Tax Pool
+
+```markdown
+# TASK: Send Real-Time Telegram Bot Notifications on Tax Pool Inflow
+
+## OBJECTIVE
+Whenever the State Treasury / Tax Pool receives a 2% tax contribution (from a completed paid consultation, finalized auction, or escrow deal), automatically dispatch a formatted system notification to the Administrator's Telegram Bot.
+
+---
+
+## REQUIREMENTS TO IMPLEMENT
+
+### 1. Telegram Service Integration (`telegramBot.ts` or similar)
+- Ensure a Telegram Bot API helper is configured using the environment variable `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ADMIN_CHAT_ID`.
+- Create a reusable notification method: `sendTaxNotification(payload)`.
+
+### 2. Notification Dispatcher Logic
+Trigger the notification inside the tax recording transaction (e.g., when `state_tax_logs` is inserted):
+
+```ts
+export async function notifyTaxCollected({
+  amount,
+  sourceType,
+  fromCitizenName,
+  totalTaxPool,
+}: {
+  amount: number;
+  sourceType: 'PAID_SESSION_TAX' | 'AUCTION_TAX' | 'ESCROW_FEE';
+  fromCitizenName: string;
+  totalTaxPool: number;
+}) {
+  const sourceLabels = {
+    PAID_SESSION_TAX: '⏱️ Платная консультация',
+    AUCTION_TAX: '🏛️ Аукцион',
+    ESCROW_FEE: '🤝 Escrow-сделка',
+  };
+
+  const message = 
+    `🏛️ *ПОПОЛНЕНИЕ НАЛОГОВОГО ПУЛА TIMENATION*\n\n` +
+    `💰 *Поступление:* +${amount.toFixed(2)} Д\n` +
+    `📌 *Источник:* ${sourceLabels[sourceType] || sourceType}\n` +
+    `👤 *Гражданин:* ${fromCitizenName}\n\n` +
+    `📊 *Всего в Казначействе:* ${totalTaxPool.toFixed(2)} Д`;
+
+  await sendTelegramMessage(process.env.TELEGRAM_ADMIN_CHAT_ID, message, { parse_mode: 'Markdown' });
+}
+
+```
+
+### 3. Integration Points
+
+Inject `notifyTaxCollected()` into:
+
+1. `POST /api/deals/paid-session/end` — after the 2% tax deduction from expert earnings.
+2. Auction Finalizer Cron Job — upon transferring winning bid taxes.
+3. Escrow Settlement Service.
+
+---
+
+## VERIFICATION CHECKLIST
+
+1. Complete a paid consultation or auction session.
+2. Check the Telegram Admin chat: an instant message formatted in Markdown should arrive displaying the exact tax amount, source, citizen, and updated total Tax Pool balance.
+
+```
+
+```

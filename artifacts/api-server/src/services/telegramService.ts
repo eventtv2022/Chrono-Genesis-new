@@ -249,6 +249,59 @@ export function initBot(token: string): Telegraf {
   return bot;
 }
 
+// ─── State Treasury tax-pool notification ─────────────────────────────────────
+// Sends a real-time alert to the admin whenever the Tax Pool receives a
+// 2% contribution. Fires after the DB write — never blocks the transaction.
+
+type TaxSourceType = "PAID_SESSION_TAX" | "AUCTION_TAX" | "ESCROW_FEE";
+
+const TAX_SOURCE_LABELS: Record<TaxSourceType, string> = {
+  PAID_SESSION_TAX: "⏱️ Платная консультация",
+  AUCTION_TAX:      "🏛️ Аукцион",
+  ESCROW_FEE:       "🤝 Escrow-сделка",
+};
+
+export async function notifyTaxCollected({
+  amount,
+  sourceType,
+  fromCitizenName,
+  referenceId,
+}: {
+  amount: number;
+  sourceType: TaxSourceType;
+  fromCitizenName: string;
+  referenceId: number;
+}): Promise<void> {
+  const adminId = process.env["ADMIN_TELEGRAM_ID"] ?? "";
+  if (!bot || !adminId) return;
+
+  // Read current treasury balance (citizen #1)
+  try {
+    const { citizensTable: ctable } = await import("@workspace/db");
+    const { eq: eqFn } = await import("drizzle-orm");
+    const [treasury] = await db
+      .select({ balance: ctable.balanceMinutes })
+      .from(ctable)
+      .where(eqFn(ctable.id, 1))
+      .limit(1);
+
+    const totalPool = Number(treasury?.balance ?? 0);
+
+    const message =
+      `🏛️ *ПОПОЛНЕНИЕ НАЛОГОВОГО ПУЛА TIMENATION*\n\n` +
+      `💰 *Поступление:* +${amount.toFixed(4)} Д\n` +
+      `📌 *Источник:* ${TAX_SOURCE_LABELS[sourceType] ?? sourceType}\n` +
+      `👤 *Гражданин:* ${fromCitizenName}\n` +
+      `🔗 *Ref ID:* #${referenceId}\n\n` +
+      `📊 *Всего в Казначействе:* ${totalPool.toFixed(4)} Д`;
+
+    await bot.telegram.sendMessage(adminId, message, { parse_mode: "Markdown" });
+  } catch (err) {
+    // Non-fatal — never let a notification failure bubble up to the API response
+    logger.warn({ err }, "notifyTaxCollected: failed to send Telegram alert");
+  }
+}
+
 export async function sendDirectMessage(
   telegramId: string,
   message: string

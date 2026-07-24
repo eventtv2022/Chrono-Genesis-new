@@ -15,6 +15,7 @@ import {
   stateTaxLogsTable,
 } from "@workspace/db";
 import { TREASURY_CITIZEN_ID } from "../services/videoStorage";
+import { notifyTaxCollected } from "../services/telegramService";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { pushToCitizen, getOnlineCitizenIds, isCitizenOnline } from "../services/socialAlarmWs";
@@ -788,6 +789,15 @@ router.post("/chat/paid-session/finalize", async (req, res): Promise<void> => {
   logger.info({ dealId, acceptor: me.id, proposer: proposerId, billedAmount, taxAmount, netExpert, sessionSeconds }, "Paid session completed");
   pushToCitizen(me.id,      { type: "session_completed", dealId, billedAmount, taxAmount, newBalance: newAcceptorBalance });
   pushToCitizen(proposerId, { type: "session_completed", dealId, billedAmount, netEarned: netExpert, taxAmount });
+
+  // Fire-and-forget Telegram alert to admin (non-blocking)
+  void notifyTaxCollected({
+    amount:          taxAmount,
+    sourceType:      "PAID_SESSION_TAX",
+    fromCitizenName: me.name ?? `ID ${proposerId}`,
+    referenceId:     dealId,
+  });
+
   res.json({ ok: true, billedAmount, taxAmount, netExpert, newBalance: newAcceptorBalance });
 });
 
