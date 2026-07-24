@@ -1,0 +1,91 @@
+Отличная, жесткая и справедливая экономическая модель!
+
+Такая логика идеально защищает эксперта от потери забронированного слота времени: если заказчик подтвердил 15-минутную сессию за 10 Дарминов, но решил сбросить звонок через 2 минуты — **слот считался выкупленным, и полные 10 Дарминов уходят в расчет**. При этом Государство TimeNation автоматически взимает стандартную системную комиссию **2%** с дохода эксперта.
+
+Ниже представлен **готовый промпт для Replit**, куда зашиты эти правила списывания и налогообложения.
+
+---
+
+## 🚀 Промпт для Replit: Фиксированное списание и налог 2% с эксперта
+
+```markdown
+# TASK: Implement Fixed Session Billing & 2% System Tax on Paid Consultations
+
+## BUSINESS LOGIC SPECIFICATION
+
+1. **Fixed Slot Deduction (No Prorated Refunds)**:
+   - When a citizen confirms/accepts a paid consultation session (e.g. 10 Darmins / 15 minutes), the full amount (`10 Darmins`) for the interval is IMMEDIATELY locked and non-refundable.
+   - If the caller or expert ends the session early (e.g., after 2 minutes), **NO refund is given** for the unused time. The full slot payment is processed.
+
+2. **2% System Tax on Expert Earnings**:
+   - The platform automatically collects a **2% tax** from the earnings of the service provider (Expert).
+   - **Calculation Example**:
+     - Gross Fee: `10 Darmins`
+     - System Tax (2%): `0.2 Darmins` (goes to System/State Vault `DAILY_EMISSION_LIMIT` or Tax Pool)
+     - Net Received by Expert: `9.8 Darmins`
+
+---
+
+## IMPLEMENTATION STEPS
+
+### 1. Update Session Settlement API (`POST /api/deals/paid-session/end`)
+Update the backend endpoint that finalizes a session:
+
+```ts
+// Pseudocode Logic for Session Finalization
+const grossAmount = session.rate; // Full interval rate (e.g., 10 Darmins)
+const taxRate = 0.02; // 2% State Tax
+
+const taxAmount = grossAmount * taxRate; // 0.2 Darmins
+const netExpertEarnings = grossAmount - taxAmount; // 9.8 Darmins
+
+await db.transaction(async (tx) => {
+  // 1. Deduct full gross amount from caller (enforce Ancestral Minute >= 1.0)
+  await tx.update(citizens)
+    .set({ balanceMinutes: sql`${citizens.balanceMinutes} - ${grossAmount}` })
+    .where(eq(citizens.id, session.callerId));
+
+  // 2. Credit net earnings to expert
+  await tx.update(citizens)
+    .set({ balanceMinutes: sql`${citizens.balanceMinutes} + ${netExpertEarnings}` })
+    .where(eq(citizens.id, session.expertId));
+
+  // 3. Record 2% tax in state auction/tax logs
+  await tx.insert(auction_logs).values({
+    type: 'PAID_SESSION_TAX',
+    amount: taxAmount,
+    fromCitizenId: session.expertId,
+    createdAt: new Date(),
+  });
+
+  // 4. Update session status
+  await tx.update(paid_sessions)
+    .set({ status: 'COMPLETED', endedAt: new Date() })
+    .where(eq(paid_sessions.id, session.id));
+});
+
+```
+
+### 2. UI Transparency Indicator
+
+In the confirmation modal (`StartPaidSessionModal.tsx`) and summary notification:
+
+* **For Caller**: Display `"Списание: 10 Д / 15 мин (независимо от длительности)"`.
+* **For Expert**: Display `"Ваш доход: 9.8 Д (за вычетом 2% гос. налога)"`.
+
+---
+
+## VERIFICATION CHECKLIST
+
+1. Start a paid session of 10 Darmins / 15 min.
+2. End the call early after 30 seconds.
+3. Check balances:
+* Caller balance decreases by exactly **10 Darmins**.
+* Expert balance increases by exactly **9.8 Darmins**.
+* **0.2 Darmins** is logged into the tax pool.
+
+
+
+```
+
+```

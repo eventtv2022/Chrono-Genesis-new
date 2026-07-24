@@ -12,7 +12,9 @@ import {
   groupKeysTable,
   transactionsTable,
   dealsTable,
+  stateTaxLogsTable,
 } from "@workspace/db";
+import { TREASURY_CITIZEN_ID } from "../services/videoStorage";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { pushToCitizen, getOnlineCitizenIds, isCitizenOnline } from "../services/socialAlarmWs";
@@ -720,50 +722,48 @@ router.post("/chat/paid-session/finalize", async (req, res): Promise<void> => {
     return;
   }
 
-  // ── Clean session — release escrow to proposer ────────────────────────────
-  // Calculate billed slots (ceil to intervalMinutes)
-  const intervalSec  = (deal.description.match(/(\d+)\s*мин/) ? parseInt(deal.description.match(/(\d+)\s*мин/)![1]!) : 15) * 60;
-  const billedSlots  = Math.max(1, Math.ceil(sessionSeconds / intervalSec));
-  const billedAmount = billedSlots * rate;
+  // ── Fixed slot billing: one confirmed slot = full rate, no proration ─────
+  // Business rule: the slot was purchased at accept time; early termination
+  // does NOT entitle caller to a refund. Tax (2%) is deducted from the expert.
+  const TAX_RATE    = 0.02;
+  const billedAmount = rate;                          // always full slot, non-refundable
+  const taxAmount    = parseFloat((billedAmount * TAX_RATE).toFixed(4));
+  const netExpert    = parseFloat((billedAmount - taxAmount).toFixed(4));
 
-  // Refund any overpaid escrow (rate was for 1 slot; sessions can run multiple)
-  // Note: escrow locked exactly `rate` (1 slot) at accept. Multi-slot overrun handled here.
-  let proposerName = "";
+  let proposerName       = "";
   let newAcceptorBalance = 0;
   try {
     await db.transaction(async (tx) => {
-      // Credit proposer (already debited from acceptor at accept time)
+      // 1. Get proposer info
       const [proposer] = await tx
-        .select({ name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
+        .select({ name: citizensTable.name })
         .from(citizensTable).where(eq(citizensTable.id, proposerId)).limit(1);
       proposerName = proposer?.name ?? `ID ${proposerId}`;
 
+      // 2. Credit net earnings to proposer (escrow already deducted `rate` from acceptor at accept)
       await tx.update(citizensTable)
-        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${rate}` })
+        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${netExpert}` })
         .where(eq(citizensTable.id, proposerId));
 
-      // If session ran longer than 1 slot, deduct extra from acceptor
-      const extraOwed = billedAmount - rate;
-      if (extraOwed > 0) {
-        const [acc] = await tx.select({ balanceMinutes: citizensTable.balanceMinutes })
-          .from(citizensTable).where(eq(citizensTable.id, me.id)).limit(1);
-        const safeDeduct = Math.min(extraOwed, Math.max(0, (acc?.balanceMinutes ?? 0) - 1));
-        if (safeDeduct > 0) {
-          await tx.update(citizensTable)
-            .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} - ${safeDeduct}` })
-            .where(eq(citizensTable.id, me.id));
-          await tx.update(citizensTable)
-            .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${safeDeduct}` })
-            .where(eq(citizensTable.id, proposerId));
-        }
-      }
+      // 3. Credit 2% tax to State Treasury (citizen #1)
+      await tx.update(citizensTable)
+        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${taxAmount}` })
+        .where(eq(citizensTable.id, TREASURY_CITIZEN_ID));
 
-      // Read updated acceptor balance
+      // 4. Log tax to state_tax_logs
+      await tx.insert(stateTaxLogsTable).values({
+        sourceType:    "PAID_SESSION_TAX",
+        amount:        taxAmount,
+        fromCitizenId: proposerId,   // expert paid the tax
+        referenceId:   dealId,
+      });
+
+      // 5. Read updated acceptor balance (unchanged since accept already locked it)
       const [updAcc] = await tx.select({ balanceMinutes: citizensTable.balanceMinutes })
         .from(citizensTable).where(eq(citizensTable.id, me.id)).limit(1);
       newAcceptorBalance = updAcc?.balanceMinutes ?? 0;
 
-      // Log transaction
+      // 6. Log the full transfer in transactions
       await tx.insert(transactionsTable).values({
         sessionId:          dealId,
         fromCitizenId:      me.id,
@@ -774,6 +774,7 @@ router.post("/chat/paid-session/finalize", async (req, res): Promise<void> => {
         durationSeconds:    sessionSeconds,
       });
 
+      // 7. Finalize deal
       await tx.update(dealsTable)
         .set({ status: "paid_session_completed", totalTrackedMinutes: Math.floor(sessionSeconds / 60), updatedAt: new Date() })
         .where(eq(dealsTable.id, dealId));
@@ -784,10 +785,10 @@ router.post("/chat/paid-session/finalize", async (req, res): Promise<void> => {
     return;
   }
 
-  logger.info({ dealId, acceptor: me.id, proposer: proposerId, billedAmount, sessionSeconds }, "Paid session completed");
-  pushToCitizen(me.id,      { type: "session_completed", dealId, billedAmount, newBalance: newAcceptorBalance });
-  pushToCitizen(proposerId, { type: "session_completed", dealId, billedAmount });
-  res.json({ ok: true, billedAmount, newBalance: newAcceptorBalance });
+  logger.info({ dealId, acceptor: me.id, proposer: proposerId, billedAmount, taxAmount, netExpert, sessionSeconds }, "Paid session completed");
+  pushToCitizen(me.id,      { type: "session_completed", dealId, billedAmount, taxAmount, newBalance: newAcceptorBalance });
+  pushToCitizen(proposerId, { type: "session_completed", dealId, billedAmount, netEarned: netExpert, taxAmount });
+  res.json({ ok: true, billedAmount, taxAmount, netExpert, newBalance: newAcceptorBalance });
 });
 
 // ── POST /chat/paid-session/decline ────────────────────────────────────────

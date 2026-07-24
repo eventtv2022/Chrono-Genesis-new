@@ -14,6 +14,13 @@ interface AdminStats {
   emission: { emitted24h: number; remainingCap: number; dailyCap: number };
 }
 
+interface TreasuryStats {
+  totalTaxCollected: number;
+  todayTaxCollected: number;
+  taxBySource: { sourceType: string; total: number }[];
+  recentLogs: { id: number; sourceType: string; amount: number; fromCitizenId: number; referenceId: number; createdAt: string }[];
+}
+
 interface AdminCitizen {
   id: number;
   name: string;
@@ -249,14 +256,21 @@ function DirectTransferForm({ authHeaders, adminBalance, onSuccess }: TransferFo
 }
 
 // ── Main Admin Page ────────────────────────────────────────────────────────────
+const SOURCE_LABELS: Record<string, string> = {
+  PAID_SESSION_TAX: "Платные сессии",
+  AUCTION_TAX:      "Аукционы",
+  ESCROW_FEE:       "Escrow",
+};
+
 export function Admin() {
   const { citizen, authToken, refreshCitizen } = useCitizen();
   const [, navigate] = useLocation();
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [treasury, setTreasury] = useState<TreasuryStats | null>(null);
   const [citizens, setCitizens] = useState<AdminCitizen[]>([]);
   const [transactions, setTransactions] = useState<AdminTx[]>([]);
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<"overview" | "citizens" | "transactions" | "emit" | "transfer">("overview");
+  const [tab, setTab] = useState<"overview" | "citizens" | "transactions" | "emit" | "transfer" | "treasury">("overview");
   const [showEmitModal, setShowEmitModal] = useState(false);
 
   useEffect(() => { document.title = "Администратор | TimeNation"; }, []);
@@ -274,6 +288,7 @@ export function Admin() {
   const loadData = useCallback(() => {
     if (!authToken) return;
     void fetch("/api/admin/stats", { headers: authHeaders }).then(r => r.json()).then(setStats).catch(() => null);
+    void fetch("/api/admin/treasury/stats", { headers: authHeaders }).then(r => r.json()).then(setTreasury).catch(() => null);
     void fetch("/api/admin/citizens", { headers: authHeaders }).then(r => r.json()).then(setCitizens).catch(() => null);
     void fetch("/api/admin/transactions?limit=50", { headers: authHeaders }).then(r => r.json()).then(setTransactions).catch(() => null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -301,6 +316,7 @@ export function Admin() {
 
   const TABS = [
     { id: "overview",      label: "Обзор" },
+    { id: "treasury",      label: "🏦 Казначейство" },
     { id: "citizens",      label: "Граждане" },
     { id: "transactions",  label: "Транзакции" },
     { id: "emit",          label: "Эмиссия" },
@@ -502,6 +518,93 @@ export function Admin() {
               Открыть форму эмиссии →
             </button>
             <p className="text-xs text-muted-foreground font-mono">Для подтверждения эмиссии потребуется код, отправленный в Telegram-бот</p>
+          </div>
+        )}
+
+        {/* TREASURY */}
+        {tab === "treasury" && (
+          <div className="space-y-6">
+            {/* KPI cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-amber-950/40 border border-amber-500/30 p-5 rounded-xl">
+                <span className="text-amber-400 text-xs font-semibold uppercase tracking-wider font-mono">Государственный Налоговый Пул</span>
+                <div className="text-3xl font-bold text-amber-200 mt-2 font-mono">
+                  {treasury ? treasury.totalTaxCollected.toFixed(4) : "—"} Д
+                </div>
+                <span className="text-xs text-amber-500/80 mt-1 block font-mono">+2% со всех платных сессий и аукционов</span>
+              </div>
+
+              <div className="bg-card border border-border p-5 rounded-xl">
+                <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider font-mono">Поступления за 24ч</span>
+                <div className="text-2xl font-bold text-emerald-400 mt-2 font-mono">
+                  +{treasury ? treasury.todayTaxCollected.toFixed(4) : "0.0000"} Д
+                </div>
+              </div>
+
+              <div className="bg-card border border-border p-5 rounded-xl">
+                <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider font-mono">Источники (все время)</span>
+                <div className="mt-3 space-y-1.5">
+                  {treasury?.taxBySource.map(s => (
+                    <div key={s.sourceType} className="flex justify-between text-xs font-mono">
+                      <span className="text-muted-foreground">{SOURCE_LABELS[s.sourceType] ?? s.sourceType}</span>
+                      <span className="text-amber-300">{Number(s.total).toFixed(4)} Д</span>
+                    </div>
+                  )) ?? <span className="text-xs text-muted-foreground font-mono">Нет данных</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* Recent tax log table */}
+            <div className="bg-card border border-border rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-foreground font-mono">История пополнения Казначейства</h3>
+                <button
+                  onClick={() => void fetch("/api/admin/treasury/stats", { headers: authHeaders }).then(r => r.json()).then(setTreasury).catch(() => null)}
+                  className="text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  ↻ Обновить
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs font-mono">
+                  <thead>
+                    <tr className="text-muted-foreground uppercase tracking-wider border-b border-border">
+                      <th className="text-left pb-2 pr-4">ID</th>
+                      <th className="text-left pb-2 pr-4">Источник</th>
+                      <th className="text-right pb-2 pr-4">Сумма</th>
+                      <th className="text-right pb-2 pr-4">Гражданин</th>
+                      <th className="text-right pb-2 pr-4">Ref ID</th>
+                      <th className="text-right pb-2">Время</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {treasury?.recentLogs.length === 0 && (
+                      <tr><td colSpan={6} className="py-6 text-center text-muted-foreground">Налоговых поступлений ещё нет</td></tr>
+                    )}
+                    {treasury?.recentLogs.map(log => (
+                      <tr key={log.id} className="hover:bg-secondary/20 transition-colors">
+                        <td className="py-1.5 pr-4 text-muted-foreground">#{log.id}</td>
+                        <td className="py-1.5 pr-4">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                            log.sourceType === "PAID_SESSION_TAX" ? "bg-amber-500/20 text-amber-300" :
+                            log.sourceType === "AUCTION_TAX"      ? "bg-blue-500/20 text-blue-300"   :
+                            "bg-zinc-500/20 text-zinc-300"
+                          }`}>
+                            {SOURCE_LABELS[log.sourceType] ?? log.sourceType}
+                          </span>
+                        </td>
+                        <td className="py-1.5 pr-4 text-right text-emerald-400">+{Number(log.amount).toFixed(4)} Д</td>
+                        <td className="py-1.5 pr-4 text-right text-muted-foreground">#{log.fromCitizenId}</td>
+                        <td className="py-1.5 pr-4 text-right text-muted-foreground">#{log.referenceId}</td>
+                        <td className="py-1.5 text-right text-muted-foreground">
+                          {new Date(log.createdAt).toLocaleString("ru-RU", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 

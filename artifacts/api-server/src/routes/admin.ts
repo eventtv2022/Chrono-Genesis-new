@@ -6,6 +6,8 @@ import {
   transactionsTable,
   auctionsTable,
   emissionLogsTable,
+  stateTaxLogsTable,
+  auctionLogsTable,
 } from "@workspace/db";
 import { eq, desc, count, sum, gte, sql, and } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middleware/auth";
@@ -63,7 +65,56 @@ async function getAdminDailyEmitted(): Promise<number> {
 
 // ── Public endpoint ───────────────────────────────────────────────────────────
 
-// GET /supply — total circulating supply (public, for Treasury page)
+// ── GET /admin/treasury/stats ─────────────────────────────────────────────────
+
+router.get("/admin/treasury/stats", async (_req, res) => {
+  const since24h = new Date(Date.now() - 86_400_000);
+
+  const [totalRow, todayRow, bySource, recentLogs] = await Promise.all([
+    // All-time total
+    db.select({ total: sum(stateTaxLogsTable.amount) }).from(stateTaxLogsTable),
+
+    // Last 24h
+    db.select({ total: sum(stateTaxLogsTable.amount) })
+      .from(stateTaxLogsTable)
+      .where(gte(stateTaxLogsTable.createdAt, since24h)),
+
+    // By source type
+    db.execute(sql`
+      SELECT source_type AS "sourceType", COALESCE(SUM(amount), 0) AS total
+      FROM state_tax_logs
+      GROUP BY source_type
+      ORDER BY total DESC
+    `),
+
+    // Recent 50 entries
+    db.select({
+      id:            stateTaxLogsTable.id,
+      sourceType:    stateTaxLogsTable.sourceType,
+      amount:        stateTaxLogsTable.amount,
+      fromCitizenId: stateTaxLogsTable.fromCitizenId,
+      referenceId:   stateTaxLogsTable.referenceId,
+      createdAt:     stateTaxLogsTable.createdAt,
+    })
+    .from(stateTaxLogsTable)
+    .orderBy(desc(stateTaxLogsTable.createdAt))
+    .limit(50),
+  ]);
+
+  // Also pull auction taxes from auction_logs for completeness
+  const [auctionTaxRow] = await db
+    .select({ total: sum(auctionLogsTable.tax2pct) })
+    .from(auctionLogsTable);
+
+  res.json({
+    totalTaxCollected:  Number(totalRow[0]?.total ?? 0) + Number(auctionTaxRow?.total ?? 0),
+    todayTaxCollected:  Number(todayRow[0]?.total ?? 0),
+    taxBySource:        bySource.rows as { sourceType: string; total: number }[],
+    recentLogs,
+  });
+});
+
+// ── GET /supply — total circulating supply (public, for Treasury page) ────────
 router.get("/supply", async (_req, res) => {
   const [row] = await db
     .select({ total: sum(citizensTable.balanceMinutes) })

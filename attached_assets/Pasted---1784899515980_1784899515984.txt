@@ -1,0 +1,80 @@
+Отличный вопрос! Налоговые отчисления от аукционов и платных консультаций — это стратегический капитал **Государственного Казначейства (State Vault / Tax Pool)**.
+
+Если в текущей административной панели еще нет отдельного виджета/экрана для мониторинга этого фонда, его необходимо добавить. Админ-панель должна показывать накопленный налоговый пул в реальном времени, историю его пополнений и распределение.
+
+Ниже представлен **готовый Промт для Replit**, который создаст этот модуль и выведет `Tax Pool` в панель администратора.
+
+---
+
+## 🚀 Промт для Replit: Создание и вывод Tax Pool в Админ-Панели
+
+```markdown
+# TASK: Create State Treasury / Tax Pool Dashboard in Admin Panel
+
+## OBJECTIVE
+Create an Administrative Treasury Module (`/admin/treasury` or inside the existing Admin Dashboard) to monitor the collected 2% State Tax Pool (from Auctions, Paid Consultations, and Escrow Fees) in real time.
+
+---
+
+## REQUIREMENTS TO IMPLEMENT
+
+### 1. Database Schema Update (`treasury_logs.ts` or `tax_pool`)
+Ensure all system taxes are collected into a dedicated structure or aggregate view:
+- **Table/Entity**: `state_tax_logs`
+  - `id` (UUID / Serial)
+  - `sourceType` (Enum: `'AUCTION_TAX'`, `'PAID_SESSION_TAX'`, `'ESCROW_FEE'`)
+  - `amount` (Decimal/Float, amount in Darmins)
+  - `fromCitizenId` (FK to `citizens`)
+  - `referenceId` (FK to auction/paid_session/deal ID)
+  - `createdAt` (Timestamp)
+
+### 2. Admin API Endpoint (`GET /api/admin/treasury/stats`)
+Create an authenticated admin route returning:
+- `totalTaxCollected` (Sum of all 2% tax entries in Darmins).
+- `todayTaxCollected` (Tax collected in the last 24 hours).
+- `taxBySource` (Breakdown: Auctions vs Paid Consultations vs Escrow Fees).
+- `recentTransactions` (List of the last 50 tax contributions with Citizen number, amount, and timestamp).
+
+### 3. Admin UI View (`AdminTreasuryCard.tsx` / Admin Dashboard Page)
+Add a visual State Vault / Tax Pool widget to the Admin Panel:
+
+```tsx
+// UI Layout Concept
+<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  {/* Total Tax Pool Card */}
+  <div className="bg-amber-950/40 border border-amber-500/30 p-5 rounded-xl">
+    <span className="text-amber-400 text-xs font-semibold uppercase tracking-wider">Государственный Налоговый Пул (Tax Pool)</span>
+    <div className="text-3xl font-bold text-amber-200 mt-2 font-mono">
+      {stats.totalTaxCollected.toFixed(2)} Д
+    </div>
+    <span className="text-xs text-amber-500/80 mt-1 block">+2% со всех сделок и платных сессий</span>
+  </div>
+
+  {/* Today's Inflow */}
+  <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-xl">
+    <span className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Поступления за 24ч</span>
+    <div className="text-2xl font-bold text-emerald-400 mt-2 font-mono">
+      +{stats.todayTaxCollected.toFixed(2)} Д
+    </div>
+  </div>
+</div>
+
+{/* Recent Tax Logs Table */}
+<div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+  <h3 className="text-sm font-semibold text-zinc-300 mb-3">История пополнения Казначейства</h3>
+  {/* Render table with Source, Amount, Citizen ID, Date */}
+</div>
+
+```
+
+---
+
+## VERIFICATION CHECKLIST
+
+1. Complete a paid session or auction finalization.
+2. Open the Admin Panel.
+3. Verify that the 2% tax automatically increases the `Total Tax Pool` widget in real time without manual DB entry.
+
+```
+
+```
