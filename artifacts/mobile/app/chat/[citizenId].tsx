@@ -1031,6 +1031,18 @@ export default function ConversationScreen() {
 
         {/* Action buttons — fixed, never shrink */}
         <View style={s.headerActions}>
+          {/* Paid consultation trigger — shown when peer charges and no session is active */}
+          {(peer?.consultationRate ?? 0) > 0 && !sessionActive && (
+            <TouchableOpacity
+              onPress={() => setConsultModal(true)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={s.consultHeaderBtn}
+            >
+              <Feather name="clock" size={15} color="#C97C4C" />
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             onPress={() => { setShowSearch((v) => !v); setSearchQuery(""); }}
             activeOpacity={0.7}
@@ -1076,16 +1088,25 @@ export default function ConversationScreen() {
       {sessionActive && peer?.consultationRate && (
         <View style={s.sessionBar}>
           <Feather name="clock" size={12} color={C.primary} />
-          <Text style={s.sessionBarText}>
-            {fmtSecs(sessionElapsedSec)}
-          </Text>
+          <Text style={s.sessionBarText}>{fmtSecs(sessionElapsedSec)}</Text>
           <Text style={s.sessionBurnText}>
-            · {Math.floor(sessionElapsedSec / 900) * (peer.consultationRate ?? 0)} Д · {peer.consultationRate} Д/15 мин
+            {" · "}
+            {Math.ceil(sessionElapsedSec / 900) * (peer.consultationRate ?? 0)} Д · {peer.consultationRate} Д/15 мин
           </Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity
             style={s.sessionEndBtn}
-            onPress={() => { setSessionActive(false); setSessionElapsedSec(0); setSessionStartMs(null); setDarminModal(true); }}
+            onPress={() => {
+              const rate   = peer?.consultationRate ?? 0;
+              const slots  = Math.max(1, Math.ceil(sessionElapsedSec / 900));
+              const owed   = slots * rate;
+              setSessionActive(false);
+              setSessionElapsedSec(0);
+              setSessionStartMs(null);
+              // Pre-fill darmin transfer modal with calculated cost
+              setDarminAmount(String(owed));
+              setDarminModal(true);
+            }}
             activeOpacity={0.8}
           >
             <Text style={s.sessionEndText}>Завершить</Text>
@@ -1316,24 +1337,56 @@ export default function ConversationScreen() {
         )}
       </KeyboardAvoidingView>
 
-      {/* Consultation rate confirmation modal */}
+      {/* Paid consultation start modal */}
       <Modal visible={consultModal && !sessionActive} transparent animationType="fade">
         <View style={s.modalOverlay}>
-          <View style={[s.modalSheet, { alignItems: "center", gap: 20, paddingBottom: 40 }]}>
-            <View style={{ alignItems: "center", gap: 8 }}>
-              <View style={s.consultIconWrap}>
-                <Feather name="clock" size={28} color={C.primary} />
-              </View>
-              <Text style={s.modalTitle}>Платная консультация</Text>
-              <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: C.muted, textAlign: "center", lineHeight: 20 }}>
-                {peerName} проводит платные консультации.{"\n"}
-                <Text style={{ color: C.primary, fontFamily: "Inter_600SemiBold" }}>
-                  {peer?.consultationRate ?? 0} Д / 15 мин
-                </Text>
+          <View style={[s.modalSheet, { alignItems: "center", gap: 0, paddingBottom: 36 }]}>
+            {/* Icon + title */}
+            <View style={s.consultIconWrap}>
+              <Feather name="clock" size={28} color={C.primary} />
+            </View>
+            <Text style={[s.modalTitle, { marginTop: 14 }]}>Платная консультация</Text>
+
+            {/* Rate row */}
+            <View style={s.consultRateRow}>
+              <Feather name="clock" size={13} color="#C97C4C" />
+              <Text style={s.consultRateText}>
+                {peer?.consultationRate ?? 0} Д / 15 мин
               </Text>
             </View>
+
+            {/* Divider */}
+            <View style={s.consultDivider} />
+
+            {/* Balance info */}
+            <View style={s.consultBalRow}>
+              <Text style={s.consultBalLabel}>Ваш баланс</Text>
+              <Text style={[
+                s.consultBalValue,
+                (citizen?.balanceMinutes ?? 0) < (peer?.consultationRate ?? 1) && s.consultBalLow,
+              ]}>
+                {citizen?.balanceMinutes ?? 0} Д
+              </Text>
+            </View>
+
+            {/* Insufficient balance warning */}
+            {(citizen?.balanceMinutes ?? 0) < (peer?.consultationRate ?? 1) && (
+              <View style={s.consultWarnBox}>
+                <Feather name="alert-triangle" size={12} color="#C97C4C" />
+                <Text style={s.consultWarnText}>
+                  Недостаточно Дарминов для первых 15 мин. Пополните баланс.
+                </Text>
+              </View>
+            )}
+
+            {/* CTA */}
             <TouchableOpacity
-              style={s.transferBtn}
+              style={[
+                s.transferBtn,
+                { marginTop: 22, width: "100%" },
+                (citizen?.balanceMinutes ?? 0) < (peer?.consultationRate ?? 1) && s.transferBtnDisabled,
+              ]}
+              disabled={(citizen?.balanceMinutes ?? 0) < (peer?.consultationRate ?? 1)}
               onPress={() => {
                 setConsultModal(false);
                 setSessionActive(true);
@@ -1344,8 +1397,16 @@ export default function ConversationScreen() {
             >
               <Text style={s.transferBtnText}>⏱  Начать сессию</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setConsultModal(false)} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}>
-              <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: C.muted }}>Продолжить без сессии</Text>
+
+            <TouchableOpacity
+              onPress={() => setConsultModal(false)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+              style={{ marginTop: 16 }}
+            >
+              <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: C.muted }}>
+                Продолжить без сессии
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1605,7 +1666,21 @@ const s = StyleSheet.create({
   sessionEndBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: "rgba(201,168,76,0.4)", backgroundColor: "rgba(201,168,76,0.1)" },
   sessionEndText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: C.primary },
   // Consultation modal icon
-  consultIconWrap: { width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(201,168,76,0.12)", borderWidth: 1.5, borderColor: "rgba(201,168,76,0.35)", alignItems: "center", justifyContent: "center" },
+  consultIconWrap: { width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(201,168,76,0.12)", borderWidth: 1.5, borderColor: "rgba(201,168,76,0.35)", alignItems: "center", justifyContent: "center", marginTop: 4 },
+  // Header clock button
+  consultHeaderBtn: { padding: 2 },
+  // Modal internals
+  consultRateRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 },
+  consultRateText: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#C97C4C" },
+  consultDivider: { width: "100%", height: 1, backgroundColor: "rgba(255,255,255,0.06)", marginVertical: 18 },
+  consultBalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", width: "100%", paddingHorizontal: 4 },
+  consultBalLabel: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.muted },
+  consultBalValue: { fontSize: 16, fontFamily: "Inter_700Bold", color: C.fg },
+  consultBalLow: { color: "#E05050" },
+  consultWarnBox: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 12, backgroundColor: "rgba(224,80,80,0.08)", borderRadius: 10, padding: 10, borderWidth: 1, borderColor: "rgba(224,80,80,0.2)" },
+  consultWarnText: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#E05050", flex: 1, lineHeight: 17 },
+  // Disabled transfer button state
+  transferBtnDisabled: { opacity: 0.4 },
   inputBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border, gap: 8, backgroundColor: C.bg },
   darminBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: C.primary, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(201,168,76,0.1)", flexShrink: 0 },
   darminBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: C.primary },
