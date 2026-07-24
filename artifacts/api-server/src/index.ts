@@ -7,6 +7,7 @@ import { airDueSlots } from "./services/tvService";
 import { initBot } from "./services/telegramService";
 import { rehydrateRenderQueue } from "./services/renderQueue";
 import { startNodeValidator } from "./services/nodeValidatorService";
+import { finalizeExpiredAuctions } from "./routes/auctions";
 import { attachSocialAlarmWs } from "./services/socialAlarmWs";
 
 const rawPort = process.env["PORT"];
@@ -81,15 +82,17 @@ function scheduleMinuteTick() {
   const msToNextMinute =
     (60 - now.getUTCSeconds()) * 1000 - now.getUTCMilliseconds() + 200;
 
-  setTimeout(() => {
+  const tick = () => {
     airDueSlots().catch((err) => logger.error({ err }, "airDueSlots cron failed"));
-    setInterval(
-      () => airDueSlots().catch((err) => logger.error({ err }, "airDueSlots cron failed")),
-      60 * 1000,
-    );
+    finalizeExpiredAuctions().catch((err) => logger.error({ err }, "auctionFinalize cron failed"));
+  };
+
+  setTimeout(() => {
+    tick();
+    setInterval(tick, 60 * 1000);
   }, msToNextMinute);
 
-  logger.info({ msToNextMinute }, "Minute tick cron scheduled (TV slot airing)");
+  logger.info({ msToNextMinute }, "Minute tick cron scheduled (TV slot airing + auction finalize)");
 }
 
 // ── Async bootstrap — rehydrate render queue BEFORE accepting connections ──────

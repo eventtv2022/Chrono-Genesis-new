@@ -1,11 +1,21 @@
 /**
- * TimeNation Chrono Sounds — synthetic audio for the messenger.
- * Web: Web Audio API (OscillatorNode + GainNode, no files needed).
- * Native: expo-av + expo-file-system (generates WAV, caches to disk).
+ * TimeNation Chrono Sounds — real audio assets for the messenger.
+ * Native: expo-av + bundled MP3 assets.
+ * Web:    Web Audio API (OscillatorNode, no files needed).
+ *
+ * Assets:
+ *   assets/sounds/send.mp3    — механический щелчок часов (отправка)
+ *   assets/sounds/receive.mp3 — глубокий хроно-импульс  (получение)
  */
 import { Platform } from "react-native";
 
-// ── WAV generator (pure math, works in both RN JS engine and browser) ─────────
+// ── Bundled MP3 assets (resolved at build time by Expo Metro) ─────────────────
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const SEND_ASSET = require("../assets/sounds/send.mp3") as number;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const RECEIVE_ASSET = require("../assets/sounds/receive.mp3") as number;
+
+// ── WAV generator — used only for "tip" (no dedicated file) ──────────────────
 function genWavBase64(
   freqHz: number,
   durationMs: number,
@@ -55,14 +65,7 @@ function genWavBase64(
   return "data:audio/wav;base64," + btoa(binary);
 }
 
-const TONES: Record<string, () => string> = {
-  send:    () => genWavBase64(880, 130, 0.22, 18),
-  receive: () => genWavBase64(528, 220, 0.18, 6),
-  tip:     () => genWavBase64(660, 260, 0.25, 7, 880),
-};
-
-// ── Native playback via expo-av + expo-file-system ────────────────────────────
-
+// ── Native playback ───────────────────────────────────────────────────────────
 type FsModule = {
   cacheDirectory: string | null;
   getInfoAsync: (path: string) => Promise<{ exists: boolean }>;
@@ -70,17 +73,36 @@ type FsModule = {
   EncodingType: { Base64: string };
 };
 
-async function playNative(key: string): Promise<void> {
+/** Play a bundled MP3 asset directly (send / receive). */
+async function playAsset(asset: number, volume = 0.6): Promise<void> {
+  try {
+    const { Audio } = await import("expo-av");
+    await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+    const { sound } = await Audio.Sound.createAsync(asset, {
+      shouldPlay: true,
+      volume,
+    });
+    sound.setOnPlaybackStatusUpdate((st) => {
+      if (st.isLoaded && st.didJustFinish) sound.unloadAsync().catch(() => {});
+    });
+  } catch { /* non-critical */ }
+}
+
+/** Play a synthetic WAV (tip sound — no dedicated file). */
+async function playNativeTip(): Promise<void> {
   try {
     const [{ Audio }, fsRaw] = await Promise.all([
       import("expo-av"),
       import("expo-file-system"),
     ]);
     const FS = fsRaw as unknown as FsModule;
-    const cacheFile = (FS.cacheDirectory ?? "") + `tn_sfx_${key}.wav`;
+    const cacheFile = (FS.cacheDirectory ?? "") + "tn_sfx_tip.wav";
     const info = await FS.getInfoAsync(cacheFile);
     if (!info.exists) {
-      const b64 = (TONES[key]?.() ?? "").replace("data:audio/wav;base64,", "");
+      const b64 = genWavBase64(660, 260, 0.25, 7, 880).replace(
+        "data:audio/wav;base64,",
+        "",
+      );
       await FS.writeAsStringAsync(cacheFile, b64, {
         encoding: FS.EncodingType.Base64,
       });
@@ -93,7 +115,7 @@ async function playNative(key: string): Promise<void> {
     sound.setOnPlaybackStatusUpdate((st) => {
       if (st.isLoaded && st.didJustFinish) sound.unloadAsync().catch(() => {});
     });
-  } catch { /* sound is non-critical */ }
+  } catch { /* non-critical */ }
 }
 
 // ── Web playback via AudioContext ─────────────────────────────────────────────
@@ -137,16 +159,19 @@ function playWeb(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 export const ChronoSounds = {
+  /** Механический щелчок часов — отправка сообщения */
   playSend() {
     if (Platform.OS === "web") playWeb(880, 110, 0.11, 20);
-    else void playNative("send");
+    else void playAsset(SEND_ASSET, 0.6);
   },
+  /** Глубокий хроно-импульс — получение сообщения */
   playReceive() {
     if (Platform.OS === "web") playWeb(528, 200, 0.09, 7);
-    else void playNative("receive");
+    else void playAsset(RECEIVE_ASSET, 0.55);
   },
+  /** Монетный аккорд — перевод/чаевые */
   playTip() {
     if (Platform.OS === "web") playWeb(660, 160, 0.13, 8, 880, 130);
-    else void playNative("tip");
+    else void playNativeTip();
   },
 };

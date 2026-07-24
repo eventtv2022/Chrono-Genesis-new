@@ -1,0 +1,72 @@
+# TASK: Implement Missing Features, P2P Messenger Engine & System Enhancements
+
+## CONTEXT & CURRENT STATE
+We have a TypeScript/Express backend with Drizzle ORM and PostgreSQL covering Citizen Passports, Chronopedia, Auctions, Escrow Deals, and Embassy Verification. We now need to fully build out and integrate the **P2P Messenger Module** alongside background services and missing endpoints.
+
+---
+
+## NEW REQUIREMENTS TO IMPLEMENT
+
+### 1. P2P & Contextual Escrow Messenger (`/api/messages` & WebSocket)
+Implement a robust messaging system supporting both direct citizen-to-citizen messaging and contextual deal/auction chats:
+
+- **Schema & Data Model (`messages` / `chat_rooms`)**:
+  - `roomId` (UUID / auto-generated).
+  - `dealId` / `auctionId` (Optional foreign keys for contextual deal chats).
+  - `senderCitizenId`, `recipientCitizenId`.
+  - `content` (Encrypted text payload).
+  - `attachments` (JSON array for uploaded media/proof files).
+  - `isSystemMessage` (Boolean for auto-generated updates).
+  - `readAt`, `createdAt`.
+
+- **API Endpoints**:
+  - `POST /api/messages/send` — Send a message or system notification.
+  - `GET /api/messages/rooms` — List all active chat rooms for the authenticated Citizen.
+  - `GET /api/messages/rooms/:roomId` — Get chat history with pagination.
+  - `POST /api/messages/rooms/:roomId/read` — Mark unread messages as read.
+
+- **System Event Integration**:
+  - Automatically insert a system message (`isSystemMessage: true`) into the associated deal chat when:
+    1. A deal is accepted by the worker.
+    2. Proof-of-Work is submitted (`proofText` / `proofUrl`).
+    3. Escrow funds are released or a dispute is opened.
+
+- **Real-Time Layer**:
+  - Setup a WebSocket (Socket.io or `ws`) handler to broadcast new messages instantly to connected room participants.
+
+---
+
+### 2. Automated Background Worker (Cron) for Auction Finalization
+- Create a scheduled job (running every 60 seconds) using `node-cron` or an interval worker.
+- Query active auctions where `endsAt <= NOW()`.
+- Automatically trigger finalization: transfer Darmins to the winner, deduct 2% tax, refund seller if no bids, and update status to `completed`.
+
+---
+
+### 3. Complete Missing Schema Endpoints
+
+- **Timeline Capsules (`/api/timeline-capsules`)**:
+  - `POST /api/timeline-capsules` — Store a temporal capsule anchored to `timelineCoord`.
+  - `GET /api/timeline-capsules?citizenId=X` — Retrieve citizen's temporal capsules.
+
+- **Time Bank & Ledger (`/api/time-bank`)**:
+  - `POST /api/time-bank/loans` — Request a time loan against collateral.
+  - `POST /api/time-bank/loans/:id/repay` — Repay loan and log transaction into `time_bank_ledger`.
+  - `GET /api/time-bank/ledger?citizenId=X` — Fetch ledger audit history.
+
+- **TV Slots & Capsules (`/api/tv`)**:
+  - `GET /api/tv/slots?date=YYYY-MM-DD` — Return 1440 minute schedule slots.
+  - `POST /api/tv/slots/:id/book` — Book TV slot with payment validation.
+  - `POST /api/tv/capsules` — Attach broadcast content to a booked TV slot.
+
+---
+
+### 4. Escrow Ancestral Minute Rule Enforcer
+- In `/api/deals`, enforce that a citizen's balance after locking escrow funds can **NEVER drop below 1.0 Ancestral Minute (Родовая минута)**. Validate across all fractional operations.
+
+---
+
+### 5. Quality Standards & Output
+- Return strongly-typed JSON with proper HTTP status codes.
+- Use internal `logger` for all background and messenger events.
+- Ensure all DB calls strictly follow Drizzle ORM standards.

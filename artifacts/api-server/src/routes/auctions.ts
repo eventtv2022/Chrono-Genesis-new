@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { auctionsTable, auctionLogsTable, citizensTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { requireAuth } from "../middleware/auth";
@@ -168,5 +168,98 @@ router.post("/auctions/:id/finalize", async (req, res): Promise<void> => {
     res.json({ ok: true, finalPrice: 0, winner: null });
   }
 });
+
+// ── Background: auto-finalize all expired active auctions ─────────────────────
+export async function finalizeExpiredAuctions(): Promise<void> {
+  const now = new Date();
+
+  const expired = await db
+    .select()
+    .from(auctionsTable)
+    .where(
+      and(
+        eq(auctionsTable.status, "active"),
+        // endsAt <= now
+        // Drizzle: lte not imported — use sql comparator
+        sql`${auctionsTable.endsAt} <= ${now.toISOString()}`,
+      ),
+    );
+
+  for (const auction of expired) {
+    try {
+      // Mark completed first to prevent double-finalization
+      const updated = await db
+        .update(auctionsTable)
+        .set({ status: "completed" })
+        .where(
+          and(
+            eq(auctionsTable.id, auction.id),
+            eq(auctionsTable.status, "active"),
+          ),
+        )
+        .returning({ id: auctionsTable.id });
+
+      if (!updated.length) continue; // already finalized by another process
+
+      const finalPrice = auction.currentBid ?? auction.startingPrice;
+      const tax = finalPrice * 0.02;
+
+      if (auction.buyerId) {
+        // Credit Darmins to winner
+        const [buyer] = await db
+          .select()
+          .from(citizensTable)
+          .where(eq(citizensTable.id, auction.buyerId))
+          .limit(1);
+        if (buyer) {
+          await db
+            .update(citizensTable)
+            .set({ balanceMinutes: buyer.balanceMinutes + auction.amountDarmins })
+            .where(eq(citizensTable.id, auction.buyerId));
+        }
+
+        // Credit seller (finalPrice - 2% tax)
+        const [seller] = await db
+          .select()
+          .from(citizensTable)
+          .where(eq(citizensTable.id, auction.sellerId))
+          .limit(1);
+        if (seller) {
+          await db
+            .update(citizensTable)
+            .set({ balanceMinutes: seller.balanceMinutes + (finalPrice - tax) })
+            .where(eq(citizensTable.id, auction.sellerId));
+        }
+
+        await db.insert(auctionLogsTable).values({
+          auctionId: auction.id,
+          buyerId: auction.buyerId,
+          sellerId: auction.sellerId,
+          finalPrice,
+          tax2pct: tax,
+        });
+
+        logger.info({ auctionId: auction.id, finalPrice, tax }, "Auction auto-finalized (winner)");
+      } else {
+        // No bids — return Darmins to seller
+        const [seller] = await db
+          .select()
+          .from(citizensTable)
+          .where(eq(citizensTable.id, auction.sellerId))
+          .limit(1);
+        if (seller) {
+          await db
+            .update(citizensTable)
+            .set({ balanceMinutes: seller.balanceMinutes + auction.amountDarmins })
+            .where(eq(citizensTable.id, auction.sellerId));
+        }
+
+        logger.info({ auctionId: auction.id }, "Auction auto-finalized (no bids, refunded)");
+      }
+    } catch (err) {
+      logger.error({ err, auctionId: auction.id }, "Failed to auto-finalize auction");
+    }
+  }
+}
 
 export default router;

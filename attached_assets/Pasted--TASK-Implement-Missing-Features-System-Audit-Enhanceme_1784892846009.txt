@@ -1,0 +1,42 @@
+# TASK: Implement Missing Features, System Audit & Enhancements for TimeNation Engine
+
+## CONTEXT & CURRENT STATE
+We have a fully functioning TypeScript/Express backend with Drizzle ORM and PostgreSQL.
+Existing features include:
+1. Citizen Registration with 9-digit ICAO 9303 Passports & ID Card SVG generators, PII encryption, age verification, and Google Sheets logger.
+2. Chronopedia Slots & Events with Google Places search integration.
+3. Auction System for Darmins with 2% tax and escrow rules.
+4. TiMETR Escrow Deals (Task-based C2C time transfers).
+5. Embassy Hardware & GPS Verification via Haversine QR tokens (<=15m limit).
+6. Emission Limit Monitoring.
+
+---
+
+## NEW REQUIREMENTS TO IMPLEMENT
+
+### 1. Automated Background Worker (Cron) for Auction Finalization
+- Create a scheduled job (e.g., using `node-cron` or an interval worker) that runs every minute.
+- Query active auctions where `endsAt <= NOW()`.
+- Automatically trigger the finalization logic (transfer Darmins to winner, execute 2% tax, refund seller if no bids, update status to `completed`).
+
+### 2. Complete Missing Module Endpoints
+Implement express routes for schema tables that currently lack API coverage:
+- **Timeline Capsules (`/api/timeline-capsules`)**:
+  - `POST /api/timeline-capsules` — Create/store a temporal capsule anchored to `timelineCoord`.
+  - `GET /api/timeline-capsules?citizenId=X` — Retrieve citizen's temporal capsules.
+- **Time Bank & Ledger (`/api/time-bank`)**:
+  - `POST /api/time-bank/loans` — Request a time loan against collateral.
+  - `POST /api/time-bank/loans/:id/repay` — Manual repayment of loan, logging entry into `time_bank_ledger`.
+  - `GET /api/time-bank/ledger?citizenId=X` — Fetch ledger audit history.
+- **TV Slots & Capsules (`/api/tv`)**:
+  - `GET /api/tv/slots?date=YYYY-MM-DD` — Get 1440 minute slots schedule.
+  - `POST /api/tv/slots/:id/book` — Book TV slot with Timeltr or Fiat payment status.
+  - `POST /api/tv/capsules` — Create broadcast capsule tied to a booked TV slot.
+
+### 3. Escrow Strict Ancestral Minute Defense
+- Update `/api/deals` validation: Ensure `sender.balanceMinutes - 1.0` strict threshold is enforced across all fractional amounts. A citizen MUST always retain at least 1.0 non-transferable Ancestral Minute (Родовая минута).
+
+### 4. Code Quality & Formatting Standards
+- Ensure all API routes return clear, strongly-typed JSON responses.
+- Wrap DB operations in proper try-catch blocks and log events using internal `logger`.
+- Maintain clean Drizzle ORM syntax consistent with `@workspace/db`.
