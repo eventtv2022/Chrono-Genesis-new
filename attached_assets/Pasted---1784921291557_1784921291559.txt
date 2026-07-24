@@ -1,0 +1,90 @@
+Отличные новости, что стрелочка заработала! Теперь остался последний шаг — оживить сами Капсулы Времени, чтобы при клике открывалось их содержимое.
+
+Разберём термины, чтобы в приложении всё было наглядно и понятно любому гражданину.
+
+---
+
+### 💡 Простыми словами: Что такое «Слоты» и «Все минутные активы»?
+
+В экосистеме **TimeNation**:
+
+1. **Минутный актив / Минутный слот**:
+* Это **конкретная минута времени в календаре** (например, `11.01.2026 14:00`), которую гражданин забронировал или купил.
+* **Почему это «слот» / «актив»?** Потому что каждая минута существует в единственном экземпляре во Вселенной. Это ваша «цифровая недвижимость» во времени. Вы можете её просто хранить, выставить на аукцион или привязать к ней временную капсулу.
+
+
+2. **Чем «Мои минуты» (Слоты) отличаются от «Капсул» (Якорей)?**
+* **`📍 Мои минуты` (Слоты)** — это просто купленная вашими руками или полученная минута (пустая «ячейка времени»).
+* **`⚓ Капсулы` (Якоря)** — это ваша минута, **внутри которой запечатано послание, память, видео или документ** (капсула времени).
+
+
+
+---
+
+### 🛠️ Почему Капсула сейчас не открывается?
+
+На карточках с бейджем `📜 Капсула` клик сейчас открывает базовую информацию о минуте, но не вызывается специальное модальное окно просмотра капсулы (`CapsuleViewModal` / `CapsuleDetailModal`), либо сервер не отдаёт содержимое запечатанного послания.
+
+Вот готовый **ультра-точный промпт для Replit**, который исправит открытие Капсулы:
+
+---
+
+## 🚀 Промпт для Replit: Показ содержимого Капсулы Времени
+
+```markdown
+# BUGFIX: Time Capsule detail modal does not open on capsule click
+
+## PROBLEM
+In "My TIME" (`MyTimeModal.tsx`), items marked with the `📜 Капсула` badge fail to display the Capsule content or open the Capsule Detail Modal (`CapsuleDetailModal.tsx` / `ViewCapsuleModal.tsx`) when clicked.
+
+---
+
+## REQUIRED FIXES
+
+### 1. Fix Capsule Click Handler in `MyTimeModal.tsx`
+Ensure that when a user clicks on any row or button with `hasCapsule: true`:
+- It fetches or passes the capsule payload (text message, attached media, unlock timestamp, author).
+- It opens the dedicated `CapsuleDetailModal`.
+
+```tsx
+const handleItemClick = (slot: TimeSlot) => {
+  if (slot.hasCapsule || slot.capsuleId) {
+    // Open Capsule View Modal
+    setSelectedCapsule(slot);
+    setIsCapsuleModalOpen(true);
+  } else {
+    // Standard minute details
+    setSelectedSlot(slot);
+    setIsSlotModalOpen(true);
+  }
+};
+
+```
+
+### 2. Ensure `CapsuleDetailModal.tsx` Exists & Displays Content
+
+The Capsule detail view must show:
+
+* **Header**: 📜 Капсула Времени (`formattedDate` e.g., `11.01.2026 14:00`)
+* **Status**:
+* If unlock date is in the past: Display the full text message/audio/content.
+* If unlock date is in the future: Display countdown timer `⏳ Капсула запечатана до [Дата]` and lock state.
+
+
+* **Action Buttons**:
+* `[ 🏛️ Выставить на аукцион ]`
+* `[ ✏️ Редактировать послание ]` (if owner)
+* `[ Закрыть ]`
+
+
+
+---
+
+## VERIFICATION CHECK
+
+1. Go to "My TIME" -> Click on the item `11.01.2026 14:00 📜 Капсула`.
+2. Ensure the Capsule modal pops up smoothly showing the saved text/capsule data instead of doing nothing.
+
+```
+
+```

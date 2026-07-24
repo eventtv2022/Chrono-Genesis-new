@@ -536,6 +536,7 @@ export default function TimelineScreen() {
   const [selectedAnchor, setSelectedAnchor] = useState<{ timelineCoord: string; status: string; createdAt: string; capsuleText: string | null } | null>(null);
   const [showAnchorActions, setShowAnchorActions] = useState(false);
   const [showCapsule, setShowCapsule] = useState(false);
+  const [showCapsuleView, setShowCapsuleView] = useState(false);
   const [capsuleText, setCapsuleText] = useState("");
   const [capsuleSaving, setCapsuleSaving] = useState(false);
   const [showStateProperty, setShowStateProperty] = useState(false);
@@ -957,7 +958,14 @@ export default function TimelineScreen() {
                         opacity: pressed ? 0.72 : 1,
                         cursor: "pointer" as never,
                       }]}
-                      onPress={() => { setSelectedAnchor(a); setShowAnchorActions(true); }}
+                      onPress={() => {
+                        setSelectedAnchor(a);
+                        if (a.capsuleText) {
+                          setShowCapsuleView(true);
+                        } else {
+                          setShowAnchorActions(true);
+                        }
+                      }}
                     >
                       <View style={styles.maRowLeft}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -1219,6 +1227,99 @@ export default function TimelineScreen() {
               ? <ActivityIndicator color="#fff" />
               : <Text style={styles.capSaveBtnText}>{t.save}</Text>}
           </Pressable>
+        </View>
+      </Modal>
+
+      {/* ── 📜 Capsule View Modal — просмотр содержимого капсулы ── */}
+      <Modal visible={showCapsuleView} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCapsuleView(false)}>
+        <View style={[styles.capModal, { backgroundColor: colors.background }]}>
+          {/* Шапка */}
+          <View style={[styles.capHeader, { borderBottomColor: colors.border }]}>
+            <View style={styles.capHeaderLeft}>
+              <Text style={{ fontSize: 20 }}>📜</Text>
+              <View>
+                <Text style={[styles.capHeaderTitle, { color: colors.foreground }]}>Капсула Времени</Text>
+                {selectedAnchor && (() => {
+                  const c = selectedAnchor.timelineCoord;
+                  const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)} ${c.slice(8,10)}:${c.slice(10,12)}`;
+                  return <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>{label}</Text>;
+                })()}
+              </View>
+            </View>
+            <Pressable onPress={() => setShowCapsuleView(false)} style={[styles.maClose, { cursor: "pointer" as never }]}>
+              <Feather name="x" size={22} color={colors.foreground} />
+            </Pressable>
+          </View>
+
+          {/* Координата-бейдж */}
+          {selectedAnchor && (() => {
+            const c = selectedAnchor.timelineCoord;
+            return (
+              <View style={[styles.capCoordBadge, { backgroundColor: colors.card, borderColor: "#7c3aed44" }]}>
+                <Feather name="map-pin" size={12} color="#7c3aed" />
+                <Text style={[styles.capCoordBadgeText, { color: colors.mutedForeground }]}>{c}</Text>
+                {selectedAnchor.status === "on_auction" && (
+                  <View style={{ marginLeft: "auto" as never, backgroundColor: "#e6952222", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#e69522" }}>🏷️ На торгах</Text>
+                  </View>
+                )}
+              </View>
+            );
+          })()}
+
+          {/* Тело капсулы */}
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 4, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+            <View style={{ backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33", borderRadius: 14, padding: 18, marginBottom: 20 }}>
+              <Text style={{ fontSize: 15, lineHeight: 24, color: colors.foreground }}>
+                {selectedAnchor?.capsuleText ?? ""}
+              </Text>
+            </View>
+
+            {/* Кнопки действий */}
+            <Pressable
+              style={({ pressed }) => ({
+                flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+                backgroundColor: "#7c3aed", borderRadius: 12, padding: 14, marginBottom: 10,
+                opacity: pressed ? 0.8 : 1, cursor: "pointer" as never,
+              })}
+              onPress={() => {
+                setShowCapsuleView(false);
+                setTimeout(() => {
+                  setCapsuleText(selectedAnchor?.capsuleText ?? "");
+                  setShowCapsule(true);
+                }, 350);
+              }}
+            >
+              <Feather name="edit-2" size={16} color="#fff" />
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Редактировать послание</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => ({
+                flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+                backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+                borderRadius: 12, padding: 14, marginBottom: 10,
+                opacity: pressed ? 0.7 : 1, cursor: "pointer" as never,
+              })}
+              onPress={() => {
+                setShowCapsuleView(false);
+                setTimeout(() => setShowAnchorActions(true), 350);
+              }}
+            >
+              <Feather name="more-horizontal" size={16} color={colors.foreground} />
+              <Text style={{ color: colors.foreground, fontWeight: "600", fontSize: 15 }}>Другие действия</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => ({
+                alignItems: "center", padding: 14,
+                opacity: pressed ? 0.6 : 1, cursor: "pointer" as never,
+              })}
+              onPress={() => setShowCapsuleView(false)}
+            >
+              <Text style={{ color: colors.mutedForeground, fontSize: 15 }}>{t.cancel}</Text>
+            </Pressable>
+          </ScrollView>
         </View>
       </Modal>
 
