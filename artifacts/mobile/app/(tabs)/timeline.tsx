@@ -1159,7 +1159,14 @@ export default function TimelineScreen() {
                         </View>
                         <Text style={[styles.maCoordRaw, { color: colors.mutedForeground }]}>{c}</Text>
                       </View>
-                      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                      <TouchableOpacity
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        style={{ padding: 8, marginRight: -8 }}
+                        onPress={() => { setSelectedAnchor(a); setShowAnchorActions(true); }}
+                        activeOpacity={0.6}
+                      >
+                        <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+                      </TouchableOpacity>
                     </TouchableOpacity>
                   );
                 }}
