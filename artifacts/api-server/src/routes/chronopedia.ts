@@ -306,6 +306,94 @@ router.delete("/chronopedia/events/:id", async (req, res): Promise<void> => {
   res.json({ ok: true });
 });
 
+// ── GET /api/chronopedia/my-slots?citizenId=X ────────────────────────────────
+// All slots owned by a specific citizen (ownerCitizenId = X).
+router.get("/chronopedia/my-slots", async (req, res): Promise<void> => {
+  const citizenId = parseInt(String(req.query["citizenId"] ?? ""), 10);
+  if (isNaN(citizenId) || citizenId <= 0) { res.status(400).json({ error: "citizenId обязателен" }); return; }
+
+  const rows = await db
+    .select({
+      id:             chronopediaSlotsTable.id,
+      timeMarker:     chronopediaSlotsTable.timeMarker,
+      placeId:        chronopediaSlotsTable.placeId,
+      geoLat:         chronopediaSlotsTable.geoLat,
+      geoLng:         chronopediaSlotsTable.geoLng,
+      locationName:   chronopediaSlotsTable.locationName,
+      ownerCitizenId: chronopediaSlotsTable.ownerCitizenId,
+      isLocked:       chronopediaSlotsTable.isLocked,
+      capsuleTitle:   chronopediaSlotsTable.capsuleTitle,
+      capsuleContent: chronopediaSlotsTable.capsuleContent,
+      capsuleMediaUrl: chronopediaSlotsTable.capsuleMediaUrl,
+      isCapsuleSealed: chronopediaSlotsTable.isCapsuleSealed,
+      createdAt:      chronopediaSlotsTable.createdAt,
+      eventCount:     sql<number>`count(case when ${chronopediaEventsTable.status} != 'deleted' then 1 end)::int`,
+    })
+    .from(chronopediaSlotsTable)
+    .leftJoin(chronopediaEventsTable, eq(chronopediaEventsTable.slotId, chronopediaSlotsTable.id))
+    .where(eq(chronopediaSlotsTable.ownerCitizenId, citizenId))
+    .groupBy(chronopediaSlotsTable.id)
+    .orderBy(desc(chronopediaSlotsTable.createdAt));
+
+  res.json({ slots: rows });
+});
+
+// ── POST /api/chronopedia/slots/:id/capsule ───────────────────────────────────
+// Attach or update a "Capsule of Meaning" for an owned slot.
+const CapsuleBody = z.object({
+  citizenId:  z.number().int().positive(),
+  title:      z.string().min(1).max(200),
+  content:    z.string().min(1).max(5000),
+  mediaUrl:   z.string().max(500).optional(),
+  visibility: z.enum(["public", "private"]).default("public"),
+});
+
+router.post("/chronopedia/slots/:id/capsule", async (req, res): Promise<void> => {
+  const slotId = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(slotId)) { res.status(400).json({ error: "Invalid slot ID" }); return; }
+
+  const parsed = CapsuleBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const { citizenId, title, content, mediaUrl } = parsed.data;
+
+  const [slot] = await db
+    .select({ id: chronopediaSlotsTable.id, ownerCitizenId: chronopediaSlotsTable.ownerCitizenId, isLocked: chronopediaSlotsTable.isLocked })
+    .from(chronopediaSlotsTable)
+    .where(eq(chronopediaSlotsTable.id, slotId))
+    .limit(1);
+
+  if (!slot) { res.status(404).json({ error: "Слот не найден" }); return; }
+  if (slot.ownerCitizenId !== citizenId) {
+    res.status(403).json({ error: "Только владелец слота может запечатать Капсулу Смысла" });
+    return;
+  }
+  if (slot.isLocked) {
+    res.status(409).json({ error: "Слот заблокирован (на аукционе). Редактирование невозможно." });
+    return;
+  }
+
+  const [updated] = await db
+    .update(chronopediaSlotsTable)
+    .set({
+      capsuleTitle:    title,
+      capsuleContent:  content,
+      capsuleMediaUrl: mediaUrl ?? null,
+      isCapsuleSealed: true,
+    })
+    .where(eq(chronopediaSlotsTable.id, slotId))
+    .returning({
+      id:              chronopediaSlotsTable.id,
+      capsuleTitle:    chronopediaSlotsTable.capsuleTitle,
+      capsuleContent:  chronopediaSlotsTable.capsuleContent,
+      capsuleMediaUrl: chronopediaSlotsTable.capsuleMediaUrl,
+      isCapsuleSealed: chronopediaSlotsTable.isCapsuleSealed,
+    });
+
+  req.log.info({ slotId, citizenId }, "Capsule of Meaning sealed");
+  res.status(201).json({ ok: true, capsule: updated });
+});
+
 // ── GET /api/chronopedia/places/search?q=TEXT ────────────────────────────────
 // Geocoding via Nominatim (OpenStreetMap) — free, no API key required.
 router.get("/chronopedia/places/search", async (req, res): Promise<void> => {

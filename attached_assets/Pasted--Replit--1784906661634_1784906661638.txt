@@ -1,0 +1,65 @@
+Вот единый и исчерпывающий промпт для Replit, который **одновременно** решает обе задачи: оживляет клик по карточкам в меню **«My TIME»**, дает возможность запечатать в выкупленную минуту **«Капсулу Смысла»** и позволяет выставить конкретный слот на **Аукцион**.
+
+---
+
+## 🚀 Комплексный Промпт для Replit: Капсула Смысла и Продажа минут на Аукционе из «My TIME»
+
+```markdown
+# TASK: Enable Interactive Actions for Owned Minutes in "My TIME" (Capsule of Meaning & Auction Sale)
+
+## OBJECTIVE
+Make every historical slot card inside the "My TIME" drawer (`MyTimeDrawer.tsx`) fully clickable. Upon clicking a slot card, open an action menu allowing the citizen to either:
+1. Attach/Edit a "Capsule of Meaning" (Капсула Смысла) for that minute.
+2. Put the specific historical minute up for P2P Auction sale (Выставить на аукцион).
+3. View the minute directly on the global Chronopedia timeline map.
+
+---
+
+## IMPLEMENTATION REQUIREMENTS
+
+### 1. Make Slot Cards Clickable (`MyTimeDrawer.tsx`)
+- Add an explicit `onClick` / `onPress` handler to each slot item in the "My TIME" list.
+- When clicked, trigger a bottom sheet or modal: `SlotActionModal.tsx` containing slot details (e.g., `01.01.1 00:01` | Code: `000101010001`) and 3 action buttons:
+  - 📜 **`Вложить Капсулу Смысла`**
+  - 🔨 **`Выставить на Аукцион`**
+  - 📍 **`Перейти на Таймлайн`**
+
+---
+
+### 2. Feature A: "Capsule of Meaning" Integration (`AttachCapsuleModal.tsx`)
+When tapping **`📜 Вложить Капсулу Смысла`**:
+- **Form Inputs**:
+  - `Title`: Short header for the historical event/record.
+  - `Content`: Deep narrative/text describing the historical meaning.
+  - `Media URL / Attachment`: Optional image or document link.
+  - `Visibility`: Select between `Public` or `Encrypted/Private`.
+- **API Endpoint**: `POST /api/chronopedia/slots/:slotId/capsule`
+- **Database Schema**: Update `chronopedia_slots` table with `title`, `content`, `mediaUrl`, and `isCapsuleSealed` (boolean).
+- **Visual Feedback**: Once created, render a gold scroll icon `📜` on that slot row inside the "My TIME" list.
+
+---
+
+### 3. Feature B: "List Slot on Auction" Integration (`CreateSlotAuctionModal.tsx`)
+When tapping **`🔨 Выставить на Аукцион`**:
+- **Form Inputs**:
+  - `Start Price`: Minimum starting price in Darmins (default: 10 Darmins).
+  - `Auction Duration`: Select duration (12h, 24h, 48h, 7 days).
+- **API Endpoint**: `POST /api/auctions`
+  - Payload:
+    ```json
+    {
+      "assetType": "HISTORICAL_SLOT",
+      "slotId": "SLOT_ID_HERE",
+      "startPrice": 10,
+      "durationHours": 24
+    }
+    ```
+- **Lock & Status**: Set `chronopedia_slots.isLocked = true` so the minute cannot be modified while on sale. Display a badge on the card in "My TIME": `"🔥 На аукционе"`.
+
+---
+
+### 4. Verification & UI Check
+- Ensure all slot rows in `MyTimeDrawer.tsx` have `cursor-pointer` styling and hover/active states.
+- Submitting either form must update the local state reactively without requiring a page refresh.
+
+```

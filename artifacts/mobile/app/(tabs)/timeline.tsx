@@ -13,6 +13,7 @@ import {
   Platform,
   Modal,
   Alert,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -140,6 +141,350 @@ function TimeAnchorAuctionModal({ anchor, visible, onClose, onSubmit, submitting
 
 const BASE_URL = getBaseUrl();
 
+// ── MyOwnedSlot interface (chronopedia slots owned by citizen) ─────────────────
+interface MyOwnedSlot {
+  id: number;
+  timeMarker: string;
+  placeId: string;
+  geoLat: number;
+  geoLng: number;
+  locationName: string;
+  ownerCitizenId: number | null;
+  isLocked: boolean;
+  capsuleTitle: string | null;
+  capsuleContent: string | null;
+  capsuleMediaUrl: string | null;
+  isCapsuleSealed: boolean;
+  createdAt: string;
+  eventCount: number;
+}
+
+// ── SlotActionModal — 3-button action menu for owned chronopedia slots ─────────
+interface SlotActionModalProps {
+  slot: MyOwnedSlot | null;
+  visible: boolean;
+  onClose: () => void;
+  onCapsule: () => void;
+  onAuction: () => void;
+  onTimeline: () => void;
+  colors: ReturnType<typeof useColors>;
+}
+
+function SlotActionModal({ slot, visible, onClose, onCapsule, onAuction, onTimeline, colors }: SlotActionModalProps) {
+  if (!slot) return null;
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }} onPress={onClose}>
+        <Pressable style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 }} onPress={() => {}}>
+          {/* Handle bar */}
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginBottom: 16 }} />
+
+          {/* Slot info */}
+          <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 20 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <Feather name="map-pin" size={14} color={colors.primary} />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground, flex: 1 }} numberOfLines={1}>
+                {slot.locationName}
+              </Text>
+              {slot.isCapsuleSealed && (
+                <View style={{ backgroundColor: "#7c3aed22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#7c3aed" }}>📜 Капсула</Text>
+                </View>
+              )}
+              {slot.isLocked && (
+                <View style={{ backgroundColor: "#f59e0b22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🔥 Аукцион</Text>
+                </View>
+              )}
+            </View>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "monospace" }}>{slot.timeMarker}</Text>
+          </View>
+
+          {/* Action: Capsule */}
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 10 }}
+            onPress={() => { onClose(); setTimeout(onCapsule, 350); }}
+          >
+            <View style={{ width: 42, height: 42, borderRadius: 11, backgroundColor: "#7c3aed22", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 20 }}>📜</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>Вложить Капсулу Смысла</Text>
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>
+                {slot.isCapsuleSealed ? "Редактировать запечатанную капсулу" : "Запечатать историческое значение минуты"}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+
+          {/* Action: Auction */}
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: slot.isLocked ? "#f59e0b55" : colors.border, marginBottom: 10, opacity: slot.isLocked ? 0.6 : 1 }}
+            onPress={() => { if (slot.isLocked) { Alert.alert("🔥", "Слот уже выставлен на аукцион"); return; } onClose(); setTimeout(onAuction, 350); }}
+          >
+            <View style={{ width: 42, height: 42, borderRadius: 11, backgroundColor: "#f59e0b22", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 20 }}>🔨</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>Выставить на Аукцион</Text>
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>
+                {slot.isLocked ? "Уже на торгах — ожидайте завершения" : "Продать слот другому гражданину"}
+              </Text>
+            </View>
+            {!slot.isLocked && <Feather name="chevron-right" size={16} color={colors.mutedForeground} />}
+          </TouchableOpacity>
+
+          {/* Action: Go to Timeline */}
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 16 }}
+            onPress={() => { onClose(); setTimeout(onTimeline, 350); }}
+          >
+            <View style={{ width: 42, height: 42, borderRadius: 11, backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 20 }}>📍</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>Перейти на Таймлайн</Text>
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>Открыть временну́ю координату на карте</Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={{ alignItems: "center", paddingVertical: 10 }} onPress={onClose}>
+            <Text style={{ fontSize: 15, color: colors.mutedForeground }}>Отмена</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ── AttachCapsuleModal — rich Capsule of Meaning form for chronopedia slots ────
+interface AttachCapsuleModalProps {
+  slot: MyOwnedSlot | null;
+  visible: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  citizenId: number;
+  colors: ReturnType<typeof useColors>;
+}
+
+function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colors }: AttachCapsuleModalProps) {
+  const [title, setTitle]     = useState(slot?.capsuleTitle ?? "");
+  const [content, setContent] = useState(slot?.capsuleContent ?? "");
+  const [mediaUrl, setMediaUrl] = useState(slot?.capsuleMediaUrl ?? "");
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [saving, setSaving]   = useState(false);
+
+  // Reset when slot changes
+  useEffect(() => {
+    setTitle(slot?.capsuleTitle ?? "");
+    setContent(slot?.capsuleContent ?? "");
+    setMediaUrl(slot?.capsuleMediaUrl ?? "");
+  }, [slot?.id]);
+
+  const handleSave = async () => {
+    if (!slot) return;
+    if (!title.trim()) { Alert.alert("⚠️", "Укажите заголовок капсулы"); return; }
+    if (!content.trim()) { Alert.alert("⚠️", "Добавьте содержание капсулы"); return; }
+    setSaving(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/chronopedia/slots/${slot.id}/capsule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ citizenId, title: title.trim(), content: content.trim(), mediaUrl: mediaUrl.trim() || undefined, visibility }),
+      });
+      if (res.ok) {
+        onSuccess();
+        onClose();
+        Alert.alert("📜", "Капсула Смысла запечатана");
+      } else {
+        const d = await res.json() as { error?: string };
+        Alert.alert("Ошибка", d.error ?? "Не удалось сохранить капсулу");
+      }
+    } catch {
+      Alert.alert("Ошибка", "Проверьте соединение");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: 20, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+          {/* Header */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <Text style={{ fontSize: 20 }}>📜</Text>
+            <Text style={{ fontSize: 17, fontWeight: "800", color: colors.foreground, flex: 1 }}>Капсула Смысла</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={8}>
+              <Feather name="x" size={22} color={colors.foreground} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Slot info badge */}
+          {slot && (
+            <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 14, marginBottom: 20, flexDirection: "row", gap: 8, alignItems: "center" }}>
+              <Feather name="map-pin" size={12} color={colors.primary} />
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, flex: 1 }} numberOfLines={1}>
+                {slot.locationName} · {slot.timeMarker}
+              </Text>
+            </View>
+          )}
+
+          {/* Title */}
+          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Заголовок *</Text>
+          <TextInput
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 15, color: colors.foreground, backgroundColor: colors.card, marginBottom: 16 }}
+            placeholder="Краткое историческое значение этой минуты"
+            placeholderTextColor={colors.mutedForeground}
+            value={title}
+            onChangeText={setTitle}
+            maxLength={200}
+          />
+
+          {/* Content */}
+          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Содержание *</Text>
+          <TextInput
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 14, color: colors.foreground, backgroundColor: colors.card, marginBottom: 6, minHeight: 120, textAlignVertical: "top" }}
+            placeholder="Глубокое описание исторического смысла, события или личного значения этой минуты..."
+            placeholderTextColor={colors.mutedForeground}
+            value={content}
+            onChangeText={setContent}
+            multiline
+            maxLength={5000}
+          />
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, textAlign: "right", marginBottom: 16 }}>{content.length}/5000</Text>
+
+          {/* Media URL */}
+          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Ссылка на медиа (необязательно)</Text>
+          <TextInput
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 13, color: colors.foreground, backgroundColor: colors.card, marginBottom: 16 }}
+            placeholder="https://..."
+            placeholderTextColor={colors.mutedForeground}
+            value={mediaUrl}
+            onChangeText={setMediaUrl}
+            keyboardType="url"
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={500}
+          />
+
+          {/* Visibility */}
+          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Видимость</Text>
+          <View style={{ flexDirection: "row", gap: 10, marginBottom: 24 }}>
+            {(["public", "private"] as const).map(v => (
+              <TouchableOpacity
+                key={v}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: visibility === v ? colors.primary : colors.border, backgroundColor: visibility === v ? colors.primary + "18" : colors.card, alignItems: "center" }}
+                onPress={() => setVisibility(v)}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "700", color: visibility === v ? colors.primary : colors.mutedForeground }}>
+                  {v === "public" ? "🌐 Публичная" : "🔒 Приватная"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Save button */}
+          <TouchableOpacity
+            style={{ backgroundColor: "#7c3aed", borderRadius: 14, paddingVertical: 15, alignItems: "center", opacity: saving ? 0.6 : 1 }}
+            disabled={saving}
+            onPress={() => void handleSave()}
+          >
+            {saving
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={{ fontSize: 16, fontWeight: "800", color: "#fff" }}>📜 Запечатать Капсулу</Text>}
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ── CreateSlotAuctionModal — put a chronopedia slot on auction ─────────────────
+interface CreateSlotAuctionModalProps {
+  slot: MyOwnedSlot | null;
+  visible: boolean;
+  onClose: () => void;
+  onSubmit: (data: { startingPrice: number; durationHours: number }) => void;
+  submitting: boolean;
+  colors: ReturnType<typeof useColors>;
+}
+
+function CreateSlotAuctionModal({ slot, visible, onClose, onSubmit, submitting, colors }: CreateSlotAuctionModalProps) {
+  const [priceInput, setPriceInput]       = useState("10");
+  const [durationInput, setDurationInput] = useState("24");
+  const DURATIONS = [
+    { label: "12 ч",    value: "12"  },
+    { label: "24 ч",    value: "24"  },
+    { label: "48 ч",    value: "48"  },
+    { label: "7 дней",  value: "168" },
+  ];
+
+  const handleConfirm = () => {
+    const price = parseFloat(priceInput);
+    const hours = parseInt(durationInput, 10);
+    if (isNaN(price) || price <= 0) { Alert.alert("⚠️", "Укажите стартовую цену больше 0"); return; }
+    onSubmit({ startingPrice: price, durationHours: hours });
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
+        <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#555", alignSelf: "center", marginBottom: 16 }} />
+          <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground, marginBottom: 4 }}>🔨 Выставить слот на аукцион</Text>
+          {slot && <Text style={{ fontSize: 13, color: colors.mutedForeground, marginBottom: 16, lineHeight: 18 }}>{slot.locationName} · {slot.timeMarker}</Text>}
+
+          <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 20, flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Feather name="info" size={14} color={colors.primary} />
+            <Text style={{ flex: 1, fontSize: 12, color: colors.mutedForeground, lineHeight: 17 }}>
+              Слот будет заблокирован на время аукциона. Победитель становится новым владельцем. Налог Казначейства: 2%.
+            </Text>
+          </View>
+
+          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Стартовая цена (Д)</Text>
+          <TextInput
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 16, color: colors.foreground, backgroundColor: colors.card, marginBottom: 16 }}
+            placeholder="10.00"
+            placeholderTextColor={colors.mutedForeground}
+            value={priceInput}
+            onChangeText={setPriceInput}
+            keyboardType="decimal-pad"
+            autoFocus
+          />
+
+          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Длительность</Text>
+          <View style={{ flexDirection: "row", gap: 8, marginBottom: 24 }}>
+            {DURATIONS.map(d => (
+              <TouchableOpacity
+                key={d.value}
+                style={{ flex: 1, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5, borderColor: durationInput === d.value ? "#f59e0b" : colors.border, backgroundColor: durationInput === d.value ? "#f59e0b18" : colors.card, alignItems: "center" }}
+                onPress={() => setDurationInput(d.value)}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "700", color: durationInput === d.value ? "#f59e0b" : colors.mutedForeground }}>{d.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TouchableOpacity
+            onPress={handleConfirm}
+            disabled={submitting}
+            style={{ backgroundColor: "#f59e0b", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10, opacity: submitting ? 0.6 : 1 }}
+          >
+            {submitting
+              ? <ActivityIndicator color="#000" />
+              : <Text style={{ fontSize: 16, fontWeight: "700", color: "#000" }}>Выставить на аукцион →</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={{ alignItems: "center", padding: 10 }}>
+            <Text style={{ fontSize: 15, color: colors.mutedForeground }}>Отмена</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 type ZoomLevel = 1 | 2 | 3 | 4 | 5;
 
 interface OccupiedEntry {
@@ -196,6 +541,13 @@ export default function TimelineScreen() {
   const [showStateProperty, setShowStateProperty] = useState(false);
   const [showAnchorAuction, setShowAnchorAuction] = useState(false);
 
+  // ── Slot (Chronopedia) state ──────────────────────────────────────────────────
+  const [myTimeTab, setMyTimeTab]             = useState<"anchors" | "slots">("anchors");
+  const [selectedSlot, setSelectedSlot]       = useState<MyOwnedSlot | null>(null);
+  const [showSlotActions, setShowSlotActions]  = useState(false);
+  const [showAttachCapsule, setShowAttachCapsule] = useState(false);
+  const [showSlotAuction, setShowSlotAuction] = useState(false);
+
   const router = useRouter();
 
   // ── Anchor auction mutation ──────────────────────────────────────────────────
@@ -245,6 +597,48 @@ export default function TimelineScreen() {
       return res.json();
     },
     enabled: !!citizen,
+  });
+
+  // ── My chronopedia slots query ────────────────────────────────────────────────
+  const { data: mySlotsData, refetch: refetchMySlots } = useQuery<{ slots: MyOwnedSlot[] }>({
+    queryKey: ["mySlots", citizen?.id],
+    queryFn: async () => {
+      if (!citizen) return { slots: [] };
+      const res = await fetch(`${BASE_URL}/api/chronopedia/my-slots?citizenId=${citizen.id}`);
+      if (!res.ok) return { slots: [] };
+      return res.json() as Promise<{ slots: MyOwnedSlot[] }>;
+    },
+    enabled: !!citizen,
+  });
+  const mySlots = mySlotsData?.slots ?? [];
+
+  // ── Slot auction mutation (HISTORICAL_SLOT) ────────────────────────────────────
+  const slotAuctionMutation = useMutation({
+    mutationFn: async (data: { startingPrice: number; durationHours: number }) => {
+      if (!selectedSlot || !citizen) throw new Error("Нет выбранного слота");
+      const res = await fetch(`${BASE_URL}/api/auctions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({
+          assetType: "HISTORICAL_SLOT",
+          slotId: selectedSlot.id,
+          startingPrice: data.startingPrice,
+          durationHours: data.durationHours,
+        }),
+      });
+      const json = await res.json() as { error?: string; id?: number };
+      if (!res.ok) throw new Error(json.error ?? "Ошибка при создании аукциона");
+      return json;
+    },
+    onSuccess: () => {
+      setShowSlotAuction(false);
+      setShowSlotActions(false);
+      qc.invalidateQueries({ queryKey: ["mySlots", citizen?.id] });
+      qc.invalidateQueries({ queryKey: ["auctions"] });
+      void refetchMySlots();
+      Alert.alert("🔥", "Слот выставлен на аукцион");
+    },
+    onError: (e: Error) => Alert.alert("Ошибка", e.message),
   });
 
   const fetchOccupied = useCallback(async (year: number, month?: number, day?: number) => {
@@ -689,64 +1083,143 @@ export default function TimelineScreen() {
         </View>
       </Modal>
 
-      {/* My Anchors Modal */}
+      {/* My TIME Modal — tabbed: ⏱ Анкоры / 📍 Слоты */}
       <Modal visible={showMyAnchors} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowMyAnchors(false)}>
         <View style={[styles.maModal, { backgroundColor: colors.background }]}>
+          {/* Header */}
           <View style={[styles.maHeader, { borderBottomColor: colors.border }]}>
             <View style={styles.maHeaderLeft}>
               <Feather name="map-pin" size={18} color={colors.primary} />
               <Text style={[styles.maHeaderTitle, { color: colors.foreground }]}>My TIME</Text>
-              <View style={[styles.maCount, { backgroundColor: colors.primary }]}>
-                <Text style={styles.maCountText}>{myAnchors.length}</Text>
-              </View>
             </View>
             <TouchableOpacity onPress={() => setShowMyAnchors(false)} style={styles.maClose}>
               <Feather name="x" size={22} color={colors.foreground} />
             </TouchableOpacity>
           </View>
 
-          {myAnchors.length === 0 ? (
-            <View style={styles.maEmpty}>
-              <Feather name="clock" size={40} color={colors.mutedForeground} />
-              <Text style={[styles.maEmptyTitle, { color: colors.foreground }]}>{t.tl_anchor_title}</Text>
-              <Text style={[styles.maEmptyText, { color: colors.mutedForeground }]}>{t.tl_anchor_cost}</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={myAnchors}
-              keyExtractor={(a) => a.timelineCoord}
-              contentContainerStyle={styles.maList}
-              showsVerticalScrollIndicator={false}
-              renderItem={({ item: a }) => {
-                const c = a.timelineCoord;
-                const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)}  ${c.slice(8,10)}:${c.slice(10,12)}`;
-                return (
+          {/* Tab switcher */}
+          <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            {([
+              { key: "anchors", label: "⏱ Анкоры", count: myAnchors.length },
+              { key: "slots",   label: "📍 Слоты",  count: mySlots.length   },
+            ] as const).map(tab => (
+              <TouchableOpacity
+                key={tab.key}
+                onPress={() => setMyTimeTab(tab.key)}
+                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5,
+                  borderColor: myTimeTab === tab.key ? colors.primary : colors.border,
+                  backgroundColor: myTimeTab === tab.key ? colors.primary + "18" : colors.card }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "700", color: myTimeTab === tab.key ? colors.primary : colors.mutedForeground }}>{tab.label}</Text>
+                {tab.count > 0 && (
+                  <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: myTimeTab === tab.key ? colors.primary : colors.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }}>
+                    <Text style={{ fontSize: 10, fontWeight: "800", color: myTimeTab === tab.key ? colors.primaryForeground : colors.mutedForeground }}>{tab.count}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* ── Tab: Anchors ── */}
+          {myTimeTab === "anchors" && (
+            myAnchors.length === 0 ? (
+              <View style={styles.maEmpty}>
+                <Feather name="clock" size={40} color={colors.mutedForeground} />
+                <Text style={[styles.maEmptyTitle, { color: colors.foreground }]}>{t.tl_anchor_title}</Text>
+                <Text style={[styles.maEmptyText, { color: colors.mutedForeground }]}>{t.tl_anchor_cost}</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={myAnchors}
+                keyExtractor={(a) => a.timelineCoord}
+                contentContainerStyle={styles.maList}
+                showsVerticalScrollIndicator={false}
+                renderItem={({ item: a }) => {
+                  const c = a.timelineCoord;
+                  const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)}  ${c.slice(8,10)}:${c.slice(10,12)}`;
+                  return (
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      style={[styles.maRow, { backgroundColor: colors.card, borderColor: a.status === "on_auction" ? "#e6952255" : colors.border }]}
+                      onPress={() => { setSelectedAnchor(a); setShowAnchorActions(true); }}
+                    >
+                      <View style={styles.maRowLeft}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <Text style={[styles.maCoordLabel, { color: colors.foreground }]}>{label}</Text>
+                          {a.status === "on_auction" && (
+                            <View style={{ backgroundColor: "#e6952222", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#e69522" }}>🏷️ На торгах</Text>
+                            </View>
+                          )}
+                          {isCenturyBoundaryCoord(c) && (
+                            <View style={{ backgroundColor: "#f59e0b22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🏛️ Фонд</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.maCoordRaw, { color: colors.mutedForeground }]}>{c}</Text>
+                      </View>
+                      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )
+          )}
+
+          {/* ── Tab: Chronopedia Slots ── */}
+          {myTimeTab === "slots" && (
+            mySlots.length === 0 ? (
+              <View style={styles.maEmpty}>
+                <Text style={{ fontSize: 36, marginBottom: 8 }}>📍</Text>
+                <Text style={[styles.maEmptyTitle, { color: colors.foreground }]}>Нет owned-слотов Хронопедии</Text>
+                <Text style={[styles.maEmptyText, { color: colors.mutedForeground }]}>Создайте слот в Хронопедии — он появится здесь</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={mySlots}
+                keyExtractor={(s) => String(s.id)}
+                contentContainerStyle={styles.maList}
+                showsVerticalScrollIndicator={false}
+                renderItem={({ item: s }) => (
                   <TouchableOpacity
                     activeOpacity={0.75}
-                    style={[styles.maRow, { backgroundColor: colors.card, borderColor: a.status === "on_auction" ? "#e6952255" : colors.border }]}
-                    onPress={() => { setSelectedAnchor(a); setShowAnchorActions(true); }}
+                    style={[styles.maRow, {
+                      backgroundColor: colors.card,
+                      borderColor: s.isLocked ? "#f59e0b55" : s.isCapsuleSealed ? "#7c3aed55" : colors.border,
+                      cursor: "pointer" as never,
+                    }]}
+                    onPress={() => { setSelectedSlot(s); setShowSlotActions(true); }}
                   >
-                    <View style={styles.maRowLeft}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        <Text style={[styles.maCoordLabel, { color: colors.foreground }]}>{label}</Text>
-                        {a.status === "on_auction" && (
-                          <View style={{ backgroundColor: "#e6952222", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#e69522" }}>🏷️ На торгах</Text>
+                    <View style={{ flex: 1 }}>
+                      {/* Location + badges row */}
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground, flexShrink: 1 }} numberOfLines={1}>{s.locationName}</Text>
+                        {s.isCapsuleSealed && (
+                          <View style={{ backgroundColor: "#7c3aed22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#7c3aed" }}>📜 Капсула</Text>
                           </View>
                         )}
-                        {isCenturyBoundaryCoord(c) && (
+                        {s.isLocked && (
                           <View style={{ backgroundColor: "#f59e0b22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🏛️ Фонд</Text>
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🔥 Аукцион</Text>
                           </View>
                         )}
                       </View>
-                      <Text style={[styles.maCoordRaw, { color: colors.mutedForeground }]}>{c}</Text>
+                      {/* Time marker */}
+                      <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{s.timeMarker}</Text>
+                      {/* Capsule title preview */}
+                      {s.isCapsuleSealed && s.capsuleTitle && (
+                        <Text style={{ fontSize: 11, color: "#7c3aed", marginTop: 2 }} numberOfLines={1}>📜 {s.capsuleTitle}</Text>
+                      )}
+                      {/* Event count */}
+                      <Text style={{ fontSize: 10, color: colors.mutedForeground, marginTop: 2 }}>{s.eventCount} событий</Text>
                     </View>
                     <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
                   </TouchableOpacity>
-                );
-              }}
-            />
+                )}
+              />
+            )
           )}
         </View>
       </Modal>
@@ -765,6 +1238,42 @@ export default function TimelineScreen() {
         onClose={() => setShowAnchorAuction(false)}
         onSubmit={(data) => anchorAuctionMutation.mutate(data)}
         submitting={anchorAuctionMutation.isPending}
+        colors={colors}
+      />
+
+      {/* 📍 Slot Action Modal */}
+      <SlotActionModal
+        slot={selectedSlot}
+        visible={showSlotActions}
+        onClose={() => setShowSlotActions(false)}
+        onCapsule={() => setShowAttachCapsule(true)}
+        onAuction={() => setShowSlotAuction(true)}
+        onTimeline={() => {
+          if (!selectedSlot) return;
+          // Navigate to the slot's chronopedia page
+          setShowMyAnchors(false);
+          router.push("/(tabs)/chronopedia");
+        }}
+        colors={colors}
+      />
+
+      {/* 📜 Attach Capsule of Meaning Modal */}
+      <AttachCapsuleModal
+        slot={selectedSlot}
+        visible={showAttachCapsule}
+        onClose={() => setShowAttachCapsule(false)}
+        onSuccess={() => { void refetchMySlots(); }}
+        citizenId={citizen?.id ?? 0}
+        colors={colors}
+      />
+
+      {/* 🔨 Create Slot Auction Modal */}
+      <CreateSlotAuctionModal
+        slot={selectedSlot}
+        visible={showSlotAuction}
+        onClose={() => setShowSlotAuction(false)}
+        onSubmit={(data) => slotAuctionMutation.mutate(data)}
+        submitting={slotAuctionMutation.isPending}
         colors={colors}
       />
 

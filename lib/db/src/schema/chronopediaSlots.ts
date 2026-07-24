@@ -12,6 +12,11 @@ export const chronopediaSlotsTable = pgTable(
     // Ownership & escrow
     ownerCitizenId: integer("owner_citizen_id"),   // null = community-owned (no individual owner)
     isLocked:       boolean("is_locked").notNull().default(false),
+    // 📜 Capsule of Meaning
+    capsuleTitle:   text("capsule_title"),
+    capsuleContent: text("capsule_content"),
+    capsuleMediaUrl: text("capsule_media_url"),
+    isCapsuleSealed: boolean("is_capsule_sealed").notNull().default(false),
     createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
