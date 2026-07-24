@@ -1,0 +1,161 @@
+Проблема, из-за которой медиафайлы (фото, видео, аудио) «не сохраняются» в капсуле, почти всегда связанa с тем, как Replit обрабатывает сохранение локальных файлов и их связывание с базой данных (Prisma/SQLite/PostgreSQL).
+
+Судя по предыдущему экрану с рутом `/__mockup/uploads`, Replit либо пытается использовать абстрактную временную файловую систему, либо фронтенд отправляет запрос на загрузку без заголовков `multipart/form-data`, из-за чего бэкенд получает `null` вместо файла и ничего не записывает в БД.
+
+Чтобы решить эту проблему раз и навсегда, нужно давать Replit **комплексную связку**: клиентская загрузка + конвертация в корректный файл / Base64 / Cloud Storage + постоянное сохранение URL в запись капсулы.
+
+Вот **финальный ультра-промпт**, который полностью починит сохранение и отображение медиафайлов:
+
+---
+
+## 🚀 Ультра-промпт для Replit: Полноценное сохранение Медиа в Капсулах (Media Storage Fix)
+
+```markdown
+# CRITICAL BUGFIX: Media Files (Photos, Video, Audio) Are Not Saving in Time Capsules
+
+## DIAGNOSIS
+When users attach media (photos, videos, audio) to a Time Capsule:
+1. The media file is either lost during form submission or fails to persist in the database (`capsules` table).
+2. The endpoint returns or saves empty/invalid `mediaUrl` fields.
+3. Express server does not properly handle `multer` file uploads or Base64 payload storage.
+
+---
+
+## REQUIRED FIXES (FULL STACK)
+
+### 1. Database Schema Check (`schema.prisma` or DB Schema)
+Ensure the `Capsule` table has explicit fields for media attachments:
+```prisma
+model Capsule {
+  id           String   @id @default(uuid())
+  timeSlotId   String   @unique
+  title        String?
+  message      String?
+  mediaUrl     String?  // Public/Relative URL to file
+  mediaType    String?  // 'IMAGE' | 'VIDEO' | 'AUDIO'
+  duration     Int?     // Duration in seconds (for audio/video)
+  createdAt    DateTime @default(now())
+}
+
+```
+
+### 2. Backend Upload API Route (`server/routes.ts`)
+
+Set up a rock-solid upload handler using `multer` with proper disk storage and directory creation:
+
+```ts
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
+
+// Ensure directory exists
+const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'capsules');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`);
+  }
+});
+
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10 MB Limit
+});
+
+// Serve public static folder
+app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
+
+// Dedicated Media Upload Endpoint
+app.post('/api/capsules/upload-media', upload.single('mediaFile'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Файл не был передан' });
+    }
+
+    const fileUrl = `/uploads/capsules/${req.file.filename}`;
+    const fileType = req.file.mimetype.startsWith('image') 
+      ? 'IMAGE' 
+      : req.file.mimetype.startsWith('video') 
+      ? 'VIDEO' 
+      : 'AUDIO';
+
+    return res.json({ 
+      mediaUrl: fileUrl, 
+      mediaType: fileType 
+    });
+  } catch (error) {
+    console.error('Upload Error:', error);
+    return res.status(500).json({ error: 'Ошибка сохранения файла на сервере' });
+  }
+});
+
+```
+
+### 3. Frontend Attachment Flow (`CreateCapsuleModal.tsx`)
+
+Ensure the capsule creation workflow follows a **two-step upload pattern**:
+
+1. When user selects a photo/video/audio, immediately send it to `/api/capsules/upload-media` via `FormData`.
+2. Store the returned `mediaUrl` and `mediaType` in local modal state.
+3. On final submission ("Сохранить капсулу"), include `mediaUrl` and `mediaType` in the `POST /api/capsules` payload.
+
+```tsx
+// Frontend upload handler:
+const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  if (file.size > 10 * 1024 * 1024) {
+    alert("Файл превышает лимит 10 МБ!");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('mediaFile', file);
+
+  setIsUploading(true);
+  try {
+    const res = await fetch('/api/capsules/upload-media', {
+      method: 'POST',
+      body: formData, // DO NOT set Content-Type header manually for FormData
+    });
+    const data = await res.json();
+    
+    if (data.mediaUrl) {
+      setMediaUrl(data.mediaUrl);
+      setMediaType(data.mediaType);
+      toast.success("Медиафайл загружен!");
+    }
+  } catch (err) {
+    console.error("Upload failed", err);
+  } finally {
+    setIsUploading(false);
+  }
+};
+
+```
+
+---
+
+## VERIFICATION CHECKLIST
+
+1. Open Capsule Creation Modal -> Attach an MP4 video or MP3/PNG.
+2. Ensure the progress/success indicator confirms upload.
+3. Save the Capsule and view it in "My TIME" -> Open the capsule.
+4. Verify that the photo, video (player), or audio (player) displays/plays perfectly from `/uploads/capsules/...` without disappearing.
+
+```
+
+---
+
+### 💡 Пояснение, что изменится после этого промпта:
+* Теперь файл загружается **сразу при выборе** (до того, как вы нажмете финальную кнопку «Сохранить»).
+* Сервер точно сохранит файл в папку `public/uploads/capsules/` и запишет прямую ссылку в Базу Данных.
+* При открытии капсулы сервер вернет готовую ссылку, и видео/аудио плеер воспроизведёт запись без ошибок.
+
+```
