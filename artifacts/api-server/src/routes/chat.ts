@@ -257,49 +257,74 @@ router.post("/chat/tip", async (req, res): Promise<void> => {
   const { toCitizenId } = parsed.data;
   if (toCitizenId === me.id) { res.status(400).json({ error: "Нельзя дать чаевые самому себе" }); return; }
 
-  const [sender] = await db
-    .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
-    .from(citizensTable).where(eq(citizensTable.id, me.id)).limit(1);
-  if (!sender) { res.status(404).json({ error: "Гражданин не найден" }); return; }
+  let newBalance = 0;
+  let senderName = "";
+  let recipientName = "";
 
-  // Keep 1 Д родовой минуты — need balance > 1 to send a tip of 1 Д
-  if ((sender.balanceMinutes ?? 0) - 1 < 1) {
-    res.status(400).json({ error: "Недостаточно Дарминов для чаевых (нужно > 1 Д)" });
+  try {
+    await db.transaction(async (tx) => {
+      // 1. Read sender inside transaction
+      const [sender] = await tx
+        .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
+        .from(citizensTable).where(eq(citizensTable.id, me.id)).limit(1);
+      if (!sender) throw Object.assign(new Error("Гражданин не найден"), { status: 404 });
+
+      // Keep 1 Д родовой минуты — need balance > 1 to send a tip of 1 Д
+      if ((sender.balanceMinutes ?? 0) - 1 < 1) {
+        throw Object.assign(new Error("Недостаточно Дарминов для чаевых (нужно > 1 Д)"), { status: 400 });
+      }
+
+      // 2. Read recipient inside transaction
+      const [recipient] = await tx
+        .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
+        .from(citizensTable).where(eq(citizensTable.id, toCitizenId)).limit(1);
+      if (!recipient) throw Object.assign(new Error("Получатель не найден"), { status: 404 });
+
+      // 3. Atomic SQL-level arithmetic — no stale-read race condition
+      await tx.update(citizensTable)
+        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} - 1` })
+        .where(eq(citizensTable.id, me.id));
+
+      await tx.update(citizensTable)
+        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + 1` })
+        .where(eq(citizensTable.id, toCitizenId));
+
+      // 4. Read back the sender's real post-update balance
+      const [updated] = await tx
+        .select({ balanceMinutes: citizensTable.balanceMinutes })
+        .from(citizensTable).where(eq(citizensTable.id, me.id)).limit(1);
+      newBalance = updated?.balanceMinutes ?? (sender.balanceMinutes ?? 1) - 1;
+
+      // 5. Log the transaction
+      await tx.insert(transactionsTable).values({
+        sessionId:          0,
+        fromCitizenId:      me.id,
+        toCitizenId:        toCitizenId,
+        fromCitizenName:    sender.name    ?? `ID ${me.id}`,
+        toCitizenName:      recipient.name ?? `ID ${toCitizenId}`,
+        minutesTransferred: 1,
+        durationSeconds:    0,
+      });
+
+      senderName    = sender.name    ?? `ID ${me.id}`;
+      recipientName = recipient.name ?? `ID ${toCitizenId}`;
+    });
+  } catch (err: unknown) {
+    const e = err as { message?: string; status?: number };
+    res.status(e.status ?? 500).json({ error: e.message ?? "Внутренняя ошибка" });
     return;
   }
 
-  const [recipient] = await db
-    .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
-    .from(citizensTable).where(eq(citizensTable.id, toCitizenId)).limit(1);
-  if (!recipient) { res.status(404).json({ error: "Получатель не найден" }); return; }
-
-  await db.update(citizensTable)
-    .set({ balanceMinutes: (sender.balanceMinutes ?? 0) - 1 })
-    .where(eq(citizensTable.id, me.id));
-  await db.update(citizensTable)
-    .set({ balanceMinutes: (recipient.balanceMinutes ?? 0) + 1 })
-    .where(eq(citizensTable.id, toCitizenId));
-
-  await db.insert(transactionsTable).values({
-    sessionId:          0,
-    fromCitizenId:      me.id,
-    toCitizenId:        toCitizenId,
-    fromCitizenName:    sender.name    ?? `ID ${me.id}`,
-    toCitizenName:      recipient.name ?? `ID ${toCitizenId}`,
-    minutesTransferred: 1,
-    durationSeconds:    0,
-  });
-
-  // WS push — notify recipient in real-time
+  // WS push — notify recipient in real-time (outside tx, non-critical)
   pushToCitizen(toCitizenId, {
     type: "tip_received",
     fromCitizenId: me.id,
-    fromName: sender.name ?? `ID ${me.id}`,
+    fromName: senderName,
     amount: 1,
   });
 
-  logger.info({ from: me.id, to: toCitizenId }, "Chat tip +1Д");
-  res.json({ ok: true, newBalance: (sender.balanceMinutes ?? 0) - 1 });
+  logger.info({ from: me.id, to: toCitizenId, newBalance }, "Chat tip +1Д");
+  res.json({ ok: true, newBalance });
 });
 
 // ── GET /chat/conversations ────────────────────────────────────────────────

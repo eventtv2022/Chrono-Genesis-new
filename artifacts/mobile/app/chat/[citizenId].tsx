@@ -109,7 +109,7 @@ export default function ConversationScreen() {
   const router = useRouter();
   const { citizenId: rawId } = useLocalSearchParams<{ citizenId: string }>();
   const peerId = parseInt(rawId ?? "0", 10);
-  const { citizen, authToken } = useCitizen();
+  const { citizen, authToken, setCitizen } = useCitizen();
 
   const [peer, setPeer] = useState<PeerInfo | null>(null);
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
@@ -705,6 +705,11 @@ export default function ConversationScreen() {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
         Alert.alert("Ошибка", err.error ?? "Не удалось отправить чаевые");
         return;
+      }
+      // Update sender balance immediately in UI — no full reload needed
+      const payload = (await res.json().catch(() => ({}))) as { newBalance?: number };
+      if (payload.newBalance !== undefined && citizen) {
+        setCitizen({ ...citizen, balanceMinutes: payload.newBalance });
       }
       ChronoSounds.playTip();
       setTipToastText("+1 Д ⏱");
