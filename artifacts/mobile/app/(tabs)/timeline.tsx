@@ -1215,7 +1215,14 @@ export default function TimelineScreen() {
                       {/* Event count */}
                       <Text style={{ fontSize: 10, color: colors.mutedForeground, marginTop: 2 }}>{s.eventCount} событий</Text>
                     </View>
-                    <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                    <TouchableOpacity
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      style={{ padding: 8, marginRight: -8 }}
+                      onPress={() => { setSelectedSlot(s); setShowSlotActions(true); }}
+                      activeOpacity={0.6}
+                    >
+                      <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+                    </TouchableOpacity>
                   </TouchableOpacity>
                 )}
               />

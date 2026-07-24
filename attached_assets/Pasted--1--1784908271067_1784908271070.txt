@@ -1,0 +1,71 @@
+Стрелки вправо (`>`) не кликаются из-за одной из трех частых проблем фронтенд-верстки:
+
+1. **Иконка — это просто декоративный SVG/div без обработчика**: Клик висит либо нигде, либо только на самом родительском контейнере, а у самой стрелки нет `onClick` или на нее наложен `pointer-events: none`.
+2. **Слишком маленькая область клика (Touch Target)**: На мобильных устройствах попадание пальцем в иконку размером 16x16px не срабатывает, если вокруг нее нет прозрачного паддинга (минимум 44x44px).
+3. **Отсутствие функции в `onClick**`: В React/Vue компоненте элемент сверстан как иконка-заглушка (`<ChevronRight/>`), но событие вызова модального окна или роутинга к нему просто не привязано.
+
+Ниже точный промпт для Replit, который заставит кликаться **как всю карточку, так и отдельную стрелку**, разворачивая меню действий с Капсулой Смысла и Аукционом.
+
+---
+
+## 🚀 Промпт для Replit: Фикс кликабельности стрелок в шторке «My TIME»
+
+```markdown
+# BUGFIX: Right Arrow Icons (`>`) and Slot Cards in "My TIME" Are Not Clickable
+
+## PROBLEM STATEMENT
+In `MyTimeDrawer.tsx`, tapping on the right chevron arrow icon (`>`) or the slot item row does not execute any handler or open the actions modal.
+
+---
+
+## FIXES TO APPLY
+
+### 1. Enable Event Handling on Whole Row & Chevron Button
+Inside `MyTimeDrawer.tsx`, ensure the entire card container AND the chevron icon are wrapped in an interactive element (`<button>` or `div` with `onClick`):
+
+```tsx
+// Example Fix:
+<div 
+  key={slot.id}
+  onClick={() => handleSelectSlot(slot)} 
+  className="flex items-center justify-between p-4 bg-slate-900/80 rounded-xl cursor-pointer active:scale-[0.98] transition-transform"
+>
+  <div>
+    <div className="font-semibold text-white">{slot.formattedDate}</div>
+    <div className="text-xs text-slate-400">{slot.slotCode}</div>
+  </div>
+  
+  {/* Touch-target optimized button wrapper */}
+  <button 
+    type="button" 
+    onClick={(e) => {
+      e.stopPropagation(); // Prevent duplicate firing if nested
+      handleSelectSlot(slot);
+    }}
+    className="p-3 -mr-2 text-slate-400 hover:text-white focus:outline-none"
+  >
+    <ChevronRight className="w-5 h-5 pointer-events-none"/>
+  </button>
+</div>
+
+```
+
+### 2. Connect Action Menu Trigger (`handleSelectSlot`)
+
+When `handleSelectSlot(slot)` is called:
+
+1. Open the action modal/sheet `SlotActionModal`:
+* Button 1: **"📜 Вложить Капсулу Смысла"**
+* Button 2: **"🔨 Выставить на аукцион"**
+* Button 3: **"📍 Показать на карте/таймлайне"**
+
+
+
+### 3. Verification Checklist
+
+* Ensure `cursor-pointer` and active touch states are present.
+* Tapping anywhere on the slot card OR directly on the right arrow icon MUST open the action menu seamlessly on mobile touchscreens.
+
+```
+
+```
