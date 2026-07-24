@@ -1,0 +1,84 @@
+Отличная функция! Возможность закладывать аудиопослания, короткие видео и фотографии делает Капсулы Времени эмоционально насыщенными «живыми» артефактами.
+
+Ниже представлен готовый **промпт для Replit**, который внедрит загрузку и валидацию медиафайлов (фото, видео, аудио) до **10 МБ** и **1 минуты**:
+
+---
+
+## 🚀 Промпт для Replit: Добавление Медиафайлов (до 10 МБ, до 1 мин) в Капсулу Времени
+
+```markdown
+# FEATURE: Support Multi-Media Attachments in Time Capsules (Max 10MB, Max 1 Min)
+
+## OBJECTIVE
+Allow citizens to attach rich media (audio, video, photos/documents) inside a Time Capsule in addition to text notes.
+Enforce strict limitations: **Maximum File Size = 10 MB**, **Maximum Audio/Video Duration = 60 Seconds (1 Minute)**.
+
+---
+
+## IMPLEMENTATION REQUIREMENTS
+
+### 1. Capsule Creation Form Updates (`CreateCapsuleModal.tsx`)
+In the Capsule Creation UI, add a Media Uploader section:
+- **Allowed Formats**: Image (`.jpg`, `.png`, `.webp`), Audio (`.mp3`, `.m4a`, `.wav`), Video (`.mp4`, `.webm`).
+- **File Picker Button**: `📷 Attach Photo / 🎤 Voice / 🎬 Short Video`
+
+### 2. Client-Side File Validation & Error Handling
+Before starting file upload, validate client-side:
+1. **Size Check**:
+   ```ts
+   const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+   if (file.size > MAX_SIZE_BYTES) {
+     toast.error("Размер файла не должен превышать 10 МБ");
+     return;
+   }
+
+```
+
+2. **Duration Check (For Video and Audio)**:
+Use HTML5 `<video>` / `<audio>` metadata elements to verify length:
+```ts
+const checkDuration = (file: File): Promise<boolean> => {
+  return new Promise((resolve) => {
+    const element = document.createElement(file.type.startsWith('video') ? 'video' : 'audio');
+    element.preload = 'metadata';
+    element.src = URL.createObjectURL(file);
+    element.onloadedmetadata = () => {
+      URL.revokeObjectURL(element.src);
+      if (element.duration > 60) {
+        toast.error("Длительность медиафайла не может превышать 1 минуту (60 сек)");
+        resolve(false);
+      }
+      resolve(true);
+    };
+  });
+};
+
+```
+
+
+
+### 3. Backend API Upload Route (`POST /api/capsules/upload`)
+
+* Configure `multer` or equivalent upload parser with `limits: { fileSize: 10 * 1024 * 1024 }`.
+* Save uploaded file to static storage (`/uploads/capsules/`) or S3 bucket.
+* Save file URL, mimeType, and duration to the `capsules` table schema (`mediaUrl`, `mediaType`, `durationSeconds`).
+
+### 4. Capsule Player UI (`CapsuleDetailModal.tsx`)
+
+When opening a Time Capsule (if unlocked):
+
+* **Image**: Render responsive lightbox view.
+* **Audio**: Render styled custom Audio Player with play/pause and progress bar.
+* **Video**: Render HTML5 `<video controls max-h-64>` player.
+
+---
+
+## VERIFICATION CHECKLIST
+
+1. Open Capsule Creation -> Try attaching a video/audio longer than 1 min -> System blocks with toast error.
+2. Try uploading a file > 10 MB -> System blocks with size error.
+3. Attach a 30-second audio or photo (<10MB) -> Confirm creation and verify playback/viewing inside `CapsuleDetailModal`.
+
+```
+
+```
