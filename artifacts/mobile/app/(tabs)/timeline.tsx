@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import { Audio } from "expo-av";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -565,6 +566,36 @@ export default function TimelineScreen() {
 
   // ── Anchor auction mutation ──────────────────────────────────────────────────
   // ── Capsule media helpers ─────────────────────────────────────────────────────
+
+  /** Returns duration in seconds, or null if the duration can't be determined. */
+  const getMediaDurationSeconds = async (uri: string, type: "audio" | "video"): Promise<number | null> => {
+    if (Platform.OS === "web") {
+      return new Promise((resolve) => {
+        const el: HTMLMediaElement = type === "audio"
+          ? new window.Audio()
+          : document.createElement("video");
+        el.preload = "metadata";
+        el.onloadedmetadata = () => resolve(isFinite(el.duration) ? el.duration : null);
+        el.onerror = () => resolve(null);
+        el.src = uri;
+      });
+    } else {
+      try {
+        const { sound, status } = await Audio.Sound.createAsync(
+          { uri },
+          { shouldPlay: false }
+        );
+        await sound.unloadAsync();
+        if (status.isLoaded && status.durationMillis) {
+          return status.durationMillis / 1000;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    }
+  };
+
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -588,6 +619,11 @@ export default function TimelineScreen() {
         Alert.alert("⚠️", "Размер файла не должен превышать 10 МБ");
         return;
       }
+      const duration = await getMediaDurationSeconds(asset.uri, "audio");
+      if (duration !== null && duration > 60) {
+        Alert.alert("⚠️", "Аудио не должно быть длиннее 60 секунд");
+        return;
+      }
       setCapsuleMedia({ uri: asset.uri, relPath: null, type: "audio", name: asset.name });
     }
   };
@@ -598,6 +634,11 @@ export default function TimelineScreen() {
       const asset = result.assets[0];
       if (asset.size && asset.size > 10 * 1024 * 1024) {
         Alert.alert("⚠️", "Размер файла не должен превышать 10 МБ");
+        return;
+      }
+      const duration = await getMediaDurationSeconds(asset.uri, "video");
+      if (duration !== null && duration > 60) {
+        Alert.alert("⚠️", "Видео не должно быть длиннее 60 секунд");
         return;
       }
       setCapsuleMedia({ uri: asset.uri, relPath: null, type: "video", name: asset.name });

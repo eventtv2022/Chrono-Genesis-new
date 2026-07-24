@@ -3,6 +3,29 @@ import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { execFile } from "child_process";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
+
+const MAX_MEDIA_DURATION_SEC = 60;
+
+/** Returns the duration of an audio/video file in seconds, or null if undetectable. */
+async function getFileDurationSeconds(filePath: string): Promise<number | null> {
+  try {
+    const { stdout } = await execFileAsync("ffprobe", [
+      "-v", "quiet",
+      "-print_format", "json",
+      "-show_format",
+      filePath,
+    ]);
+    const data = JSON.parse(stdout) as { format?: { duration?: string } };
+    const duration = parseFloat(data?.format?.duration ?? "");
+    return isNaN(duration) ? null : duration;
+  } catch {
+    return null;
+  }
+}
 import { db } from "@workspace/db";
 import { citizensTable, timelineAnchorsTable, timelineCapsulesTable } from "@workspace/db";
 import { z } from "zod";
@@ -305,6 +328,18 @@ router.post(
     let mediaType: "image" | "audio" | "video" = "image";
     if (req.file.mimetype.startsWith("audio/")) mediaType = "audio";
     else if (req.file.mimetype.startsWith("video/")) mediaType = "video";
+
+    // ── Duration guard for audio/video ────────────────────────────────────────
+    if (mediaType === "audio" || mediaType === "video") {
+      const duration = await getFileDurationSeconds(req.file.path);
+      if (duration !== null && duration > MAX_MEDIA_DURATION_SEC) {
+        fs.unlinkSync(req.file.path); // remove oversized file
+        res.status(400).json({
+          error: `Файл слишком длинный — максимальная продолжительность ${MAX_MEDIA_DURATION_SEC} секунд`,
+        });
+        return;
+      }
+    }
 
     const url = `/uploads/capsules/${req.file.filename}`;
     res.status(201).json({ url, mediaType });
