@@ -1,5 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { db } from "@workspace/db";
 import { citizensTable, timelineAnchorsTable, timelineCapsulesTable } from "@workspace/db";
 import { z } from "zod";
@@ -7,6 +10,34 @@ import { logTimelineAnchorToSheets } from "../lib/googleSheets";
 import { sendTransactionNotification } from "../services/telegramService";
 import { isCenturyBoundaryMinute, CENTURY_STATE_PROPERTY_CODE, CENTURY_STATE_PROPERTY_MSG } from "../lib/centuryGuard";
 import { isStateHeritageCoord, HERITAGE_LOCK_CODE, HERITAGE_LOCK_TITLE, HERITAGE_LOCK_MSG } from "../lib/heritageGuard";
+import { requireAuth } from "../middleware/auth";
+
+// ── Capsule media upload directory ────────────────────────────────────────────
+// Computed inline (no UPLOADS_DIR import) to avoid circular-import issues at module init time
+const CAPSULE_DIR = path.join(process.cwd(), "public", "uploads", "capsules");
+fs.mkdirSync(CAPSULE_DIR, { recursive: true });
+
+const capsuleUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, CAPSULE_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || "") || "";
+      cb(null, `${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: (_req, file, cb) => {
+    if (
+      file.mimetype.startsWith("image/") ||
+      file.mimetype.startsWith("audio/") ||
+      file.mimetype.startsWith("video/")
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error("Разрешены только изображения, аудио и видео"));
+    }
+  },
+});
 
 const router: IRouter = Router();
 
@@ -191,14 +222,11 @@ router.get("/timeline/occupied", async (req, res): Promise<void> => {
   );
 });
 
-// ── GET /timeline/my-anchors?citizenId=X ─────────────────────────────────────
-// Returns all timeline anchors owned by a citizen, sorted chronologically.
-router.get("/timeline/my-anchors", async (req, res): Promise<void> => {
-  const citizenId = parseInt(String(req.query["citizenId"] ?? ""), 10);
-  if (isNaN(citizenId) || citizenId <= 0) {
-    res.status(400).json({ error: "citizenId обязателен" });
-    return;
-  }
+// ── GET /timeline/my-anchors ──────────────────────────────────────────────────
+// Returns all timeline anchors owned by the authenticated citizen.
+router.get("/timeline/my-anchors", requireAuth, async (req, res): Promise<void> => {
+  // citizenId comes from the authenticated session; query param is ignored
+  const citizenId = req.citizen!.id;
 
   const anchors = await db
     .select()
@@ -206,9 +234,9 @@ router.get("/timeline/my-anchors", async (req, res): Promise<void> => {
     .where(eq(timelineAnchorsTable.citizenId, citizenId))
     .orderBy(timelineAnchorsTable.timelineCoord);
 
-  // Fetch the latest capsule text for each anchor in one query
+  // Fetch the latest capsule for each anchor in one query
   const coords = anchors.map((a) => a.timelineCoord);
-  const capsuleMap = new Map<string, string>();
+  const capsuleMap = new Map<string, { text: string; mediaUrl: string | null; mediaType: string | null }>();
   if (coords.length > 0) {
     const capsules = await db
       .select()
@@ -222,7 +250,7 @@ router.get("/timeline/my-anchors", async (req, res): Promise<void> => {
       .orderBy(timelineCapsulesTable.createdAt);
     // Keep the latest per coord (last wins since ordered ASC)
     for (const cap of capsules) {
-      capsuleMap.set(cap.timelineCoord, cap.text);
+      capsuleMap.set(cap.timelineCoord, { text: cap.text, mediaUrl: cap.mediaUrl, mediaType: cap.mediaType });
     }
   }
 
@@ -231,38 +259,78 @@ router.get("/timeline/my-anchors", async (req, res): Promise<void> => {
       timelineCoord: a.timelineCoord,
       status: a.status,
       createdAt: a.createdAt.toISOString(),
-      capsuleText: capsuleMap.get(a.timelineCoord) ?? null,
+      capsuleText: capsuleMap.get(a.timelineCoord)?.text ?? null,
+      mediaUrl: capsuleMap.get(a.timelineCoord)?.mediaUrl ?? null,
+      mediaType: capsuleMap.get(a.timelineCoord)?.mediaType ?? null,
     }))
   );
 });
 
+// ── POST /timeline/capsule/upload ─────────────────────────────────────────────
+// Uploads a media file (image/audio/video, ≤10 MB) for a Time Capsule.
+// Requires auth token + timelineCoord body field; verifies anchor ownership before accepting.
+router.post(
+  "/timeline/capsule/upload",
+  requireAuth,
+  capsuleUpload.single("file"),
+  async (req, res): Promise<void> => {
+    // If multer rejected the file (wrong mime or size), req.file is undefined
+    if (!req.file) {
+      res.status(400).json({ error: "Файл не прикреплён или неверный формат / размер" });
+      return;
+    }
+
+    const timelineCoord = String(req.body?.timelineCoord ?? "");
+    if (!timelineCoord || !/^\d{12}$/.test(timelineCoord)) {
+      fs.unlinkSync(req.file.path); // remove orphan
+      res.status(400).json({ error: "timelineCoord обязателен (12 цифр)" });
+      return;
+    }
+
+    // Verify the authenticated citizen owns this anchor
+    const citizenId = req.citizen!.id;
+    const anchor = await db
+      .select({ id: timelineAnchorsTable.id })
+      .from(timelineAnchorsTable)
+      .where(and(eq(timelineAnchorsTable.citizenId, citizenId), eq(timelineAnchorsTable.timelineCoord, timelineCoord)))
+      .limit(1)
+      .then((r) => r[0]);
+
+    if (!anchor) {
+      fs.unlinkSync(req.file.path); // remove orphan
+      res.status(403).json({ error: "Эта координата вам не принадлежит" });
+      return;
+    }
+
+    let mediaType: "image" | "audio" | "video" = "image";
+    if (req.file.mimetype.startsWith("audio/")) mediaType = "audio";
+    else if (req.file.mimetype.startsWith("video/")) mediaType = "video";
+
+    const url = `/uploads/capsules/${req.file.filename}`;
+    res.status(201).json({ url, mediaType });
+  }
+);
+
 // ── POST /timeline/capsule ────────────────────────────────────────────────────
-// Saves a semantic capsule (free-text meaning) for a citizen's timeline anchor.
+// Saves a semantic capsule (free-text + optional media) for a citizen's anchor.
+// Requires auth token; citizenId is derived from req.citizen — body citizenId is ignored.
 const CapsuleBody = z.object({
-  citizenId: z.number().int().positive(),
   timelineCoord: z.string().regex(/^\d{12}$/, "timelineCoord must be 12 digits"),
   text: z.string().min(1).max(1000),
+  mediaUrl: z.string().nullable().optional(),
+  mediaType: z.enum(["image", "audio", "video"]).nullable().optional(),
 });
 
-router.post("/timeline/capsule", async (req, res): Promise<void> => {
+router.post("/timeline/capsule", requireAuth, async (req, res): Promise<void> => {
   const parsed = CapsuleBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Неверные данные" });
     return;
   }
-  const { citizenId, timelineCoord, text } = parsed.data;
+  const { timelineCoord, text, mediaUrl, mediaType } = parsed.data;
 
-  const citizen = await db
-    .select({ id: citizensTable.id })
-    .from(citizensTable)
-    .where(eq(citizensTable.id, citizenId))
-    .limit(1)
-    .then((r) => r[0]);
-
-  if (!citizen) {
-    res.status(404).json({ error: "Гражданин не найден" });
-    return;
-  }
+  // citizenId comes exclusively from the authenticated session — never from the body
+  const citizenId = req.citizen!.id;
 
   const anchor = await db
     .select({ id: timelineAnchorsTable.id })
@@ -288,10 +356,29 @@ router.post("/timeline/capsule", async (req, res): Promise<void> => {
 
   const [capsule] = await db
     .insert(timelineCapsulesTable)
-    .values({ citizenId, timelineCoord, text })
+    .values({ citizenId, timelineCoord, text, mediaUrl: mediaUrl ?? null, mediaType: mediaType ?? null })
     .returning();
 
   res.status(201).json({ id: capsule!.id, timelineCoord, createdAt: capsule!.createdAt.toISOString() });
+});
+
+// ── Multer error handler (size / mime type rejections) ────────────────────────
+// Must be registered after the upload routes so Express picks it up as an error middleware.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+router.use("/timeline/capsule/upload", (err: unknown, _req: import("express").Request, res: import("express").Response, _next: import("express").NextFunction): void => {
+  if (err && typeof err === "object" && "code" in err) {
+    const code = (err as { code: string }).code;
+    if (code === "LIMIT_FILE_SIZE") {
+      res.status(413).json({ error: "Файл слишком большой — максимум 10 МБ" });
+      return;
+    }
+    if (code === "LIMIT_UNEXPECTED_FILE") {
+      res.status(400).json({ error: "Неожиданное поле файла" });
+      return;
+    }
+  }
+  const message = err instanceof Error ? err.message : "Ошибка загрузки файла";
+  res.status(400).json({ error: message });
 });
 
 export default router;

@@ -2,7 +2,7 @@ import { getBaseUrl } from "@/lib/api";
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
-  ActivityIndicator, Alert, TextInput, Platform, Modal, ScrollView,
+  ActivityIndicator, Alert, TextInput, Platform, Modal, ScrollView, Image, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -25,6 +25,8 @@ interface Auction {
   slotTimeMarker: string | null;
   timelineCoord: string | null;
   capsuleText: string | null;
+  mediaUrl: string | null;
+  mediaType: string | null;
   startingPrice: number;
   currentBid: number | null;
   buyerId: number | null;
@@ -280,7 +282,33 @@ export default function AuctionsScreen() {
                 })()}
               </View>
             </View>
-            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              {/* Медиавложение */}
+              {capsuleModal?.mediaUrl && (
+                <View style={{ marginBottom: 12 }}>
+                  {capsuleModal.mediaType === "image" ? (
+                    <Image
+                      source={{ uri: `${BASE_URL}${capsuleModal.mediaUrl}` }}
+                      style={{ width: "100%", height: 180, borderRadius: 12 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() => void Linking.openURL(`${BASE_URL}${capsuleModal.mediaUrl}`)}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33", borderRadius: 12, padding: 14 }}
+                    >
+                      <Text style={{ fontSize: 26 }}>{capsuleModal.mediaType === "audio" ? "🎤" : "🎬"}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }}>
+                          {capsuleModal.mediaType === "audio" ? "Аудиопослание" : "Видеопослание"}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Нажмите для воспроизведения</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
               <View style={{ backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33", borderRadius: 14, padding: 16, marginBottom: 8 }}>
                 <Text style={{ fontSize: 15, lineHeight: 24, color: colors.foreground }}>
                   {capsuleModal?.capsuleText ?? ""}

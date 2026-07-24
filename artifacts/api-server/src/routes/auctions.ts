@@ -71,18 +71,25 @@ router.get("/auctions", async (_req, res): Promise<void> => {
     .filter(a => a.assetType === "TIME_ANCHOR" && a.timelineCoord)
     .map(a => a.timelineCoord as string);
 
-  const capsuleMap = new Map<string, string>();
+  const capsuleMap = new Map<string, { text: string; mediaUrl: string | null; mediaType: string | null }>();
   if (anchorCoords.length > 0) {
     const capsules = await db
-      .select({ timelineCoord: timelineCapsulesTable.timelineCoord, text: timelineCapsulesTable.text })
+      .select({
+        timelineCoord: timelineCapsulesTable.timelineCoord,
+        text: timelineCapsulesTable.text,
+        mediaUrl: timelineCapsulesTable.mediaUrl,
+        mediaType: timelineCapsulesTable.mediaType,
+      })
       .from(timelineCapsulesTable)
       .where(inArray(timelineCapsulesTable.timelineCoord, anchorCoords));
-    for (const cap of capsules) capsuleMap.set(cap.timelineCoord, cap.text);
+    for (const cap of capsules) capsuleMap.set(cap.timelineCoord, { text: cap.text, mediaUrl: cap.mediaUrl, mediaType: cap.mediaType });
   }
 
   const result = auctions.map(a => ({
     ...a,
-    capsuleText: a.timelineCoord ? (capsuleMap.get(a.timelineCoord) ?? null) : null,
+    capsuleText: a.timelineCoord ? (capsuleMap.get(a.timelineCoord)?.text ?? null) : null,
+    mediaUrl: a.timelineCoord ? (capsuleMap.get(a.timelineCoord)?.mediaUrl ?? null) : null,
+    mediaType: a.timelineCoord ? (capsuleMap.get(a.timelineCoord)?.mediaType ?? null) : null,
   }));
 
   res.json(result);

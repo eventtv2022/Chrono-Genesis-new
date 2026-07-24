@@ -14,7 +14,11 @@ import {
   Modal,
   Alert,
   KeyboardAvoidingView,
+  Image,
+  Linking,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -533,12 +537,20 @@ export default function TimelineScreen() {
   const [jumpMonth, setJumpMonth] = useState("");
   const [jumpDay, setJumpDay] = useState("");
   const [showMyAnchors, setShowMyAnchors] = useState(false);
-  const [selectedAnchor, setSelectedAnchor] = useState<{ timelineCoord: string; status: string; createdAt: string; capsuleText: string | null } | null>(null);
+  const [selectedAnchor, setSelectedAnchor] = useState<{ timelineCoord: string; status: string; createdAt: string; capsuleText: string | null; mediaUrl: string | null; mediaType: string | null } | null>(null);
   const [showAnchorActions, setShowAnchorActions] = useState(false);
   const [showCapsule, setShowCapsule] = useState(false);
   const [showCapsuleView, setShowCapsuleView] = useState(false);
   const [capsuleText, setCapsuleText] = useState("");
   const [capsuleSaving, setCapsuleSaving] = useState(false);
+  // ── Capsule media state ───────────────────────────────────────────────────────
+  const [capsuleMedia, setCapsuleMedia] = useState<{
+    uri: string;       // local file URI (new) or full server URL (existing)
+    relPath: string | null; // server relative path; null = needs upload
+    type: "image" | "audio" | "video";
+    name: string;
+  } | null>(null);
+  const [capsuleMediaUploading, setCapsuleMediaUploading] = useState(false);
   const [showStateProperty, setShowStateProperty] = useState(false);
   const [showAnchorAuction, setShowAnchorAuction] = useState(false);
 
@@ -552,6 +564,71 @@ export default function TimelineScreen() {
   const router = useRouter();
 
   // ── Anchor auction mutation ──────────────────────────────────────────────────
+  // ── Capsule media helpers ─────────────────────────────────────────────────────
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+        Alert.alert("⚠️", "Размер файла не должен превышать 10 МБ");
+        return;
+      }
+      setCapsuleMedia({ uri: asset.uri, relPath: null, type: "image", name: asset.fileName ?? `photo_${Date.now()}.jpg` });
+    }
+  };
+
+  const pickAudio = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      if (asset.size && asset.size > 10 * 1024 * 1024) {
+        Alert.alert("⚠️", "Размер файла не должен превышать 10 МБ");
+        return;
+      }
+      setCapsuleMedia({ uri: asset.uri, relPath: null, type: "audio", name: asset.name });
+    }
+  };
+
+  const pickVideo = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: "video/*", copyToCacheDirectory: true });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      if (asset.size && asset.size > 10 * 1024 * 1024) {
+        Alert.alert("⚠️", "Размер файла не должен превышать 10 МБ");
+        return;
+      }
+      setCapsuleMedia({ uri: asset.uri, relPath: null, type: "video", name: asset.name });
+    }
+  };
+
+  const uploadCapsuleMedia = async (
+    media: { uri: string; type: "image" | "audio" | "video"; name: string },
+    timelineCoord: string,
+  ): Promise<{ url: string; mediaType: "image" | "audio" | "video" }> => {
+    const formData = new FormData();
+    if (Platform.OS === "web") {
+      const blobRes = await fetch(media.uri);
+      const blob = await blobRes.blob();
+      formData.append("file", blob, media.name);
+    } else {
+      const mimeMap = { image: "image/jpeg", audio: "audio/mpeg", video: "video/mp4" };
+      formData.append("file", { uri: media.uri, type: mimeMap[media.type], name: media.name } as unknown as Blob);
+    }
+    // timelineCoord lets the server verify anchor ownership before accepting the file
+    formData.append("timelineCoord", timelineCoord);
+    const res = await fetch(`${BASE_URL}/api/timeline/capsule/upload`, {
+      method: "POST",
+      headers: { ...authHeaders }, // Bearer token for requireAuth
+      body: formData,
+    });
+    const data = await res.json() as { url?: string; mediaType?: "image" | "audio" | "video"; error?: string };
+    if (!res.ok) throw new Error(data.error ?? "Ошибка загрузки файла");
+    return { url: data.url!, mediaType: data.mediaType! };
+  };
+
   const anchorAuctionMutation = useMutation({
     mutationFn: async (data: { startingPrice: number; durationHours: number }) => {
       if (!selectedAnchor) throw new Error("Нет выбранной координаты");
@@ -588,12 +665,12 @@ export default function TimelineScreen() {
   });
 
   const { data: myAnchors = [], refetch: refetchMyAnchors } = useQuery<
-    { timelineCoord: string; status: string; createdAt: string; capsuleText: string | null }[]
+    { timelineCoord: string; status: string; createdAt: string; capsuleText: string | null; mediaUrl: string | null; mediaType: string | null }[]
   >({
     queryKey: ["myAnchors", citizen?.id],
     queryFn: async () => {
       if (!citizen) return [];
-      const res = await fetch(`${BASE_URL}/api/timeline/my-anchors?citizenId=${citizen.id}`);
+      const res = await fetch(`${BASE_URL}/api/timeline/my-anchors`, { headers: { ...authHeaders } });
       if (!res.ok) return [];
       return res.json();
     },
@@ -1090,7 +1167,16 @@ export default function TimelineScreen() {
 
             <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => {
               setShowAnchorActions(false);
-              setTimeout(() => { setCapsuleText(selectedAnchor?.capsuleText ?? ""); setShowCapsule(true); }, 350);
+              setTimeout(() => {
+                setCapsuleText(selectedAnchor?.capsuleText ?? "");
+                setCapsuleMedia(selectedAnchor?.mediaUrl ? {
+                  uri: `${BASE_URL}${selectedAnchor.mediaUrl}`,
+                  relPath: selectedAnchor.mediaUrl,
+                  type: (selectedAnchor.mediaType as "image" | "audio" | "video") ?? "image",
+                  name: selectedAnchor.mediaUrl.split("/").pop() ?? "media",
+                } : null);
+                setShowCapsule(true);
+              }, 350);
             }}>
               <View style={[styles.asIconBox, { backgroundColor: "#7c3aed22" }]}>
                 <Feather name="box" size={18} color="#7c3aed" />
@@ -1196,17 +1282,75 @@ export default function TimelineScreen() {
           />
           <Text style={[styles.capCount, { color: colors.mutedForeground }]}>{capsuleText.length}/1000</Text>
 
+          {/* ── Media picker ── */}
+          <View style={{ marginBottom: 16 }}>
+            {capsuleMedia ? (
+              <View style={{ borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#7c3aed44" }}>
+                {capsuleMedia.type === "image" ? (
+                  <Image source={{ uri: capsuleMedia.uri }} style={{ width: "100%", height: 160, backgroundColor: colors.card }} resizeMode="cover" />
+                ) : (
+                  <View style={{ backgroundColor: "#7c3aed11", padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Text style={{ fontSize: 24 }}>{capsuleMedia.type === "audio" ? "🎤" : "🎬"}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }} numberOfLines={1}>{capsuleMedia.name}</Text>
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{capsuleMedia.type === "audio" ? "Аудиофайл" : "Видеофайл"} · прикреплён</Text>
+                    </View>
+                  </View>
+                )}
+                <Pressable
+                  onPress={() => setCapsuleMedia(null)}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, padding: 10, backgroundColor: "#dc262611", cursor: "pointer" as never }}
+                >
+                  <Feather name="trash-2" size={14} color="#dc2626" />
+                  <Text style={{ fontSize: 13, color: "#dc2626", fontWeight: "600" }}>Удалить вложение</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground, marginBottom: 8 }}>📎 Медиавложение <Text style={{ fontWeight: "400", color: colors.mutedForeground }}>(до 10 МБ)</Text></Text>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  {(["image", "audio", "video"] as const).map((mtype) => (
+                    <Pressable
+                      key={mtype}
+                      onPress={mtype === "image" ? pickImage : mtype === "audio" ? pickAudio : pickVideo}
+                      style={({ pressed }) => ({ flex: 1, alignItems: "center", gap: 4, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never })}
+                    >
+                      <Text style={{ fontSize: 22 }}>{mtype === "image" ? "📷" : mtype === "audio" ? "🎤" : "🎬"}</Text>
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{mtype === "image" ? "Фото" : mtype === "audio" ? "Аудио" : "Видео"}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+
           <Pressable
-            style={({ pressed }) => [styles.capSaveBtn, { backgroundColor: capsuleText.trim() ? "#7c3aed" : colors.border, opacity: capsuleSaving || !capsuleText.trim() ? 0.6 : pressed ? 0.8 : 1, cursor: "pointer" as never }]}
-            disabled={!capsuleText.trim() || capsuleSaving}
+            style={({ pressed }) => [styles.capSaveBtn, { backgroundColor: capsuleText.trim() ? "#7c3aed" : colors.border, opacity: (capsuleSaving || capsuleMediaUploading || !capsuleText.trim()) ? 0.6 : pressed ? 0.8 : 1, cursor: "pointer" as never }]}
+            disabled={!capsuleText.trim() || capsuleSaving || capsuleMediaUploading}
             onPress={async () => {
               if (!citizen || !selectedAnchor || !capsuleText.trim()) return;
               setCapsuleSaving(true);
               try {
+                let finalMediaUrl: string | null = null;
+                let finalMediaType: string | null = null;
+                if (capsuleMedia) {
+                  if (capsuleMedia.relPath === null) {
+                    // New file — upload first
+                    setCapsuleMediaUploading(true);
+                    const uploaded = await uploadCapsuleMedia(capsuleMedia, selectedAnchor.timelineCoord);
+                    setCapsuleMediaUploading(false);
+                    finalMediaUrl = uploaded.url;
+                    finalMediaType = uploaded.mediaType;
+                  } else {
+                    // Existing media — keep as-is
+                    finalMediaUrl = capsuleMedia.relPath;
+                    finalMediaType = capsuleMedia.type;
+                  }
+                }
                 const res = await fetch(`${BASE_URL}/api/timeline/capsule`, {
                   method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ citizenId: citizen.id, timelineCoord: selectedAnchor.timelineCoord, text: capsuleText.trim() }),
+                  headers: { "Content-Type": "application/json", ...authHeaders },
+                  body: JSON.stringify({ timelineCoord: selectedAnchor.timelineCoord, text: capsuleText.trim(), mediaUrl: finalMediaUrl, mediaType: finalMediaType }),
                 });
                 if (res.ok) {
                   void refetchMyAnchors();
@@ -1216,14 +1360,15 @@ export default function TimelineScreen() {
                   const d = await res.json() as { error?: string };
                   Alert.alert("Error", d.error ?? t.connection_error);
                 }
-              } catch {
-                Alert.alert("Error", t.connection_error);
+              } catch (err) {
+                Alert.alert("Error", err instanceof Error ? err.message : t.connection_error);
               } finally {
                 setCapsuleSaving(false);
+                setCapsuleMediaUploading(false);
               }
             }}
           >
-            {capsuleSaving
+            {(capsuleSaving || capsuleMediaUploading)
               ? <ActivityIndicator color="#fff" />
               : <Text style={styles.capSaveBtnText}>{t.save}</Text>}
           </Pressable>
@@ -1269,6 +1414,37 @@ export default function TimelineScreen() {
 
           {/* Тело капсулы */}
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 4, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+            {/* ── Медиавложение ── */}
+            {selectedAnchor?.mediaUrl && (
+              <View style={{ marginBottom: 16 }}>
+                {selectedAnchor.mediaType === "image" ? (
+                  <Image
+                    source={{ uri: `${BASE_URL}${selectedAnchor.mediaUrl}` }}
+                    style={{ width: "100%", height: 200, borderRadius: 14 }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Pressable
+                    onPress={() => void Linking.openURL(`${BASE_URL}${selectedAnchor.mediaUrl}`)}
+                    style={({ pressed }) => ({
+                      flexDirection: "row", alignItems: "center", gap: 12,
+                      backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33",
+                      borderRadius: 14, padding: 16, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never,
+                    })}
+                  >
+                    <Text style={{ fontSize: 28 }}>{selectedAnchor.mediaType === "audio" ? "🎤" : "🎬"}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }}>
+                        {selectedAnchor.mediaType === "audio" ? "Аудиопослание" : "Видеопослание"}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }}>Нажмите для воспроизведения</Text>
+                    </View>
+                    <Feather name="play-circle" size={26} color="#7c3aed" />
+                  </Pressable>
+                )}
+              </View>
+            )}
+
             <View style={{ backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33", borderRadius: 14, padding: 18, marginBottom: 20 }}>
               <Text style={{ fontSize: 15, lineHeight: 24, color: colors.foreground }}>
                 {selectedAnchor?.capsuleText ?? ""}
@@ -1286,6 +1462,12 @@ export default function TimelineScreen() {
                 setShowCapsuleView(false);
                 setTimeout(() => {
                   setCapsuleText(selectedAnchor?.capsuleText ?? "");
+                  setCapsuleMedia(selectedAnchor?.mediaUrl ? {
+                    uri: `${BASE_URL}${selectedAnchor.mediaUrl}`,
+                    relPath: selectedAnchor.mediaUrl,
+                    type: (selectedAnchor.mediaType as "image" | "audio" | "video") ?? "image",
+                    name: selectedAnchor.mediaUrl.split("/").pop() ?? "media",
+                  } : null);
                   setShowCapsule(true);
                 }, 350);
               }}

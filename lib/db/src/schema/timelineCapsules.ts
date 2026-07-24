@@ -7,6 +7,8 @@ export const timelineCapsulesTable = pgTable("timeline_capsules", {
   citizenId: integer("citizen_id").notNull(),
   timelineCoord: text("timeline_coord").notNull(),
   text: text("text").notNull(),
+  mediaUrl: text("media_url"),
+  mediaType: text("media_type"), // "image" | "audio" | "video"
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
