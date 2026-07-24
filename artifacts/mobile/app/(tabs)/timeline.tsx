@@ -897,186 +897,6 @@ export default function TimelineScreen() {
         </ScrollView>
       )}
 
-      {/* Anchor Action Sheet */}
-      <Modal visible={showAnchorActions} transparent animationType="slide" onRequestClose={() => setShowAnchorActions(false)}>
-        <Pressable style={styles.asOverlay} onPress={() => setShowAnchorActions(false)}>
-          <Pressable style={[styles.asSheet, { backgroundColor: colors.card }]} onPress={() => {}}>
-            <View style={[styles.asHandle, { backgroundColor: colors.border }]} />
-
-            {selectedAnchor && (() => {
-              const c = selectedAnchor.timelineCoord;
-              const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)}  ${c.slice(8,10)}:${c.slice(10,12)}`;
-              return (
-                <View style={[styles.asCoordBox, { borderColor: colors.border }]}>
-                  <Feather name="map-pin" size={14} color={colors.primary} />
-                  <Text style={[styles.asCoordText, { color: colors.foreground }]}>{label}</Text>
-                  <Text style={[styles.asCoordRaw, { color: colors.mutedForeground }]}>{c}</Text>
-                </View>
-              );
-            })()}
-
-            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => {
-              if (!selectedAnchor) return;
-              const c = selectedAnchor.timelineCoord;
-              setSelectedYear(parseInt(c.slice(0,4),10));
-              setSelectedCentury(Math.ceil(parseInt(c.slice(0,4),10)/100));
-              setSelectedMonth(parseInt(c.slice(4,6),10));
-              setSelectedDay(parseInt(c.slice(6,8),10));
-              setSelectedHour(parseInt(c.slice(8,10),10));
-              setZoom(5);
-              setShowAnchorActions(false);
-              setShowMyAnchors(false);
-            }}>
-              <View style={[styles.asIconBox, { backgroundColor: colors.primary + "22" }]}>
-                <Feather name="navigation" size={18} color={colors.primary} />
-              </View>
-              <View style={styles.asRowText}>
-                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_go_to_minute}</Text>
-                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_open_timeline}</Text>
-              </View>
-            </Pressable>
-
-            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => {
-              setShowAnchorActions(false);
-              setTimeout(() => { setCapsuleText(selectedAnchor?.capsuleText ?? ""); setShowCapsule(true); }, 350);
-            }}>
-              <View style={[styles.asIconBox, { backgroundColor: "#7c3aed22" }]}>
-                <Feather name="box" size={18} color="#7c3aed" />
-              </View>
-              <View style={styles.asRowText}>
-                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_create_capsule}</Text>
-                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_capsule_sub}</Text>
-              </View>
-            </Pressable>
-
-            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => {
-              if (!selectedAnchor) return;
-              if (isCenturyBoundaryCoord(selectedAnchor.timelineCoord)) {
-                setShowAnchorActions(false);
-                setTimeout(() => setShowStateProperty(true), 350);
-                return;
-              }
-              if (selectedAnchor.status === "on_auction") {
-                Alert.alert("🏷️", "Эта координата уже выставлена на аукцион");
-                return;
-              }
-              setShowAnchorActions(false);
-              setTimeout(() => setShowAnchorAuction(true), 350);
-            }}>
-              <View style={[styles.asIconBox, { backgroundColor: "#e6952222" }]}>
-                <Feather name="tag" size={18} color="#e69522" />
-              </View>
-              <View style={styles.asRowText}>
-                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_to_auction}</Text>
-                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_to_auction_sub}</Text>
-              </View>
-              {selectedAnchor?.status === "on_auction" && (
-                <View style={[styles.asSoon, { backgroundColor: "#e6952222" }]}>
-                  <Text style={[styles.asSoonText, { color: "#e69522" }]}>На торгах</Text>
-                </View>
-              )}
-            </Pressable>
-
-            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => Alert.alert(t.soon, t.tl_swap_free_sub)}>
-              <View style={[styles.asIconBox, { backgroundColor: "#0ea5e922" }]}>
-                <Feather name="refresh-cw" size={18} color="#0ea5e9" />
-              </View>
-              <View style={styles.asRowText}>
-                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_swap_free}</Text>
-                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_swap_free_sub}</Text>
-              </View>
-              <View style={styles.asSoon}><Text style={styles.asSoonText}>{t.soon}</Text></View>
-            </Pressable>
-
-            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => Alert.alert(t.soon, t.tl_swap_occ_sub)}>
-              <View style={[styles.asIconBox, { backgroundColor: "#e6394622" }]}>
-                <Feather name="users" size={18} color="#e63946" />
-              </View>
-              <View style={styles.asRowText}>
-                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_swap_occ}</Text>
-                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_swap_occ_sub}</Text>
-              </View>
-              <View style={styles.asSoon}><Text style={styles.asSoonText}>{t.soon}</Text></View>
-            </Pressable>
-
-            <Pressable style={({ pressed }) => [styles.asCancel, { opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => setShowAnchorActions(false)}>
-              <Text style={[styles.asCancelText, { color: colors.mutedForeground }]}>{t.cancel}</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Capsule Creation Modal */}
-      <Modal visible={showCapsule} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCapsule(false)}>
-        <View style={[styles.capModal, { backgroundColor: colors.background }]}>
-          <View style={[styles.capHeader, { borderBottomColor: colors.border }]}>
-            <View style={styles.capHeaderLeft}>
-              <Feather name="box" size={18} color="#7c3aed" />
-              <Text style={[styles.capHeaderTitle, { color: colors.foreground }]}>{t.tl_capsule_modal_title}</Text>
-            </View>
-            <Pressable onPress={() => setShowCapsule(false)} style={[styles.maClose, { cursor: "pointer" as never }]}>
-              <Feather name="x" size={22} color={colors.foreground} />
-            </Pressable>
-          </View>
-
-          {selectedAnchor && (() => {
-            const c = selectedAnchor.timelineCoord;
-            const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)}  ${c.slice(8,10)}:${c.slice(10,12)}`;
-            return (
-              <View style={[styles.capCoordBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Feather name="map-pin" size={12} color={colors.primary} />
-                <Text style={[styles.capCoordBadgeText, { color: colors.mutedForeground }]}>{label} · {c}</Text>
-              </View>
-            );
-          })()}
-
-          <Text style={[styles.capLabel, { color: colors.foreground }]}>{t.tl_capsule_sub}</Text>
-          <TextInput
-            style={[styles.capInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
-            multiline
-            numberOfLines={6}
-            placeholder={t.tl_capsule_sub}
-            placeholderTextColor={colors.mutedForeground}
-            value={capsuleText}
-            onChangeText={setCapsuleText}
-            maxLength={1000}
-            textAlignVertical="top"
-          />
-          <Text style={[styles.capCount, { color: colors.mutedForeground }]}>{capsuleText.length}/1000</Text>
-
-          <Pressable
-            style={({ pressed }) => [styles.capSaveBtn, { backgroundColor: capsuleText.trim() ? "#7c3aed" : colors.border, opacity: capsuleSaving || !capsuleText.trim() ? 0.6 : pressed ? 0.8 : 1, cursor: "pointer" as never }]}
-            disabled={!capsuleText.trim() || capsuleSaving}
-            onPress={async () => {
-              if (!citizen || !selectedAnchor || !capsuleText.trim()) return;
-              setCapsuleSaving(true);
-              try {
-                const res = await fetch(`${BASE_URL}/api/timeline/capsule`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ citizenId: citizen.id, timelineCoord: selectedAnchor.timelineCoord, text: capsuleText.trim() }),
-                });
-                if (res.ok) {
-                  setShowCapsule(false);
-                  Alert.alert("✓", t.save);
-                } else {
-                  const d = await res.json() as { error?: string };
-                  Alert.alert("Error", d.error ?? t.connection_error);
-                }
-              } catch {
-                Alert.alert("Error", t.connection_error);
-              } finally {
-                setCapsuleSaving(false);
-              }
-            }}
-          >
-            {capsuleSaving
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.capSaveBtnText}>{t.save}</Text>}
-          </Pressable>
-        </View>
-      </Modal>
-
       {/* My TIME Modal — tabbed: ⏱ Анкоры / 📍 Слоты */}
       <Modal visible={showMyAnchors} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowMyAnchors(false)}>
         <View style={[styles.maModal, { backgroundColor: colors.background }]}>
@@ -1215,6 +1035,190 @@ export default function TimelineScreen() {
               </ScrollView>
             )
           )}
+        </View>
+      </Modal>
+
+      {/* ── Anchor Action Sheet — рендерится ПОСЛЕ My TIME чтобы быть поверх него на Web ── */}
+      <Modal visible={showAnchorActions} transparent animationType="slide" onRequestClose={() => setShowAnchorActions(false)}>
+        <View style={styles.asOverlay}>
+          {/* Фон-закрывашка — отдельный Pressable, не оборачивает sheet */}
+          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} onPress={() => setShowAnchorActions(false)} />
+          {/* Sheet — простой View, без Pressable-обёртки чтобы не поглощать клики */}
+          <View style={[styles.asSheet, { backgroundColor: colors.card }]}>
+            <View style={[styles.asHandle, { backgroundColor: colors.border }]} />
+
+            {selectedAnchor && (() => {
+              const c = selectedAnchor.timelineCoord;
+              const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)}  ${c.slice(8,10)}:${c.slice(10,12)}`;
+              return (
+                <View style={[styles.asCoordBox, { borderColor: colors.border }]}>
+                  <Feather name="map-pin" size={14} color={colors.primary} />
+                  <Text style={[styles.asCoordText, { color: colors.foreground }]}>{label}</Text>
+                  <Text style={[styles.asCoordRaw, { color: colors.mutedForeground }]}>{c}</Text>
+                </View>
+              );
+            })()}
+
+            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => {
+              if (!selectedAnchor) return;
+              const c = selectedAnchor.timelineCoord;
+              setSelectedYear(parseInt(c.slice(0,4),10));
+              setSelectedCentury(Math.ceil(parseInt(c.slice(0,4),10)/100));
+              setSelectedMonth(parseInt(c.slice(4,6),10));
+              setSelectedDay(parseInt(c.slice(6,8),10));
+              setSelectedHour(parseInt(c.slice(8,10),10));
+              setZoom(5);
+              setShowAnchorActions(false);
+              setShowMyAnchors(false);
+            }}>
+              <View style={[styles.asIconBox, { backgroundColor: colors.primary + "22" }]}>
+                <Feather name="navigation" size={18} color={colors.primary} />
+              </View>
+              <View style={styles.asRowText}>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_go_to_minute}</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_open_timeline}</Text>
+              </View>
+            </Pressable>
+
+            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => {
+              setShowAnchorActions(false);
+              setTimeout(() => { setCapsuleText(selectedAnchor?.capsuleText ?? ""); setShowCapsule(true); }, 350);
+            }}>
+              <View style={[styles.asIconBox, { backgroundColor: "#7c3aed22" }]}>
+                <Feather name="box" size={18} color="#7c3aed" />
+              </View>
+              <View style={styles.asRowText}>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_create_capsule}</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_capsule_sub}</Text>
+              </View>
+            </Pressable>
+
+            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => {
+              if (!selectedAnchor) return;
+              if (isCenturyBoundaryCoord(selectedAnchor.timelineCoord)) {
+                setShowAnchorActions(false);
+                setTimeout(() => setShowStateProperty(true), 350);
+                return;
+              }
+              if (selectedAnchor.status === "on_auction") {
+                Alert.alert("🏷️", "Эта координата уже выставлена на аукцион");
+                return;
+              }
+              setShowAnchorActions(false);
+              setTimeout(() => setShowAnchorAuction(true), 350);
+            }}>
+              <View style={[styles.asIconBox, { backgroundColor: "#e6952222" }]}>
+                <Feather name="tag" size={18} color="#e69522" />
+              </View>
+              <View style={styles.asRowText}>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_to_auction}</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_to_auction_sub}</Text>
+              </View>
+              {selectedAnchor?.status === "on_auction" && (
+                <View style={[styles.asSoon, { backgroundColor: "#e6952222" }]}>
+                  <Text style={[styles.asSoonText, { color: "#e69522" }]}>На торгах</Text>
+                </View>
+              )}
+            </Pressable>
+
+            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => Alert.alert(t.soon, t.tl_swap_free_sub)}>
+              <View style={[styles.asIconBox, { backgroundColor: "#0ea5e922" }]}>
+                <Feather name="refresh-cw" size={18} color="#0ea5e9" />
+              </View>
+              <View style={styles.asRowText}>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_swap_free}</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_swap_free_sub}</Text>
+              </View>
+              <View style={styles.asSoon}><Text style={styles.asSoonText}>{t.soon}</Text></View>
+            </Pressable>
+
+            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => Alert.alert(t.soon, t.tl_swap_occ_sub)}>
+              <View style={[styles.asIconBox, { backgroundColor: "#e6394622" }]}>
+                <Feather name="users" size={18} color="#e63946" />
+              </View>
+              <View style={styles.asRowText}>
+                <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_swap_occ}</Text>
+                <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_swap_occ_sub}</Text>
+              </View>
+              <View style={styles.asSoon}><Text style={styles.asSoonText}>{t.soon}</Text></View>
+            </Pressable>
+
+            <Pressable style={({ pressed }) => [styles.asCancel, { opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => setShowAnchorActions(false)}>
+              <Text style={[styles.asCancelText, { color: colors.mutedForeground }]}>{t.cancel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Capsule Creation Modal — рендерится после My TIME и AnchorActionsSheet ── */}
+      <Modal visible={showCapsule} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCapsule(false)}>
+        <View style={[styles.capModal, { backgroundColor: colors.background }]}>
+          <View style={[styles.capHeader, { borderBottomColor: colors.border }]}>
+            <View style={styles.capHeaderLeft}>
+              <Feather name="box" size={18} color="#7c3aed" />
+              <Text style={[styles.capHeaderTitle, { color: colors.foreground }]}>{t.tl_capsule_modal_title}</Text>
+            </View>
+            <Pressable onPress={() => setShowCapsule(false)} style={[styles.maClose, { cursor: "pointer" as never }]}>
+              <Feather name="x" size={22} color={colors.foreground} />
+            </Pressable>
+          </View>
+
+          {selectedAnchor && (() => {
+            const c = selectedAnchor.timelineCoord;
+            const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)}  ${c.slice(8,10)}:${c.slice(10,12)}`;
+            return (
+              <View style={[styles.capCoordBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Feather name="map-pin" size={12} color={colors.primary} />
+                <Text style={[styles.capCoordBadgeText, { color: colors.mutedForeground }]}>{label} · {c}</Text>
+              </View>
+            );
+          })()}
+
+          <Text style={[styles.capLabel, { color: colors.foreground }]}>{t.tl_capsule_sub}</Text>
+          <TextInput
+            style={[styles.capInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            multiline
+            numberOfLines={6}
+            placeholder={t.tl_capsule_sub}
+            placeholderTextColor={colors.mutedForeground}
+            value={capsuleText}
+            onChangeText={setCapsuleText}
+            maxLength={1000}
+            textAlignVertical="top"
+          />
+          <Text style={[styles.capCount, { color: colors.mutedForeground }]}>{capsuleText.length}/1000</Text>
+
+          <Pressable
+            style={({ pressed }) => [styles.capSaveBtn, { backgroundColor: capsuleText.trim() ? "#7c3aed" : colors.border, opacity: capsuleSaving || !capsuleText.trim() ? 0.6 : pressed ? 0.8 : 1, cursor: "pointer" as never }]}
+            disabled={!capsuleText.trim() || capsuleSaving}
+            onPress={async () => {
+              if (!citizen || !selectedAnchor || !capsuleText.trim()) return;
+              setCapsuleSaving(true);
+              try {
+                const res = await fetch(`${BASE_URL}/api/timeline/capsule`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ citizenId: citizen.id, timelineCoord: selectedAnchor.timelineCoord, text: capsuleText.trim() }),
+                });
+                if (res.ok) {
+                  void refetchMyAnchors();
+                  setShowCapsule(false);
+                  Alert.alert("✓", t.save);
+                } else {
+                  const d = await res.json() as { error?: string };
+                  Alert.alert("Error", d.error ?? t.connection_error);
+                }
+              } catch {
+                Alert.alert("Error", t.connection_error);
+              } finally {
+                setCapsuleSaving(false);
+              }
+            }}
+          >
+            {capsuleSaving
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.capSaveBtnText}>{t.save}</Text>}
+          </Pressable>
         </View>
       </Modal>
 
