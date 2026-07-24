@@ -959,7 +959,15 @@ export default function ConversationScreen() {
     <SafeAreaView style={s.safe}>
       {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={{ flexShrink: 0 }}>
+        <TouchableOpacity
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/chat");
+          }}
+          activeOpacity={0.7}
+          style={{ flexShrink: 0 }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
           <Feather name="arrow-left" size={22} color={C.primary} />
         </TouchableOpacity>
 
