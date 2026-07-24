@@ -459,6 +459,77 @@ router.get("/chat/messages/:withCitizenId", async (req, res): Promise<void> => {
   });
 });
 
+// ── Anti-fraud helpers ─────────────────────────────────────────────────────
+
+const FRAUD_RATE_LIMIT_PER_HOUR = 3;          // max paid sessions between same pair/hour
+const FRAUD_LOOP_WINDOW_HOURS   = 48;         // look-back window for circular wash detection
+const FRAUD_MIN_VOICE_RATIO     = 0.80;       // minimum voice-active fraction of session time
+const FRAUD_MERIT_PENALTY       = 0.5;        // merit deducted per fraud flag
+
+interface FraudCheckResult {
+  ok: boolean;
+  reason?: string;
+  flagType?: "RATE_LIMITED" | "SUSPICIOUS_CIRCULAR_ACTIVITY" | "DUMMY_CALL";
+}
+
+/** Check rate-limit: how many paid sessions has this pair started in the last hour? */
+async function checkRateLimit(acceptorId: number, proposerId: number): Promise<FraudCheckResult> {
+  const since = new Date(Date.now() - 3_600_000);
+  const rows = await db
+    .select({ id: dealsTable.id })
+    .from(dealsTable)
+    .where(
+      and(
+        sql`${dealsTable.status} LIKE ${"paid_session%"}`,
+        sql`${dealsTable.createdAt} >= ${since}`,
+        or(
+          and(eq(dealsTable.senderId, acceptorId), eq(dealsTable.receiverId, proposerId)),
+          and(eq(dealsTable.senderId, proposerId), eq(dealsTable.receiverId, acceptorId)),
+        )!,
+      ),
+    );
+  if (rows.length >= FRAUD_RATE_LIMIT_PER_HOUR) {
+    return { ok: false, reason: `Превышен лимит: не более ${FRAUD_RATE_LIMIT_PER_HOUR} платных сессий в час с одним собеседником`, flagType: "RATE_LIMITED" };
+  }
+  return { ok: true };
+}
+
+/** Circular wash-trading: A pays B and B tips A (or pays back) within 48 h. */
+async function checkCircularWashing(acceptorId: number, proposerId: number): Promise<FraudCheckResult> {
+  const since = new Date(Date.now() - FRAUD_LOOP_WINDOW_HOURS * 3_600_000);
+
+  const [aToB, bToA] = await Promise.all([
+    db.select({ total: sql<number>`COALESCE(SUM(minutes_transferred),0)` })
+      .from(transactionsTable)
+      .where(and(eq(transactionsTable.fromCitizenId, acceptorId), eq(transactionsTable.toCitizenId, proposerId), sql`${transactionsTable.createdAt} >= ${since}`)),
+    db.select({ total: sql<number>`COALESCE(SUM(minutes_transferred),0)` })
+      .from(transactionsTable)
+      .where(and(eq(transactionsTable.fromCitizenId, proposerId), eq(transactionsTable.toCitizenId, acceptorId), sql`${transactionsTable.createdAt} >= ${since}`)),
+  ]);
+
+  const sentAB = Number(aToB[0]?.total ?? 0);
+  const sentBA = Number(bToA[0]?.total ?? 0);
+
+  // Flag if both directions have substantial flow (>= 5 Д each way within window)
+  if (sentAB >= 5 && sentBA >= 5) {
+    return {
+      ok: false,
+      reason: `Обнаружена круговая торговля: ${sentAB} Д → и ${sentBA} Д ← за последние ${FRAUD_LOOP_WINDOW_HOURS}ч`,
+      flagType: "SUSPICIOUS_CIRCULAR_ACTIVITY",
+    };
+  }
+  return { ok: true };
+}
+
+/** Reduce merit score for both participants involved in fraud. Works with db or a transaction. */
+async function penalizeMerit(citizenIds: number[], tx: { update: typeof db.update }): Promise<void> {
+  for (const cid of citizenIds) {
+    await tx.update(citizensTable)
+      .set({ meritScore: sql`GREATEST(0, ${citizensTable.meritScore} - ${FRAUD_MERIT_PENALTY})` })
+      .where(eq(citizensTable.id, cid));
+  }
+}
+
 // ── POST /chat/paid-session/accept ─────────────────────────────────────────
 
 router.post("/chat/paid-session/accept", async (req, res): Promise<void> => {
@@ -485,8 +556,24 @@ router.post("/chat/paid-session/accept", async (req, res): Promise<void> => {
   if (meta.offerStatus !== "pending") { res.status(400).json({ error: "Оффер уже обработан" }); return; }
 
   const { rate } = meta;
+  const proposerId = msg.fromCitizenId;
 
-  // Check acceptor (me) has enough balance — keep 1 ancestral minute
+  // ── Anti-fraud pre-checks ──────────────────────────────────────────────────
+  const [rateCheck, washCheck] = await Promise.all([
+    checkRateLimit(me.id, proposerId),
+    checkCircularWashing(me.id, proposerId),
+  ]);
+
+  if (!rateCheck.ok) {
+    res.status(429).json({ error: rateCheck.reason, flagType: rateCheck.flagType });
+    return;
+  }
+  if (!washCheck.ok) {
+    // Flag the session as suspicious but still allow it — funds held in escrow
+    logger.warn({ acceptor: me.id, proposer: proposerId, reason: washCheck.reason }, "Circular wash detected pre-accept");
+  }
+
+  // ── Balance check — keep 1 ancestral minute ────────────────────────────────
   const [acceptor] = await db
     .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
     .from(citizensTable).where(eq(citizensTable.id, me.id)).limit(1);
@@ -504,14 +591,16 @@ router.post("/chat/paid-session/accept", async (req, res): Promise<void> => {
         .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} - ${rate}` })
         .where(eq(citizensTable.id, me.id));
 
-      // Create deal record as escrow
+      // Create deal record as escrow (mark suspicious if wash-trade was flagged)
+      const dealStatus = washCheck.ok ? "paid_session" : "paid_session_flagged";
       const [deal] = await tx.insert(dealsTable).values({
         senderId: me.id,             // acceptor pays
-        receiverId: msg.fromCitizenId, // proposer receives when session ends
+        receiverId: proposerId,      // proposer receives when session ends
         amount: rate,
         description: `Платная консультация ${rate} Д / ${meta.intervalMinutes} мин`,
-        status: "paid_session",
+        status: dealStatus,
         snapshotMinuteRate: 1.0,
+        ...(washCheck.ok ? {} : { aiVerdict: washCheck.reason }),
       }).returning({ id: dealsTable.id });
       dealId = deal!.id;
 
@@ -542,6 +631,163 @@ router.post("/chat/paid-session/accept", async (req, res): Promise<void> => {
 
   logger.info({ acceptor: me.id, proposer: msg.fromCitizenId, dealId, rate }, "Paid session started");
   res.json({ ok: true, dealId, rate });
+});
+
+// ── POST /chat/paid-session/finalize ──────────────────────────────────────
+// Called by the acceptor when they tap "Завершить сессию".
+// Validates voice-activity ratio, releases escrow to proposer (or holds for audit).
+
+router.post("/chat/paid-session/finalize", async (req, res): Promise<void> => {
+  const me = await getAuthCitizen(req.headers.authorization);
+  if (!me) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const parsed = z.object({
+    dealId:             z.number().int().positive(),
+    sessionSeconds:     z.number().int().min(0),   // total wall-clock session time
+    voiceActiveSeconds: z.number().int().min(0),   // seconds where voice was detected
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Некорректные данные" }); return; }
+
+  const { dealId, sessionSeconds, voiceActiveSeconds } = parsed.data;
+
+  const [deal] = await db
+    .select()
+    .from(dealsTable)
+    .where(and(eq(dealsTable.id, dealId), eq(dealsTable.senderId, me.id)))
+    .limit(1);
+
+  if (!deal) { res.status(404).json({ error: "Сделка не найдена" }); return; }
+  if (!deal.status.startsWith("paid_session")) { res.status(400).json({ error: "Сделка не является платной сессией" }); return; }
+  if (deal.status === "paid_session_completed" || deal.status === "paid_session_held") {
+    res.status(400).json({ error: "Сессия уже завершена" }); return;
+  }
+
+  const proposerId = deal.receiverId!;
+  const rate       = deal.amount;
+
+  // ── Voice activity validation ─────────────────────────────────────────────
+  const voiceRatio = sessionSeconds > 0 ? voiceActiveSeconds / sessionSeconds : 0;
+  const isDummyCall = sessionSeconds > 60 && voiceRatio < FRAUD_MIN_VOICE_RATIO;
+
+  if (isDummyCall) {
+    // Hold escrow — don't release to proposer. Penalise both participants.
+    try {
+      await db.transaction(async (tx) => {
+        await tx.update(dealsTable)
+          .set({
+            status: "paid_session_held",
+            proofText: `DUMMY_CALL: voice_ratio=${(voiceRatio * 100).toFixed(1)}% < ${FRAUD_MIN_VOICE_RATIO * 100}%`,
+            updatedAt: new Date(),
+          })
+          .where(eq(dealsTable.id, dealId));
+        await penalizeMerit([me.id, proposerId], tx);
+      });
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      res.status(500).json({ error: e.message ?? "Ошибка транзакции" });
+      return;
+    }
+
+    logger.warn({ dealId, acceptor: me.id, proposer: proposerId, voiceRatio }, "Dummy call — funds held, merit penalised");
+    pushToCitizen(me.id,      { type: "session_held", dealId, reason: "DUMMY_CALL" });
+    pushToCitizen(proposerId, { type: "session_held", dealId, reason: "DUMMY_CALL" });
+    res.json({ ok: false, held: true, reason: "DUMMY_CALL", voiceRatio });
+    return;
+  }
+
+  // ── Circular wash check at finalization ───────────────────────────────────
+  const washCheck = await checkCircularWashing(me.id, proposerId);
+
+  if (!washCheck.ok || deal.status === "paid_session_flagged") {
+    // Hold for audit
+    try {
+      await db.transaction(async (tx) => {
+        await tx.update(dealsTable)
+          .set({ status: "paid_session_held", proofText: washCheck.reason ?? deal.aiVerdict ?? "Circular activity", updatedAt: new Date() })
+          .where(eq(dealsTable.id, dealId));
+        await penalizeMerit([me.id, proposerId], tx);
+      });
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      res.status(500).json({ error: e.message ?? "Ошибка транзакции" });
+      return;
+    }
+
+    logger.warn({ dealId, acceptor: me.id, proposer: proposerId }, "Circular wash at finalize — funds held");
+    pushToCitizen(me.id,      { type: "session_held", dealId, reason: "SUSPICIOUS_CIRCULAR_ACTIVITY" });
+    pushToCitizen(proposerId, { type: "session_held", dealId, reason: "SUSPICIOUS_CIRCULAR_ACTIVITY" });
+    res.json({ ok: false, held: true, reason: "SUSPICIOUS_CIRCULAR_ACTIVITY" });
+    return;
+  }
+
+  // ── Clean session — release escrow to proposer ────────────────────────────
+  // Calculate billed slots (ceil to intervalMinutes)
+  const intervalSec  = (deal.description.match(/(\d+)\s*мин/) ? parseInt(deal.description.match(/(\d+)\s*мин/)![1]!) : 15) * 60;
+  const billedSlots  = Math.max(1, Math.ceil(sessionSeconds / intervalSec));
+  const billedAmount = billedSlots * rate;
+
+  // Refund any overpaid escrow (rate was for 1 slot; sessions can run multiple)
+  // Note: escrow locked exactly `rate` (1 slot) at accept. Multi-slot overrun handled here.
+  let proposerName = "";
+  let newAcceptorBalance = 0;
+  try {
+    await db.transaction(async (tx) => {
+      // Credit proposer (already debited from acceptor at accept time)
+      const [proposer] = await tx
+        .select({ name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes })
+        .from(citizensTable).where(eq(citizensTable.id, proposerId)).limit(1);
+      proposerName = proposer?.name ?? `ID ${proposerId}`;
+
+      await tx.update(citizensTable)
+        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${rate}` })
+        .where(eq(citizensTable.id, proposerId));
+
+      // If session ran longer than 1 slot, deduct extra from acceptor
+      const extraOwed = billedAmount - rate;
+      if (extraOwed > 0) {
+        const [acc] = await tx.select({ balanceMinutes: citizensTable.balanceMinutes })
+          .from(citizensTable).where(eq(citizensTable.id, me.id)).limit(1);
+        const safeDeduct = Math.min(extraOwed, Math.max(0, (acc?.balanceMinutes ?? 0) - 1));
+        if (safeDeduct > 0) {
+          await tx.update(citizensTable)
+            .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} - ${safeDeduct}` })
+            .where(eq(citizensTable.id, me.id));
+          await tx.update(citizensTable)
+            .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${safeDeduct}` })
+            .where(eq(citizensTable.id, proposerId));
+        }
+      }
+
+      // Read updated acceptor balance
+      const [updAcc] = await tx.select({ balanceMinutes: citizensTable.balanceMinutes })
+        .from(citizensTable).where(eq(citizensTable.id, me.id)).limit(1);
+      newAcceptorBalance = updAcc?.balanceMinutes ?? 0;
+
+      // Log transaction
+      await tx.insert(transactionsTable).values({
+        sessionId:          dealId,
+        fromCitizenId:      me.id,
+        toCitizenId:        proposerId,
+        fromCitizenName:    me.name ?? `ID ${me.id}`,
+        toCitizenName:      proposerName,
+        minutesTransferred: billedAmount,
+        durationSeconds:    sessionSeconds,
+      });
+
+      await tx.update(dealsTable)
+        .set({ status: "paid_session_completed", totalTrackedMinutes: Math.floor(sessionSeconds / 60), updatedAt: new Date() })
+        .where(eq(dealsTable.id, dealId));
+    });
+  } catch (err: unknown) {
+    const e = err as { message?: string };
+    res.status(500).json({ error: e.message ?? "Ошибка транзакции" });
+    return;
+  }
+
+  logger.info({ dealId, acceptor: me.id, proposer: proposerId, billedAmount, sessionSeconds }, "Paid session completed");
+  pushToCitizen(me.id,      { type: "session_completed", dealId, billedAmount, newBalance: newAcceptorBalance });
+  pushToCitizen(proposerId, { type: "session_completed", dealId, billedAmount });
+  res.json({ ok: true, billedAmount, newBalance: newAcceptorBalance });
 });
 
 // ── POST /chat/paid-session/decline ────────────────────────────────────────

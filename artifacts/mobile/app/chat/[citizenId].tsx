@@ -157,6 +157,9 @@ export default function ConversationScreen() {
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionStartMs, setSessionStartMs] = useState<number | null>(null);
   const [sessionElapsedSec, setSessionElapsedSec] = useState(0);
+  const [sessionDealId, setSessionDealId] = useState<number | null>(null);
+  const [sessionRate, setSessionRate] = useState<number>(0);
+  const [sessionFinalizing, setSessionFinalizing] = useState(false);
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const flatRef = useRef<FlatList>(null);
@@ -436,17 +439,41 @@ export default function ConversationScreen() {
 
         // ── Paid session events ──────────────────────────────────────────────
         if (msg["type"] === "paid_session_started") {
-          const { messageId, rate, intervalMinutes } = msg as { messageId: number; rate: number; intervalMinutes: number; dealId: number; acceptorId: number; proposerId: number };
+          const { messageId, rate, intervalMinutes, dealId, acceptorId } = msg as { messageId: number; rate: number; intervalMinutes: number; dealId: number; acceptorId: number; proposerId: number };
           // Update the offer card to "accepted"
           setMessages((prev) => prev.map((m) => {
             if (m.id !== messageId) return m;
-            const meta: PaidRateOfferMeta = { rate, intervalMinutes, offerStatus: "accepted" };
+            const meta: PaidRateOfferMeta = { rate, intervalMinutes, offerStatus: "accepted", dealId };
             return { ...m, metadata: JSON.stringify(meta) };
           }));
-          // Start session timer for acceptor (the one who accepted pays)
-          setSessionActive(true);
-          setSessionStartMs(Date.now());
-          setSessionElapsedSec(0);
+          // Only the acceptor runs the timer and finalizes
+          if (citizen && acceptorId === citizen.id) {
+            setSessionActive(true);
+            setSessionStartMs(Date.now());
+            setSessionElapsedSec(0);
+            setSessionDealId(dealId);
+            setSessionRate(rate);
+          }
+        }
+
+        if (msg["type"] === "session_completed") {
+          const { billedAmount, newBalance } = msg as { dealId: number; billedAmount: number; newBalance?: number };
+          if (newBalance !== undefined && citizen) {
+            setCitizen({ ...citizen, balanceMinutes: newBalance });
+          }
+          setTipToastText(`Сессия завершена · −${billedAmount} Д`);
+          tipToastAnim.setValue(0);
+          Animated.sequence([
+            Animated.timing(tipToastAnim, { toValue: 1, duration: 280, useNativeDriver: true }),
+            Animated.delay(2500),
+            Animated.timing(tipToastAnim, { toValue: 0, duration: 280, useNativeDriver: true }),
+          ]).start();
+        }
+
+        if (msg["type"] === "session_held") {
+          const { reason } = msg as { dealId: number; reason: string };
+          const label = reason === "DUMMY_CALL" ? "Сессия заблокирована: мало голосовой активности" : "Сессия заблокирована: подозрительная активность";
+          Alert.alert("⚠️ Аудит", label + "\nДармины удержаны на проверке. Merit −0.5.");
         }
 
         if (msg["type"] === "offer_declined") {
@@ -761,6 +788,64 @@ export default function ConversationScreen() {
       Alert.alert("Ошибка", "Сетевая ошибка");
     } finally {
       setTippingMsgId(null);
+    }
+  }
+
+  // ── Paid session finalize ─────────────────────────────────────────────────
+  async function finalizeSession() {
+    if (!sessionDealId || sessionFinalizing) return;
+    setSessionFinalizing(true);
+
+    // Voice activity approximation: we assume full voice presence unless
+    // the session was extremely short (< 60 s) relative to elapsed — client
+    // has no real VAD, so we report 100 % and rely on server-side signals.
+    const totalSec        = sessionElapsedSec;
+    const voiceActiveSec  = totalSec; // honest approximation without WebRTC stats
+
+    // Stop timer immediately
+    setSessionActive(false);
+    if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+
+    try {
+      const hdrs = await getStoredAuthHeaders();
+      const res = await fetch(`${BASE_URL}/api/chat/paid-session/finalize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...hdrs },
+        body: JSON.stringify({
+          dealId:             sessionDealId,
+          sessionSeconds:     totalSec,
+          voiceActiveSeconds: voiceActiveSec,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; held?: boolean; reason?: string; billedAmount?: number; newBalance?: number; error?: string };
+
+      if (!res.ok) {
+        Alert.alert("Ошибка завершения", data.error ?? "Не удалось завершить сессию");
+        // Reactivate timer so user can retry
+        setSessionActive(true);
+        return;
+      }
+
+      // Reset session state
+      setSessionElapsedSec(0);
+      setSessionStartMs(null);
+      setSessionDealId(null);
+      setSessionRate(0);
+
+      if (data.held) {
+        // Fraud hold — alert already handled by WS event, nothing more needed here
+        return;
+      }
+
+      // Update balance immediately from response
+      if (data.newBalance !== undefined && citizen) {
+        setCitizen({ ...citizen, balanceMinutes: data.newBalance });
+      }
+    } catch {
+      Alert.alert("Сетевая ошибка", "Не удалось завершить сессию");
+      setSessionActive(true);
+    } finally {
+      setSessionFinalizing(false);
     }
   }
 
@@ -1162,31 +1247,25 @@ export default function ConversationScreen() {
       </View>
 
       {/* Active consultation session bar */}
-      {sessionActive && peer?.consultationRate && (
+      {sessionActive && (
         <View style={s.sessionBar}>
           <Feather name="clock" size={12} color={C.primary} />
           <Text style={s.sessionBarText}>{fmtSecs(sessionElapsedSec)}</Text>
           <Text style={s.sessionBurnText}>
             {" · "}
-            {Math.ceil(sessionElapsedSec / 900) * (peer.consultationRate ?? 0)} Д · {peer.consultationRate} Д/15 мин
+            {Math.ceil(sessionElapsedSec / 900) * sessionRate} Д · {sessionRate} Д/15 мин
           </Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity
-            style={s.sessionEndBtn}
-            onPress={() => {
-              const rate   = peer?.consultationRate ?? 0;
-              const slots  = Math.max(1, Math.ceil(sessionElapsedSec / 900));
-              const owed   = slots * rate;
-              setSessionActive(false);
-              setSessionElapsedSec(0);
-              setSessionStartMs(null);
-              // Pre-fill darmin transfer modal with calculated cost
-              setDarminAmount(String(owed));
-              setDarminModal(true);
-            }}
+            style={[s.sessionEndBtn, sessionFinalizing && { opacity: 0.5 }]}
+            onPress={() => void finalizeSession()}
+            disabled={sessionFinalizing}
             activeOpacity={0.8}
           >
-            <Text style={s.sessionEndText}>Завершить</Text>
+            {sessionFinalizing
+              ? <ActivityIndicator size="small" color={C.primary} style={{ width: 56 }} />
+              : <Text style={s.sessionEndText}>Завершить</Text>
+            }
           </TouchableOpacity>
         </View>
       )}
