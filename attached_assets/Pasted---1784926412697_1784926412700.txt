@@ -1,0 +1,95 @@
+Отличная новость: видео на самом деле **сохранилось и успешно загрузилось на сервер** (на скриншоте виден путь к файлу: `1784926097673.mp4`)!
+
+Однако вы видите белый экран с техническим текстом (`The server is configured with a public base URL...`), потому что Replit на сервере Express **не настроил раздачу статических файлов** (маршрут `/uploads` не подключен через `express.static`), либо при сохранении видео в базу данных записывается неправильный относительный/абсолютный URL.
+
+---
+
+### 💡 В чём точная причина:
+
+1. **На бэкенде**: Express не раздает папку `uploads/capsules/` как общедоступную статическую папку (отсутствует `app.use('/uploads', express.static(...))`).
+2. **На фронтенде**: Вместо того чтобы вставить ссылка на видео в тег `<video src="...">` внутри модального окна, приложение пытается прямо перенаправить браузер по ссылке на файл.
+
+---
+
+Вот готовый **ультра-точный промпт для Replit**, который мгновенно исправит раздачу файлов и корректно отобразит плеер видео прямо в модальном окне капсулы:
+
+---
+
+## 🚀 Промпт для Replit: Фикс раздачи и воспроизведения видеофайлов капсулы
+
+```markdown
+# BUGFIX: Fix Capsule Video Upload Path & Express Static File Serving
+
+## CRITICAL ISSUE
+Uploaded capsule videos return a server route warning:
+`The server is configured with a public base URL of /__mockup - did you mean to visit /__mockup/uploads/capsules/...`
+This happens because:
+1. Express backend is missing static directory middleware for `/uploads`.
+2. Returned `mediaUrl` from the upload API uses an incorrect relative or mocked path.
+3. The frontend attempts a direct browser redirect instead of embedding the URL inside an HTML5 `<video>` tag.
+
+---
+
+## REQUIRED FIXES
+
+### 1. Enable Static File Serving in Express (`server/index.ts` or `server/routes.ts`)
+Ensure the uploads directory is properly exposed with `express.static`:
+
+```ts
+import path from 'path';
+import express from 'express';
+
+// Ensure uploads folder is static and publicly accessible
+const uploadsPath = path.join(process.cwd(), 'uploads');
+app.use('/uploads', express.static(uploadsPath));
+
+```
+
+### 2. Standardize Media URL Generation on Upload Route (`POST /api/capsules/upload`)
+
+When a file is uploaded (e.g. `1784926097673.mp4`), return a clean relative public URL:
+
+```ts
+// Save file to process.cwd() + '/uploads/capsules/'
+const publicUrl = `/uploads/capsules/${req.file.filename}`;
+return res.json({ mediaUrl: publicUrl, mimeType: req.file.mimetype });
+
+```
+
+### 3. Embed Video Player in Capsule View Modal (`CapsuleDetailModal.tsx`)
+
+In `CapsuleDetailModal.tsx`, DO NOT navigate away to the file link. Instead, render a video element natively inside the modal layout:
+
+```tsx
+{capsule.mediaUrl && (
+  <div className="mt-4 rounded-xl overflow-hidden bg-black border border-zinc-800">
+    {capsule.mediaUrl.endsWith('.mp4') || capsule.mediaType?.includes('video') ? (
+      <video 
+        src={capsule.mediaUrl} 
+        controls 
+        playsInline 
+        className="w-full max-h-72 object-contain"
+      />
+    ) : (
+      <img 
+        src={capsule.mediaUrl} 
+        alt="Capsule Attachment" 
+        className="w-full max-h-72 object-cover" 
+      />
+    )}
+  </div>
+)}
+
+```
+
+---
+
+## VERIFICATION CHECK
+
+1. Open a Time Capsule containing a video.
+2. The modal MUST display an embedded video player (`<video controls>`) directly inside the UI.
+3. Clicking play MUST start the video without white screen or URL redirect errors.
+
+```
+
+```

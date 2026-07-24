@@ -1,4 +1,5 @@
 import { getBaseUrl } from "@/lib/api";
+import { CapsuleMediaPlayer } from "@/components/CapsuleMediaPlayer";
 import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
@@ -15,7 +16,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Image,
-  Linking,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -1424,23 +1424,12 @@ export default function TimelineScreen() {
                     resizeMode="cover"
                   />
                 ) : (
-                  <Pressable
-                    onPress={() => void Linking.openURL(`${BASE_URL}${selectedAnchor.mediaUrl}`)}
-                    style={({ pressed }) => ({
-                      flexDirection: "row", alignItems: "center", gap: 12,
-                      backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33",
-                      borderRadius: 14, padding: 16, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never,
-                    })}
-                  >
-                    <Text style={{ fontSize: 28 }}>{selectedAnchor.mediaType === "audio" ? "🎤" : "🎬"}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }}>
-                        {selectedAnchor.mediaType === "audio" ? "Аудиопослание" : "Видеопослание"}
-                      </Text>
-                      <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }}>Нажмите для воспроизведения</Text>
-                    </View>
-                    <Feather name="play-circle" size={26} color="#7c3aed" />
-                  </Pressable>
+                  <CapsuleMediaPlayer
+                    mediaUrl={selectedAnchor.mediaUrl!}
+                    mediaType={selectedAnchor.mediaType as "audio" | "video"}
+                    baseUrl={BASE_URL}
+                    colors={colors}
+                  />
                 )}
               </View>
             )}

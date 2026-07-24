@@ -2,7 +2,7 @@ import { getBaseUrl } from "@/lib/api";
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
-  ActivityIndicator, Alert, TextInput, Platform, Modal, ScrollView, Image, Linking,
+  ActivityIndicator, Alert, TextInput, Platform, Modal, ScrollView, Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
+import { CapsuleMediaPlayer } from "@/components/CapsuleMediaPlayer";
 import { useLanguage } from "@/context/LanguageContext";
 
 const BASE_URL = getBaseUrl();
@@ -293,19 +294,12 @@ export default function AuctionsScreen() {
                       resizeMode="cover"
                     />
                   ) : (
-                    <TouchableOpacity
-                      activeOpacity={0.75}
-                      onPress={() => void Linking.openURL(`${BASE_URL}${capsuleModal.mediaUrl}`)}
-                      style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33", borderRadius: 12, padding: 14 }}
-                    >
-                      <Text style={{ fontSize: 26 }}>{capsuleModal.mediaType === "audio" ? "🎤" : "🎬"}</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }}>
-                          {capsuleModal.mediaType === "audio" ? "Аудиопослание" : "Видеопослание"}
-                        </Text>
-                        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>Нажмите для воспроизведения</Text>
-                      </View>
-                    </TouchableOpacity>
+                    <CapsuleMediaPlayer
+                      mediaUrl={capsuleModal.mediaUrl!}
+                      mediaType={capsuleModal.mediaType as "audio" | "video"}
+                      baseUrl={BASE_URL}
+                      colors={colors}
+                    />
                   )}
                 </View>
               )}
