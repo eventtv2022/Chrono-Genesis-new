@@ -243,12 +243,12 @@ export default function StatsScreen() {
           </TouchableOpacity>
           {citizen && (
             <TouchableOpacity
-              style={[styles.topupBtn, { backgroundColor: colors.muted }]}
+              style={styles.timeBankBtn}
               onPress={() => router.push("/timebank")}
-              activeOpacity={0.8}
+              activeOpacity={0.75}
             >
-              <Feather name="clock" size={13} color={colors.primary} />
-              <Text style={[styles.topupBtnText, { color: colors.primary }]}>{t.stats_bank}</Text>
+              <Feather name="clock" size={14} color="#FFD700" />
+              <Text style={styles.timeBankBtnText}>{t.stats_bank}</Text>
             </TouchableOpacity>
           )}
           {citizen && (
@@ -351,6 +351,13 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold", color: colors.foreground, letterSpacing: 2 },
     topupBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 },
     topupBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.primaryForeground },
+    timeBankBtn: {
+      flexDirection: "row", alignItems: "center", gap: 5,
+      backgroundColor: "rgba(212, 175, 55, 0.15)",
+      borderWidth: 1, borderColor: "#D4AF37",
+      paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16,
+    },
+    timeBankBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#FFD700" },
     metricsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 12, gap: 8, marginBottom: 8 },
     metricCard: { flex: 1, minWidth: "45%", backgroundColor: colors.card, borderRadius: 12, padding: 16, alignItems: "center", gap: 4, borderWidth: 1, borderColor: colors.border, marginHorizontal: 4 },
     metricNum: { fontSize: 28, fontFamily: "Inter_700Bold", color: colors.primary },

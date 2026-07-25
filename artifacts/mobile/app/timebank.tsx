@@ -19,6 +19,8 @@ import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
+import { useLanguage } from "@/context/LanguageContext";
+import type { UIStrings } from "@/lib/i18n";
 
 const BASE_URL = getBaseUrl();
 
@@ -63,12 +65,27 @@ interface TimeBankStatus {
   ledger: LedgerEntry[];
 }
 
-const LEDGER_ICONS: Record<string, { icon: string; color: string; label: string }> = {
-  loan_issued:         { icon: "download",   color: "#3b82f6", label: "Выдан кредит" },
-  manual_repayment:    { icon: "upload",     color: "#10b981", label: "Ручное погашение" },
-  auto_repayment:      { icon: "zap",        color: "#8b5cf6", label: "Автопогашение" },
-  collateral_released: { icon: "unlock",     color: "#f59e0b", label: "Залог освобождён" },
-};
+function getLedgerMeta(t: UIStrings): Record<string, { icon: string; color: string; label: string }> {
+  return {
+    loan_issued:         { icon: "download",   color: "#3b82f6", label: t.tb_loan_issued },
+    manual_repayment:    { icon: "upload",     color: "#10b981", label: t.tb_manual_repay },
+    auto_repayment:      { icon: "zap",        color: "#8b5cf6", label: t.tb_auto_repay },
+    collateral_released: { icon: "unlock",     color: "#f59e0b", label: t.tb_collateral },
+  };
+}
+
+function getLadder(t: UIStrings) {
+  return [
+    { step: 1, label: t.tb_novice,         limit: 60,  req: t.tb_starting_limit },
+    { step: 2, label: t.tb_first_contract, limit: 120, req: `1 ${t.tb_1_service}` },
+    { step: 3, label: t.tb_progression,    limit: 180, req: `2 ${t.tb_hours_worked_req}` },
+    { step: 4, label: "",                  limit: 240, req: `3 ${t.tb_hours_worked_req}` },
+    { step: 5, label: "",                  limit: 300, req: `4 ${t.tb_hours_worked_req}` },
+    { step: 6, label: "",                  limit: 360, req: `5 ${t.tb_hours_worked_req}` },
+    { step: 7, label: "",                  limit: 420, req: `6 ${t.tb_hours_worked_req}` },
+    { step: 8, label: t.tb_ceiling,        limit: 480, req: `7 ${t.tb_hours_worked_req}` },
+  ];
+}
 
 export default function TimeBankScreen() {
   const colors = useColors();
@@ -77,6 +94,7 @@ export default function TimeBankScreen() {
   const { citizen, refreshCitizen } = useCitizen();
   const queryClient = useQueryClient();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const { t } = useLanguage();
 
   const [borrowAmount, setBorrowAmount] = useState("");
   const [repayAmount, setRepayAmount] = useState("");
@@ -90,9 +108,9 @@ export default function TimeBankScreen() {
   const { data, isLoading, refetch, isRefetching } = useQuery<TimeBankStatus>({
     queryKey: ["timebank", citizen?.id],
     queryFn: async () => {
-      if (!citizen?.id) throw new Error("Не авторизован");
+      if (!citizen?.id) throw new Error(t.tb_no_auth);
       const res = await fetch(`${BASE_URL}/api/timebank/status?citizenId=${citizen.id}`);
-      if (!res.ok) throw new Error("Ошибка загрузки");
+      if (!res.ok) throw new Error(t.error);
       return res.json() as Promise<TimeBankStatus>;
     },
     enabled: !!citizen?.id,
@@ -107,7 +125,7 @@ export default function TimeBankScreen() {
         body: JSON.stringify({ citizenId: citizen!.id, amount }),
       });
       const json = await res.json() as { error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Ошибка");
+      if (!res.ok) throw new Error(json.error ?? t.error);
       return json;
     },
     onSuccess: () => {
@@ -133,7 +151,7 @@ export default function TimeBankScreen() {
         body: JSON.stringify({ citizenId: citizen!.id, amount }),
       });
       const json = await res.json() as { error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Ошибка");
+      if (!res.ok) throw new Error(json.error ?? t.error);
       return json;
     },
     onSuccess: () => {
@@ -154,7 +172,7 @@ export default function TimeBankScreen() {
   function handleBorrow() {
     const amt = parseInt(borrowAmount, 10);
     if (isNaN(amt) || amt <= 0) {
-      setBorrowError("Введите корректную сумму");
+      setBorrowError(t.tb_invalid_amount);
       return;
     }
     setBorrowError(null);
@@ -164,7 +182,7 @@ export default function TimeBankScreen() {
   function handleRepay() {
     const amt = parseInt(repayAmount, 10);
     if (isNaN(amt) || amt <= 0) {
-      setRepayError("Введите корректную сумму погашения");
+      setRepayError(t.tb_invalid_repay);
       return;
     }
     setRepayError(null);
@@ -172,6 +190,7 @@ export default function TimeBankScreen() {
   }
 
   const activeLoan = data?.loans.find((l) => l.status === "active") ?? null;
+  const ledgerMeta = getLedgerMeta(t);
 
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>
@@ -180,7 +199,7 @@ export default function TimeBankScreen() {
         <TouchableOpacity onPress={() => router.back()} style={st.backBtn}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[st.title, { color: colors.foreground }]}>Банк Времени</Text>
+        <Text style={[st.title, { color: colors.foreground }]}>{t.tb_title}</Text>
         <View style={{ width: 38 }} />
       </View>
 
@@ -188,7 +207,7 @@ export default function TimeBankScreen() {
         <View style={st.center}>
           <Feather name="lock" size={40} color={colors.mutedForeground} />
           <Text style={[st.emptyText, { color: colors.mutedForeground }]}>
-            Необходим аккаунт гражданина
+            {t.tb_no_auth}
           </Text>
         </View>
       ) : isLoading ? (
@@ -211,7 +230,7 @@ export default function TimeBankScreen() {
             <View style={st.cardHeader}>
               <Feather name="clock" size={20} color={colors.primary} />
               <Text style={[st.cardTitle, { color: colors.foreground }]}>
-                Кредитный статус
+                {t.tb_credit_status}
               </Text>
             </View>
             <Text style={[st.statusLabel, { color: data?.atCap ? colors.destructive : colors.primary }]}>
@@ -219,14 +238,22 @@ export default function TimeBankScreen() {
             </Text>
 
             <View style={st.metaRow}>
-              <MetaItem label="Лимит" value={`${data?.creditLimit ?? 0} мин`} colors={colors} />
               <MetaItem
-                label="Активный долг"
-                value={`${data?.activeDebt ?? 0} мин`}
+                label={t.tb_limit}
+                value={`${data?.creditLimit ?? 0} ${t.tb_min}`}
+                colors={colors}
+              />
+              <MetaItem
+                label={t.tb_active_debt}
+                value={`${data?.activeDebt ?? 0} ${t.tb_min}`}
                 colors={colors}
                 highlight={Boolean((data?.activeDebt ?? 0) > 0)}
               />
-              <MetaItem label="Доступно" value={`${data?.availableCredit ?? 0} мин`} colors={colors} />
+              <MetaItem
+                label={t.tb_available}
+                value={`${data?.availableCredit ?? 0} ${t.tb_min}`}
+                colors={colors}
+              />
             </View>
 
             {/* Debt progress bar */}
@@ -235,6 +262,7 @@ export default function TimeBankScreen() {
                 activeDebt={data!.activeDebt}
                 creditLimit={data!.creditLimit}
                 colors={colors}
+                t={t}
               />
             )}
 
@@ -243,6 +271,7 @@ export default function TimeBankScreen() {
               creditLimit={data?.creditLimit ?? 60}
               maxCap={data?.maxDebtCap ?? 480}
               colors={colors}
+              t={t}
             />
           </View>
 
@@ -251,13 +280,13 @@ export default function TimeBankScreen() {
             <View style={[st.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={st.cardHeader}>
                 <Feather name="trending-up" size={18} color={colors.primary} />
-                <Text style={[st.cardTitle, { color: colors.foreground }]}>Следующий уровень</Text>
+                <Text style={[st.cardTitle, { color: colors.foreground }]}>{t.tb_next_level}</Text>
               </View>
 
               {data.nextLevel.targetMinutes > 0 ? (
                 <>
                   <Text style={[st.nextLabel, { color: colors.mutedForeground }]}>
-                    Отработано: {data.nextLevel.currentMinutes} / {data.nextLevel.targetMinutes} мин
+                    {t.tb_worked}: {data.nextLevel.currentMinutes} / {data.nextLevel.targetMinutes} {t.tb_min}
                   </Text>
                   <View style={[st.barBg, { backgroundColor: colors.muted }]}>
                     <View
@@ -283,29 +312,29 @@ export default function TimeBankScreen() {
               <View style={[st.servicesBadge, { backgroundColor: colors.muted }]}>
                 <Feather name="check-circle" size={14} color={colors.primary} />
                 <Text style={[st.servicesText, { color: colors.foreground }]}>
-                  Выполнено услуг: {data.completedServicesCount}
+                  {t.tb_completed_services}: {data.completedServicesCount}
                 </Text>
               </View>
             </View>
           )}
 
           {/* Ladder reference */}
-          <LadderCard colors={colors} current={data?.creditLimit ?? 60} />
+          <LadderCard colors={colors} current={data?.creditLimit ?? 60} t={t} />
 
           {/* Borrow section */}
           {(data?.availableCredit ?? 0) > 0 && (
             <View style={[st.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={st.cardHeader}>
                 <Feather name="download" size={18} color={colors.primary} />
-                <Text style={[st.cardTitle, { color: colors.foreground }]}>Взять кредит</Text>
+                <Text style={[st.cardTitle, { color: colors.foreground }]}>{t.tb_borrow}</Text>
               </View>
               <Text style={[st.hint, { color: colors.mutedForeground }]}>
-                Доступно: {data?.availableCredit} мин · Лимит: {data?.creditLimit} мин
+                {t.tb_available}: {data?.availableCredit} {t.tb_min} · {t.tb_limit}: {data?.creditLimit} {t.tb_min}
               </Text>
               <View style={st.inputRow}>
                 <TextInput
                   style={[st.input, { color: colors.foreground, borderColor: borrowError ? colors.destructive : colors.border, backgroundColor: colors.muted }]}
-                  placeholder="Количество Д"
+                  placeholder={t.tb_borrow_amount}
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="numeric"
                   value={borrowAmount}
@@ -319,7 +348,7 @@ export default function TimeBankScreen() {
                   {borrowMutation.isPending ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={st.actionBtnText}>Взять</Text>
+                    <Text style={st.actionBtnText}>{t.tb_take}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -332,7 +361,7 @@ export default function TimeBankScreen() {
               {borrowSuccess && (
                 <View style={[st.inlineBanner, { backgroundColor: "#10b98118", borderColor: "#10b98155" }]}>
                   <Feather name="check-circle" size={13} color="#10b981" />
-                  <Text style={[st.inlineBannerText, { color: "#10b981" }]}>Кредит выдан — Дармины зачислены на баланс</Text>
+                  <Text style={[st.inlineBannerText, { color: "#10b981" }]}>{t.tb_borrow_success}</Text>
                 </View>
               )}
             </View>
@@ -343,21 +372,21 @@ export default function TimeBankScreen() {
             <View style={[st.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={st.cardHeader}>
                 <Feather name="upload" size={18} color="#f59e0b" />
-                <Text style={[st.cardTitle, { color: colors.foreground }]}>Погасить кредит</Text>
+                <Text style={[st.cardTitle, { color: colors.foreground }]}>{t.tb_repay_loan}</Text>
               </View>
 
-              {/* Debt progress */}
+              {/* Debt summary */}
               <View style={[st.debtSummary, { backgroundColor: colors.muted, borderColor: colors.border }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 22, fontWeight: "800", color: "#f59e0b" }}>
                     {activeLoan.remainingDebt} Д
                   </Text>
                   <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2 }}>
-                    остаток долга · взято {activeLoan.amount} Д · {new Date(activeLoan.createdAt).toLocaleDateString("ru-RU")}
+                    {t.tb_debt_remaining} · {t.tb_taken} {activeLoan.amount} Д · {new Date(activeLoan.createdAt).toLocaleDateString()}
                   </Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={{ fontSize: 11, color: colors.mutedForeground }}>баланс</Text>
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{t.tb_balance}</Text>
                   <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>
                     {(citizen.balanceMinutes - 1).toFixed(2)} Д
                   </Text>
@@ -377,18 +406,18 @@ export default function TimeBankScreen() {
                   />
                 </View>
                 <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center", marginTop: 4 }}>
-                  Погашено {activeLoan.amount - activeLoan.remainingDebt} из {activeLoan.amount} Д
+                  {activeLoan.amount - activeLoan.remainingDebt} / {activeLoan.amount} Д
                 </Text>
               </View>
 
               <Text style={[st.hint, { color: colors.mutedForeground, marginBottom: 4 }]}>
-                💡 Зарабатывая минуты в TiMETR, система автоматически направляет их на погашение долга.
+                💡 {t.tb_auto_note}
               </Text>
 
               <View style={st.inputRow}>
                 <TextInput
                   style={[st.input, { color: colors.foreground, borderColor: repayError ? colors.destructive : colors.border, backgroundColor: colors.muted }]}
-                  placeholder={`До ${activeLoan.remainingDebt} Д`}
+                  placeholder={`${t.tb_limit} ${activeLoan.remainingDebt} Д`}
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="numeric"
                   value={repayAmount}
@@ -402,13 +431,13 @@ export default function TimeBankScreen() {
                   {repayMutation.isPending ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={st.actionBtnText}>Погасить</Text>
+                    <Text style={st.actionBtnText}>{t.tb_repay_btn}</Text>
                   )}
                 </TouchableOpacity>
               </View>
               <TouchableOpacity onPress={() => setRepayAmount(String(activeLoan.remainingDebt))}>
                 <Text style={[st.fullRepay, { color: colors.primary }]}>
-                  Погасить полностью ({activeLoan.remainingDebt} Д) →
+                  {t.tb_repay_full} ({activeLoan.remainingDebt} Д) →
                 </Text>
               </TouchableOpacity>
               {repayError && (
@@ -420,7 +449,7 @@ export default function TimeBankScreen() {
               {repaySuccess && (
                 <View style={[st.inlineBanner, { backgroundColor: "#10b98118", borderColor: "#10b98155" }]}>
                   <Feather name="check-circle" size={13} color="#10b981" />
-                  <Text style={[st.inlineBannerText, { color: "#10b981" }]}>Долг погашен — спасибо за исполнение обязательств</Text>
+                  <Text style={[st.inlineBannerText, { color: "#10b981" }]}>{t.tb_repay_success}</Text>
                 </View>
               )}
             </View>
@@ -431,8 +460,7 @@ export default function TimeBankScreen() {
             <View style={[st.capNotice, { backgroundColor: colors.destructive + "22", borderColor: colors.destructive }]}>
               <Feather name="alert-triangle" size={16} color={colors.destructive} />
               <Text style={[st.capText, { color: colors.destructive }]}>
-                Достигнут максимальный предел доверия Банка Времени (8 часов).
-                Погасите долг для дальнейшего кредитования.
+                {t.tb_cap_notice}
               </Text>
             </View>
           )}
@@ -442,15 +470,15 @@ export default function TimeBankScreen() {
             <View style={[st.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={st.cardHeader}>
                 <Feather name="list" size={16} color={colors.mutedForeground} />
-                <Text style={[st.cardTitle, { color: colors.foreground }]}>История операций</Text>
+                <Text style={[st.cardTitle, { color: colors.foreground }]}>{t.tb_history}</Text>
               </View>
               {[...(data!.ledger)].reverse().slice(0, 20).map((entry) => {
-                const meta = LEDGER_ICONS[entry.type] ?? { icon: "circle", color: colors.mutedForeground, label: entry.type };
+                const meta = ledgerMeta[entry.type] ?? { icon: "circle", color: colors.mutedForeground, label: entry.type };
                 const sign = entry.type === "loan_issued" ? "+" : entry.type === "collateral_released" ? "🔓" : "−";
                 return (
                   <View key={entry.id} style={[st.historyRow, { borderBottomColor: colors.border }]}>
                     <View style={[st.historyIcon, { backgroundColor: meta.color + "22" }]}>
-                      <Feather name={meta.icon as any} size={14} color={meta.color} />
+                      <Feather name={meta.icon as never} size={14} color={meta.color} />
                     </View>
                     <View style={{ flex: 1, marginLeft: 10 }}>
                       <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
@@ -467,7 +495,7 @@ export default function TimeBankScreen() {
                         {typeof sign === "string" && sign !== "🔓" ? `${sign}${entry.amount}` : `${sign} ${entry.amount}`} Д
                       </Text>
                       <Text style={{ fontSize: 10, color: colors.mutedForeground, marginTop: 2 }}>
-                        {new Date(entry.createdAt).toLocaleDateString("ru-RU")}
+                        {new Date(entry.createdAt).toLocaleDateString()}
                       </Text>
                     </View>
                   </View>
@@ -510,17 +538,19 @@ function DebtBar({
   activeDebt,
   creditLimit,
   colors,
+  t,
 }: {
   activeDebt: number;
   creditLimit: number;
   colors: ReturnType<typeof useColors>;
+  t: UIStrings;
 }) {
   const pct = Math.min(100, Math.round((activeDebt / creditLimit) * 100));
   return (
     <View style={{ marginTop: 12, marginBottom: 4 }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
-        <Text style={{ fontSize: 11, color: "#f59e0b", fontWeight: "600" }}>Долг: {activeDebt} Д</Text>
-        <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{pct}% от лимита</Text>
+        <Text style={{ fontSize: 11, color: "#f59e0b", fontWeight: "600" }}>{t.tb_debt}: {activeDebt} Д</Text>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{pct}% {t.tb_of_limit}</Text>
       </View>
       <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.muted, overflow: "hidden" }}>
         <View style={{ height: "100%", borderRadius: 3, backgroundColor: "#f59e0b", width: `${pct}%` }} />
@@ -533,47 +563,39 @@ function CreditBar({
   creditLimit,
   maxCap,
   colors,
+  t,
 }: {
   creditLimit: number;
   maxCap: number;
   colors: ReturnType<typeof useColors>;
+  t: UIStrings;
 }) {
   const pct = Math.round((creditLimit / maxCap) * 100);
   return (
     <View style={{ marginTop: 14 }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
-        <Text style={{ fontSize: 11, color: colors.mutedForeground }}>60 мин</Text>
-        <Text style={{ fontSize: 11, color: colors.mutedForeground }}>480 мин (потолок)</Text>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground }}>60 {t.tb_min}</Text>
+        <Text style={{ fontSize: 11, color: colors.mutedForeground }}>480 {t.tb_min} ({t.tb_ceiling})</Text>
       </View>
       <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.muted, overflow: "hidden" }}>
         <View style={{ height: "100%", borderRadius: 4, backgroundColor: colors.primary, width: `${pct}%` }} />
       </View>
       <Text style={{ fontSize: 11, color: colors.mutedForeground, textAlign: "center", marginTop: 4 }}>
-        Текущий лимит: {creditLimit} мин ({pct}% от потолка)
+        {t.tb_current_limit}: {creditLimit} {t.tb_min} ({pct}% {t.tb_of_limit})
       </Text>
     </View>
   );
 }
 
-const LADDER = [
-  { step: 1, label: "Новичок", limit: 60, req: "Начальный лимит" },
-  { step: 2, label: "Первый контракт", limit: 120, req: "1 услуга" },
-  { step: 3, label: "Прогрессия", limit: 180, req: "2 ч отработано" },
-  { step: 4, label: "", limit: 240, req: "3 ч отработано" },
-  { step: 5, label: "", limit: 300, req: "4 ч отработано" },
-  { step: 6, label: "", limit: 360, req: "5 ч отработано" },
-  { step: 7, label: "", limit: 420, req: "6 ч отработано" },
-  { step: 8, label: "Потолок", limit: 480, req: "7 ч отработано" },
-];
-
-function LadderCard({ colors, current }: { colors: ReturnType<typeof useColors>; current: number }) {
+function LadderCard({ colors, current, t }: { colors: ReturnType<typeof useColors>; current: number; t: UIStrings }) {
+  const ladder = getLadder(t);
   return (
     <View style={[{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 12, padding: 16, marginBottom: 12 }]}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <Feather name="layers" size={16} color={colors.primary} />
-        <Text style={{ fontSize: 14, fontWeight: "600", color: colors.foreground }}>Лестница доверия</Text>
+        <Text style={{ fontSize: 14, fontWeight: "600", color: colors.foreground }}>{t.tb_trust_ladder}</Text>
       </View>
-      {LADDER.map((rung) => {
+      {ladder.map((rung) => {
         const active = current === rung.limit;
         const passed = current > rung.limit;
         return (
@@ -593,13 +615,13 @@ function LadderCard({ colors, current }: { colors: ReturnType<typeof useColors>;
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 13, fontWeight: active ? "700" : "400", color: colors.foreground }}>
-                {rung.limit} мин{rung.label ? ` — ${rung.label}` : ""}
+                {rung.limit} {t.tb_min}{rung.label ? ` — ${rung.label}` : ""}
               </Text>
               <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{rung.req}</Text>
             </View>
             {active && (
               <View style={{ backgroundColor: colors.primary + "22", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 }}>
-                <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>ТЕКУЩИЙ</Text>
+                <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>{t.tb_current_badge}</Text>
               </View>
             )}
           </View>
