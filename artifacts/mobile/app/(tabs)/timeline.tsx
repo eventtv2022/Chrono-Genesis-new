@@ -30,6 +30,7 @@ import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { FOCUS_PROMPTS_I18N } from "@/lib/i18n";
 import { LogoBrand } from "@/components/LogoBrand";
 
 // ── Century boundary guard (client-side mirror of backend centuryGuard.ts) ─────
@@ -493,22 +494,14 @@ function CreateSlotAuctionModal({ slot, visible, onClose, onSubmit, submitting, 
   );
 }
 
-// ── Focus prompts — смысловые подсказки для создания События ─────────────────
-const FOCUS_PROMPTS = [
-  "💡 Зафиксируй решение, которое изменило твой день",
-  "💡 Запиши мысль или эмоцию для себя в будущее",
-  "💡 Запечатлей знание, ценность или красоту этого момента",
-  "💡 Что из происходящего прямо сейчас стоит сохранить в Хронопедии?",
-  "💡 Оставь отпечаток момента, который формирует твою историю",
-  "💡 Передай главное — у тебя есть 1 минута, чтобы зафиксировать Значимое",
-];
-
 /**
- * Классический новостной тикер: одна фраза из FOCUS_PROMPTS едет справа налево,
- * полностью уходит за левый край, затем появляется следующая фраза — и так по кругу.
- * Чисто визуальный компонент, без обработчиков касаний.
+ * Классический новостной тикер: одна фраза из FOCUS_PROMPTS_I18N[lang] едет справа
+ * налево, полностью уходит за левый край, затем появляется следующая — и так по кругу.
+ * Язык подхватывается автоматически из контекста. Чисто визуальный компонент.
  */
 function FocusTicker({ accentColor }: { accentColor: string }) {
+  const { lang }               = useLanguage();
+  const prompts                = FOCUS_PROMPTS_I18N[lang] ?? FOCUS_PROMPTS_I18N["ru"];
   const { width: screenWidth } = useWindowDimensions();
   const [index, setIndex]      = useState(0);
   const indexRef               = useRef(0);
@@ -516,27 +509,21 @@ function FocusTicker({ accentColor }: { accentColor: string }) {
   const activeAnim             = useRef<Animated.CompositeAnimation | null>(null);
 
   const runTicker = useCallback(() => {
-    // Сброс: фраза стоит за правым краем экрана
     translateX.setValue(screenWidth);
-
-    // Проезд до -screenWidth: фраза гарантированно уходит за левый край
     const anim = Animated.timing(translateX, {
       toValue:         -screenWidth,
-      duration:        9000,          // ~9 с на проезд — комфортная скорость чтения
+      duration:        9000,
       easing:          Easing.linear,
       useNativeDriver: true,
     });
     activeAnim.current = anim;
-
     anim.start(({ finished }) => {
-      if (!finished) return; // анимация была прервана (unmount)
-      // Переключаем на следующую фразу и повторяем
-      indexRef.current = (indexRef.current + 1) % FOCUS_PROMPTS.length;
+      if (!finished) return;
+      indexRef.current = (indexRef.current + 1) % prompts.length;
       setIndex(indexRef.current);
     });
-  }, [screenWidth, translateX]);
+  }, [screenWidth, translateX, prompts.length]);
 
-  // Запускаем новый проезд каждый раз, когда меняется index
   useEffect(() => {
     runTicker();
     return () => { activeAnim.current?.stop(); };
@@ -551,14 +538,11 @@ function FocusTicker({ accentColor }: { accentColor: string }) {
     >
       <Animated.Text
         style={{
-          fontSize:        13,
-          color:           accentColor,
-          fontWeight:      "500",
-          paddingHorizontal: 12,
-          transform:       [{ translateX }],
+          fontSize: 13, color: accentColor, fontWeight: "500",
+          paddingHorizontal: 12, transform: [{ translateX }],
         }}
       >
-        {FOCUS_PROMPTS[index]}
+        {prompts[index]}
       </Animated.Text>
     </View>
   );
@@ -694,10 +678,7 @@ export default function TimelineScreen() {
         const mime = asset.mimeType ?? "application/octet-stream";
         console.log("[Picker Success]:", asset.name, mime, asset.size);
 
-        if (asset.size && asset.size > 10 * 1024 * 1024) {
-          Alert.alert("⚠️", "Размер файла не должен превышать 10 МБ");
-          return;
-        }
+        const sizeOver = !!(asset.size && asset.size > 12 * 1024 * 1024);
 
         // Detect media category from MIME
         let mediaType: "image" | "audio" | "video" | "document" = "document";
@@ -706,13 +687,21 @@ export default function TimelineScreen() {
         else if (mime.startsWith("video/")) mediaType = "video";
 
         // Duration guard for audio/video (≤60 s)
+        let durationOver = false;
         if (mediaType === "audio" || mediaType === "video") {
-          const duration = await getMediaDurationSeconds(asset.uri, mediaType);
-          console.log("[Picker Duration]:", duration);
-          if (duration !== null && duration > 60) {
-            Alert.alert("Лимит Хронопедии", "Длительность события не должна превышать 1 минуту. Передайте самое Значимое.");
-            return;
-          }
+          const dur = await getMediaDurationSeconds(asset.uri, mediaType);
+          console.log("[Picker Duration]:", dur);
+          if (dur !== null && dur > 60) durationOver = true;
+        }
+
+        if (sizeOver || durationOver) {
+          const msg = sizeOver && durationOver
+            ? t.file_limit_both
+            : sizeOver
+              ? t.file_limit_size
+              : t.file_limit_duration;
+          Alert.alert(t.file_limit_title, msg);
+          return;
         }
 
         setCapsuleMedia({ uri: asset.uri, relPath: null, type: mediaType, name: asset.name, mimeType: mime });
@@ -1121,8 +1110,8 @@ export default function TimelineScreen() {
           {/* Tab switcher */}
           <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}>
             {([
-              { key: "anchors", label: "⏱ Значимое", count: myAnchors.length },
-              { key: "slots",   label: "📍 События",  count: mySlots.length   },
+              { key: "anchors", label: `⏱ ${t.tl_anchor_badge}`, count: myAnchors.length },
+              { key: "slots",   label: `📍 ${t.tl_slot_badge}`,   count: mySlots.length   },
             ] as const).map(tab => (
               <Pressable
                 key={tab.key}

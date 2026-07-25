@@ -26,6 +26,7 @@ import { WebRTCService } from "@/lib/webrtcService";
 import CallScreen, { type CallState } from "./CallScreen";
 
 import { useCitizen } from "@/context/CitizenContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { getBaseUrl } from "@/lib/api";
 import { getStoredAuthHeaders, getStoredToken } from "@/lib/authStorage";
 import { decryptMsg, encryptMsg, getOrCreateKeyPair, getSafetyCode } from "@/lib/e2ee";
@@ -118,6 +119,7 @@ export default function ConversationScreen() {
   const { citizenId: rawId } = useLocalSearchParams<{ citizenId: string }>();
   const peerId = parseInt(rawId ?? "0", 10);
   const { citizen, authToken, setCitizen } = useCitizen();
+  const { t } = useLanguage();
 
   const [peer, setPeer] = useState<PeerInfo | null>(null);
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
@@ -918,8 +920,8 @@ export default function ConversationScreen() {
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
       const sizeBytes = asset.size ?? 0;
-      if (sizeBytes > 10 * 1024 * 1024) {
-        Alert.alert("Файл слишком большой", "Максимальный размер — 10 МБ");
+      if (sizeBytes > 12 * 1024 * 1024) {
+        Alert.alert(t.file_limit_title, t.file_limit_size);
         return;
       }
       setPendingFiles((prev) => [

@@ -69,6 +69,9 @@ const TRANSLATIONS: Record<LangCode, { welcome: string; select_hour: string; btn
   nl: { welcome: "Welkom bij TimeNation",           select_hour: "Kies uw uur",                btn_publish: "Video publiceren",   status: "Tijd is een gemeenschappelijke taal die alle naties van de wereld verenigt." },
   kk: { welcome: "TimeNation-қа қош келдіңіз",      select_hour: "Сағатыңызды таңдаңыз",      btn_publish: "Бейнені жариялау",   status: "Уақыт — бүкіл әлем халықтарын бір циферблатта біріктіретін ортақ тіл." },
   uz: { welcome: "TimeNation-ga xush kelibsiz",     select_hour: "Soatingizni tanlang",        btn_publish: "Videoni nashr qilish", status: "Vaqt — dunyodagi barcha millatlarni birlashtiradigan umumiy tildir." },
+  el: { welcome: "Καλώς ήρθατε στο TimeNation",    select_hour: "Επιλέξτε την ώρα σας",       btn_publish: "Δημοσίευση βίντεο",  status: "Ο χρόνος είναι η κοινή γλώσσα που ενώνει όλα τα έθνη του κόσμου." },
+  cs: { welcome: "Vítejte v TimeNation",            select_hour: "Vyberte svou hodinu",        btn_publish: "Zveřejnit video",    status: "Čas je společný jazyk, který spojuje všechny národy světa." },
+  sv: { welcome: "Välkommen till TimeNation",       select_hour: "Välj din timme",             btn_publish: "Publicera video",    status: "Tid är ett gemensamt språk som förenar alla nationer i världen." },
 };
 
 const COLS = 4;
