@@ -1180,7 +1180,7 @@ export default function TimerScreen() {
               editable={true}
               onPhotoUpdated={() => void refreshCitizen()}
             />
-            <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flex: 1, flexShrink: 1, minWidth: 0 }}>
               <Text style={styles.passportName} numberOfLines={1}>{citizen.name}</Text>
               <Text style={styles.passportId}>ID #{citizen.id}</Text>
               <Text style={[styles.passportRank, { marginTop: 2 }]}>{citizen.rank ?? ui.login}</Text>
@@ -1494,10 +1494,10 @@ export default function TimerScreen() {
 function getStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10 },
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingLeft: 16, paddingRight: 12, paddingVertical: 10, width: "100%", overflow: "hidden" },
     headerBrand: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 },
     headerTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: colors.primary, letterSpacing: 1 },
-    headerRight: { flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 1 },
+    headerRight: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1, overflow: "hidden", minWidth: 0 },
     rankPill: { backgroundColor: "rgba(201,168,76,0.15)", borderWidth: 1, borderColor: "rgba(201,168,76,0.4)", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 20 },
     rankText: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.primary, letterSpacing: 0 },
     balancePill: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.goldGlow, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: 7, paddingVertical: 4, borderRadius: 20 },
@@ -1527,15 +1527,15 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     listSection: { flex: 1, paddingHorizontal: 20, paddingTop: 14 },
     listTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 12 },
     // Passport card
-    passportCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: 20, marginBottom: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary + "55", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, gap: 10 },
-    passportLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 },
+    passportCard: { flexDirection: "column", alignItems: "stretch", marginHorizontal: 20, marginBottom: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary + "55", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, gap: 0 },
+    passportLeft: { flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0 },
     passportAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primary + "22", borderWidth: 1, borderColor: colors.primary + "66", alignItems: "center", justifyContent: "center", flexShrink: 0 },
     passportAvatarText: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.primary },
     passportName: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground },
     passportId: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 1 },
     passportRankLabel: { fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5 },
     passportRank: { fontSize: 11, fontFamily: "Inter_700Bold", color: colors.primary },
-    passportActions: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 },
+    passportActions: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 12 },
     passportRefresh: { padding: 6, borderRadius: 8 },
     passportLogout: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
     passportLogoutText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
