@@ -18,6 +18,7 @@ import {
   Image,
   Animated,
   Easing,
+  useWindowDimensions,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Audio } from "expo-av";
@@ -502,90 +503,63 @@ const FOCUS_PROMPTS = [
   "💡 Передай главное — у тебя есть 1 минута, чтобы зафиксировать Значимое",
 ];
 
-const TICKER_SEP = "   ✦   ";
-// 3 копии сегмента — гарантируют бесшовный цикл без пустых разрывов
-const TICKER_SEGMENT = FOCUS_PROMPTS.join(TICKER_SEP) + TICKER_SEP;
-const TICKER_TRIPLE  = TICKER_SEGMENT + TICKER_SEGMENT + TICKER_SEGMENT;
-
 /**
- * Бегущая строка смысловых фокусов. Чисто визуальная — без обработчиков кликов.
- *
- *  — Измеряет ширину ОДНОГО сегмента через невидимый ScrollView horizontal.
- *  — Анимирует translateX от 0 до -segWidth (один цикл) через Animated.loop.
- *  — Тройное дублирование в DOM + seamless loop = никаких пустых разрывов.
- *  — duration = segWidth * 35 (~28 px/s, вдвое быстрее первоначальных 14 px/s).
- *  — Текст рендерится без numberOfLines и ellipsizeMode — все фразы целиком.
+ * Классический новостной тикер: одна фраза из FOCUS_PROMPTS едет справа налево,
+ * полностью уходит за левый край, затем появляется следующая фраза — и так по кругу.
+ * Чисто визуальный компонент, без обработчиков касаний.
  */
 function FocusTicker({ accentColor }: { accentColor: string }) {
-  const [segWidth, setSegWidth] = useState(0);
-  const translateX = useRef(new Animated.Value(0)).current;
-  const animRef    = useRef<Animated.CompositeAnimation | null>(null);
+  const { width: screenWidth } = useWindowDimensions();
+  const [index, setIndex]      = useState(0);
+  const indexRef               = useRef(0);
+  const translateX             = useRef(new Animated.Value(screenWidth)).current;
+  const activeAnim             = useRef<Animated.CompositeAnimation | null>(null);
 
+  const runTicker = useCallback(() => {
+    // Сброс: фраза стоит за правым краем экрана
+    translateX.setValue(screenWidth);
+
+    // Проезд до -screenWidth: фраза гарантированно уходит за левый край
+    const anim = Animated.timing(translateX, {
+      toValue:         -screenWidth,
+      duration:        9000,          // ~9 с на проезд — комфортная скорость чтения
+      easing:          Easing.linear,
+      useNativeDriver: true,
+    });
+    activeAnim.current = anim;
+
+    anim.start(({ finished }) => {
+      if (!finished) return; // анимация была прервана (unmount)
+      // Переключаем на следующую фразу и повторяем
+      indexRef.current = (indexRef.current + 1) % FOCUS_PROMPTS.length;
+      setIndex(indexRef.current);
+    });
+  }, [screenWidth, translateX]);
+
+  // Запускаем новый проезд каждый раз, когда меняется index
   useEffect(() => {
-    if (!segWidth) return;
-    animRef.current?.stop();
-    translateX.setValue(0);
-    animRef.current = Animated.loop(
-      Animated.timing(translateX, {
-        toValue: -segWidth,          // смещаемся ровно на длину одного сегмента…
-        duration: segWidth * 35,     // ~28 px/s — вдвое быстрее (было 70)
-        useNativeDriver: true,
-        easing: Easing.linear,
-      })
-    );
-    animRef.current.start();
-    return () => { animRef.current?.stop(); };
-  }, [segWidth, translateX]);
+    runTicker();
+    return () => { activeAnim.current?.stop(); };
+  }, [index, runTicker]);
 
   return (
-    <View style={{ marginBottom: 10 }} pointerEvents="none">
-      {/*
-       * Невидимый слой измерения одного сегмента:
-       * ScrollView horizontal снимает ограничение ширины родителя,
-       * поэтому onLayout возвращает натуральную (полную) ширину текста.
-       */}
-      <ScrollView
-        horizontal
-        scrollEnabled={false}
-        showsHorizontalScrollIndicator={false}
-        style={{ position: "absolute", opacity: 0 }}
-        pointerEvents="none"
-      >
-        <Text
-          style={{ fontSize: 13, fontWeight: "500", paddingHorizontal: 12 }}
-          onLayout={(e) => {
-            const w = e.nativeEvent.layout.width;
-            if (w > 50 && !segWidth) setSegWidth(w);
-          }}
-        >
-          {TICKER_SEGMENT}
-        </Text>
-      </ScrollView>
-
-      {/* Видимая бегущая строка — только overflow:hidden + анимация */}
-      <View
+    <View
+      style={{ marginBottom: 10, height: 36, overflow: "hidden", borderRadius: 10,
+               backgroundColor: accentColor + "14", borderWidth: 1,
+               borderColor: accentColor + "28", justifyContent: "center" }}
+      pointerEvents="none"
+    >
+      <Animated.Text
         style={{
-          height: 36,
-          overflow: "hidden",
-          borderRadius: 10,
-          backgroundColor: accentColor + "14",
-          borderWidth: 1,
-          borderColor: accentColor + "28",
-          justifyContent: "center",
+          fontSize:        13,
+          color:           accentColor,
+          fontWeight:      "500",
+          paddingHorizontal: 12,
+          transform:       [{ translateX }],
         }}
       >
-        <Animated.View style={{ flexDirection: "row", transform: [{ translateX }] }}>
-          {/*
-           * TICKER_TRIPLE = три копии сегмента рядом.
-           * Анимация смещает на -segWidth (одну копию), затем loop сбрасывает
-           * на 0 — визуально незаметно, т.к. следующая копия идентична.
-           * Отсутствие numberOfLines / ellipsizeMode — все фразы целиком.
-           */}
-          <Text style={{ fontSize: 13, color: accentColor, fontWeight: "500", paddingHorizontal: 12 }}>
-            {TICKER_TRIPLE}
-          </Text>
-        </Animated.View>
-      </View>
+        {FOCUS_PROMPTS[index]}
+      </Animated.Text>
     </View>
   );
 }
