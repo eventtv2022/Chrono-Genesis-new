@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, createElement } from "react";
+import React, { useState, useEffect, useRef, createElement, useCallback } from "react";
 import { View, Text, TouchableOpacity, Platform } from "react-native";
 import { Audio } from "expo-av";
 import type { AVPlaybackStatus } from "expo-av";
@@ -26,30 +26,50 @@ function normalizeMediaUrl(url: string): string {
 
 export function CapsuleMediaPlayer({ mediaUrl, mediaType, baseUrl, colors }: Props) {
   const fullUri = `${baseUrl}${normalizeMediaUrl(mediaUrl)}`;
+  // Error state must be declared before any early return (Rules of Hooks).
+  const [webMediaError, setWebMediaError] = useState<string | null>(null);
+  const handleWebError = useCallback(() => {
+    setWebMediaError("Формат медиа не поддерживается браузером");
+  }, []);
 
   // ── Web: native HTML elements ─────────────────────────────────────────────
   if (Platform.OS === "web") {
+    if (webMediaError) {
+      return (
+        <View style={{ borderRadius: 14, padding: 14, backgroundColor: "#fee2e2", borderWidth: 1, borderColor: "#fca5a5" }}>
+          <Text style={{ color: "#b91c1c", fontSize: 13 }}>⚠️ {webMediaError}</Text>
+        </View>
+      );
+    }
+
     if (mediaType === "video") {
       return (
         <View style={{ borderRadius: 14, overflow: "hidden", backgroundColor: "#000" }}>
           {createElement("video", {
-            src: fullUri,
             controls: true,
             playsInline: true,
             preload: "metadata",
+            onError: handleWebError,
+            onStalled: handleWebError,
             style: { width: "100%", maxHeight: 220, display: "block", borderRadius: 14 },
-          })}
+          },
+            createElement("source", { src: fullUri, type: "video/mp4" }),
+            // Fallback source without explicit type lets browser attempt auto-detection
+            createElement("source", { src: fullUri }),
+          )}
         </View>
       );
     }
     return (
       <View style={{ borderRadius: 14, overflow: "hidden", backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33", padding: 12 }}>
         {createElement("audio", {
-          src: fullUri,
           controls: true,
           preload: "metadata",
+          onError: handleWebError,
           style: { width: "100%", display: "block" },
-        })}
+        },
+          createElement("source", { src: fullUri }),
+        )}
       </View>
     );
   }

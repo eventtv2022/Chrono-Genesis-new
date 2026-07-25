@@ -1,0 +1,87 @@
+Вот это настоящий детективный сюжет с Replit! Раз все заголовки (`206 Partial Content`, `Accept-Ranges`, `CORS`) сервером выдаются верно, а клиент настроен правильно — проблема перешла на **слой декодирования и взаимодействия браузера с медиа-контейнером**.
+
+Браузер отдает `206`, но плеер **не может запустить воспроизведение**. В 90% случаев при такой симптоматике причина кроется в одном из 3 внешних факторов:
+
+---
+
+## 🔍 В чем реальная причина на самом деле?
+
+### 1. Отсутствие кодека (MIME Type Mismatch)
+
+`express.static` определяет MIME-тип по расширению файла.
+
+* Если с мобильного устройства (Expo/React Native) прилетает видео `.mov` или аудио `.m4a` / `.aac`, а сервер отдаёт его как `application/octet-stream` или `video/mp4`, **браузерный HTML5-плеер не сможет его декодировать** и будет бесконечно крутить лоадер.
+
+### 2. Запись в формате Apple (HEVC / AAC / MOV)
+
+Если медиа записывалось с iPhone / Safari (частая история в Expo/React Native), файлы часто кодируются в **HEVC (H.265)** для видео или **Apple Lossless / M4A** для аудио.
+
+* Chrome/Firefox на ПК **физически не умеют воспроизводить H.265 (HEVC)** через стандартный `<video>` тег без аппаратных лицензий. Им нужен классический **H.264 / AAC**.
+
+### 3. Ограничения Replit Proxy на Chunked Streaming
+
+Прокси Replit при маршрутизации `/api/uploads/*` иногда **буферизует поток целиком**, не передавая `Range` со стороны клиента корректно, либо обрывает соединения при стрейминге длинных бинарных ответов.
+
+---
+
+## 🛠 Как мгновенно проверить, в чём именно дело
+
+Откройте вкладку **Developer Tools (F12) -> Network (Сеть)** в браузере при попытке включить видео/аудио:
+
+1. **Кликните на запрос медиафайла:**
+* Какое значение у `Content-Type` в ответах? (Должно быть `video/mp4`, `audio/mpeg`, `audio/wav`, а НЕ `application/octet-stream`).
+
+
+2. **Откройте вкладку Console (Консоль):**
+* Есть ли там ошибки вида: `NotSupportedError: The element has no supported source` или `DEMUXER_ERROR_COULD_NOT_OPEN`? (Это 100% указывает на проблему с кодеком/MIME).
+
+
+3. **Откройте URL медиафайла напрямую в новой вкладке браузера:**
+* Открывается ли встроенный плеер браузера? Если нет — файл либо битый, либо в неподдерживаемом кодеке.
+
+
+
+---
+
+## 📋 Промт для точного фикса в Replit
+
+Скопируйте этот промт, чтобы Replit выявил и исправил проблему с MIME-типами и кодеками:
+
+```text
+Сервер отдаёт 206 Partial Content и Range-заголовки, но HTML5-плеер (видео/аудио) всё равно не воспроизводит медиафайлы. 
+
+Сделай следующие исправления:
+
+1. БЭКЕНД: Явное задание MIME-типов для express.static
+В app.ts расширь настройки express.static, чтобы гарантировать корректные Content-Type для всех типов аудио и видео (особенно .m4a, .webm, .mov, .mkv, .mp3, .mp4):
+
+import mime from 'mime-types'; // или установи/используй аналог
+
+const staticOptions = {
+  maxAge: "7d",
+  acceptRanges: true,
+  setHeaders: (res: any, filePath: string) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Range");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
+    
+    // Явно задаем MIME-тип если mime-type определился
+    const type = mime.lookup(filePath);
+    if (type) {
+      res.setHeader("Content-Type", type);
+    }
+  }
+};
+
+2. КЛИЕНТ (CapsuleMediaPlayer.tsx):
+- Добавь обработчики ошибок onError и onStalled на теги <video> и <audio>, чтобы выводить понятный текст ошибки на экран (например: "Формат медиа не поддерживается вашим браузером"), а не вечный индикатор загрузки.
+- Для <video> добавь атрибут `type` внутри <source> элемента, например:
+  <video controls playsInline preload="metadata">
+    <source src={url} type={mediaType === 'video' ? 'video/mp4' : undefined} />
+  </video>
+
+3. ПРОВЕРКА ЗАГРУЗКИ (Multer / Upload):
+- Проверь, с каким расширением сохраняются файлы при загрузке через Multer. Если Multer сохраняет файлы без расширения (например, `capsule_1710000000000`), express.static НЕ сможет определить MIME-тип и отдаст application/octet-stream! 
+- Убедись, что path.extname(file.originalname) сохраняется в имени файла при записи на диск.
+
+```

@@ -63,16 +63,40 @@ app.use("/media", express.static(MEDIA_DIR, {
 //                       via Range requests (206 Partial Content) instead of full download.
 // setHeaders         — CORS must explicitly allow the Range header so browsers permit
 //                       cross-origin media streaming (images forgive missing CORS; video doesn't).
+// Explicit MIME map ensures HTML5 players receive the right Content-Type even if
+// the OS mime database is missing a type (e.g. .m4a, .aac, .mov on some Linux builds).
+const MEDIA_MIME: Record<string, string> = {
+  ".mp4":  "video/mp4",
+  ".webm": "video/webm",
+  ".mov":  "video/quicktime",
+  ".mkv":  "video/x-matroska",
+  ".m4v":  "video/x-m4v",
+  ".3gp":  "video/3gpp",
+  ".mp3":  "audio/mpeg",
+  ".m4a":  "audio/mp4",
+  ".aac":  "audio/aac",
+  ".ogg":  "audio/ogg",
+  ".wav":  "audio/wav",
+  ".flac": "audio/flac",
+};
+
 const uploadsStaticOptions: Parameters<typeof express.static>[1] = {
   maxAge: "7d",
   acceptRanges: true,
-  setHeaders(res) {
+  setHeaders(res, filePath) {
+    // CORS — Range header must be allowed so cross-origin players can stream.
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader(
       "Access-Control-Allow-Headers",
       "Origin, X-Requested-With, Content-Type, Accept, Range",
     );
     res.setHeader("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
+
+    // Explicit Content-Type override for media files to avoid application/octet-stream
+    // fall-through on some Linux mime-db builds.
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeType = MEDIA_MIME[ext];
+    if (mimeType) res.setHeader("Content-Type", mimeType);
   },
 };
 
