@@ -17,9 +17,9 @@ import {
   KeyboardAvoidingView,
   Image,
 } from "react-native";
-import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { Audio } from "expo-av";
+import { Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -548,8 +548,9 @@ export default function TimelineScreen() {
   const [capsuleMedia, setCapsuleMedia] = useState<{
     uri: string;       // local file URI (new) or full server URL (existing)
     relPath: string | null; // server relative path; null = needs upload
-    type: "image" | "audio" | "video";
+    type: "image" | "audio" | "video" | "document";
     name: string;
+    mimeType?: string; // actual MIME from picker
   } | null>(null);
   const [capsuleMediaUploading, setCapsuleMediaUploading] = useState(false);
   const [isPickingMedia, setIsPickingMedia] = useState(false);
@@ -603,110 +604,49 @@ export default function TimelineScreen() {
     }
   };
 
-  const pickImage = async () => {
-    console.log("[Picker Start] image");
+  /** Universal file picker — like Telegram/WhatsApp attach button.
+   *  Opens system file browser; detects type from MIME automatically. */
+  const pickFile = async () => {
+    console.log("[Picker Start] universal");
     setIsPickingMedia(true);
     try {
-      // On native, media library permission must be granted before the picker opens.
-      // On web this is a no-op (always granted), so it's safe to call unconditionally.
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log("[Picker Permission] image:", perm);
-      if (!perm.granted) {
-        Alert.alert("Нет доступа", "Разрешите доступ к медиафайлам в настройках браузера/устройства");
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 1,
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
       });
-      console.log("[Picker Result] image:", result.canceled ? "canceled" : "selected");
+      console.log("[Picker Result]:", result.canceled ? "canceled" : "selected");
       if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
-        console.log("[Picker Success] image:", asset.fileName, asset.fileSize);
-        if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+        const mime = asset.mimeType ?? "application/octet-stream";
+        console.log("[Picker Success]:", asset.name, mime, asset.size);
+
+        if (asset.size && asset.size > 10 * 1024 * 1024) {
           Alert.alert("⚠️", "Размер файла не должен превышать 10 МБ");
           return;
         }
-        setCapsuleMedia({ uri: asset.uri, relPath: null, type: "image", name: asset.fileName ?? `photo_${Date.now()}.jpg` });
-      } else {
-        console.log("[Picker] Image canceled or no asset returned");
-      }
-    } catch (err) {
-      console.error("[Picker Error] image:", err);
-      Alert.alert("Ошибка пикера", err instanceof Error ? err.message : JSON.stringify(err));
-    } finally {
-      setIsPickingMedia(false);
-    }
-  };
 
-  const pickAudio = async () => {
-    console.log("[Picker Start] audio");
-    setIsPickingMedia(true);
-    try {
-      // Broad MIME list: bare "audio/*" causes Safari/iOS to return canceled:true for .m4a/.aac.
-      // DocumentPicker v57 accepts string[] and joins it into the <input accept> attribute.
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["audio/*", "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/aac", "audio/wav", "audio/ogg", "audio/flac"],
-        copyToCacheDirectory: true,
-      });
-      console.log("[Picker Result] audio:", result.canceled ? "canceled" : "selected");
-      if (!result.canceled && result.assets?.[0]) {
-        const asset = result.assets[0];
-        console.log("[Picker Success] audio:", asset.name, asset.mimeType, asset.size);
-        if (asset.size && asset.size > 10 * 1024 * 1024) {
-          Alert.alert("⚠️", "Аудио не должно превышать 10 МБ");
-          return;
-        }
-        // Duration check may take up to 5 s on web — isPickingMedia stays true during this
-        const duration = await getMediaDurationSeconds(asset.uri, "audio");
-        console.log("[Picker Duration] audio:", duration);
-        if (duration !== null && duration > 60) {
-          Alert.alert("⚠️", "Аудио не должно быть длиннее 60 секунд");
-          return;
-        }
-        setCapsuleMedia({ uri: asset.uri, relPath: null, type: "audio", name: asset.name });
-      } else {
-        console.log("[Picker] Audio canceled or no asset returned");
-      }
-    } catch (err) {
-      console.error("[Picker Error] audio:", err);
-      Alert.alert("Ошибка пикера", err instanceof Error ? err.message : JSON.stringify(err));
-    } finally {
-      setIsPickingMedia(false);
-    }
-  };
+        // Detect media category from MIME
+        let mediaType: "image" | "audio" | "video" | "document" = "document";
+        if (mime.startsWith("image/")) mediaType = "image";
+        else if (mime.startsWith("audio/")) mediaType = "audio";
+        else if (mime.startsWith("video/")) mediaType = "video";
 
-  const pickVideo = async () => {
-    console.log("[Picker Start] video");
-    setIsPickingMedia(true);
-    try {
-      // Broad MIME list: bare "video/*" may cause browsers to silently cancel for .mov/.mkv/.webm.
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["video/*", "video/mp4", "video/quicktime", "video/webm", "video/x-matroska", "video/3gpp"],
-        copyToCacheDirectory: true,
-      });
-      console.log("[Picker Result] video:", result.canceled ? "canceled" : "selected");
-      if (!result.canceled && result.assets?.[0]) {
-        const asset = result.assets[0];
-        console.log("[Picker Success] video:", asset.name, asset.mimeType, asset.size);
-        if (asset.size && asset.size > 10 * 1024 * 1024) {
-          Alert.alert("⚠️", "Видео не должно превышать 10 МБ");
-          return;
+        // Duration guard for audio/video (≤60 s)
+        if (mediaType === "audio" || mediaType === "video") {
+          const duration = await getMediaDurationSeconds(asset.uri, mediaType);
+          console.log("[Picker Duration]:", duration);
+          if (duration !== null && duration > 60) {
+            Alert.alert("⚠️", "Медиафайл не должен быть длиннее 60 секунд");
+            return;
+          }
         }
-        // Duration check may take up to 5 s on web — isPickingMedia stays true during this
-        const duration = await getMediaDurationSeconds(asset.uri, "video");
-        console.log("[Picker Duration] video:", duration);
-        if (duration !== null && duration > 60) {
-          Alert.alert("⚠️", "Видео не должно быть длиннее 60 секунд");
-          return;
-        }
-        setCapsuleMedia({ uri: asset.uri, relPath: null, type: "video", name: asset.name });
+
+        setCapsuleMedia({ uri: asset.uri, relPath: null, type: mediaType, name: asset.name, mimeType: mime });
       } else {
-        console.log("[Picker] Video canceled or no asset returned");
+        console.log("[Picker] Canceled or no asset returned");
       }
     } catch (err) {
-      console.error("[Picker Error] video:", err);
+      console.error("[Picker Error]:", err);
       Alert.alert("Ошибка пикера", err instanceof Error ? err.message : JSON.stringify(err));
     } finally {
       setIsPickingMedia(false);
@@ -714,17 +654,23 @@ export default function TimelineScreen() {
   };
 
   const uploadCapsuleMedia = async (
-    media: { uri: string; type: "image" | "audio" | "video"; name: string },
+    media: { uri: string; type: "image" | "audio" | "video" | "document"; name: string; mimeType?: string },
     timelineCoord: string,
-  ): Promise<{ url: string; mediaType: "image" | "audio" | "video" }> => {
+  ): Promise<{ url: string; mediaType: "image" | "audio" | "video" | "document" }> => {
     const formData = new FormData();
     if (Platform.OS === "web") {
       const blobRes = await fetch(media.uri);
       const blob = await blobRes.blob();
       formData.append("file", blob, media.name);
     } else {
-      const mimeMap = { image: "image/jpeg", audio: "audio/mpeg", video: "video/mp4" };
-      formData.append("file", { uri: media.uri, type: mimeMap[media.type], name: media.name } as unknown as Blob);
+      // Use actual MIME from picker; fall back per type so the server sees a useful Content-Type
+      const fallbackMime =
+        media.type === "image" ? "image/jpeg" :
+        media.type === "audio" ? "audio/mpeg" :
+        media.type === "video" ? "video/mp4" :
+        "application/octet-stream";
+      const mime = media.mimeType ?? fallbackMime;
+      formData.append("file", { uri: media.uri, type: mime, name: media.name } as unknown as Blob);
     }
     // timelineCoord lets the server verify anchor ownership before accepting the file
     formData.append("timelineCoord", timelineCoord);
@@ -733,7 +679,7 @@ export default function TimelineScreen() {
       headers: { ...authHeaders }, // Bearer token for requireAuth
       body: formData,
     });
-    const data = await res.json() as { url?: string; mediaType?: "image" | "audio" | "video"; error?: string };
+    const data = await res.json() as { url?: string; mediaType?: "image" | "audio" | "video" | "document"; error?: string };
     if (!res.ok) throw new Error(data.error ?? "Ошибка загрузки файла");
     return { url: data.url!, mediaType: data.mediaType! };
   };
@@ -1281,7 +1227,7 @@ export default function TimelineScreen() {
                 setCapsuleMedia(selectedAnchor?.mediaUrl ? {
                   uri: `${BASE_URL}${selectedAnchor.mediaUrl}`,
                   relPath: selectedAnchor.mediaUrl,
-                  type: (selectedAnchor.mediaType as "image" | "audio" | "video") ?? "image",
+                  type: (selectedAnchor.mediaType as "image" | "audio" | "video" | "document") ?? "image",
                   name: selectedAnchor.mediaUrl.split("/").pop() ?? "media",
                 } : null);
                 setShowCapsule(true);
@@ -1399,10 +1345,14 @@ export default function TimelineScreen() {
                   <Image source={{ uri: capsuleMedia.uri }} style={{ width: "100%", height: 160, backgroundColor: colors.card }} resizeMode="cover" />
                 ) : (
                   <View style={{ backgroundColor: "#7c3aed11", padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <Text style={{ fontSize: 24 }}>{capsuleMedia.type === "audio" ? "🎤" : "🎬"}</Text>
+                    <Text style={{ fontSize: 24 }}>
+                      {capsuleMedia.type === "audio" ? "🎤" : capsuleMedia.type === "video" ? "🎬" : "📄"}
+                    </Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }} numberOfLines={1}>{capsuleMedia.name}</Text>
-                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{capsuleMedia.type === "audio" ? "Аудиофайл" : "Видеофайл"} · прикреплён</Text>
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
+                        {capsuleMedia.type === "audio" ? "Аудиофайл" : capsuleMedia.type === "video" ? "Видеофайл" : "Документ"} · прикреплён
+                      </Text>
                     </View>
                   </View>
                 )}
@@ -1416,24 +1366,24 @@ export default function TimelineScreen() {
               </View>
             ) : (
               <View>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground, marginBottom: 8 }}>📎 Медиавложение <Text style={{ fontWeight: "400", color: colors.mutedForeground }}>(до 10 МБ)</Text></Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  {(["image", "audio", "video"] as const).map((mtype) => (
-                    <Pressable
-                      key={mtype}
-                      onPress={mtype === "image" ? pickImage : mtype === "audio" ? pickAudio : pickVideo}
-                      disabled={isPickingMedia}
-                      style={({ pressed }) => ({ flex: 1, alignItems: "center", gap: 4, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, opacity: (isPickingMedia || pressed) ? 0.5 : 1, cursor: "pointer" as never })}
-                    >
-                      {isPickingMedia
-                        ? <ActivityIndicator size="small" color={colors.primary} />
-                        : <Text style={{ fontSize: 22 }}>{mtype === "image" ? "📷" : mtype === "audio" ? "🎤" : "🎬"}</Text>}
-                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
-                        {isPickingMedia ? "Загрузка…" : mtype === "image" ? "Фото" : mtype === "audio" ? "Аудио" : "Видео"}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground, marginBottom: 8 }}>📎 Вложение <Text style={{ fontWeight: "400", color: colors.mutedForeground }}>(до 10 МБ)</Text></Text>
+                <Pressable
+                  onPress={pickFile}
+                  disabled={isPickingMedia}
+                  style={({ pressed }) => ({
+                    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+                    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+                    borderRadius: 10, padding: 12,
+                    opacity: (isPickingMedia || pressed) ? 0.5 : 1, cursor: "pointer" as never,
+                  })}
+                >
+                  {isPickingMedia
+                    ? <ActivityIndicator size="small" color={colors.primary} />
+                    : <Text style={{ fontSize: 20 }}>📎</Text>}
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
+                    {isPickingMedia ? "Выбор файла…" : "Прикрепить файл"}
+                  </Text>
+                </Pressable>
               </View>
             )}
           </View>
@@ -1547,6 +1497,28 @@ export default function TimelineScreen() {
                     style={{ width: "100%", height: 200, borderRadius: 14 }}
                     resizeMode="cover"
                   />
+                ) : selectedAnchor.mediaType === "document" ? (
+                  <Pressable
+                    onPress={() => {
+                      const raw = selectedAnchor.mediaUrl!;
+                      const url = `${BASE_URL}${raw.startsWith("/uploads/") ? `/api${raw}` : raw}`;
+                      void Linking.openURL(url);
+                    }}
+                    style={({ pressed }) => ({
+                      flexDirection: "row", alignItems: "center", gap: 12,
+                      backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33",
+                      borderRadius: 14, padding: 16, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never,
+                    })}
+                  >
+                    <Text style={{ fontSize: 32 }}>📄</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }} numberOfLines={2}>
+                        {selectedAnchor.mediaUrl!.split("/").pop() ?? "Документ"}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }}>Нажмите, чтобы открыть</Text>
+                    </View>
+                    <Feather name="external-link" size={20} color="#7c3aed" />
+                  </Pressable>
                 ) : (
                   <CapsuleMediaPlayer
                     mediaUrl={selectedAnchor.mediaUrl!}
@@ -1578,7 +1550,7 @@ export default function TimelineScreen() {
                   setCapsuleMedia(selectedAnchor?.mediaUrl ? {
                     uri: `${BASE_URL}${selectedAnchor.mediaUrl}`,
                     relPath: selectedAnchor.mediaUrl,
-                    type: (selectedAnchor.mediaType as "image" | "audio" | "video") ?? "image",
+                    type: (selectedAnchor.mediaType as "image" | "audio" | "video" | "document") ?? "image",
                     name: selectedAnchor.mediaUrl.split("/").pop() ?? "media",
                   } : null);
                   setShowCapsule(true);

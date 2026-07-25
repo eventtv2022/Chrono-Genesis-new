@@ -49,16 +49,9 @@ const capsuleUpload = multer({
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
-  fileFilter: (_req, file, cb) => {
-    if (
-      file.mimetype.startsWith("image/") ||
-      file.mimetype.startsWith("audio/") ||
-      file.mimetype.startsWith("video/")
-    ) {
-      cb(null, true);
-    } else {
-      cb(new Error("Разрешены только изображения, аудио и видео"));
-    }
+  fileFilter: (_req, _file, cb) => {
+    // Accept any MIME type — server derives mediaType from mimetype after upload
+    cb(null, true);
   },
 });
 
@@ -325,8 +318,9 @@ router.post(
       return;
     }
 
-    let mediaType: "image" | "audio" | "video" = "image";
-    if (req.file.mimetype.startsWith("audio/")) mediaType = "audio";
+    let mediaType: "image" | "audio" | "video" | "document" = "document";
+    if (req.file.mimetype.startsWith("image/")) mediaType = "image";
+    else if (req.file.mimetype.startsWith("audio/")) mediaType = "audio";
     else if (req.file.mimetype.startsWith("video/")) mediaType = "video";
 
     // ── Duration guard for audio/video ────────────────────────────────────────
@@ -355,7 +349,7 @@ const CapsuleBody = z.object({
   timelineCoord: z.string().regex(/^\d{12}$/, "timelineCoord must be 12 digits"),
   text: z.string().min(1).max(1000),
   mediaUrl: z.string().nullable().optional(),
-  mediaType: z.enum(["image", "audio", "video"]).nullable().optional(),
+  mediaType: z.enum(["image", "audio", "video", "document"]).nullable().optional(),
 });
 
 router.post("/timeline/capsule", requireAuth, async (req, res): Promise<void> => {

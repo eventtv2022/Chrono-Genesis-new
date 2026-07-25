@@ -6,7 +6,7 @@ import { Feather } from "@expo/vector-icons";
 
 interface Props {
   mediaUrl: string;        // relative path, e.g. /uploads/capsules/xxx.mp4
-  mediaType: "audio" | "video";
+  mediaType: "audio" | "video" | "image" | "document";
   baseUrl: string;
   colors: { foreground: string; mutedForeground: string };
 }
@@ -74,7 +74,8 @@ export function CapsuleMediaPlayer({ mediaUrl, mediaType, baseUrl, colors }: Pro
     );
   }
 
-  // ── Native: expo-av ───────────────────────────────────────────────────────
+  // ── Native: expo-av (audio / video only) ─────────────────────────────────
+  if (mediaType !== "audio" && mediaType !== "video") return null;
   return <NativeAudioPlayer fullUri={fullUri} mediaType={mediaType} colors={colors} />;
 }
 
