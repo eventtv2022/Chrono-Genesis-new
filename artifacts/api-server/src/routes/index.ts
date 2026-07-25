@@ -21,6 +21,7 @@ import socialAlarmRouter from "./socialAlarm";
 import adminRouter from "./admin";
 import chatRouter from "./chat";
 import heritageRouter from "./heritage";
+import moderationRouter from "./moderation";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(reviewsRouter);
 router.use(telegramRouter);
 router.use(chatRouter);
 router.use(heritageRouter);
+router.use(moderationRouter);
 
 export default router;

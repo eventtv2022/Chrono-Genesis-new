@@ -1360,6 +1360,74 @@ export default function TimelineScreen() {
               <View style={styles.asSoon}><Text style={styles.asSoonText}>{t.soon}</Text></View>
             </Pressable>
 
+            {/* ── Moderation: Report Content / Block User ─────────────────── */}
+            <View style={{ height: 1, backgroundColor: colors.border, marginHorizontal: 16, marginVertical: 4 }} />
+
+            <Pressable
+              style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]}
+              onPress={() => {
+                if (!selectedAnchor) return;
+                const coord = selectedAnchor.timelineCoord;
+                setShowAnchorActions(false);
+                const sendReport = (reason: "spam" | "abuse" | "inappropriate") => {
+                  fetch(`${BASE_URL}/api/moderation/report`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", ...authHeaders },
+                    body: JSON.stringify({ coord, reason }),
+                  }).catch(() => {});
+                  Alert.alert(t.mod_report_sent, t.mod_report_thanks);
+                };
+                setTimeout(() => {
+                  Alert.alert(t.mod_report_content, t.mod_report_reason, [
+                    { text: t.mod_spam,          onPress: () => sendReport("spam") },
+                    { text: t.mod_abuse,         onPress: () => sendReport("abuse") },
+                    { text: t.mod_inappropriate, onPress: () => sendReport("inappropriate") },
+                    { text: t.cancel, style: "cancel" },
+                  ]);
+                }, 350);
+              }}
+            >
+              <View style={[styles.asIconBox, { backgroundColor: "#ef444418" }]}>
+                <Feather name="flag" size={18} color="#ef4444" />
+              </View>
+              <View style={styles.asRowText}>
+                <Text style={[styles.asRowTitle, { color: "#ef4444" }]}>{t.mod_report_content}</Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]}
+              onPress={() => {
+                if (!selectedAnchor) return;
+                const coord = selectedAnchor.timelineCoord;
+                setShowAnchorActions(false);
+                setTimeout(() => {
+                  Alert.alert(t.mod_block_user, t.mod_block_confirm, [
+                    { text: t.cancel, style: "cancel" },
+                    {
+                      text: t.mod_block_user,
+                      style: "destructive",
+                      onPress: () => {
+                        fetch(`${BASE_URL}/api/moderation/block`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json", ...authHeaders },
+                          body: JSON.stringify({ coord }),
+                        }).catch(() => {});
+                        Alert.alert("✓", t.mod_block_done);
+                      },
+                    },
+                  ]);
+                }, 350);
+              }}
+            >
+              <View style={[styles.asIconBox, { backgroundColor: "#ef444418" }]}>
+                <Feather name="user-x" size={18} color="#ef4444" />
+              </View>
+              <View style={styles.asRowText}>
+                <Text style={[styles.asRowTitle, { color: "#ef4444" }]}>{t.mod_block_user}</Text>
+              </View>
+            </Pressable>
+
             <Pressable style={({ pressed }) => [styles.asCancel, { opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => setShowAnchorActions(false)}>
               <Text style={[styles.asCancelText, { color: colors.mutedForeground }]}>{t.cancel}</Text>
             </Pressable>

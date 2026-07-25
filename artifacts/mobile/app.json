@@ -16,8 +16,12 @@
     "ios": {
       "supportsTablet": false,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "TimeNation использует микрофон для аудио- и видеозвонков",
-        "NSCameraUsageDescription": "TimeNation использует камеру для видеозвонков"
+        "NSCameraUsageDescription": "Camera access is needed to attach photos and videos when creating Events and Capsules in Chronopedia.",
+        "NSMicrophoneUsageDescription": "Microphone access is needed to record audio notes when creating Events and Capsules in Chronopedia.",
+        "NSPhotoLibraryUsageDescription": "Photo library access is needed to attach images and videos from your gallery when creating Events and Capsules.",
+        "NSPhotoLibraryAddUsageDescription": "Permission is needed to save media from Events and Capsules to your photo library.",
+        "NSLocationWhenInUseUsageDescription": "Location access is needed to place Events at your current position on the world map in Chronopedia.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Location access is needed to place Events at your current position on the world map in Chronopedia."
       }
     },
     "android": {
@@ -25,7 +29,12 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.INTERNET"
+        "android.permission.INTERNET",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {

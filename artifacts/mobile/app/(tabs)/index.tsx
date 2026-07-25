@@ -976,6 +976,7 @@ export default function TimerScreen() {
 
   // ── Logout (single-tap, optimistic, blocks repeat clicks) ──────────────────
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // Reset spinner when a citizen appears/changes (login or account switch)
   useEffect(() => {
@@ -991,6 +992,33 @@ export default function TimerScreen() {
     setCitizen(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [isLoggingOut, setCitizen, queryClient]);
+
+  const handleDeleteAccount = useCallback(() => {
+    Alert.alert(
+      ui.mod_delete_account,
+      `${ui.mod_delete_warning}\n\n${ui.mod_delete_confirm}`,
+      [
+        { text: ui.cancel, style: "cancel" },
+        {
+          text: ui.mod_delete_account,
+          style: "destructive",
+          onPress: async () => {
+            setIsDeletingAccount(true);
+            try {
+              const res = await fetch(`${BASE_URL}/api/moderation/account`, { method: "DELETE" });
+              if (!res.ok) throw new Error("server error");
+              queryClient.clear();
+              setCitizen(null);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch {
+              setIsDeletingAccount(false);
+              Alert.alert("Error", "Could not delete account. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  }, [ui, queryClient, setCitizen]);
 
   const { data: citizens = [], isLoading: loadingCitizens } = useQuery<Citizen[]>({
     queryKey: ["citizens"],
@@ -1181,6 +1209,23 @@ export default function TimerScreen() {
                 : <Feather name="log-out" size={13} color={colors.destructive} />}
               <Text style={[styles.passportLogoutText, { color: colors.destructive }]}>
                 {ui.logout}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.passportLogout,
+                { borderColor: "#ef444455", backgroundColor: "#ef444410" },
+                isDeletingAccount && { opacity: 0.5 },
+              ]}
+              onPress={handleDeleteAccount}
+              disabled={isDeletingAccount}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              {isDeletingAccount
+                ? <ActivityIndicator size={13} color="#ef4444" />
+                : <Feather name="trash-2" size={13} color="#ef4444" />}
+              <Text style={[styles.passportLogoutText, { color: "#ef4444" }]}>
+                {ui.mod_delete_account}
               </Text>
             </TouchableOpacity>
           </View>
