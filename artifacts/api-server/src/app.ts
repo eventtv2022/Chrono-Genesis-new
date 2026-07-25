@@ -59,7 +59,24 @@ app.use("/media", express.static(MEDIA_DIR, {
 
 // Serve uploads both at /api/uploads (routed by Replit proxy — paths=["/api"])
 // and /uploads (fallback for same-origin / local dev).
-app.use("/api/uploads", express.static(UPLOADS_DIR, { maxAge: "7d" }));
-app.use("/uploads", express.static(UPLOADS_DIR, { maxAge: "7d" }));
+// acceptRanges: true  — lets HTML5 <video>/<audio> and iOS/Android players stream
+//                       via Range requests (206 Partial Content) instead of full download.
+// setHeaders         — CORS must explicitly allow the Range header so browsers permit
+//                       cross-origin media streaming (images forgive missing CORS; video doesn't).
+const uploadsStaticOptions: Parameters<typeof express.static>[1] = {
+  maxAge: "7d",
+  acceptRanges: true,
+  setHeaders(res) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content-Type, Accept, Range",
+    );
+    res.setHeader("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
+  },
+};
+
+app.use("/api/uploads", express.static(UPLOADS_DIR, uploadsStaticOptions));
+app.use("/uploads",     express.static(UPLOADS_DIR, uploadsStaticOptions));
 
 export default app;

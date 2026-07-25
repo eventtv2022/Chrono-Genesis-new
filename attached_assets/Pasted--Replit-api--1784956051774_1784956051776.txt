@@ -1,0 +1,94 @@
+Классика веб-дев проксирования! Маршрутизация Replit (`/api/*`) — действительно коварный нюанс, и решение с маппингом статики под `/api/uploads` плюс функция `normalizeMediaUrl` — просто отличный и элегантный фикс.
+
+А вот то, что **картинки пошли, а видео и аудио — пока нет**, очень четко сужает область поиска. Фото загружаются как единый статический файл за один HTTP-запрос (обычный `GET`), а для воспроизведения медиапотоков (аудио/видео) браузеру и мобильным плеерам требуется гораздо больше:
+
+---
+
+## 🔍 Почему фото работает, а видео/аудио — нет?
+
+### 1. Отсутствие поддержки `Range` заголовков (Partial Content / 206)
+
+Это причина №1 для мультимедиа.
+
+* Плееры (особенно HTML5 `<video>`, `<audio>` и плееры iOS/Android) **не скачивают медиафайл целиком за один раз**.
+* Они посылают запрос с заголовком `Range: bytes=0-`, ожидая от сервера ответ **`206 Partial Content`** и заголовок `Accept-Ranges: bytes`.
+* Если ваш Express-сервер или прокси не поддерживает/блокирует частичную отдачу, видео просто зависнет в вечной загрузке или выдаст ошибку формата.
+
+---
+
+### 2. CORS заголовки для медиа-запросов
+
+Для `<img>` браузеры часто прощают отсутствующие CORS-заголовки, но для тегов `<video>` и `<audio>` (особенно при обработке через Canvas или Web Audio API / Expo Media) браузер строго проверяет CORS и блокирует поток.
+
+---
+
+### 3. Некорректный `Content-Type` (MIME-type)
+
+Если `express.static` не может правильно определить расширение файла (например, `.m4a`, `.webm`, `.mov`, `.m4v`), он отдает файл с дефолтным `application/octet-stream` вместо `video/mp4` или `audio/mpeg`. HTML5-плееры отказываются воспроизводить бинарный поток с неверным MIME-типом.
+
+---
+
+## 🛠 Быстрая проверка и исправление
+
+В `express.static` поддержка Range-запросов и определение MIME-типов включены по умолчанию, **но** прокси (Replit) или промежуточные `middleware` могут срезать эти заголовки.
+
+Чтобы починить это раз и навсегда:
+
+### Шаг 1. Явно настроить `express.static` в `app.ts`
+
+Убедитесь, что параметры статики явно разрешают `acceptRanges` и задают заголовки:
+
+```typescript
+const staticOptions = {
+  maxAge: "7d",
+  acceptRanges: true, // Включает поддержку Chunk/Range запросов (206 Partial Content)
+  setHeaders: (res: any, path: string) => {
+    // Гарантируем CORS для медиафайлов
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Range");
+  }
+};
+
+app.use("/api/uploads", express.static(UPLOADS_DIR, staticOptions));
+app.use("/uploads", express.static(UPLOADS_DIR, staticOptions));
+
+```
+
+### Шаг 2. Проверить HTML5-элементы на клиенте (`CapsuleMediaPlayer.tsx`)
+
+В HTML5 тегах `<video>` и `<audio>` обязательно укажите атрибут `preload`:
+
+```tsx
+<video 
+  src={normalizeMediaUrl(mediaUrl)} 
+  controls 
+  preload="metadata" // или "auto"
+  playsInline // Критично для Safari / iOS
+/>
+
+```
+
+---
+
+### 📋 Промт для исправления воспроизведения медиа
+
+Вот промт, который можно передать разработчику или ИИ-помощнику для точного фикса:
+
+```text
+Картинки из /api/uploads/ отображаются отлично, но видео и аудио файлы не воспроизводятся в CapsuleMediaPlayer.
+
+Нужно исправить отдачу и воспроизведение медиапотоков:
+
+1. БЭКЕНД (app.ts):
+- Убедись, что express.static настроен с поддержкой Range-запросов (206 Partial Content), чтобы плееры могли стримить файлы кусочками:
+  `acceptRanges: true`
+- Добавь заголовки Access-Control-Allow-Origin: * и Access-Control-Allow-Headers (включая Range) в setHeaders для express.static.
+
+2. КЛИЕНТ (CapsuleMediaPlayer.tsx):
+- Для тегов <video> поставь атрибуты `playsInline`, `controls` и `preload="metadata"`.
+- Для Expo Web / Native убедись, что передается корректный `source={{ uri: normalizeMediaUrl(url) }}`.
+
+3. ИНДИКАТОР ЗАГРУЗКИ (Task Update):
+- Реализуй индикатор загрузки длительности (ActivityIndicator/Spinner), пока идёт проверка и буферизация аудио/видео (состояния onLoadStart / onLoadedMetadata / onReadyForDisplay).
+
+```
