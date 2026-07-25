@@ -1,6 +1,6 @@
 import { getBaseUrl } from "@/lib/api";
 import { CapsuleMediaPlayer } from "@/components/CapsuleMediaPlayer";
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Image,
+  Animated,
+  Easing,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Audio } from "expo-av";
@@ -490,6 +492,135 @@ function CreateSlotAuctionModal({ slot, visible, onClose, onSubmit, submitting, 
   );
 }
 
+// ── Focus prompts — смысловые подсказки для создания События ─────────────────
+const FOCUS_PROMPTS = [
+  "💡 Зафиксируй решение, которое изменило твой день",
+  "💡 Запиши мысль или эмоцию для себя в будущее",
+  "💡 Запечатлей знание, ценность или красоту этого момента",
+  "💡 Что из происходящего прямо сейчас стоит сохранить в Хронопедии?",
+  "💡 Оставь отпечаток момента, который формирует твою историю",
+  "💡 Передай главное — у тебя есть 1 минута, чтобы зафиксировать Значимое",
+];
+
+const TICKER_SEP = "   ✦   ";
+const TICKER_SEGMENT = FOCUS_PROMPTS.join(TICKER_SEP) + TICKER_SEP;
+
+/**
+ * Бегущая строка смысловых фокусов для экрана создания События.
+ *
+ * Технически:
+ *  — Измеряет ширину полного текстового сегмента через невидимый
+ *    горизонтальный ScrollView (единственный надёжный способ получить
+ *    натуральную ширину текста без flex-обрезания).
+ *  — Анимирует translateX от 0 до -segWidth через Animated.loop + Easing.linear.
+ *  — Дублирует сегмент рядом, чтобы стык был незаметен (seamless loop).
+ *  — По тапу — вставляет текущую фразу (без 💡) в поле ввода.
+ */
+function FocusTicker({
+  onSelect,
+  accentColor,
+}: {
+  onSelect: (text: string) => void;
+  accentColor: string;
+}) {
+  const [segWidth, setSegWidth] = useState(0);
+  const translateX = useRef(new Animated.Value(0)).current;
+  const animRef = useRef<Animated.CompositeAnimation | null>(null);
+  const activeIdxRef = useRef(0);
+
+  // Start/restart the loop whenever the measured width is known
+  useEffect(() => {
+    if (!segWidth) return;
+    animRef.current?.stop();
+    translateX.setValue(0);
+    animRef.current = Animated.loop(
+      Animated.timing(translateX, {
+        toValue: -segWidth,
+        duration: segWidth * 70,   // ~14 px/s — медленно, легко читается
+        useNativeDriver: true,
+        easing: Easing.linear,
+      })
+    );
+    animRef.current.start();
+    return () => { animRef.current?.stop(); };
+  }, [segWidth, translateX]);
+
+  // Advance active prompt index so the tap handler always gives the correct phrase
+  useEffect(() => {
+    if (!segWidth) return;
+    const perPromptMs = (segWidth * 70) / FOCUS_PROMPTS.length;
+    const timer = setInterval(() => {
+      activeIdxRef.current = (activeIdxRef.current + 1) % FOCUS_PROMPTS.length;
+    }, perPromptMs);
+    return () => clearInterval(timer);
+  }, [segWidth]);
+
+  const handleTap = () => {
+    const raw = FOCUS_PROMPTS[activeIdxRef.current] ?? FOCUS_PROMPTS[0];
+    onSelect(raw.replace(/^💡\s*/, ""));
+  };
+
+  return (
+    <View style={{ marginBottom: 10 }}>
+      {/*
+       * Невидимый слой измерения:
+       * ScrollView horizontal = контент не ограничен шириной родителя,
+       * поэтому Text.onLayout возвращает натуральную (полную) ширину строки.
+       */}
+      <ScrollView
+        horizontal
+        scrollEnabled={false}
+        showsHorizontalScrollIndicator={false}
+        style={{ position: "absolute", opacity: 0 }}
+        pointerEvents="none"
+      >
+        <Text
+          style={{ fontSize: 13, fontWeight: "500", paddingHorizontal: 12 }}
+          onLayout={(e) => {
+            const w = e.nativeEvent.layout.width;
+            if (w > 50 && !segWidth) setSegWidth(w);
+          }}
+        >
+          {TICKER_SEGMENT}
+        </Text>
+      </ScrollView>
+
+      {/* Видимая бегущая строка */}
+      <Pressable
+        onPress={handleTap}
+        style={{
+          height: 36,
+          overflow: "hidden",
+          borderRadius: 10,
+          backgroundColor: accentColor + "14",
+          borderWidth: 1,
+          borderColor: accentColor + "28",
+          justifyContent: "center",
+        }}
+      >
+        <Animated.View style={{ flexDirection: "row", transform: [{ translateX }] }}>
+          {/* Первая копия — измеряем + отображаем */}
+          <Text
+            numberOfLines={1}
+            style={{ fontSize: 13, color: accentColor, fontWeight: "500", paddingHorizontal: 12 }}
+          >
+            {TICKER_SEGMENT}
+          </Text>
+          {/* Вторая копия — бесшовный стык при зацикливании */}
+          {segWidth > 0 && (
+            <Text
+              numberOfLines={1}
+              style={{ fontSize: 13, color: accentColor, fontWeight: "500", paddingHorizontal: 12 }}
+            >
+              {TICKER_SEGMENT}
+            </Text>
+          )}
+        </Animated.View>
+      </Pressable>
+    </View>
+  );
+}
+
 type ZoomLevel = 1 | 2 | 3 | 4 | 5;
 
 interface OccupiedEntry {
@@ -543,6 +674,7 @@ export default function TimelineScreen() {
   const [showCapsule, setShowCapsule] = useState(false);
   const [showCapsuleView, setShowCapsuleView] = useState(false);
   const [capsuleText, setCapsuleText] = useState("");
+  const [tickerPH, setTickerPH] = useState("");
   const [capsuleSaving, setCapsuleSaving] = useState(false);
   // ── Capsule media state ───────────────────────────────────────────────────────
   const [capsuleMedia, setCapsuleMedia] = useState<{
@@ -1324,11 +1456,26 @@ export default function TimelineScreen() {
           })()}
 
           <Text style={[styles.capLabel, { color: colors.foreground }]}>{t.tl_capsule_sub}</Text>
+
+          {/* ── Бегущая строка смысловых фокусов ── */}
+          <FocusTicker
+            accentColor="#7c3aed"
+            onSelect={(text) => {
+              if (!capsuleText.trim()) {
+                // Поле пустое — подставляем как стартовую тему
+                setCapsuleText(text);
+              } else {
+                // Поле заполнено — обновляем только placeholder-подсказку
+                setTickerPH(text);
+              }
+            }}
+          />
+
           <TextInput
             style={[styles.capInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             multiline
             numberOfLines={6}
-            placeholder={t.tl_capsule_sub}
+            placeholder={tickerPH || t.tl_capsule_sub}
             placeholderTextColor={colors.mutedForeground}
             value={capsuleText}
             onChangeText={setCapsuleText}
