@@ -1,0 +1,135 @@
+Проблема заключается в том, что в вашей системе **совершенно отсутствует функционал для обработки и сохранения медиафайлов в капсулах времени**.
+
+В коде есть несоответствие между **схемой базы данных** и **API-маршрутами** для работы с капсулами.
+
+---
+
+## 🔍 Подробный разбор причин
+
+### 1. Таблица капсул (`timeline_capsules`) содержит только текст
+
+В файле `lib/db/src/schema/timelineCapsules.ts` структура таблицы определена так:
+
+```typescript
+export const timelineCapsulesTable = pgTable("timeline_capsules", {
+  id: serial("id").primaryKey(),
+  citizenId: integer("citizen_id").notNull(),
+  timelineCoord: text("timeline_coord").notNull(),
+  text: text("text").notNull(), // <-- Есть ТОЛЬКО текстовое поле
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+```
+
+* В схеме `timeline_capsules` **вообще нет полей** для хранения URL файлов, путей медиа или типов файлов (например, `media_url`, `media_type`).
+* *(Примечание: медиа-поля есть только у `tv_capsules`, но не у временных капсул `timeline_capsules`).*
+
+---
+
+### 2. Отсутствуют маршруты API (Routes) для загрузки капсул
+
+В представленных серверных роутах (`api-server/src/routes/...`) есть эндпоинты для:
+
+* Граждан (`citizens.ts` — там есть загрузка через `multer` фото для паспорта)
+* Хронопедии (`chronopedia.ts`)
+* Эскроу/Сделок (`deals.ts`)
+* Посольств, Аукционов и Эмиссии
+
+**Маршруты для загрузки и сохранения капсул времени (`timelineCapsules`) полностью отсутствуют.**
+
+1. Нет эндпоинта `POST /api/timeline-capsules` (или аналогичного) для создания капсулы.
+2. Нет интеграции библиотеки `multer` для приема файлов (картинок, видео, аудио) в данном роуте.
+3. Отсутствует логика сохранения файлов на диск/в хранилище (по аналогии с `VAULT_PHOTOS_DIR`, который используется в паспортах).
+
+---
+
+## 🛠 Как это исправить
+
+Для того чтобы медиафайлы начали загружаться и сохраняться в капсуле времени, необходимо внести изменения в 3 места:
+
+### Шаг 1. Обновить схему БД (`lib/db/src/schema/timelineCapsules.ts`)
+
+Добавьте поля для хранения медиафайлов:
+
+```typescript
+export const timelineCapsulesTable = pgTable("timeline_capsules", {
+  id: serial("id").primaryKey(),
+  citizenId: integer("citizen_id").notNull(),
+  timelineCoord: text("timeline_coord").notNull(),
+  text: text("text").notNull(),
+  mediaUrl: text("media_url"),     // <-- Добавить URL / путь к медиафайлу
+  mediaType: text("media_type"),   // <-- Добавить тип (image, video, audio)
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+```
+
+*(Не забудьте сгенерировать и применить миграцию Drizzle).*
+
+---
+
+### Шаг 2. Создать роут загрузки (`artifacts/api-server/src/routes/timelineCapsules.ts`)
+
+Создайте обработчик с использованием `multer` для загрузки файлов и записи капсулы в БД:
+
+```typescript
+import { Router } from "express";
+import multer from "multer";
+import path from "path";
+import { db, timelineCapsulesTable } from "@workspace/db";
+
+const router = Router();
+
+// Настройка хранилища медиафайлов капсул
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, "uploads/capsules"),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      cb(null, `capsule_${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 }, // Лимит 50MB (для видео/аудио)
+});
+
+router.post("/timeline-capsules", upload.single("media"), async (req, res) => {
+  const { citizenId, timelineCoord, text } = req.body;
+
+  const mediaUrl = req.file ? `/uploads/capsules/${req.file.filename}` : null;
+  const mediaType = req.file ? req.file.mimetype.split("/")[0] : null;
+
+  const [capsule] = await db
+    .insert(timelineCapsulesTable)
+    .values({
+      citizenId: Number(citizenId),
+      timelineCoord,
+      text,
+      mediaUrl,
+      mediaType,
+    })
+    .returning();
+
+  res.status(201).json(capsule);
+});
+
+export default router;
+
+```
+
+---
+
+### Шаг 3. Подключить роут в приложении Express
+
+Подключите новый файл роутера в главном файле вашего сервера (например, `index.ts` или `app.ts`):
+
+```typescript
+import timelineCapsulesRouter from "./routes/timelineCapsules";
+
+// ...
+app.use("/api", timelineCapsulesRouter);
+// Сделать папку загрузок доступной (или раздавать файлы защищенно)
+app.use("/uploads/capsules", express.static("uploads/capsules"));
+
+```
