@@ -604,88 +604,110 @@ export default function TimelineScreen() {
   };
 
   const pickImage = async () => {
+    console.log("[Picker Start] image");
     setIsPickingMedia(true);
     try {
+      // On native, media library permission must be granted before the picker opens.
+      // On web this is a no-op (always granted), so it's safe to call unconditionally.
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log("[Picker Permission] image:", perm);
+      if (!perm.granted) {
+        Alert.alert("Нет доступа", "Разрешите доступ к медиафайлам в настройках браузера/устройства");
+        return;
+      }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.85,
+        allowsEditing: false,
+        quality: 1,
       });
-      if (!result.canceled && result.assets[0]) {
+      console.log("[Picker Result] image:", result.canceled ? "canceled" : "selected");
+      if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
+        console.log("[Picker Success] image:", asset.fileName, asset.fileSize);
         if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
           Alert.alert("⚠️", "Размер файла не должен превышать 10 МБ");
           return;
         }
         setCapsuleMedia({ uri: asset.uri, relPath: null, type: "image", name: asset.fileName ?? `photo_${Date.now()}.jpg` });
+      } else {
+        console.log("[Picker] Image canceled or no asset returned");
       }
     } catch (err) {
-      Alert.alert("Ошибка", err instanceof Error ? err.message : "Не удалось открыть галерею");
+      console.error("[Picker Error] image:", err);
+      Alert.alert("Ошибка пикера", err instanceof Error ? err.message : JSON.stringify(err));
     } finally {
       setIsPickingMedia(false);
     }
   };
 
   const pickAudio = async () => {
+    console.log("[Picker Start] audio");
     setIsPickingMedia(true);
     try {
-      // Broad MIME list prevents iOS/macOS Safari from silently returning canceled:true
-      // when the user picks .m4a / .aac — those don't match a bare "audio/*" filter on some browsers.
+      // Broad MIME list: bare "audio/*" causes Safari/iOS to return canceled:true for .m4a/.aac.
+      // DocumentPicker v57 accepts string[] and joins it into the <input accept> attribute.
       const result = await DocumentPicker.getDocumentAsync({
         type: ["audio/*", "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/aac", "audio/wav", "audio/ogg", "audio/flac"],
         copyToCacheDirectory: true,
       });
+      console.log("[Picker Result] audio:", result.canceled ? "canceled" : "selected");
       if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
-        console.log("[Picker] Audio selected:", asset.name, asset.mimeType, asset.size);
+        console.log("[Picker Success] audio:", asset.name, asset.mimeType, asset.size);
         if (asset.size && asset.size > 10 * 1024 * 1024) {
           Alert.alert("⚠️", "Аудио не должно превышать 10 МБ");
           return;
         }
         // Duration check may take up to 5 s on web — isPickingMedia stays true during this
         const duration = await getMediaDurationSeconds(asset.uri, "audio");
+        console.log("[Picker Duration] audio:", duration);
         if (duration !== null && duration > 60) {
           Alert.alert("⚠️", "Аудио не должно быть длиннее 60 секунд");
           return;
         }
         setCapsuleMedia({ uri: asset.uri, relPath: null, type: "audio", name: asset.name });
       } else {
-        console.log("[Picker] Audio canceled or no asset returned:", result.canceled);
+        console.log("[Picker] Audio canceled or no asset returned");
       }
     } catch (err) {
-      Alert.alert("Ошибка", err instanceof Error ? err.message : "Не удалось выбрать аудиофайл");
+      console.error("[Picker Error] audio:", err);
+      Alert.alert("Ошибка пикера", err instanceof Error ? err.message : JSON.stringify(err));
     } finally {
       setIsPickingMedia(false);
     }
   };
 
   const pickVideo = async () => {
+    console.log("[Picker Start] video");
     setIsPickingMedia(true);
     try {
-      // Broad MIME list prevents browsers from silently returning canceled:true
-      // for .mov / .mkv / .webm that don't match a bare "video/*" on some platforms.
+      // Broad MIME list: bare "video/*" may cause browsers to silently cancel for .mov/.mkv/.webm.
       const result = await DocumentPicker.getDocumentAsync({
         type: ["video/*", "video/mp4", "video/quicktime", "video/webm", "video/x-matroska", "video/3gpp"],
         copyToCacheDirectory: true,
       });
+      console.log("[Picker Result] video:", result.canceled ? "canceled" : "selected");
       if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
-        console.log("[Picker] Video selected:", asset.name, asset.mimeType, asset.size);
+        console.log("[Picker Success] video:", asset.name, asset.mimeType, asset.size);
         if (asset.size && asset.size > 10 * 1024 * 1024) {
           Alert.alert("⚠️", "Видео не должно превышать 10 МБ");
           return;
         }
         // Duration check may take up to 5 s on web — isPickingMedia stays true during this
         const duration = await getMediaDurationSeconds(asset.uri, "video");
+        console.log("[Picker Duration] video:", duration);
         if (duration !== null && duration > 60) {
           Alert.alert("⚠️", "Видео не должно быть длиннее 60 секунд");
           return;
         }
         setCapsuleMedia({ uri: asset.uri, relPath: null, type: "video", name: asset.name });
       } else {
-        console.log("[Picker] Video canceled or no asset returned:", result.canceled);
+        console.log("[Picker] Video canceled or no asset returned");
       }
     } catch (err) {
-      Alert.alert("Ошибка", err instanceof Error ? err.message : "Не удалось выбрать видеофайл");
+      console.error("[Picker Error] video:", err);
+      Alert.alert("Ошибка пикера", err instanceof Error ? err.message : JSON.stringify(err));
     } finally {
       setIsPickingMedia(false);
     }
