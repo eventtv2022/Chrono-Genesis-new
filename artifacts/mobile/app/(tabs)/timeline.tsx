@@ -225,7 +225,7 @@ function SlotActionModal({ slot, visible, onClose, onCapsule, onAuction, onTimel
           {/* Action: Auction */}
           <Pressable
             style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: slot.isLocked ? "#f59e0b55" : colors.border, marginBottom: 10, opacity: slot.isLocked ? 0.6 : pressed ? 0.7 : 1, cursor: "pointer" as never })}
-            onPress={() => { if (slot.isLocked) { Alert.alert("🔥", "Слот уже выставлен на аукцион"); return; } onClose(); setTimeout(onAuction, 350); }}
+            onPress={() => { if (slot.isLocked) { Alert.alert("🔥", "Событие уже выставлено на аукцион"); return; } onClose(); setTimeout(onAuction, 350); }}
           >
             <View style={{ width: 42, height: 42, borderRadius: 11, backgroundColor: "#f59e0b22", alignItems: "center", justifyContent: "center" }}>
               <Text style={{ fontSize: 20 }}>🔨</Text>
@@ -233,7 +233,7 @@ function SlotActionModal({ slot, visible, onClose, onCapsule, onAuction, onTimel
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>Выставить на Аукцион</Text>
               <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>
-                {slot.isLocked ? "Уже на торгах — ожидайте завершения" : "Продать слот другому гражданину"}
+                {slot.isLocked ? "Уже на торгах — ожидайте завершения" : "Продать Событие другому гражданину"}
               </Text>
             </View>
             {!slot.isLocked && <Feather name="chevron-right" size={16} color={colors.mutedForeground} />}
@@ -438,13 +438,13 @@ function CreateSlotAuctionModal({ slot, visible, onClose, onSubmit, submitting, 
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
         <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#555", alignSelf: "center", marginBottom: 16 }} />
-          <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground, marginBottom: 4 }}>🔨 Выставить слот на аукцион</Text>
+          <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground, marginBottom: 4 }}>🔨 Выставить Событие на аукцион</Text>
           {slot && <Text style={{ fontSize: 13, color: colors.mutedForeground, marginBottom: 16, lineHeight: 18 }}>{slot.locationName} · {slot.timeMarker}</Text>}
 
           <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 20, flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Feather name="info" size={14} color={colors.primary} />
             <Text style={{ flex: 1, fontSize: 12, color: colors.mutedForeground, lineHeight: 17 }}>
-              Слот будет заблокирован на время аукциона. Победитель становится новым владельцем. Налог Казначейства: 2%.
+              Событие будет заблокировано на время аукциона. Победитель становится новым владельцем. Налог Казначейства: 2%.
             </Text>
           </View>
 
@@ -636,7 +636,7 @@ export default function TimelineScreen() {
           const duration = await getMediaDurationSeconds(asset.uri, mediaType);
           console.log("[Picker Duration]:", duration);
           if (duration !== null && duration > 60) {
-            Alert.alert("⚠️", "Медиафайл не должен быть длиннее 60 секунд");
+            Alert.alert("Лимит Хронопедии", "Длительность события не должна превышать 1 минуту. Передайте самое Значимое.");
             return;
           }
         }
@@ -748,7 +748,7 @@ export default function TimelineScreen() {
   // ── Slot auction mutation (HISTORICAL_SLOT) ────────────────────────────────────
   const slotAuctionMutation = useMutation({
     mutationFn: async (data: { startingPrice: number; durationHours: number }) => {
-      if (!selectedSlot || !citizen) throw new Error("Нет выбранного слота");
+      if (!selectedSlot || !citizen) throw new Error("Нет выбранного События");
       const res = await fetch(`${BASE_URL}/api/auctions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
@@ -769,7 +769,7 @@ export default function TimelineScreen() {
       qc.invalidateQueries({ queryKey: ["mySlots", citizen?.id] });
       qc.invalidateQueries({ queryKey: ["auctions"] });
       void refetchMySlots();
-      Alert.alert("🔥", "Слот выставлен на аукцион");
+      Alert.alert("🔥", "Событие выставлено на аукцион");
     },
     onError: (e: Error) => Alert.alert("Ошибка", e.message),
   });
@@ -1047,8 +1047,8 @@ export default function TimelineScreen() {
           {/* Tab switcher */}
           <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}>
             {([
-              { key: "anchors", label: "⏱ Анкоры", count: myAnchors.length },
-              { key: "slots",   label: "📍 Слоты",  count: mySlots.length   },
+              { key: "anchors", label: "⏱ Значимое", count: myAnchors.length },
+              { key: "slots",   label: "📍 События",  count: mySlots.length   },
             ] as const).map(tab => (
               <Pressable
                 key={tab.key}
@@ -1133,8 +1133,8 @@ export default function TimelineScreen() {
             mySlots.length === 0 ? (
               <View style={styles.maEmpty}>
                 <Text style={{ fontSize: 36, marginBottom: 8 }}>📍</Text>
-                <Text style={[styles.maEmptyTitle, { color: colors.foreground }]}>Нет owned-слотов Хронопедии</Text>
-                <Text style={[styles.maEmptyText, { color: colors.mutedForeground }]}>Создайте слот в Хронопедии — он появится здесь</Text>
+                <Text style={[styles.maEmptyTitle, { color: colors.foreground }]}>Нет События в Хронопедии</Text>
+                <Text style={[styles.maEmptyText, { color: colors.mutedForeground }]}>Создайте Событие в Хронопедии — оно появится здесь</Text>
               </View>
             ) : (
               <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.maList} showsVerticalScrollIndicator={false}>
