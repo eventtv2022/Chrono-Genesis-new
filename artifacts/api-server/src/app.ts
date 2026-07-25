@@ -57,7 +57,9 @@ app.use("/media", express.static(MEDIA_DIR, {
   },
 }));
 
-// Serve chat image uploads at /uploads/*
+// Serve uploads both at /api/uploads (routed by Replit proxy — paths=["/api"])
+// and /uploads (fallback for same-origin / local dev).
+app.use("/api/uploads", express.static(UPLOADS_DIR, { maxAge: "7d" }));
 app.use("/uploads", express.static(UPLOADS_DIR, { maxAge: "7d" }));
 
 export default app;

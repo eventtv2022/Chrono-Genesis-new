@@ -1470,7 +1470,7 @@ export default function TimelineScreen() {
               <View style={{ marginBottom: 16 }}>
                 {selectedAnchor.mediaType === "image" ? (
                   <Image
-                    source={{ uri: `${BASE_URL}${selectedAnchor.mediaUrl}` }}
+                    source={{ uri: `${BASE_URL}${selectedAnchor.mediaUrl!.startsWith("/uploads/") ? `/api${selectedAnchor.mediaUrl}` : selectedAnchor.mediaUrl}` }}
                     style={{ width: "100%", height: 200, borderRadius: 14 }}
                     resizeMode="cover"
                   />

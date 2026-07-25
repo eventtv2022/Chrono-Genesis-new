@@ -19,8 +19,13 @@ interface Props {
  *
  * On native: uses expo-av Audio.Sound for audio; Video component for video.
  */
+/** Normalize legacy /uploads/ URLs to /api/uploads/ so the Replit proxy routes them correctly. */
+function normalizeMediaUrl(url: string): string {
+  return url.startsWith("/uploads/") ? `/api${url}` : url;
+}
+
 export function CapsuleMediaPlayer({ mediaUrl, mediaType, baseUrl, colors }: Props) {
-  const fullUri = `${baseUrl}${mediaUrl}`;
+  const fullUri = `${baseUrl}${normalizeMediaUrl(mediaUrl)}`;
 
   // ── Web: native HTML elements ─────────────────────────────────────────────
   if (Platform.OS === "web") {

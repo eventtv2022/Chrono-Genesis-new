@@ -289,7 +289,7 @@ export default function AuctionsScreen() {
                 <View style={{ marginBottom: 12 }}>
                   {capsuleModal.mediaType === "image" ? (
                     <Image
-                      source={{ uri: `${BASE_URL}${capsuleModal.mediaUrl}` }}
+                      source={{ uri: `${BASE_URL}${capsuleModal.mediaUrl!.startsWith("/uploads/") ? `/api${capsuleModal.mediaUrl}` : capsuleModal.mediaUrl}` }}
                       style={{ width: "100%", height: 180, borderRadius: 12 }}
                       resizeMode="cover"
                     />

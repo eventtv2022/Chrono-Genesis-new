@@ -341,7 +341,9 @@ router.post(
       }
     }
 
-    const url = `/uploads/capsules/${req.file.filename}`;
+    // Use /api/uploads prefix so the Replit proxy (paths=["/api"]) routes
+    // static-file requests to this server instead of returning 404.
+    const url = `/api/uploads/capsules/${req.file.filename}`;
     res.status(201).json({ url, mediaType });
   }
 );
