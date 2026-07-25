@@ -17,7 +17,10 @@ import { db } from "@workspace/db";
 import { tvSlotsTable, tvCapsulesTable, citizensTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import crypto from "crypto";
 import { logger } from "../lib/logger";
+import { requireAuth } from "../middleware/auth";
+import { getBotUsername } from "../services/telegramService";
 import {
   publishVideoToTelegram,
   buildTVCaption,
@@ -147,6 +150,136 @@ router.post(
     }
 
     res.json({ ok: true, messageId: result.messageId });
+  },
+);
+
+// ─── POST /api/telegram/bind-token ────────────────────────────────────────────
+// Generate a one-time token and return the deep link for the citizen to open.
+
+router.post(
+  "/telegram/bind-token",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const citizen = req.citizen!;
+    const token = crypto.randomBytes(16).toString("hex");
+    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await db
+      .update(citizensTable)
+      .set({ tgBindToken: token, tgBindTokenExpires: expires })
+      .where(eq(citizensTable.id, citizen.id));
+
+    const botUsername = getBotUsername();
+    if (!botUsername) {
+      res.status(503).json({ error: "Telegram bot not configured" });
+      return;
+    }
+
+    const deepLink = `https://t.me/${botUsername}?start=bind_${citizen.id}_${token}`;
+    res.json({ deepLink, expiresAt: expires.toISOString() });
+  },
+);
+
+// ─── GET /api/telegram/status ─────────────────────────────────────────────────
+// Returns telegram link status and notification settings for the current citizen.
+
+router.get(
+  "/telegram/status",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const citizen = req.citizen!;
+    const [row] = await db
+      .select({
+        telegramId: citizensTable.telegramId,
+        telegramUsername: citizensTable.telegramUsername,
+        tgNotifyDm: citizensTable.tgNotifyDm,
+        tgNotifyCapsules: citizensTable.tgNotifyCapsules,
+        tgNotifyMentions: citizensTable.tgNotifyMentions,
+        tgNotifyState: citizensTable.tgNotifyState,
+        tgNotifyAllGroups: citizensTable.tgNotifyAllGroups,
+      })
+      .from(citizensTable)
+      .where(eq(citizensTable.id, citizen.id))
+      .limit(1);
+
+    if (!row) { res.status(404).json({ error: "Citizen not found" }); return; }
+
+    res.json({
+      linked: !!row.telegramId,
+      username: row.telegramUsername ?? null,
+      settings: {
+        dm:         !!row.tgNotifyDm,
+        capsules:   !!row.tgNotifyCapsules,
+        mentions:   !!row.tgNotifyMentions,
+        state:      !!row.tgNotifyState,
+        all_groups: !!row.tgNotifyAllGroups,
+      },
+    });
+  },
+);
+
+// ─── PATCH /api/telegram/settings ─────────────────────────────────────────────
+// Update notification toggles.
+
+const TgSettingsBody = z.object({
+  dm:         z.boolean().optional(),
+  capsules:   z.boolean().optional(),
+  mentions:   z.boolean().optional(),
+  state:      z.boolean().optional(),
+  all_groups: z.boolean().optional(),
+});
+
+router.patch(
+  "/telegram/settings",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const parsed = TgSettingsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid body" });
+      return;
+    }
+
+    const d = parsed.data;
+    const updates: Record<string, number> = {};
+    if (d.dm         !== undefined) updates.tgNotifyDm        = d.dm         ? 1 : 0;
+    if (d.capsules   !== undefined) updates.tgNotifyCapsules   = d.capsules   ? 1 : 0;
+    if (d.mentions   !== undefined) updates.tgNotifyMentions   = d.mentions   ? 1 : 0;
+    if (d.state      !== undefined) updates.tgNotifyState      = d.state      ? 1 : 0;
+    if (d.all_groups !== undefined) updates.tgNotifyAllGroups  = d.all_groups ? 1 : 0;
+
+    if (Object.keys(updates).length === 0) {
+      res.json({ ok: true });
+      return;
+    }
+
+    await db
+      .update(citizensTable)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .set(updates as any)
+      .where(eq(citizensTable.id, req.citizen!.id));
+
+    res.json({ ok: true });
+  },
+);
+
+// ─── DELETE /api/telegram/unbind ──────────────────────────────────────────────
+// Disconnect Telegram from this account.
+
+router.delete(
+  "/telegram/unbind",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    await db
+      .update(citizensTable)
+      .set({
+        telegramId: null,
+        telegramUsername: null,
+        tgBindToken: null,
+        tgBindTokenExpires: null,
+      })
+      .where(eq(citizensTable.id, req.citizen!.id));
+
+    res.json({ ok: true });
   },
 );
 

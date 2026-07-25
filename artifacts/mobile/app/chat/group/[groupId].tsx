@@ -393,22 +393,38 @@ export default function GroupConversationScreen() {
     <SafeAreaView style={s.safe}>
       {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
+        {/* ← Back — flexShrink:0 prevents headerCenter from squeezing it to 0 */}
+        <TouchableOpacity
+          onPress={() => { if (router.canGoBack()) router.back(); else router.replace("/"); }}
+          activeOpacity={0.7}
+          style={{ flexShrink: 0 }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
           <Feather name="arrow-left" size={22} color={C.primary} />
         </TouchableOpacity>
-        <TouchableOpacity style={s.headerCenter} onPress={() => setShowMembers(true)} activeOpacity={0.8}>
+
+        {/* Group info — minWidth:0 prevents overflow that would cover siblings */}
+        <TouchableOpacity
+          style={s.headerCenter}
+          onPress={() => setShowMembers(true)}
+          activeOpacity={0.8}
+        >
           <View style={s.groupIcon}><Feather name="users" size={16} color={C.primary} /></View>
-          <View>
-            <Text style={s.groupName}>{group?.name ?? `Группа ${groupId}`}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={s.groupName} numberOfLines={1} ellipsizeMode="tail">
+              {group?.name ?? `Группа ${groupId}`}
+            </Text>
             <Text style={s.memberCount}>{members.length} участников</Text>
           </View>
         </TouchableOpacity>
-        <View style={s.headerActions}>
+
+        {/* Call buttons + badge — box-none so the View wrapper never swallows taps */}
+        <View style={s.headerActions} pointerEvents="box-none">
           <TouchableOpacity
             style={s.callBtn}
             onPress={() => Alert.alert("📞 " + t.grp_call_audio, t.grp_call_audio_soon)}
             activeOpacity={0.75}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
           >
             <Feather name="phone" size={16} color={C.primary} />
           </TouchableOpacity>
@@ -416,7 +432,7 @@ export default function GroupConversationScreen() {
             style={s.callBtn}
             onPress={() => Alert.alert("📹 " + t.grp_call_video, t.grp_call_video_soon)}
             activeOpacity={0.75}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
           >
             <Feather name="video" size={16} color={C.primary} />
           </TouchableOpacity>
@@ -670,7 +686,7 @@ const s = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   muted: { color: C.muted, fontSize: 15 },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border, gap: 12 },
-  headerCenter: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  headerCenter: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0, overflow: "hidden" },
   groupIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(201,168,76,0.12)", borderWidth: 1, borderColor: "rgba(201,168,76,0.25)", alignItems: "center", justifyContent: "center" },
   groupName: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: C.fg },
   memberCount: { fontSize: 11, fontFamily: "Inter_400Regular", color: C.muted },

@@ -12,7 +12,10 @@ import {
   TextInput,
   ScrollView,
   Modal,
+  Switch,
+  Linking,
 } from "react-native";
+import { getStoredAuthHeaders } from "@/lib/authStorage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -109,6 +112,166 @@ const STATUS_COLORS: Record<string, string> = {
   disputed: "#9C27B0",
   cancelled: "#607D8B",
 };
+
+// ─── Telegram Notifications Section ──────────────────────────────────────────
+interface TgStatus {
+  linked: boolean;
+  username: string | null;
+  settings: {
+    dm: boolean;
+    capsules: boolean;
+    mentions: boolean;
+    state: boolean;
+    all_groups: boolean;
+  };
+}
+
+function TelegramSection({
+  colors,
+  ui,
+}: {
+  colors: ReturnType<typeof useColors>;
+  ui: import("@/lib/i18n").UIStrings;
+}) {
+  const [status, setStatus] = useState<TgStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const hdrs = await getStoredAuthHeaders();
+      const res = await fetch(`${BASE_URL}/api/telegram/status`, { headers: hdrs });
+      if (res.ok) setStatus(await res.json() as TgStatus);
+    } catch (_) { /* silent */ } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { void fetchStatus(); }, [fetchStatus]);
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    try {
+      const hdrs = await getStoredAuthHeaders();
+      const res = await fetch(`${BASE_URL}/api/telegram/bind-token`, {
+        method: "POST",
+        headers: hdrs,
+      });
+      if (!res.ok) { Alert.alert(ui.error, (await res.json() as { error?: string }).error ?? ui.error); return; }
+      const { deepLink } = await res.json() as { deepLink: string };
+      await Linking.openURL(deepLink);
+      // Poll for success after returning from Telegram
+      setTimeout(() => { void fetchStatus(); }, 3000);
+      setTimeout(() => { void fetchStatus(); }, 8000);
+    } catch (e) {
+      Alert.alert(ui.error, String(e));
+    } finally { setConnecting(false); }
+  };
+
+  const handleDisconnect = () => {
+    Alert.alert(ui.tg_section_title, ui.tg_disconnect + "?", [
+      { text: ui.cancel, style: "cancel" },
+      {
+        text: ui.tg_disconnect, style: "destructive",
+        onPress: async () => {
+          setDisconnecting(true);
+          try {
+            const hdrs = await getStoredAuthHeaders();
+            await fetch(`${BASE_URL}/api/telegram/unbind`, { method: "DELETE", headers: hdrs });
+            await fetchStatus();
+          } catch (_) { /* silent */ } finally { setDisconnecting(false); }
+        },
+      },
+    ]);
+  };
+
+  const toggleSetting = async (key: keyof TgStatus["settings"], value: boolean) => {
+    if (!status) return;
+    setStatus(prev => prev ? { ...prev, settings: { ...prev.settings, [key]: value } } : prev);
+    try {
+      const hdrs = await getStoredAuthHeaders();
+      await fetch(`${BASE_URL}/api/telegram/settings`, {
+        method: "PATCH",
+        headers: { ...hdrs, "Content-Type": "application/json" },
+        body: JSON.stringify({ [key]: value }),
+      });
+    } catch (_) { void fetchStatus(); }
+  };
+
+  const C = colors;
+  const gold = C.primary;
+  const goldAlpha = (a: number) => `rgba(201,168,76,${a})`;
+
+  if (loading) return null;
+
+  return (
+    <View style={{ marginHorizontal: 20, marginBottom: 12, borderWidth: 1, borderColor: goldAlpha(0.3), borderRadius: 14, backgroundColor: C.surface, overflow: "hidden" }}>
+      {/* Header row */}
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingTop: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: goldAlpha(0.15) }}>
+        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: goldAlpha(0.12), borderWidth: 1, borderColor: goldAlpha(0.35), alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+          <Feather name="send" size={14} color={gold} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: C.foreground }}>{ui.tg_section_title}</Text>
+          <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: C.mutedForeground, marginTop: 1 }}>
+            {status?.linked ? (status.username ?? ui.tg_connected) : ui.tg_not_linked}
+          </Text>
+        </View>
+        {status?.linked ? (
+          <TouchableOpacity
+            style={{ borderWidth: 1, borderColor: "#ef444455", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: "#ef444410" }}
+            onPress={handleDisconnect}
+            disabled={disconnecting}
+            activeOpacity={0.75}
+          >
+            {disconnecting
+              ? <ActivityIndicator size={12} color="#ef4444" />
+              : <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#ef4444" }}>{ui.tg_disconnect}</Text>}
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={{ borderWidth: 1, borderColor: goldAlpha(0.5), borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: goldAlpha(0.1) }}
+            onPress={handleConnect}
+            disabled={connecting}
+            activeOpacity={0.75}
+          >
+            {connecting
+              ? <ActivityIndicator size={12} color={gold} />
+              : <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: gold }}>{ui.tg_connect}</Text>}
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Notification toggles — always visible so the user can configure before linking too */}
+      {status && (
+        <View style={{ paddingHorizontal: 14, paddingVertical: 10, gap: 0 }}>
+          <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: C.mutedForeground, letterSpacing: 0.5, marginBottom: 8, textTransform: "uppercase" }}>
+            {ui.tg_settings_title}
+          </Text>
+          {(
+            [
+              ["dm",         ui.tg_notify_dm],
+              ["capsules",   ui.tg_notify_capsules],
+              ["mentions",   ui.tg_notify_mentions],
+              ["state",      ui.tg_notify_state],
+              ["all_groups", ui.tg_notify_all_groups],
+            ] as [keyof TgStatus["settings"], string][]
+          ).map(([key, label]) => (
+            <View key={key} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 7, borderBottomWidth: key === "all_groups" ? 0 : 0.5, borderBottomColor: goldAlpha(0.1) }}>
+              <Text style={{ flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", color: C.foreground }}>{label}</Text>
+              <Switch
+                value={!!status.settings[key]}
+                onValueChange={(v) => void toggleSetting(key, v)}
+                trackColor={{ false: C.border, true: goldAlpha(0.5) }}
+                thumbColor={status.settings[key] ? gold : C.mutedForeground}
+                ios_backgroundColor={C.border}
+              />
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
 
 // ─── AI Rate Widget ───────────────────────────────────────────────────────────
 function RateWidget({ recipient, colors }: { recipient: Citizen; colors: ReturnType<typeof useColors> }) {
@@ -1245,6 +1408,11 @@ export default function TimerScreen() {
           </View>
           <Feather name="chevron-right" size={18} color={colors.primary} />
         </TouchableOpacity>
+      )}
+
+      {/* ── Telegram Notifications ─────────────────────────────────────────── */}
+      {citizen && (
+        <TelegramSection colors={colors} ui={ui} />
       )}
 
       {/* ── Guest: login form instead of timer ─────────────────────────────── */}

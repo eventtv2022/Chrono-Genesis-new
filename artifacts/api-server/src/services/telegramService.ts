@@ -5,21 +5,22 @@ import { eq, and, ilike } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 let bot: Telegraf | null = null;
+let _botUsername = "";
 
 export function getBot(): Telegraf | null {
   return bot;
 }
 
+export function getBotUsername(): string {
+  return _botUsername;
+}
+
 // ─── Legacy import data ────────────────────────────────────────────────────
-// amount кодирует: minutes * 100 + seconds (например, 261 = 2 мин 61 сек).
-// fromName / toName сопоставляются с citizens.name в БД при импорте.
-// sessionId = 0 — sentinel-маркер «импортированная запись».
-// ──────────────────────────────────────────────────────────────────────────
 interface LegacyTransaction {
   fromName: string;
   toName: string;
-  amount: number; // minutes * 100 + seconds
-  createdAt: string; // ISO 8601
+  amount: number;
+  createdAt: string;
 }
 
 const LEGACY_TRANSACTIONS: LegacyTransaction[] = [
@@ -30,8 +31,6 @@ const LEGACY_TRANSACTIONS: LegacyTransaction[] = [
 ];
 
 // ─── Admin guard ──────────────────────────────────────────────────────────
-// Установи ADMIN_TELEGRAM_ID в Replit Secrets — числовой ID твоего аккаунта.
-// Узнать свой ID можно у @userinfobot в Telegram.
 const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID ?? "";
 
 function isAdmin(telegramId: string): boolean {
@@ -43,10 +42,77 @@ function isAdmin(telegramId: string): boolean {
 export function initBot(token: string): Telegraf {
   bot = new Telegraf(token);
 
+  // ── /start — handles both plain greeting and deep-link binding ───────────
   bot.start(async (ctx) => {
+    const payload = ctx.startPayload ?? ""; // e.g. "bind_42_abc123"
     const telegramId = String(ctx.from.id);
+    const tgUsername = ctx.from.username ? `@${ctx.from.username}` : "";
     const firstName = ctx.from.first_name ?? "Гражданин";
 
+    // ── Deep-link binding: /start bind_<citizenId>_<token> ─────────────
+    if (payload.startsWith("bind_")) {
+      const parts = payload.split("_");
+      // format: bind_<citizenId>_<token>  — token itself may not contain _
+      if (parts.length >= 3) {
+        const citizenId = parseInt(parts[1] ?? "", 10);
+        const token = parts.slice(2).join("_");
+
+        if (!isNaN(citizenId) && token) {
+          try {
+            const [citizen] = await db
+              .select()
+              .from(citizensTable)
+              .where(eq(citizensTable.id, citizenId))
+              .limit(1);
+
+            if (!citizen) {
+              await ctx.reply("❌ Гражданин не найден. Попробуйте снова через приложение.");
+              return;
+            }
+
+            // Validate token
+            if (
+              citizen.tgBindToken !== token ||
+              !citizen.tgBindTokenExpires ||
+              citizen.tgBindTokenExpires < new Date()
+            ) {
+              await ctx.reply(
+                "❌ Ссылка устарела или недействительна.\n\nОткройте приложение TimeNation и нажмите «Подключить Telegram» снова.",
+              );
+              return;
+            }
+
+            // Bind: save telegramId + username, clear token
+            await db
+              .update(citizensTable)
+              .set({
+                telegramId: telegramId,
+                telegramUsername: tgUsername || null,
+                tgBindToken: null,
+                tgBindTokenExpires: null,
+              })
+              .where(eq(citizensTable.id, citizenId));
+
+            await ctx.reply(
+              `✅ *Ваш аккаунт TimeNation (ID #${citizenId}) успешно привязан!*\n\n` +
+              `👤 Гражданин: *${citizen.name}*\n` +
+              `📜 Ранг: *${citizen.rank}*\n` +
+              `💰 Баланс: *${citizen.balanceMinutes} Д*\n\n` +
+              `Теперь вы будете получать персональные уведомления TimeNation прямо сюда.`,
+              { parse_mode: "Markdown" },
+            );
+            logger.info({ citizenId, telegramId }, "Telegram account bound via deep link");
+            return;
+          } catch (err) {
+            logger.error({ err, citizenId }, "Telegram bind failed");
+            await ctx.reply("❌ Внутренняя ошибка. Попробуйте позже.");
+            return;
+          }
+        }
+      }
+    }
+
+    // ── Plain /start — show greeting ─────────────────────────────────────
     const [citizen] = await db
       .select()
       .from(citizensTable)
@@ -59,16 +125,14 @@ export function initBot(token: string): Telegraf {
         `💰 Ваш баланс: *${citizen.balanceMinutes} минут*\n` +
         `📜 Ранг: *${citizen.rank}*\n\n` +
         `Откройте приложение TimeNation, чтобы начать TiMETR-сессию.`,
-        { parse_mode: "Markdown" }
+        { parse_mode: "Markdown" },
       );
     } else {
       await ctx.reply(
         `🏛 Добро пожаловать в TimeNation, ${firstName}!\n\n` +
         `Вы ещё не привязали Telegram к своему аккаунту.\n\n` +
-        `Чтобы привязать аккаунт, отправьте команду:\n` +
-        `*/link <ваш_номер_телефона>*\n\n` +
-        `Например: \`/link +79991234567\``,
-        { parse_mode: "Markdown" }
+        `Откройте приложение TimeNation → Профиль → «Подключить Telegram» и нажмите кнопку — бот сам всё сделает.`,
+        { parse_mode: "Markdown" },
       );
     }
   });
@@ -79,10 +143,7 @@ export function initBot(token: string): Telegraf {
     const phone = args[0]?.trim();
 
     if (!phone) {
-      await ctx.reply(
-        "Укажите номер телефона: */link +79991234567*",
-        { parse_mode: "Markdown" }
-      );
+      await ctx.reply("Укажите номер телефона: */link +79991234567*", { parse_mode: "Markdown" });
       return;
     }
 
@@ -97,10 +158,7 @@ export function initBot(token: string): Telegraf {
       return;
     }
 
-    await db
-      .update(citizensTable)
-      .set({ telegramId })
-      .where(eq(citizensTable.phone, phone));
+    await db.update(citizensTable).set({ telegramId }).where(eq(citizensTable.phone, phone));
 
     await ctx.reply(
       `✅ Аккаунт привязан!\n\n` +
@@ -108,7 +166,7 @@ export function initBot(token: string): Telegraf {
       `💰 Баланс: *${citizen.balanceMinutes} минут*\n` +
       `📜 Ранг: *${citizen.rank}*\n\n` +
       `Теперь вы будете получать уведомления о каждой транзакции в Казначействе TimeNation.`,
-      { parse_mode: "Markdown" }
+      { parse_mode: "Markdown" },
     );
   });
 
@@ -132,81 +190,56 @@ export function initBot(token: string): Telegraf {
       `📜 Ранг: *${citizen.rank}* (Merit: ${citizen.meritScore.toFixed(2)})\n` +
       `Передано: ${citizen.totalGiven} мин\n` +
       `Получено: ${citizen.totalReceived} мин`,
-      { parse_mode: "Markdown" }
+      { parse_mode: "Markdown" },
     );
   });
 
   // ─── /migratedata — только для администратора ───────────────────────────
   bot.command("migratedata", async (ctx) => {
     const senderId = String(ctx.from.id);
-
-    // Полностью игнорировать для всех не-администраторов
     if (!isAdmin(senderId)) return;
 
     if (LEGACY_TRANSACTIONS.length === 0) {
       await ctx.reply(
         "⚠️ Массив LEGACY\\_TRANSACTIONS пуст\\.\n\nДобавь исторические записи в telegramService\\.ts перед запуском импорта\\.",
-        { parse_mode: "MarkdownV2" }
+        { parse_mode: "MarkdownV2" },
       );
       return;
     }
 
     await ctx.reply(
       `⏳ Начинаю импорт *${LEGACY_TRANSACTIONS.length}* исторических транзакций\\.\\.\\.`,
-      { parse_mode: "MarkdownV2" }
+      { parse_mode: "MarkdownV2" },
     );
 
-    let imported = 0;
-    let skipped = 0;
-    let notFound = 0;
-    let errors = 0;
+    let imported = 0, skipped = 0, notFound = 0, errors = 0;
 
     for (const tx of LEGACY_TRANSACTIONS) {
       try {
-        // Декодируем amount: minutes * 100 + seconds
         const minutesTransferred = Math.floor(tx.amount / 100);
         const durationSeconds    = tx.amount % 100;
 
-        // Ищем граждан по имени (без учёта регистра)
         const [fromCitizen] = await db
           .select({ id: citizensTable.id, name: citizensTable.name })
-          .from(citizensTable)
-          .where(ilike(citizensTable.name, tx.fromName))
-          .limit(1);
+          .from(citizensTable).where(ilike(citizensTable.name, tx.fromName)).limit(1);
 
         const [toCitizen] = await db
           .select({ id: citizensTable.id, name: citizensTable.name })
-          .from(citizensTable)
-          .where(ilike(citizensTable.name, tx.toName))
-          .limit(1);
+          .from(citizensTable).where(ilike(citizensTable.name, tx.toName)).limit(1);
 
-        if (!fromCitizen || !toCitizen) {
-          notFound++;
-          logger.warn(
-            { fromName: tx.fromName, toName: tx.toName, fromFound: !!fromCitizen, toFound: !!toCitizen },
-            "migratedata: citizen not found by name, skipping"
-          );
-          continue;
-        }
+        if (!fromCitizen || !toCitizen) { notFound++; continue; }
 
-        // Дедупликация по (sessionId=0, fromCitizenId, toCitizenId, minutesTransferred)
         const [existing] = await db
           .select({ id: transactionsTable.id })
           .from(transactionsTable)
-          .where(
-            and(
-              eq(transactionsTable.sessionId, 0),
-              eq(transactionsTable.fromCitizenId, fromCitizen.id),
-              eq(transactionsTable.toCitizenId, toCitizen.id),
-              eq(transactionsTable.minutesTransferred, minutesTransferred),
-            )
-          )
-          .limit(1);
+          .where(and(
+            eq(transactionsTable.sessionId, 0),
+            eq(transactionsTable.fromCitizenId, fromCitizen.id),
+            eq(transactionsTable.toCitizenId, toCitizen.id),
+            eq(transactionsTable.minutesTransferred, minutesTransferred),
+          )).limit(1);
 
-        if (existing) {
-          skipped++;
-          continue;
-        }
+        if (existing) { skipped++; continue; }
 
         await db.insert(transactionsTable).values({
           sessionId: 0,
@@ -218,7 +251,6 @@ export function initBot(token: string): Telegraf {
           durationSeconds,
           createdAt: new Date(tx.createdAt),
         });
-
         imported++;
       } catch (err) {
         logger.error({ err, tx }, "migratedata: failed to insert legacy transaction");
@@ -226,19 +258,21 @@ export function initBot(token: string): Telegraf {
       }
     }
 
-    const report =
+    await ctx.reply(
       `✅ *Импорт завершён*\n\n` +
-      `📥 Успешно импортировано: *${imported}* транзакций\n` +
-      `⏭ Пропущено (дубли): *${skipped}*\n` +
-      `👤 Гражданин не найден: *${notFound}*\n` +
-      `❌ Ошибок при записи: *${errors}*`;
-
-    logger.info({ imported, skipped, notFound, errors }, "migratedata: import completed");
-    await ctx.reply(report, { parse_mode: "Markdown" });
+      `📥 Успешно: *${imported}*\n⏭ Дубли: *${skipped}*\n` +
+      `👤 Не найдено: *${notFound}*\n❌ Ошибок: *${errors}*`,
+      { parse_mode: "Markdown" },
+    );
   });
-  // ─────────────────────────────────────────────────────────────────────────
 
-  bot.launch().catch((err) => {
+  bot.launch().then(async () => {
+    try {
+      const me = await bot!.telegram.getMe();
+      _botUsername = me.username ?? "";
+      logger.info({ username: _botUsername }, "Telegram bot username resolved");
+    } catch (_) { /* non-fatal */ }
+  }).catch((err) => {
     logger.error({ err }, "Telegram bot launch failed");
   });
 
@@ -249,10 +283,58 @@ export function initBot(token: string): Telegraf {
   return bot;
 }
 
-// ─── State Treasury tax-pool notification ─────────────────────────────────────
-// Sends a real-time alert to the admin whenever the Tax Pool receives a
-// 2% contribution. Fires after the DB write — never blocks the transaction.
+// ─── Notification type guard ──────────────────────────────────────────────────
+export type NotifType = "dm" | "capsules" | "mentions" | "state" | "all_groups";
 
+/**
+ * Send a Telegram DM to a citizen only if they have the corresponding
+ * notification type enabled. Silently drops if bot is not configured,
+ * citizen has no telegramId, or the toggle is off.
+ */
+export async function notifyUserConditional(
+  citizenId: number,
+  message: string,
+  type: NotifType,
+): Promise<void> {
+  if (!bot) return;
+  try {
+    const [citizen] = await db
+      .select({
+        telegramId: citizensTable.telegramId,
+        tgNotifyDm: citizensTable.tgNotifyDm,
+        tgNotifyCapsules: citizensTable.tgNotifyCapsules,
+        tgNotifyMentions: citizensTable.tgNotifyMentions,
+        tgNotifyState: citizensTable.tgNotifyState,
+        tgNotifyAllGroups: citizensTable.tgNotifyAllGroups,
+      })
+      .from(citizensTable)
+      .where(eq(citizensTable.id, citizenId))
+      .limit(1);
+
+    if (!citizen?.telegramId) return;
+
+    const flagMap: Record<NotifType, number | null> = {
+      dm:         citizen.tgNotifyDm,
+      capsules:   citizen.tgNotifyCapsules,
+      mentions:   citizen.tgNotifyMentions,
+      state:      citizen.tgNotifyState,
+      all_groups: citizen.tgNotifyAllGroups,
+    };
+
+    if (!flagMap[type]) return; // disabled
+
+    await bot.telegram.sendMessage(citizen.telegramId, message, { parse_mode: "Markdown" });
+  } catch (err: unknown) {
+    const code = (err as { code?: number })?.code;
+    if (code === 403) {
+      logger.warn({ citizenId }, "Citizen blocked the Telegram bot");
+    } else {
+      logger.error({ err, citizenId }, "notifyUserConditional: failed");
+    }
+  }
+}
+
+// ─── State Treasury tax-pool notification ─────────────────────────────────────
 type TaxSourceType = "PAID_SESSION_TAX" | "AUCTION_TAX" | "ESCROW_FEE";
 
 const TAX_SOURCE_LABELS: Record<TaxSourceType, string> = {
@@ -262,10 +344,7 @@ const TAX_SOURCE_LABELS: Record<TaxSourceType, string> = {
 };
 
 export async function notifyTaxCollected({
-  amount,
-  sourceType,
-  fromCitizenName,
-  referenceId,
+  amount, sourceType, fromCitizenName, referenceId,
 }: {
   amount: number;
   sourceType: TaxSourceType;
@@ -275,36 +354,33 @@ export async function notifyTaxCollected({
   const adminId = process.env["ADMIN_TELEGRAM_ID"] ?? "";
   if (!bot || !adminId) return;
 
-  // Read current treasury balance (citizen #1)
   try {
     const { citizensTable: ctable } = await import("@workspace/db");
     const { eq: eqFn } = await import("drizzle-orm");
     const [treasury] = await db
       .select({ balance: ctable.balanceMinutes })
-      .from(ctable)
-      .where(eqFn(ctable.id, 1))
-      .limit(1);
+      .from(ctable).where(eqFn(ctable.id, 1)).limit(1);
 
     const totalPool = Number(treasury?.balance ?? 0);
 
-    const message =
+    await bot.telegram.sendMessage(
+      adminId,
       `🏛️ *ПОПОЛНЕНИЕ НАЛОГОВОГО ПУЛА TIMENATION*\n\n` +
       `💰 *Поступление:* +${amount.toFixed(4)} Д\n` +
       `📌 *Источник:* ${TAX_SOURCE_LABELS[sourceType] ?? sourceType}\n` +
       `👤 *Гражданин:* ${fromCitizenName}\n` +
       `🔗 *Ref ID:* #${referenceId}\n\n` +
-      `📊 *Всего в Казначействе:* ${totalPool.toFixed(4)} Д`;
-
-    await bot.telegram.sendMessage(adminId, message, { parse_mode: "Markdown" });
+      `📊 *Всего в Казначействе:* ${totalPool.toFixed(4)} Д`,
+      { parse_mode: "Markdown" },
+    );
   } catch (err) {
-    // Non-fatal — never let a notification failure bubble up to the API response
     logger.warn({ err }, "notifyTaxCollected: failed to send Telegram alert");
   }
 }
 
 export async function sendDirectMessage(
   telegramId: string,
-  message: string
+  message: string,
 ): Promise<boolean> {
   if (!bot || !telegramId) return false;
   try {
@@ -318,10 +394,9 @@ export async function sendDirectMessage(
 
 export async function sendTransactionNotification(
   citizenId: number,
-  message: string
+  message: string,
 ): Promise<void> {
   if (!bot) return;
-
   try {
     const [citizen] = await db
       .select({ telegramId: citizensTable.telegramId })
@@ -331,9 +406,7 @@ export async function sendTransactionNotification(
 
     if (!citizen?.telegramId) return;
 
-    await bot.telegram.sendMessage(citizen.telegramId, message, {
-      parse_mode: "Markdown",
-    });
+    await bot.telegram.sendMessage(citizen.telegramId, message, { parse_mode: "Markdown" });
   } catch (err: unknown) {
     const code = (err as { code?: number })?.code;
     if (code === 403) {

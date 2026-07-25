@@ -364,6 +364,11 @@ export interface UIStrings {
   mod_report_sent: string; mod_report_thanks: string;
   mod_block_user: string; mod_block_confirm: string; mod_block_done: string;
   mod_delete_account: string; mod_delete_confirm: string; mod_delete_warning: string;
+  // Telegram personal notifications
+  tg_section_title: string; tg_connect: string; tg_connected: string;
+  tg_disconnect: string; tg_not_linked: string; tg_settings_title: string;
+  tg_notify_dm: string; tg_notify_capsules: string; tg_notify_mentions: string;
+  tg_notify_state: string; tg_notify_all_groups: string;
 }
 
 export const UI: Record<LangCode, UIStrings> = {
@@ -595,6 +600,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Удалить аккаунт и все данные",
     mod_delete_confirm: "Это действие необратимо. Продолжить?",
     mod_delete_warning: "Все данные будут безвозвратно удалены",
+    tg_section_title: "Telegram Уведомления", tg_connect: "Подключить Telegram", tg_connected: "Подключено", tg_disconnect: "Отключить", tg_not_linked: "Не привязан", tg_settings_title: "Настройки уведомлений", tg_notify_dm: "Личные сообщения", tg_notify_capsules: "Капсулы и Хронопедия", tg_notify_mentions: "Упоминания в группах (@me)", tg_notify_state: "Указы и государственные новости", tg_notify_all_groups: "Все сообщения из групп",
   },
   en: {
     tab_timer: "TiMETR", tab_timeline: "Timeline", tab_economy: "Economy",
@@ -821,6 +827,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Delete Account and All Data",
     mod_delete_confirm: "This action cannot be undone. Continue?",
     mod_delete_warning: "All your data will be permanently deleted",
+    tg_section_title: "Telegram Notifications", tg_connect: "Connect Telegram", tg_connected: "Connected", tg_disconnect: "Disconnect", tg_not_linked: "Not connected", tg_settings_title: "Notification Settings", tg_notify_dm: "Private Messages", tg_notify_capsules: "Capsules & Timeline", tg_notify_mentions: "Group Mentions (@me)", tg_notify_state: "State Announcements", tg_notify_all_groups: "All Group Messages",
   },
   zh: {
     tab_timer: "TiMETR", tab_timeline: "时间线", tab_economy: "经济",
@@ -1044,6 +1051,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "删除账户及所有数据",
     mod_delete_confirm: "此操作不可撤销。是否继续？",
     mod_delete_warning: "您的所有数据将被永久删除",
+    tg_section_title: "Telegram 通知", tg_connect: "连接 Telegram", tg_connected: "已连接", tg_disconnect: "断开连接", tg_not_linked: "未连接", tg_settings_title: "通知设置", tg_notify_dm: "私信", tg_notify_capsules: "时间胶囊 & 时间线", tg_notify_mentions: "群组提及 (@me)", tg_notify_state: "国家公告", tg_notify_all_groups: "所有群组消息",
   },
   hi: {
     tab_timer: "TiMETR", tab_timeline: "टाइमलाइन", tab_economy: "अर्थव्यवस्था",
@@ -1267,6 +1275,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "खाता और सभी डेटा हटाएं",
     mod_delete_confirm: "यह क्रिया अपरिवर्तनीय है। जारी रखें?",
     mod_delete_warning: "आपका सभी डेटा स्थायी रूप से हटा दिया जाएगा",
+    tg_section_title: "Telegram सूचनाएं", tg_connect: "Telegram जोड़ें", tg_connected: "जुड़ा हुआ", tg_disconnect: "डिस्कनेक्ट करें", tg_not_linked: "नहीं जुड़ा", tg_settings_title: "सूचना सेटिंग", tg_notify_dm: "निजी संदेश", tg_notify_capsules: "कैप्सूल और टाइमलाइन", tg_notify_mentions: "समूह में उल्लेख (@me)", tg_notify_state: "राज्य घोषणाएं", tg_notify_all_groups: "सभी समूह संदेश",
   },
   es: {
     tab_timer: "TiMETR", tab_timeline: "Cronología", tab_economy: "Economía",
@@ -1490,6 +1499,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Eliminar cuenta y todos los datos",
     mod_delete_confirm: "Esta acción no se puede deshacer. ¿Continuar?",
     mod_delete_warning: "Todos tus datos se eliminarán permanentemente",
+    tg_section_title: "Notificaciones de Telegram", tg_connect: "Conectar Telegram", tg_connected: "Conectado", tg_disconnect: "Desconectar", tg_not_linked: "No conectado", tg_settings_title: "Configuración de notificaciones", tg_notify_dm: "Mensajes privados", tg_notify_capsules: "Cápsulas y cronología", tg_notify_mentions: "Menciones en grupos (@me)", tg_notify_state: "Anuncios estatales", tg_notify_all_groups: "Todos los mensajes de grupo",
   },
   fr: {
     tab_timer: "TiMETR", tab_timeline: "Chronologie", tab_economy: "Économie",
@@ -1713,6 +1723,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Supprimer le compte et toutes les données",
     mod_delete_confirm: "Cette action est irréversible. Continuer?",
     mod_delete_warning: "Toutes vos données seront supprimées définitivement",
+    tg_section_title: "Notifications Telegram", tg_connect: "Connecter Telegram", tg_connected: "Connecté", tg_disconnect: "Déconnecter", tg_not_linked: "Non connecté", tg_settings_title: "Paramètres de notification", tg_notify_dm: "Messages privés", tg_notify_capsules: "Capsules & chronologie", tg_notify_mentions: "Mentions de groupe (@me)", tg_notify_state: "Annonces officielles", tg_notify_all_groups: "Tous les messages de groupe",
   },
   ar: {
     tab_timer: "TiMETR", tab_timeline: "الجدول", tab_economy: "الاقتصاد",
@@ -1936,6 +1947,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "حذف الحساب وجميع البيانات",
     mod_delete_confirm: "هذا الإجراء لا رجعة فيه. هل تريد الاستمرار؟",
     mod_delete_warning: "ستُحذف جميع بياناتك نهائيًا",
+    tg_section_title: "إشعارات تيليغرام", tg_connect: "ربط تيليغرام", tg_connected: "متصل", tg_disconnect: "قطع الاتصال", tg_not_linked: "غير متصل", tg_settings_title: "إعدادات الإشعارات", tg_notify_dm: "الرسائل الخاصة", tg_notify_capsules: "الكبسولات والجدول الزمني", tg_notify_mentions: "الإشارات في المجموعات (@me)", tg_notify_state: "الإعلانات الرسمية", tg_notify_all_groups: "جميع رسائل المجموعة",
   },
   bn: {
     tab_timer: "TiMETR", tab_timeline: "টাইমলাইন", tab_economy: "অর্থনীতি",
@@ -2159,6 +2171,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "অ্যাকাউন্ট এবং সমস্ত ডেটা মুছুন",
     mod_delete_confirm: "এই ক্রিয়া অপরিবর্তনীয়। চালিয়ে যেতে চান?",
     mod_delete_warning: "আপনার সমস্ত ডেটা স্থায়ীভাবে মুছে যাবে",
+    tg_section_title: "টেলিগ্রাম বিজ্ঞপ্তি", tg_connect: "টেলিগ্রাম সংযুক্ত করুন", tg_connected: "সংযুক্ত", tg_disconnect: "সংযোগ বিচ্ছিন্ন", tg_not_linked: "সংযুক্ত নয়", tg_settings_title: "বিজ্ঞপ্তি সেটিংস", tg_notify_dm: "ব্যক্তিগত বার্তা", tg_notify_capsules: "ক্যাপসুল ও টাইমলাইন", tg_notify_mentions: "গ্রুপ উল্লেখ (@me)", tg_notify_state: "রাষ্ট্রীয় ঘোষণা", tg_notify_all_groups: "সমস্ত গ্রুপ বার্তা",
   },
   pt: {
     tab_timer: "TiMETR", tab_timeline: "Cronologia", tab_economy: "Economia",
@@ -2382,6 +2395,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Excluir conta e todos os dados",
     mod_delete_confirm: "Esta ação é irreversível. Continuar?",
     mod_delete_warning: "Todos os seus dados serão excluídos permanentemente",
+    tg_section_title: "Notificações do Telegram", tg_connect: "Conectar Telegram", tg_connected: "Conectado", tg_disconnect: "Desconectar", tg_not_linked: "Não conectado", tg_settings_title: "Configurações de notificação", tg_notify_dm: "Mensagens privadas", tg_notify_capsules: "Cápsulas e linha do tempo", tg_notify_mentions: "Menções no grupo (@me)", tg_notify_state: "Anúncios oficiais", tg_notify_all_groups: "Todas as mensagens do grupo",
   },
   ur: {
     tab_timer: "TiMETR", tab_timeline: "ٹائم لائن", tab_economy: "معیشت",
@@ -2605,6 +2619,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "اکاؤنٹ اور تمام ڈیٹا حذف کریں",
     mod_delete_confirm: "یہ عمل ناقابل واپسی ہے۔ جاری رکھیں؟",
     mod_delete_warning: "آپ کا تمام ڈیٹا مستقل طور پر حذف ہو جائے گا",
+    tg_section_title: "ٹیلیگرام نوٹیفیکیشنز", tg_connect: "ٹیلیگرام جوڑیں", tg_connected: "منسلک", tg_disconnect: "منقطع کریں", tg_not_linked: "منسلک نہیں", tg_settings_title: "نوٹیفیکیشن سیٹنگز", tg_notify_dm: "ذاتی پیغامات", tg_notify_capsules: "کیپسول اور ٹائم لائن", tg_notify_mentions: "گروپ ذکر (@me)", tg_notify_state: "سرکاری اعلانات", tg_notify_all_groups: "تمام گروپ پیغامات",
   },
   id: {
     tab_timer: "TiMETR", tab_timeline: "Linimasa", tab_economy: "Ekonomi",
@@ -2828,6 +2843,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Hapus Akun dan Semua Data",
     mod_delete_confirm: "Tindakan ini tidak dapat dibatalkan. Lanjutkan?",
     mod_delete_warning: "Semua data Anda akan dihapus secara permanen",
+    tg_section_title: "Notifikasi Telegram", tg_connect: "Hubungkan Telegram", tg_connected: "Terhubung", tg_disconnect: "Putuskan", tg_not_linked: "Tidak terhubung", tg_settings_title: "Pengaturan notifikasi", tg_notify_dm: "Pesan pribadi", tg_notify_capsules: "Kapsul & garis waktu", tg_notify_mentions: "Sebutan grup (@me)", tg_notify_state: "Pengumuman resmi", tg_notify_all_groups: "Semua pesan grup",
   },
   de: {
     tab_timer: "TiMETR", tab_timeline: "Zeitleiste", tab_economy: "Wirtschaft",
@@ -3051,6 +3067,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Konto und alle Daten löschen",
     mod_delete_confirm: "Diese Aktion kann nicht rückgängig gemacht werden. Fortfahren?",
     mod_delete_warning: "Alle Ihre Daten werden dauerhaft gelöscht",
+    tg_section_title: "Telegram-Benachrichtigungen", tg_connect: "Telegram verbinden", tg_connected: "Verbunden", tg_disconnect: "Trennen", tg_not_linked: "Nicht verbunden", tg_settings_title: "Benachrichtigungseinstellungen", tg_notify_dm: "Privatnachrichten", tg_notify_capsules: "Kapseln & Zeitstrahl", tg_notify_mentions: "Gruppenerwähnungen (@me)", tg_notify_state: "Staatliche Bekanntmachungen", tg_notify_all_groups: "Alle Gruppennachrichten",
   },
   ja: {
     tab_timer: "TiMETR", tab_timeline: "時系列", tab_economy: "経済",
@@ -3274,6 +3291,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "アカウントとすべてのデータを削除",
     mod_delete_confirm: "この操作は取り消せません。続行しますか？",
     mod_delete_warning: "すべてのデータが完全に削除されます",
+    tg_section_title: "Telegram 通知", tg_connect: "Telegram を接続", tg_connected: "接続済み", tg_disconnect: "切断", tg_not_linked: "未接続", tg_settings_title: "通知設定", tg_notify_dm: "プライベートメッセージ", tg_notify_capsules: "カプセルとタイムライン", tg_notify_mentions: "グループメンション (@me)", tg_notify_state: "公式アナウンス", tg_notify_all_groups: "全グループメッセージ",
   },
   tr: {
     tab_timer: "TiMETR", tab_timeline: "Zaman çizelgesi", tab_economy: "Ekonomi",
@@ -3497,6 +3515,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Hesabı ve Tüm Verileri Sil",
     mod_delete_confirm: "Bu işlem geri alınamaz. Devam edilsin mi?",
     mod_delete_warning: "Tüm verileriniz kalıcı olarak silinecek",
+    tg_section_title: "Telegram Bildirimleri", tg_connect: "Telegram Bağla", tg_connected: "Bağlandı", tg_disconnect: "Bağlantıyı Kes", tg_not_linked: "Bağlı değil", tg_settings_title: "Bildirim Ayarları", tg_notify_dm: "Özel Mesajlar", tg_notify_capsules: "Kapsüller & Zaman Çizelgesi", tg_notify_mentions: "Grup Bahisleri (@me)", tg_notify_state: "Resmi Duyurular", tg_notify_all_groups: "Tüm Grup Mesajları",
   },
   vi: {
     tab_timer: "TiMETR", tab_timeline: "Dòng thời gian", tab_economy: "Kinh tế",
@@ -3720,6 +3739,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Xóa tài khoản và tất cả dữ liệu",
     mod_delete_confirm: "Hành động này không thể hoàn tác. Tiếp tục?",
     mod_delete_warning: "Tất cả dữ liệu của bạn sẽ bị xóa vĩnh viễn",
+    tg_section_title: "Thông báo Telegram", tg_connect: "Kết nối Telegram", tg_connected: "Đã kết nối", tg_disconnect: "Ngắt kết nối", tg_not_linked: "Chưa kết nối", tg_settings_title: "Cài đặt thông báo", tg_notify_dm: "Tin nhắn riêng", tg_notify_capsules: "Viên nang & Dòng thời gian", tg_notify_mentions: "Đề cập trong nhóm (@me)", tg_notify_state: "Thông báo chính thức", tg_notify_all_groups: "Tất cả tin nhắn nhóm",
   },
   he: {
     tab_timer: "TiMETR", tab_timeline: "ציר זמן", tab_economy: "כלכלה",
@@ -3943,6 +3963,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "מחק חשבון וכל הנתונים",
     mod_delete_confirm: "פעולה זו אינה הפיכה. להמשיך?",
     mod_delete_warning: "כל הנתונים שלך יימחקו לצמיתות",
+    tg_section_title: "התראות טלגרם", tg_connect: "חבר טלגרם", tg_connected: "מחובר", tg_disconnect: "נתק", tg_not_linked: "לא מחובר", tg_settings_title: "הגדרות התראות", tg_notify_dm: "הודעות פרטיות", tg_notify_capsules: "כמוסות וציר זמן", tg_notify_mentions: "אזכורים בקבוצה (@me)", tg_notify_state: "הודעות רשמיות", tg_notify_all_groups: "כל הודעות הקבוצה",
   },
   fa: {
     tab_timer: "TiMETR", tab_timeline: "جدول زمانی", tab_economy: "اقتصاد",
@@ -4166,6 +4187,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "حذف حساب و همه داده‌ها",
     mod_delete_confirm: "این عمل برگشت‌پذیر نیست. ادامه می‌دهید؟",
     mod_delete_warning: "همه داده‌های شما به‌طور دائمی حذف می‌شوند",
+    tg_section_title: "اعلان‌های تلگرام", tg_connect: "اتصال تلگرام", tg_connected: "متصل", tg_disconnect: "قطع اتصال", tg_not_linked: "متصل نیست", tg_settings_title: "تنظیمات اعلان", tg_notify_dm: "پیام‌های خصوصی", tg_notify_capsules: "کپسول‌ها و جدول زمانی", tg_notify_mentions: "اشاره‌های گروه (@me)", tg_notify_state: "اطلاعیه‌های دولتی", tg_notify_all_groups: "همه پیام‌های گروه",
   },
   ko: {
     tab_timer: "TiMETR", tab_timeline: "타임라인", tab_economy: "경제",
@@ -4389,6 +4411,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "계정 및 모든 데이터 삭제",
     mod_delete_confirm: "이 작업은 취소할 수 없습니다. 계속하시겠습니까?",
     mod_delete_warning: "모든 데이터가 영구적으로 삭제됩니다",
+    tg_section_title: "텔레그램 알림", tg_connect: "텔레그램 연결", tg_connected: "연결됨", tg_disconnect: "연결 해제", tg_not_linked: "연결 안 됨", tg_settings_title: "알림 설정", tg_notify_dm: "개인 메시지", tg_notify_capsules: "캡슐 & 타임라인", tg_notify_mentions: "그룹 멘션 (@me)", tg_notify_state: "공식 발표", tg_notify_all_groups: "모든 그룹 메시지",
   },
   it: {
     tab_timer: "TiMETR", tab_timeline: "Cronologia", tab_economy: "Economia",
@@ -4612,6 +4635,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Elimina account e tutti i dati",
     mod_delete_confirm: "Questa azione è irreversibile. Continuare?",
     mod_delete_warning: "Tutti i tuoi dati verranno eliminati definitivamente",
+    tg_section_title: "Notifiche Telegram", tg_connect: "Collega Telegram", tg_connected: "Collegato", tg_disconnect: "Disconnetti", tg_not_linked: "Non collegato", tg_settings_title: "Impostazioni notifiche", tg_notify_dm: "Messaggi privati", tg_notify_capsules: "Capsule e cronologia", tg_notify_mentions: "Menzioni nel gruppo (@me)", tg_notify_state: "Annunci ufficiali", tg_notify_all_groups: "Tutti i messaggi di gruppo",
   },
   pl: {
     tab_timer: "TiMETR", tab_timeline: "Oś czasu", tab_economy: "Gospodarka",
@@ -4835,6 +4859,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Usuń konto i wszystkie dane",
     mod_delete_confirm: "Tej czynności nie można cofnąć. Kontynuować?",
     mod_delete_warning: "Wszystkie Twoje dane zostaną trwale usunięte",
+    tg_section_title: "Powiadomienia Telegram", tg_connect: "Połącz Telegram", tg_connected: "Połączono", tg_disconnect: "Rozłącz", tg_not_linked: "Nie połączono", tg_settings_title: "Ustawienia powiadomień", tg_notify_dm: "Prywatne wiadomości", tg_notify_capsules: "Kapsułki i oś czasu", tg_notify_mentions: "Wzmianki w grupie (@me)", tg_notify_state: "Oficjalne ogłoszenia", tg_notify_all_groups: "Wszystkie wiadomości grupowe",
   },
   uk: {
     tab_timer: "TiMETR", tab_timeline: "Часова шкала", tab_economy: "Економіка",
@@ -5058,6 +5083,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Видалити акаунт і всі дані",
     mod_delete_confirm: "Цю дію не можна скасувати. Продовжити?",
     mod_delete_warning: "Всі ваші дані буде безповоротно видалено",
+    tg_section_title: "Сповіщення Telegram", tg_connect: "Підключити Telegram", tg_connected: "Підключено", tg_disconnect: "Відключити", tg_not_linked: "Не підключено", tg_settings_title: "Налаштування сповіщень", tg_notify_dm: "Особисті повідомлення", tg_notify_capsules: "Капсули і хронологія", tg_notify_mentions: "Згадки в групах (@me)", tg_notify_state: "Державні оголошення", tg_notify_all_groups: "Всі повідомлення груп",
   },
   nl: {
     tab_timer: "TiMETR", tab_timeline: "Tijdlijn", tab_economy: "Economie",
@@ -5281,6 +5307,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Account en alle gegevens verwijderen",
     mod_delete_confirm: "Deze actie is onomkeerbaar. Doorgaan?",
     mod_delete_warning: "Al uw gegevens worden permanent verwijderd",
+    tg_section_title: "Telegram-meldingen", tg_connect: "Telegram koppelen", tg_connected: "Verbonden", tg_disconnect: "Ontkoppelen", tg_not_linked: "Niet verbonden", tg_settings_title: "Meldingsinstellingen", tg_notify_dm: "Privéberichten", tg_notify_capsules: "Capsules & tijdlijn", tg_notify_mentions: "Groepsvermeldingen (@me)", tg_notify_state: "Officiële aankondigingen", tg_notify_all_groups: "Alle groepsberichten",
   },
   kk: {
     tab_timer: "TiMETR", tab_timeline: "Уақыт шкаласы", tab_economy: "Экономика",
@@ -5504,6 +5531,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Аккаунт пен барлық деректерді жою",
     mod_delete_confirm: "Бұл әрекетті болдырмауға болмайды. Жалғастырасыз ба?",
     mod_delete_warning: "Барлық деректеріңіз біржола жойылады",
+    tg_section_title: "Telegram хабарландырулары", tg_connect: "Telegram қосу", tg_connected: "Қосылды", tg_disconnect: "Ажырату", tg_not_linked: "Қосылмаған", tg_settings_title: "Хабарландыру параметрлері", tg_notify_dm: "Жеке хабарлар", tg_notify_capsules: "Капсулалар мен хронология", tg_notify_mentions: "Топтық атаулар (@me)", tg_notify_state: "Мемлекеттік хабарландырулар", tg_notify_all_groups: "Барлық топтық хабарлар",
   },
   uz: {
     tab_timer: "TiMETR", tab_timeline: "Vaqt chizig'i", tab_economy: "Iqtisodiyot",
@@ -5727,6 +5755,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Hisobni va barcha ma'lumotlarni o'chirish",
     mod_delete_confirm: "Bu amalni bekor qilib bo'lmaydi. Davom ettirilsinmi?",
     mod_delete_warning: "Barcha ma'lumotlaringiz butunlay o'chirib yuboriladi",
+    tg_section_title: "Telegram bildirishnomalar", tg_connect: "Telegram ulash", tg_connected: "Ulangan", tg_disconnect: "Uzish", tg_not_linked: "Ulanmagan", tg_settings_title: "Bildirishnoma sozlamalari", tg_notify_dm: "Shaxsiy xabarlar", tg_notify_capsules: "Kapsulalar va vaqt chizig'i", tg_notify_mentions: "Guruhdagi eslatmalar (@me)", tg_notify_state: "Rasmiy e'lonlar", tg_notify_all_groups: "Barcha guruh xabarlari",
   },
   el: {
     tab_timer: "TiMETR", tab_timeline: "Χρονολόγιο", tab_economy: "Οικονομία",
@@ -5963,6 +5992,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Διαγραφή λογαριασμού και όλων των δεδομένων",
     mod_delete_confirm: "Αυτή η ενέργεια δεν είναι αναστρέψιμη. Συνέχεια;",
     mod_delete_warning: "Όλα τα δεδομένα σας θα διαγραφούν μόνιμα",
+    tg_section_title: "Ειδοποιήσεις Telegram", tg_connect: "Σύνδεση Telegram", tg_connected: "Συνδεδεμένο", tg_disconnect: "Αποσύνδεση", tg_not_linked: "Μη συνδεδεμένο", tg_settings_title: "Ρυθμίσεις ειδοποιήσεων", tg_notify_dm: "Ιδιωτικά μηνύματα", tg_notify_capsules: "Κάψουλες & χρονολόγιο", tg_notify_mentions: "Αναφορές ομάδας (@me)", tg_notify_state: "Επίσημες ανακοινώσεις", tg_notify_all_groups: "Όλα τα μηνύματα ομάδας",
   },
   cs: {
     tab_timer: "TiMETR", tab_timeline: "Časová osa", tab_economy: "Ekonomika",
@@ -6200,6 +6230,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Smazat účet a všechna data",
     mod_delete_confirm: "Tuto akci nelze vrátit zpět. Pokračovat?",
     mod_delete_warning: "Všechna Vaše data budou trvale smazána",
+    tg_section_title: "Telegram oznámení", tg_connect: "Připojit Telegram", tg_connected: "Připojeno", tg_disconnect: "Odpojit", tg_not_linked: "Nepřipojeno", tg_settings_title: "Nastavení oznámení", tg_notify_dm: "Soukromé zprávy", tg_notify_capsules: "Kapsule a časová osa", tg_notify_mentions: "Zmínky ve skupině (@me)", tg_notify_state: "Oficiální oznámení", tg_notify_all_groups: "Všechny zprávy skupiny",
   },
   sv: {
     tab_timer: "TiMETR", tab_timeline: "Tidslinje", tab_economy: "Ekonomi",
@@ -6437,6 +6468,7 @@ export const UI: Record<LangCode, UIStrings> = {
     mod_delete_account: "Radera konto och all data",
     mod_delete_confirm: "Denna åtgärd kan inte ångras. Fortsätt?",
     mod_delete_warning: "All din data kommer att raderas permanent",
+    tg_section_title: "Telegram-aviseringar", tg_connect: "Anslut Telegram", tg_connected: "Ansluten", tg_disconnect: "Koppla bort", tg_not_linked: "Inte ansluten", tg_settings_title: "Aviseringsinställningar", tg_notify_dm: "Privata meddelanden", tg_notify_capsules: "Kapslar & tidslinje", tg_notify_mentions: "Gruppnämnanden (@me)", tg_notify_state: "Officiella meddelanden", tg_notify_all_groups: "Alla gruppmeddelanden",
   },
 };
 

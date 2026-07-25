@@ -70,6 +70,16 @@ export const citizensTable = pgTable("citizens", {
 
   // ── Paid Consultation ──────────────────────────────────────────────────────
   consultationRate: integer("consultation_rate").default(0), // Дарминов / 15 мин; 0 = бесплатно
+
+  // ── Telegram personal notifications ────────────────────────────────────────
+  telegramUsername: text("telegram_username"),              // @username for display
+  tgBindToken: text("tg_bind_token"),                       // one-time token for deep-link binding
+  tgBindTokenExpires: timestamp("tg_bind_token_expires", { withTimezone: true }),
+  tgNotifyDm: integer("tg_notify_dm").notNull().default(1),         // private messages
+  tgNotifyCapsules: integer("tg_notify_capsules").notNull().default(1), // capsules & timeline
+  tgNotifyMentions: integer("tg_notify_mentions").notNull().default(1), // @mentions in groups
+  tgNotifyState: integer("tg_notify_state").notNull().default(1),   // state announcements
+  tgNotifyAllGroups: integer("tg_notify_all_groups").notNull().default(0), // all group messages
 });
 
 export const insertCitizenSchema = createInsertSchema(citizensTable).omit({
