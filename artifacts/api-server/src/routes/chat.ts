@@ -1305,7 +1305,12 @@ router.get("/chat/groups/:groupId/messages", async (req, res): Promise<void> => 
     LIMIT ${limit}
   `);
 
-  res.json({ messages: messages.rows.reverse() });
+  const rows = (messages.rows as Array<Record<string, unknown>>).map((m) => ({
+    ...m,
+    attachments: m["attachments"] ? JSON.parse(m["attachments"] as string) as AttachmentMeta[] : null,
+  }));
+
+  res.json({ messages: rows.reverse() });
 });
 
 // ── POST /chat/groups/:groupId/messages — send group message ──────────────
@@ -1320,6 +1325,7 @@ const groupMsgSchema = z.object({
   replyToId: z.number().int().positive().optional(),
   replySenderName: z.string().max(100).optional(),
   replyContent: z.string().max(500).optional(),
+  attachments: z.array(attachmentSchema).max(5).optional(),
 });
 
 router.post("/chat/groups/:groupId/messages", async (req, res): Promise<void> => {
@@ -1336,18 +1342,19 @@ router.post("/chat/groups/:groupId/messages", async (req, res): Promise<void> =>
   const parsed = groupMsgSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Некорректные данные" }); return; }
 
-  const { content, ciphertext, msgNonce, msgType, darminAmount, forwardedFromDmId, replyToId, replySenderName, replyContent } = parsed.data;
+  const { content, ciphertext, msgNonce, msgType, darminAmount, forwardedFromDmId, replyToId, replySenderName, replyContent, attachments } = parsed.data;
+  const attachmentsJson = attachments && attachments.length > 0 ? JSON.stringify(attachments) : null;
 
-  // Must have either plaintext content or E2EE ciphertext+nonce
-  if (!content && !(ciphertext && msgNonce)) {
-    res.status(400).json({ error: "Необходимо передать content или ciphertext+msgNonce" }); return;
+  // Must have either plaintext content, E2EE ciphertext+nonce, or at least one attachment
+  if (!content && !(ciphertext && msgNonce) && !attachmentsJson) {
+    res.status(400).json({ error: "Необходимо передать content, ciphertext+msgNonce или attachments" }); return;
   }
 
   const [inserted] = await db.insert(groupMessagesTable)
     .values({
       groupId,
       fromCitizenId: me.id,
-      content: content ?? "",  // empty string placeholder when E2EE
+      content: content ?? "",  // empty string placeholder when E2EE or file-only
       ciphertext: ciphertext ?? null,
       msgNonce: msgNonce ?? null,
       msgType,
@@ -1356,6 +1363,7 @@ router.post("/chat/groups/:groupId/messages", async (req, res): Promise<void> =>
       replyToId: replyToId ?? null,
       replySenderName: replySenderName ?? null,
       replyContent: replyContent ?? null,
+      attachments: attachmentsJson,
     })
     .returning();
 
@@ -1379,6 +1387,7 @@ router.post("/chat/groups/:groupId/messages", async (req, res): Promise<void> =>
     msg_type: inserted.msgType,
     darmin_amount: inserted.darminAmount ?? null,
     forwarded_from_dm_id: inserted.forwardedFromDmId ?? null,
+    attachments: inserted.attachments ? (JSON.parse(inserted.attachments) as AttachmentMeta[]) : null,
     created_at: inserted.createdAt,
     sender_name: me.name,
     sender_rank: me.rank,

@@ -30,7 +30,7 @@ import {
 } from "@/lib/e2ee";
 import { decodeBase64 } from "tweetnacl-util";
 import { useLanguage } from "@/context/LanguageContext";
-import { AttachmentPreviewStrip, type AttachmentMeta } from "@/components/ChatAttachments";
+import { AttachmentPreviewStrip, AttachmentBubble, type AttachmentMeta } from "@/components/ChatAttachments";
 
 const BASE_URL = getBaseUrl();
 
@@ -54,6 +54,8 @@ interface GrpMsg {
   ciphertext?: string | null; msg_nonce?: string | null;
   // Reply fields
   reply_to_id?: number | null; reply_sender_name?: string | null; reply_content?: string | null;
+  // Attachments
+  attachments?: AttachmentMeta[] | string | null;
 }
 
 interface PendingFile { uri: string; name: string; size: number; mimeType: string; }
@@ -404,7 +406,7 @@ export default function GroupConversationScreen() {
         <View style={s.headerActions}>
           <TouchableOpacity
             style={s.callBtn}
-            onPress={() => Alert.alert("📞 " + t.grp_call_audio, t.grp_call_starting)}
+            onPress={() => Alert.alert("📞 " + t.grp_call_audio, t.grp_call_audio_soon)}
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
@@ -412,7 +414,7 @@ export default function GroupConversationScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={s.callBtn}
-            onPress={() => Alert.alert("📹 " + t.grp_call_video, t.grp_call_starting)}
+            onPress={() => Alert.alert("📹 " + t.grp_call_video, t.grp_call_video_soon)}
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
@@ -469,9 +471,20 @@ export default function GroupConversationScreen() {
                           </View>
                         </View>
                       )}
-                      <Text style={[s.bubbleText, isMine ? s.bubbleTextMine : s.bubbleTextTheirs]}>
-                        {m.content}
-                      </Text>
+                      {(() => {
+                        const atts: AttachmentMeta[] | null =
+                          Array.isArray(m.attachments) ? m.attachments as AttachmentMeta[]
+                          : typeof m.attachments === "string" ? (() => { try { return JSON.parse(m.attachments as string) as AttachmentMeta[]; } catch { return null; } })()
+                          : null;
+                        return atts && atts.length > 0
+                          ? atts.map((att, i) => <AttachmentBubble key={i} att={att} isMine={isMine} />)
+                          : null;
+                      })()}
+                      {m.content ? (
+                        <Text style={[s.bubbleText, isMine ? s.bubbleTextMine : s.bubbleTextTheirs]}>
+                          {m.content}
+                        </Text>
+                      ) : null}
                       <Text style={s.msgTime}>{formatTime(m.created_at)}</Text>
                     </View>
                   )}

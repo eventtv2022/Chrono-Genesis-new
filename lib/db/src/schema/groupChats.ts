@@ -31,6 +31,7 @@ export const groupMessagesTable = pgTable("group_messages", {
   replyToId: integer("reply_to_id"),
   replySenderName: text("reply_sender_name"),
   replyContent: text("reply_content"),
+  attachments: text("attachments"),  // JSON-stringified AttachmentMeta[]
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
