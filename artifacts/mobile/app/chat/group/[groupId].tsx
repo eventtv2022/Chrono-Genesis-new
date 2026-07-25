@@ -29,6 +29,8 @@ import {
   encryptMsg,
 } from "@/lib/e2ee";
 import { decodeBase64 } from "tweetnacl-util";
+import { useLanguage } from "@/context/LanguageContext";
+import { AttachmentPreviewStrip, type AttachmentMeta } from "@/components/ChatAttachments";
 
 const BASE_URL = getBaseUrl();
 
@@ -53,6 +55,8 @@ interface GrpMsg {
   // Reply fields
   reply_to_id?: number | null; reply_sender_name?: string | null; reply_content?: string | null;
 }
+
+interface PendingFile { uri: string; name: string; size: number; mimeType: string; }
 
 function formatTime(iso: string | Date | null | undefined): string {
   if (!iso) return "Только что";
@@ -87,7 +91,9 @@ export default function GroupConversationScreen() {
   const [forwardSearch, setForwardSearch] = useState("");
   const [forwardingTo, setForwardingTo] = useState<number | null>(null);
   const [replyTo, setReplyTo] = useState<{ id: number; text: string; senderName: string } | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
 
+  const { t } = useLanguage();
   const flatRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const groupKeyRef = useRef<Uint8Array | null>(null);
@@ -247,21 +253,31 @@ export default function GroupConversationScreen() {
 
   // ── Send message ──────────────────────────────────────────────────────────
   async function sendMessage() {
-    if (!input.trim() || !citizen) return;
+    if (!input.trim() && pendingFiles.length === 0) return;
+    if (!citizen) return;
     setSending(true);
     const plaintext = input.trim();
+    const capturedFiles = pendingFiles;
     try {
       const hdrs = await getStoredAuthHeaders();
       if (!hdrs.Authorization) { Alert.alert("Сессия истекла", "Выйдите и войдите снова"); return; }
+
+      let uploadedAtts: AttachmentMeta[] = [];
+      if (capturedFiles.length > 0) {
+        const token = hdrs.Authorization.replace("Bearer ", "");
+        uploadedAtts = await uploadFiles(capturedFiles, token);
+      }
+
       const replyFields = replyTo
         ? { replyToId: replyTo.id, replySenderName: replyTo.senderName, replyContent: replyTo.text.slice(0, 400) }
         : {};
+      const attField = uploadedAtts.length > 0 ? { attachments: uploadedAtts } : {};
       let body: object;
       if (groupKeyRef.current) {
         const { ciphertext, msgNonce } = encryptGroupMsg(plaintext, groupKeyRef.current);
-        body = { content: "", ciphertext, msgNonce, msgType: "text", ...replyFields };
+        body = { content: "", ciphertext, msgNonce, msgType: "text", ...replyFields, ...attField };
       } else {
-        body = { content: plaintext, msgType: "text", ...replyFields };
+        body = { content: plaintext, msgType: "text", ...replyFields, ...attField };
       }
       const res = await fetch(`${BASE_URL}/api/chat/groups/${groupId}/messages`, {
         method: "POST",
@@ -280,6 +296,7 @@ export default function GroupConversationScreen() {
         reply_content: replyTo?.text.slice(0, 400) ?? null,
       }]);
       setInput("");
+      setPendingFiles([]);
       setReplyTo(null);
       setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
     } catch { Alert.alert("Ошибка", "Сетевая ошибка"); }
@@ -315,6 +332,57 @@ export default function GroupConversationScreen() {
     finally { setTransferring(false); }
   }
 
+  // ── File attachment picker ────────────────────────────────────────────────
+  async function pickAttachment() {
+    if (pendingFiles.length >= 5) { Alert.alert("Лимит", "Максимум 5 файлов за раз"); return; }
+    try {
+      const DocumentPicker = await import("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      const sizeBytes = asset.size ?? 0;
+      if (sizeBytes > 12 * 1024 * 1024) {
+        Alert.alert(t.tl_media_label, t.tl_media_limit); return;
+      }
+      setPendingFiles((prev) => [...prev, {
+        uri: asset.uri,
+        name: asset.name ?? "file",
+        size: sizeBytes,
+        mimeType: asset.mimeType ?? "application/octet-stream",
+      }]);
+    } catch { /* user cancelled or permission denied */ }
+  }
+
+  // ── Upload files to server ────────────────────────────────────────────────
+  async function uploadFiles(files: PendingFile[], token: string): Promise<AttachmentMeta[]> {
+    const uploadOne = async (pf: PendingFile): Promise<AttachmentMeta> => {
+      const form = new FormData();
+      if (Platform.OS === "web") {
+        let blob: Blob;
+        try { blob = await fetch(pf.uri).then((r) => r.blob()); }
+        catch { throw new Error(`Не удалось прочитать файл «${pf.name}»`); }
+        form.append("file", new File([blob], pf.name, { type: pf.mimeType || blob.type || "application/octet-stream" }));
+      } else {
+        form.append("file", { uri: pf.uri, name: pf.name, type: pf.mimeType } as unknown as Blob);
+      }
+      const res = await fetch(`${BASE_URL}/api/chat/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}) as object) as { error?: string };
+        throw new Error(err.error ?? `Ошибка загрузки «${pf.name}»`);
+      }
+      return res.json() as Promise<AttachmentMeta>;
+    };
+    return Promise.all(files.map(uploadOne));
+  }
+
   if (!citizen) {
     return <SafeAreaView style={s.safe}><View style={s.center}><Text style={s.muted}>Требуется авторизация</Text></View></SafeAreaView>;
   }
@@ -333,9 +401,27 @@ export default function GroupConversationScreen() {
             <Text style={s.memberCount}>{members.length} участников</Text>
           </View>
         </TouchableOpacity>
-        <View style={[s.serverBadge, isE2EE && { borderColor: "rgba(201,168,76,0.4)", backgroundColor: "rgba(201,168,76,0.08)" }]}>
-          <Feather name={isE2EE ? "lock" : "server"} size={9} color={isE2EE ? C.primary : C.muted} />
-          <Text style={[s.serverText, isE2EE && { color: C.primary }]}>{isE2EE ? "E2EE" : "Сервер"}</Text>
+        <View style={s.headerActions}>
+          <TouchableOpacity
+            style={s.callBtn}
+            onPress={() => Alert.alert("📞 " + t.grp_call_audio, t.grp_call_starting)}
+            activeOpacity={0.75}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Feather name="phone" size={16} color={C.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.callBtn}
+            onPress={() => Alert.alert("📹 " + t.grp_call_video, t.grp_call_starting)}
+            activeOpacity={0.75}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Feather name="video" size={16} color={C.primary} />
+          </TouchableOpacity>
+          <View style={[s.serverBadge, isE2EE && { borderColor: "rgba(201,168,76,0.4)", backgroundColor: "rgba(201,168,76,0.08)" }]}>
+            <Feather name={isE2EE ? "lock" : "server"} size={9} color={isE2EE ? C.primary : C.muted} />
+            <Text style={[s.serverText, isE2EE && { color: C.primary }]}>{isE2EE ? "E2EE" : "Сервер"}</Text>
+          </View>
         </View>
       </View>
 
@@ -410,13 +496,19 @@ export default function GroupConversationScreen() {
             </TouchableOpacity>
           </View>
         )}
+        {pendingFiles.length > 0 && (
+          <AttachmentPreviewStrip
+            files={pendingFiles}
+            onRemove={(i) => setPendingFiles((p) => p.filter((_, idx) => idx !== i))}
+          />
+        )}
         <View style={s.inputBar}>
-          <TouchableOpacity style={s.darminBtn} onPress={() => setDarminModal(true)} activeOpacity={0.75}>
-            <Text style={s.darminBtnText}>Д</Text>
+          <TouchableOpacity style={s.attachBtn} onPress={pickAttachment} activeOpacity={0.75}>
+            <Feather name="paperclip" size={18} color={C.primary} />
           </TouchableOpacity>
           <TextInput
             style={s.input}
-            placeholder="Сообщение группе..."
+            placeholder={t.grp_msg_placeholder}
             placeholderTextColor={C.muted}
             value={input}
             onChangeText={setInput}
@@ -426,9 +518,9 @@ export default function GroupConversationScreen() {
             onSubmitEditing={sendMessage}
           />
           <TouchableOpacity
-            style={[s.sendBtn, (!input.trim() || sending) && s.sendBtnDis]}
+            style={[s.sendBtn, (!input.trim() && pendingFiles.length === 0 || sending) && s.sendBtnDis]}
             onPress={sendMessage}
-            disabled={!input.trim() || sending}
+            disabled={(!input.trim() && pendingFiles.length === 0) || sending}
             activeOpacity={0.75}
           >
             {sending ? <ActivityIndicator size="small" color="#0A0A0F" /> : <Feather name="send" size={16} color="#0A0A0F" />}
@@ -604,9 +696,10 @@ const s = StyleSheet.create({
   fwdAvatarText: { fontSize: 16, fontFamily: "Inter_700Bold", color: C.primary },
   fwdName: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: C.fg },
   fwdRank: { fontSize: 11, fontFamily: "Inter_400Regular", color: C.muted },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 0 },
+  callBtn: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: "rgba(201,168,76,0.35)", backgroundColor: "rgba(201,168,76,0.08)", alignItems: "center", justifyContent: "center" },
   inputBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border, gap: 8, backgroundColor: C.bg },
-  darminBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: C.primary, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(201,168,76,0.1)", flexShrink: 0 },
-  darminBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: C.primary },
+  attachBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: C.primary, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(201,168,76,0.08)", flexShrink: 0 },
   input: { flex: 1, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, color: C.fg, fontFamily: "Inter_400Regular", fontSize: 15, maxHeight: 120 },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.primary, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   sendBtnDis: { opacity: 0.4 },
