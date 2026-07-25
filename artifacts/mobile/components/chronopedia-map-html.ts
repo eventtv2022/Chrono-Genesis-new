@@ -1,5 +1,5 @@
 // Leaflet map HTML — shared between native WebView and web iframe renderers.
-// Native: injected via source={{ html: LEAFLET_HTML }} into react-native-webview.
+// Native: injected via source={{ html: makeLeafletHTML(lang) }} into react-native-webview.
 // Web: mounted as a srcdoc iframe via ChronopediaMap.web.tsx.
 //
 // Communication protocol:
@@ -7,8 +7,59 @@
 //                      { type: 'ready' | 'slotClick' | 'mapClick', ... }
 //   IN  (host → map):  injectJavaScript (native) OR iframe.contentWindow.postMessage
 //                      { fn: string, args: unknown[] }  →  window[fn].apply(null, args)
+//
+// Language support:
+//   The tile layer uses Google Maps `hl=` parameter for map label language.
+//   Call setLang(langCode) at runtime to switch language without reloading the map.
+//   The eventsLabel in marker tooltips is also updated via the inline EVENTS_LABELS map.
 
-export const LEAFLET_HTML = `<!DOCTYPE html>
+// "events" word in each of the 27 supported languages — used in marker tooltips.
+const EVENTS_LABELS: Record<string, string> = {
+  ru: "событий",
+  en: "events",
+  zh: "事件",
+  hi: "घटनाएँ",
+  es: "eventos",
+  fr: "événements",
+  ar: "أحداث",
+  bn: "ঘটনা",
+  pt: "eventos",
+  ur: "واقعات",
+  id: "acara",
+  de: "Ereignisse",
+  ja: "件",
+  tr: "etkinlik",
+  vi: "sự kiện",
+  he: "אירועים",
+  fa: "رویداد",
+  ko: "건",
+  it: "eventi",
+  pl: "wydarzeń",
+  uk: "подій",
+  nl: "evenementen",
+  kk: "оқиға",
+  uz: "hodisa",
+  el: "εκδηλώσεις",
+  cs: "událostí",
+  sv: "händelser",
+};
+
+/** Google Maps tile `hl=` codes — most match our codes; zh needs zh-CN. */
+function toGoogleHl(lang: string): string {
+  if (lang === "zh") return "zh-CN";
+  return lang;
+}
+
+/**
+ * Generate the full Leaflet HTML with the tile layer pre-set to `lang`.
+ * Bake `lang` into the initial HTML so the map labels are correct on first load.
+ * Call `setLang(newLang)` (via injectJavaScript / postMessage) for subsequent changes.
+ */
+export function makeLeafletHTML(lang: string): string {
+  const hl = toGoogleHl(lang);
+  const labelsJson = JSON.stringify(EVENTS_LABELS);
+
+  return `<!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
@@ -25,8 +76,34 @@ html,body,#map{width:100%;height:100%;background:#f5f5f5;}
 <body>
 <div id="map"></div>
 <script>
+var EVENTS_LABELS=${labelsJson};
+var currentLang='${lang}';
+var currentEventsLabel=EVENTS_LABELS['${lang}']||'events';
+var tileLayer=null;
+var lastSlots=[],lastMyId=0,lastSelId=null;
+
 var map=L.map('map',{center:[20,10],zoom:2,zoomControl:false,attributionControl:false,worldCopyJump:true});
-L.tileLayer('https://mt1.google.com/vt/lyrs=m&hl=ru&x={x}&y={y}&z={z}',{maxZoom:20,attribution:'&copy; Google Maps'}).addTo(map);
+
+function buildTileUrl(hl){return'https://mt1.google.com/vt/lyrs=m&hl='+hl+'&x={x}&y={y}&z={z}';}
+
+function applyTileLayer(hl){
+  if(tileLayer){map.removeLayer(tileLayer);}
+  tileLayer=L.tileLayer(buildTileUrl(hl),{maxZoom:20,attribution:'&copy; Google Maps'});
+  tileLayer.addTo(map);
+}
+
+function setLang(l){
+  currentLang=l;
+  currentEventsLabel=EVENTS_LABELS[l]||'events';
+  var hl=l==='zh'?'zh-CN':l;
+  applyTileLayer(hl);
+  // Re-render markers so tooltip eventsLabel is updated immediately
+  if(lastSlots.length){updateMarkers(lastSlots,lastMyId,lastSelId);}
+}
+
+// Initialise tile layer with baked-in language
+applyTileLayer('${hl}');
+
 var markers={};
 var selectedSlotId=null;
 var pendingMarker=null;
@@ -42,17 +119,19 @@ function makeIcon(count,isMine,isSelected){
 }
 function escHtml(s){return String(s||'').replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]||c;});}
 function updateMarkers(slots,myId,selId){
+  // Persist for re-use by setLang
+  lastSlots=slots||[];lastMyId=myId||0;lastSelId=(selId!==undefined)?selId:lastSelId;
   selectedSlotId=(selId!==undefined)?selId:selectedSlotId;
   Object.values(markers).forEach(function(m){m.remove();});
   markers={};
-  (slots||[]).forEach(function(s){
+  lastSlots.forEach(function(s){
     // Skip null-island (0,0) — coordinates were not geocoded
     if(!s.geoLat&&!s.geoLng){return;}
     if(s.geoLat===0&&s.geoLng===0){return;}
     var isMine=!!s.hasMyEvent;
     var isSel=s.id===selectedSlotId;
     var m=L.marker([s.geoLat,s.geoLng],{icon:makeIcon(s.eventCount||0,isMine,isSel)}).addTo(map);
-    m.bindTooltip('<b>'+escHtml(s.locationName)+'</b><br><small>'+escHtml(s.timeMarker)+'</small><br>'+(s.eventCount||0)+' \u043c\u043d\u0435\u043d\u0438'+(s.eventCount===1?'\u0435':'\u0439'),{className:'tn-tip',direction:'top'});
+    m.bindTooltip('<b>'+escHtml(s.locationName)+'</b><br><small>'+escHtml(s.timeMarker)+'</small><br>'+(s.eventCount||0)+' '+escHtml(currentEventsLabel),{className:'tn-tip',direction:'top'});
     m.on('click',function(){send({type:'slotClick',slotId:s.id});});
     markers[s.id]=m;
     if(isSel){map.setView([s.geoLat,s.geoLng],13,{animate:true});setTimeout(function(){m.openTooltip();},300);}
@@ -67,12 +146,13 @@ function setPending(lat,lng){
   map.setView([lat,lng],z<8?8:z,{animate:true});
 }
 function centerOn(lat,lng,z){map.setView([lat,lng],z||12,{animate:true});}
-function clearSelection(){selectedSlotId=null;}
+function clearSelection(){selectedSlotId=null;lastSelId=null;}
 map.on('click',function(e){send({type:'mapClick',lat:parseFloat(e.latlng.lat.toFixed(6)),lng:parseFloat(normLng(e.latlng.lng).toFixed(6))});});
 window.updateMarkers=updateMarkers;
 window.setPending=setPending;
 window.centerOn=centerOn;
 window.clearSelection=clearSelection;
+window.setLang=setLang;
 // Receive commands from parent iframe (web environment: host → iframe via postMessage)
 window.addEventListener('message',function(e){
   try{
@@ -85,3 +165,7 @@ window.onerror=function(msg,src,line,col,err){send({type:'jsError',message:Strin
 </script>
 </body>
 </html>`;
+}
+
+/** Backward-compat default (English). Use makeLeafletHTML(lang) for language-aware maps. */
+export const LEAFLET_HTML = makeLeafletHTML("en");

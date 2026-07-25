@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import WebView, { type WebViewMessageEvent } from "react-native-webview";
-import { LEAFLET_HTML } from "./chronopedia-map-html";
+import { makeLeafletHTML } from "./chronopedia-map-html";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 
@@ -32,6 +32,10 @@ export interface ChronopediaMapProps {
   selectedSlotId: number | null;
   pendingLat?: number | null;
   pendingLng?: number | null;
+  /** BCP-47 language code — drives map tile labels and tooltip text. */
+  lang?: string;
+  /** Text shown in the loading overlay. */
+  loadingText?: string;
   onSlotClick: (slotId: number) => void;
   onMapClick: (lat: number, lng: number) => void;
   onReady: () => void;
@@ -42,10 +46,21 @@ export interface ChronopediaMapProps {
 
 const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
   (props, ref) => {
-    const { slots, myId, selectedSlotId, pendingLat, pendingLng, onSlotClick, onMapClick, onReady, style } = props;
+    const {
+      slots, myId, selectedSlotId, pendingLat, pendingLng,
+      lang, loadingText, onSlotClick, onMapClick, onReady, style,
+    } = props;
 
     const webViewRef = useRef<WebView>(null);
     const [mapReady, setMapReady] = useState(false);
+
+    // Generate HTML once from the initial lang so the tile layer is correct
+    // on first load — no WebView reload needed for subsequent lang changes.
+    const initialLang = useRef(lang || "en");
+    const htmlSource = useRef({
+      html: makeLeafletHTML(initialLang.current),
+      baseUrl: "https://unpkg.com",
+    });
 
     useImperativeHandle(ref, () => ({
       centerOn: (lat, lng, zoom = 12) => {
@@ -68,6 +83,19 @@ const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
       const lng = pendingLng ?? "null";
       webViewRef.current?.injectJavaScript(`setPending(${lat},${lng}); true;`);
     }, [mapReady, pendingLat, pendingLng]);
+
+    // Sync tile language + tooltip eventsLabel when lang prop changes.
+    // Skip if this is the initial lang (already baked into the HTML).
+    const prevLang = useRef<string | undefined>(undefined);
+    useEffect(() => {
+      const newLang = lang || "en";
+      if (!mapReady) return;
+      if (prevLang.current === newLang) return;
+      prevLang.current = newLang;
+      webViewRef.current?.injectJavaScript(
+        `setLang(${JSON.stringify(newLang)}); true;`
+      );
+    }, [mapReady, lang]);
 
     const handleMessage = useCallback(
       (e: WebViewMessageEvent) => {
@@ -99,7 +127,7 @@ const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
       <View style={[styles.container, style as object]}>
         <WebView
           ref={webViewRef}
-          source={{ html: LEAFLET_HTML, baseUrl: "https://unpkg.com" }}
+          source={htmlSource.current}
           style={styles.webView}
           javaScriptEnabled
           originWhitelist={["*"]}
@@ -118,7 +146,7 @@ const ChronopediaMap = forwardRef<ChronopediaMapHandle, ChronopediaMapProps>(
         {!mapReady && (
           <View style={styles.loading}>
             <ActivityIndicator color="#00ff87" />
-            <Text style={styles.loadingText}>Загрузка карты…</Text>
+            <Text style={styles.loadingText}>{loadingText ?? "…"}</Text>
           </View>
         )}
       </View>

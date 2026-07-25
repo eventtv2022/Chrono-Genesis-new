@@ -567,7 +567,7 @@ export default function ChronopediaScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { citizen, authHeaders } = useCitizen();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const qc = useQueryClient();
   const st = getStyles(colors);
   const chronoGuide = useContextualGuide("chronopedia");
@@ -877,6 +877,8 @@ export default function ChronopediaScreen() {
               selectedSlotId={selectedSlotId}
               pendingLat={pendingLat}
               pendingLng={pendingLng}
+              lang={lang}
+              loadingText={t.loading}
               onReady={() => setMapReady(true)}
               onSlotClick={(slotId) => {
                 setSelectedSlotId(slotId);
