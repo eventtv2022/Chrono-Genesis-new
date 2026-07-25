@@ -552,6 +552,7 @@ export default function TimelineScreen() {
     name: string;
   } | null>(null);
   const [capsuleMediaUploading, setCapsuleMediaUploading] = useState(false);
+  const [isPickingMedia, setIsPickingMedia] = useState(false);
   const [showStateProperty, setShowStateProperty] = useState(false);
   const [showAnchorAuction, setShowAnchorAuction] = useState(false);
 
@@ -597,51 +598,74 @@ export default function TimelineScreen() {
   };
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.85,
-    });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
-        Alert.alert("⚠️", "Размер файла не должен превышать 10 МБ");
-        return;
+    setIsPickingMedia(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+          Alert.alert("⚠️", "Размер файла не должен превышать 10 МБ");
+          return;
+        }
+        setCapsuleMedia({ uri: asset.uri, relPath: null, type: "image", name: asset.fileName ?? `photo_${Date.now()}.jpg` });
       }
-      setCapsuleMedia({ uri: asset.uri, relPath: null, type: "image", name: asset.fileName ?? `photo_${Date.now()}.jpg` });
+    } catch (err) {
+      Alert.alert("Ошибка", err instanceof Error ? err.message : "Не удалось открыть галерею");
+    } finally {
+      setIsPickingMedia(false);
     }
   };
 
   const pickAudio = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      if (asset.size && asset.size > 10 * 1024 * 1024) {
-        Alert.alert("⚠️", "Размер файла не должен превышать 10 МБ");
-        return;
+    setIsPickingMedia(true);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        if (asset.size && asset.size > 10 * 1024 * 1024) {
+          Alert.alert("⚠️", "Аудио не должно превышать 10 МБ");
+          return;
+        }
+        // Duration check takes time on web (HTML5 element) — isPickingMedia stays true during this
+        const duration = await getMediaDurationSeconds(asset.uri, "audio");
+        if (duration !== null && duration > 60) {
+          Alert.alert("⚠️", "Аудио не должно быть длиннее 60 секунд");
+          return;
+        }
+        setCapsuleMedia({ uri: asset.uri, relPath: null, type: "audio", name: asset.name });
       }
-      const duration = await getMediaDurationSeconds(asset.uri, "audio");
-      if (duration !== null && duration > 60) {
-        Alert.alert("⚠️", "Аудио не должно быть длиннее 60 секунд");
-        return;
-      }
-      setCapsuleMedia({ uri: asset.uri, relPath: null, type: "audio", name: asset.name });
+    } catch (err) {
+      Alert.alert("Ошибка", err instanceof Error ? err.message : "Не удалось выбрать аудиофайл");
+    } finally {
+      setIsPickingMedia(false);
     }
   };
 
   const pickVideo = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: "video/*", copyToCacheDirectory: true });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      if (asset.size && asset.size > 10 * 1024 * 1024) {
-        Alert.alert("⚠️", "Размер файла не должен превышать 10 МБ");
-        return;
+    setIsPickingMedia(true);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: "video/*", copyToCacheDirectory: true });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        if (asset.size && asset.size > 10 * 1024 * 1024) {
+          Alert.alert("⚠️", "Видео не должно превышать 10 МБ");
+          return;
+        }
+        // Duration check takes time on web (HTML5 element) — isPickingMedia stays true during this
+        const duration = await getMediaDurationSeconds(asset.uri, "video");
+        if (duration !== null && duration > 60) {
+          Alert.alert("⚠️", "Видео не должно быть длиннее 60 секунд");
+          return;
+        }
+        setCapsuleMedia({ uri: asset.uri, relPath: null, type: "video", name: asset.name });
       }
-      const duration = await getMediaDurationSeconds(asset.uri, "video");
-      if (duration !== null && duration > 60) {
-        Alert.alert("⚠️", "Видео не должно быть длиннее 60 секунд");
-        return;
-      }
-      setCapsuleMedia({ uri: asset.uri, relPath: null, type: "video", name: asset.name });
+    } catch (err) {
+      Alert.alert("Ошибка", err instanceof Error ? err.message : "Не удалось выбрать видеофайл");
+    } finally {
+      setIsPickingMedia(false);
     }
   };
 
@@ -1354,10 +1378,15 @@ export default function TimelineScreen() {
                     <Pressable
                       key={mtype}
                       onPress={mtype === "image" ? pickImage : mtype === "audio" ? pickAudio : pickVideo}
-                      style={({ pressed }) => ({ flex: 1, alignItems: "center", gap: 4, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never })}
+                      disabled={isPickingMedia}
+                      style={({ pressed }) => ({ flex: 1, alignItems: "center", gap: 4, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, opacity: (isPickingMedia || pressed) ? 0.5 : 1, cursor: "pointer" as never })}
                     >
-                      <Text style={{ fontSize: 22 }}>{mtype === "image" ? "📷" : mtype === "audio" ? "🎤" : "🎬"}</Text>
-                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{mtype === "image" ? "Фото" : mtype === "audio" ? "Аудио" : "Видео"}</Text>
+                      {isPickingMedia
+                        ? <ActivityIndicator size="small" color={colors.primary} />
+                        : <Text style={{ fontSize: 22 }}>{mtype === "image" ? "📷" : mtype === "audio" ? "🎤" : "🎬"}</Text>}
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
+                        {isPickingMedia ? "Загрузка…" : mtype === "image" ? "Фото" : mtype === "audio" ? "Аудио" : "Видео"}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
