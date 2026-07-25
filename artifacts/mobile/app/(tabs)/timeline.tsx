@@ -1394,8 +1394,18 @@ export default function TimelineScreen() {
                   body: JSON.stringify({ timelineCoord: selectedAnchor.timelineCoord, text: capsuleText.trim(), mediaUrl: finalMediaUrl, mediaType: finalMediaType }),
                 });
                 if (res.ok) {
+                  // Update selectedAnchor immediately so CapsuleViewModal reflects the new media
+                  // without waiting for refetchMyAnchors to complete (avoids stale-data race)
+                  setSelectedAnchor(prev => prev ? {
+                    ...prev,
+                    capsuleText: capsuleText.trim(),
+                    mediaUrl: finalMediaUrl,
+                    mediaType: finalMediaType,
+                  } : prev);
                   void refetchMyAnchors();
                   setShowCapsule(false);
+                  // Re-open the view modal so the user immediately sees the saved capsule with media
+                  setShowCapsuleView(true);
                   Alert.alert("✓", t.save);
                 } else {
                   const d = await res.json() as { error?: string };

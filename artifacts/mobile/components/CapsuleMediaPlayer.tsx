@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, createElement } from "react";
 import { View, Text, TouchableOpacity, Platform } from "react-native";
-import { Video, Audio, ResizeMode } from "expo-av";
+import { Audio } from "expo-av";
 import type { AVPlaybackStatus } from "expo-av";
 import { Feather } from "@expo/vector-icons";
 
@@ -13,24 +13,80 @@ interface Props {
 
 /**
  * Inline audio / video player for Time Capsule modals.
- * Replaces Linking.openURL so media plays in-app without leaving the screen.
+ *
+ * On Expo Web: renders native HTML5 <video>/<audio> elements via React.createElement
+ * so playback happens in-app without any URL redirect.
+ *
+ * On native: uses expo-av Audio.Sound for audio; Video component for video.
  */
 export function CapsuleMediaPlayer({ mediaUrl, mediaType, baseUrl, colors }: Props) {
   const fullUri = `${baseUrl}${mediaUrl}`;
 
-  // ── Audio state ────────────────────────────────────────────────────────────
+  // ── Web: native HTML elements ─────────────────────────────────────────────
+  if (Platform.OS === "web") {
+    if (mediaType === "video") {
+      return (
+        <View style={{ borderRadius: 14, overflow: "hidden", backgroundColor: "#000" }}>
+          {createElement("video", {
+            src: fullUri,
+            controls: true,
+            playsInline: true,
+            preload: "metadata",
+            style: { width: "100%", maxHeight: 220, display: "block", borderRadius: 14 },
+          })}
+        </View>
+      );
+    }
+    return (
+      <View style={{ borderRadius: 14, overflow: "hidden", backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33", padding: 12 }}>
+        {createElement("audio", {
+          src: fullUri,
+          controls: true,
+          preload: "metadata",
+          style: { width: "100%", display: "block" },
+        })}
+      </View>
+    );
+  }
+
+  // ── Native: expo-av ───────────────────────────────────────────────────────
+  return <NativeAudioPlayer fullUri={fullUri} mediaType={mediaType} colors={colors} />;
+}
+
+// Separate component so hooks only run on native (web branch returns early above)
+function NativeAudioPlayer({
+  fullUri,
+  mediaType,
+  colors,
+}: {
+  fullUri: string;
+  mediaType: "audio" | "video";
+  colors: { foreground: string; mutedForeground: string };
+}) {
   const soundRef = useRef<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioLoading, setAudioLoading] = useState(false);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (soundRef.current) {
-        void soundRef.current.unloadAsync();
-      }
+      if (soundRef.current) void soundRef.current.unloadAsync();
     };
   }, []);
+
+  if (mediaType === "video") {
+    // Lazy import to avoid pulling expo-av Video into web bundle
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Video, ResizeMode } = require("expo-av") as typeof import("expo-av");
+    return (
+      <Video
+        source={{ uri: fullUri }}
+        style={{ width: "100%", height: 200, borderRadius: 14, backgroundColor: "#000" }}
+        useNativeControls
+        resizeMode={ResizeMode.CONTAIN}
+        shouldPlay={false}
+      />
+    );
+  }
 
   const toggleAudio = async () => {
     try {
@@ -43,7 +99,6 @@ export function CapsuleMediaPlayer({ mediaUrl, mediaType, baseUrl, colors }: Pro
           (status: AVPlaybackStatus) => {
             if (status.isLoaded) {
               setIsPlaying(status.isPlaying);
-              // Reset when finished
               if (status.didJustFinish) {
                 void sound.setPositionAsync(0);
                 setIsPlaying(false);
@@ -64,21 +119,6 @@ export function CapsuleMediaPlayer({ mediaUrl, mediaType, baseUrl, colors }: Pro
     }
   };
 
-  // ── Video ──────────────────────────────────────────────────────────────────
-  if (mediaType === "video") {
-    // On web, expo-av Video renders an HTML5 <video> element — no redirect
-    return (
-      <Video
-        source={{ uri: fullUri }}
-        style={{ width: "100%", height: 200, borderRadius: 14, backgroundColor: "#000" }}
-        useNativeControls
-        resizeMode={ResizeMode.CONTAIN}
-        shouldPlay={false}
-      />
-    );
-  }
-
-  // ── Audio ──────────────────────────────────────────────────────────────────
   return (
     <TouchableOpacity
       activeOpacity={0.8}
@@ -88,7 +128,6 @@ export function CapsuleMediaPlayer({ mediaUrl, mediaType, baseUrl, colors }: Pro
         flexDirection: "row", alignItems: "center", gap: 12,
         backgroundColor: "#7c3aed11", borderWidth: 1, borderColor: "#7c3aed33",
         borderRadius: 14, padding: 16,
-        cursor: Platform.OS === "web" ? ("pointer" as never) : undefined,
       }}
     >
       <Text style={{ fontSize: 28 }}>🎤</Text>

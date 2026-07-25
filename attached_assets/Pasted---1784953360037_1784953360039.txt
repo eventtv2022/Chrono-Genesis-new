@@ -1,0 +1,111 @@
+Вижу проблему на скриншоте: текст («Жизнь - лучший дар Вселенной») сохраняется отлично, а вот блок с медиа (видео/аудио/фото) **вообще не отображается в окне просмотра**, потому что Replit Agent создал форму редактирования, но забыл отрисовать медиаплеер в модальном окне просмотра (`CapsuleViewModal.tsx`).
+
+Поскольку Replit часто «теряет» файлы при загрузке на локальный диск сервера (диск очищается при перезапуске контейнера Replit), самое стабильное и надежное решение — **сохранять медиафайлы прямо в базу данных в виде Base64 строк**. Это работает со 100% гарантией, не требует настройки статических папок и файлы никогда не будут теряться!
+
+Ниже готовый **ультра-промпт**, который заставит Replit переписать загрузку медиа на Base64 и отобразить медиаплеер на этом самом экране.
+
+---
+
+## 🚀 Ультра-промпт для Replit: Полноценное Base64 сохранение и показ Медиа в Капсуле
+
+```markdown
+# CRITICAL FIX: Media (Video/Audio/Image) Not Displayed or Saved in Capsule Modal
+
+## PROBLEM ANALYSIS
+1. Text saves correctly, but attached media (photos, videos, audio) does not appear in `CapsuleViewModal.tsx` (see screenshot).
+2. Local file uploads on Replit reset when the container restarts.
+
+## SOLUTION
+Switch media storage to **Base64 Data URLs** directly in the database. This eliminates disk storage issues and guarantees media will render instantly anywhere.
+
+---
+
+## REQUIRED CHANGES
+
+### 1. Update Frontend File Reader & Base64 Encoder (`CreateCapsuleModal.tsx` / `EditCapsuleModal.tsx`)
+When the user attaches an image, video, or audio file, convert it directly to Base64 on the client side before sending:
+
+```tsx
+const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  // Check 10 MB Limit
+  if (file.size > 10 * 1024 * 1024) {
+    alert("Размер файла превышает 10 МБ!");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    const base64Data = reader.result as string; // Standard data:video/mp4;base64,... URL
+    setMediaUrl(base64Data);
+    setMediaType(file.type.startsWith('video') ? 'VIDEO' : file.type.startsWith('audio') ? 'AUDIO' : 'IMAGE');
+  };
+  reader.readAsDataURL(file);
+};
+
+```
+
+### 2. Update DB Model & API Route (`server/routes.ts`)
+
+Ensure the `mediaUrl` field in the `capsules` table is of type `TEXT` or `VARCHAR` with no length limit (to store large Base64 strings):
+
+```ts
+app.post('/api/capsules', async (req, res) => {
+  const { timeSlotId, text, mediaUrl, mediaType } = req.body;
+  
+  const updatedCapsule = await db.capsule.upsert({
+    where: { timeSlotId },
+    update: { message: text, mediaUrl, mediaType },
+    create: { timeSlotId, message: text, mediaUrl, mediaType }
+  });
+
+  return res.json(updatedCapsule);
+});
+
+```
+
+### 3. Render Player in Viewing Modal (`CapsuleViewModal.tsx`)
+
+Add explicit media rendering inside the capsule view card (right above or below the text field `"Жизнь - лучший дар Вселенной"`):
+
+```tsx
+{capsule?.mediaUrl && (
+  <div className="w-full my-4 rounded-2xl overflow-hidden bg-black/60 border border-zinc-800 p-2 flex justify-center items-center">
+    {capsule.mediaType === 'VIDEO' || capsule.mediaUrl.startsWith('data:video') ? (
+      <video 
+        src={capsule.mediaUrl} 
+        controls 
+        playsInline 
+        className="w-full max-h-64 rounded-xl object-contain" 
+      />
+    ) : capsule.mediaType === 'AUDIO' || capsule.mediaUrl.startsWith('data:audio') ? (
+      <audio 
+        src={capsule.mediaUrl} 
+        controls 
+        className="w-full py-2 px-1" 
+      />
+    ) : (
+      <img 
+        src={capsule.mediaUrl} 
+        alt="Capsule Attachment" 
+        className="w-full max-h-64 rounded-xl object-cover" 
+      />
+    )}
+  </div>
+)}
+
+```
+
+---
+
+## VERIFICATION
+
+1. Open Capsule -> Click "Редактировать послание" -> Upload a video/audio/photo -> Save.
+2. The `CapsuleViewModal` MUST display the video/audio player or photo right above the text "Жизнь - лучший дар Вселенной".
+3. Press play on the video/audio -> Verify smooth playback without server errors.
+
+```
+
+```
