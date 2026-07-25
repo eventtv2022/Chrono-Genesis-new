@@ -568,10 +568,12 @@ export default function TimelineScreen() {
   // ── Anchor auction mutation ──────────────────────────────────────────────────
   // ── Capsule media helpers ─────────────────────────────────────────────────────
 
-  /** Returns duration in seconds, or null if the duration can't be determined. */
+  /** Returns duration in seconds, or null if it can't be determined. */
   const getMediaDurationSeconds = async (uri: string, type: "audio" | "video"): Promise<number | null> => {
     if (Platform.OS === "web") {
-      return new Promise((resolve) => {
+      // onloadedmetadata may never fire for unsupported codecs — race with a 5 s timeout
+      // so the spinner doesn't hang forever and finally{} always runs.
+      const detect = new Promise<number | null>((resolve) => {
         const el: HTMLMediaElement = type === "audio"
           ? new window.Audio()
           : document.createElement("video");
@@ -580,6 +582,10 @@ export default function TimelineScreen() {
         el.onerror = () => resolve(null);
         el.src = uri;
       });
+      const timeout = new Promise<number | null>((resolve) =>
+        setTimeout(() => resolve(null), 5000),
+      );
+      return Promise.race([detect, timeout]);
     } else {
       try {
         const { sound, status } = await Audio.Sound.createAsync(
@@ -622,20 +628,28 @@ export default function TimelineScreen() {
   const pickAudio = async () => {
     setIsPickingMedia(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
-      if (!result.canceled && result.assets[0]) {
+      // Broad MIME list prevents iOS/macOS Safari from silently returning canceled:true
+      // when the user picks .m4a / .aac — those don't match a bare "audio/*" filter on some browsers.
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["audio/*", "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/aac", "audio/wav", "audio/ogg", "audio/flac"],
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
+        console.log("[Picker] Audio selected:", asset.name, asset.mimeType, asset.size);
         if (asset.size && asset.size > 10 * 1024 * 1024) {
           Alert.alert("⚠️", "Аудио не должно превышать 10 МБ");
           return;
         }
-        // Duration check takes time on web (HTML5 element) — isPickingMedia stays true during this
+        // Duration check may take up to 5 s on web — isPickingMedia stays true during this
         const duration = await getMediaDurationSeconds(asset.uri, "audio");
         if (duration !== null && duration > 60) {
           Alert.alert("⚠️", "Аудио не должно быть длиннее 60 секунд");
           return;
         }
         setCapsuleMedia({ uri: asset.uri, relPath: null, type: "audio", name: asset.name });
+      } else {
+        console.log("[Picker] Audio canceled or no asset returned:", result.canceled);
       }
     } catch (err) {
       Alert.alert("Ошибка", err instanceof Error ? err.message : "Не удалось выбрать аудиофайл");
@@ -647,20 +661,28 @@ export default function TimelineScreen() {
   const pickVideo = async () => {
     setIsPickingMedia(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: "video/*", copyToCacheDirectory: true });
-      if (!result.canceled && result.assets[0]) {
+      // Broad MIME list prevents browsers from silently returning canceled:true
+      // for .mov / .mkv / .webm that don't match a bare "video/*" on some platforms.
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["video/*", "video/mp4", "video/quicktime", "video/webm", "video/x-matroska", "video/3gpp"],
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
+        console.log("[Picker] Video selected:", asset.name, asset.mimeType, asset.size);
         if (asset.size && asset.size > 10 * 1024 * 1024) {
           Alert.alert("⚠️", "Видео не должно превышать 10 МБ");
           return;
         }
-        // Duration check takes time on web (HTML5 element) — isPickingMedia stays true during this
+        // Duration check may take up to 5 s on web — isPickingMedia stays true during this
         const duration = await getMediaDurationSeconds(asset.uri, "video");
         if (duration !== null && duration > 60) {
           Alert.alert("⚠️", "Видео не должно быть длиннее 60 секунд");
           return;
         }
         setCapsuleMedia({ uri: asset.uri, relPath: null, type: "video", name: asset.name });
+      } else {
+        console.log("[Picker] Video canceled or no asset returned:", result.canceled);
       }
     } catch (err) {
       Alert.alert("Ошибка", err instanceof Error ? err.message : "Не удалось выбрать видеофайл");
