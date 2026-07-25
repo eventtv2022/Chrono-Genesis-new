@@ -48,6 +48,7 @@ function isCenturyBoundaryCoord(coord: string): boolean {
 
 // ── StatePropertyModal ─────────────────────────────────────────────────────────
 function StatePropertyModal({ visible, onClose, colors }: { visible: boolean; onClose: () => void; colors: ReturnType<typeof useColors> }) {
+  const { t } = useLanguage();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", padding: 24 }}>
@@ -56,18 +57,18 @@ function StatePropertyModal({ visible, onClose, colors }: { visible: boolean; on
             <Text style={{ fontSize: 30 }}>🏛️</Text>
           </View>
           <Text style={{ fontSize: 15, fontWeight: "800", color: "#f59e0b", textAlign: "center", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
-            Неотчуждаемая{"\n"}государственная собственность
+            {t.cp_state_title}
           </Text>
           <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center", lineHeight: 20, marginBottom: 24 }}>
-            Первые и последние минуты каждого столетия принадлежат{" "}
-            <Text style={{ color: colors.foreground, fontWeight: "600" }}>Национальному Хроно-Фонду TimeNation</Text>.
-            Данная минута не подлежит частному бронированию, выкупу или передаче.
+            {t.cp_state_body}{" "}
+            <Text style={{ color: colors.foreground, fontWeight: "600" }}>{t.cp_state_fund}</Text>.
+            {"\n"}{t.cp_state_note}
           </Text>
           <Pressable
             onPress={onClose}
             style={({ pressed }) => ({ width: "100%", backgroundColor: "#f59e0b", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: pressed ? 0.8 : 1, cursor: "pointer" as never })}
           >
-            <Text style={{ fontSize: 15, fontWeight: "700", color: "#000" }}>Принято</Text>
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#000" }}>{t.cp_state_ok}</Text>
           </Pressable>
         </View>
       </View>
@@ -86,6 +87,7 @@ interface AnchorAuctionModalProps {
 }
 
 function TimeAnchorAuctionModal({ anchor, visible, onClose, onSubmit, submitting, colors }: AnchorAuctionModalProps) {
+  const { t } = useLanguage();
   const [priceInput, setPriceInput]       = useState("1");
   const [durationInput, setDurationInput] = useState("24");
 
@@ -97,8 +99,8 @@ function TimeAnchorAuctionModal({ anchor, visible, onClose, onSubmit, submitting
   const handleConfirm = () => {
     const price = parseFloat(priceInput);
     const hours = parseInt(durationInput, 10);
-    if (isNaN(price) || price <= 0)     { Alert.alert("⚠️", "Укажите стартовую цену больше 0"); return; }
-    if (isNaN(hours) || hours < 1 || hours > 168) { Alert.alert("⚠️", "Длительность: от 1 до 168 часов"); return; }
+    if (isNaN(price) || price <= 0)     { Alert.alert("⚠️", t.auc_price_err); return; }
+    if (isNaN(hours) || hours < 1 || hours > 168) { Alert.alert("⚠️", t.auc_duration_err); return; }
     onSubmit({ startingPrice: price, durationHours: hours });
   };
 
@@ -107,24 +109,24 @@ function TimeAnchorAuctionModal({ anchor, visible, onClose, onSubmit, submitting
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
         <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#555", alignSelf: "center", marginBottom: 16 }} />
-          <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground, marginBottom: 4 }}>🏷️ Выставить на аукцион</Text>
+          <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground, marginBottom: 4 }}>{t.auc_anchor_title}</Text>
           <Text style={{ fontSize: 13, color: colors.mutedForeground, marginBottom: 20 }}>{label}</Text>
 
           <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 20, flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Feather name="info" size={14} color={colors.primary} />
             <Text style={{ flex: 1, fontSize: 12, color: colors.mutedForeground, lineHeight: 17 }}>
-              Координата будет заблокирована на время торгов. Победитель получает право собственности. Комиссия Казначейства: 2%.
+              {t.auc_anchor_info}
             </Text>
           </View>
 
-          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Стартовая цена (Д)</Text>
+          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{t.auc_price_label}</Text>
           <TextInput
             style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 16, color: colors.foreground, backgroundColor: colors.card, marginBottom: 14 }}
             placeholder="1.00" placeholderTextColor={colors.mutedForeground}
             value={priceInput} onChangeText={setPriceInput} keyboardType="decimal-pad" autoFocus
           />
 
-          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Длительность (часов)</Text>
+          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{t.auc_dur_hours_label}</Text>
           <TextInput
             style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 16, color: colors.foreground, backgroundColor: colors.card, marginBottom: 24 }}
             placeholder="24" placeholderTextColor={colors.mutedForeground}
@@ -137,10 +139,10 @@ function TimeAnchorAuctionModal({ anchor, visible, onClose, onSubmit, submitting
           >
             {submitting
               ? <ActivityIndicator color={colors.primaryForeground} />
-              : <Text style={{ fontSize: 16, fontWeight: "700", color: colors.primaryForeground }}>Выставить на продажу →</Text>}
+              : <Text style={{ fontSize: 16, fontWeight: "700", color: colors.primaryForeground }}>{t.auc_anchor_btn}</Text>}
           </Pressable>
           <Pressable onPress={onClose} style={{ alignItems: "center", padding: 10, cursor: "pointer" as never }}>
-            <Text style={{ fontSize: 15, color: colors.mutedForeground }}>Отмена</Text>
+            <Text style={{ fontSize: 15, color: colors.mutedForeground }}>{t.cancel}</Text>
           </Pressable>
         </View>
       </View>
@@ -180,6 +182,7 @@ interface SlotActionModalProps {
 }
 
 function SlotActionModal({ slot, visible, onClose, onCapsule, onAuction, onTimeline, colors }: SlotActionModalProps) {
+  const { t } = useLanguage();
   if (!slot) return null;
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -197,12 +200,12 @@ function SlotActionModal({ slot, visible, onClose, onCapsule, onAuction, onTimel
               </Text>
               {slot.isCapsuleSealed && (
                 <View style={{ backgroundColor: "#7c3aed22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#7c3aed" }}>📜 Капсула</Text>
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#7c3aed" }}>📜 {t.tl_badge_capsule}</Text>
                 </View>
               )}
               {slot.isLocked && (
                 <View style={{ backgroundColor: "#f59e0b22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🔥 Аукцион</Text>
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🔥 {t.tl_badge_auction}</Text>
                 </View>
               )}
             </View>
@@ -218,9 +221,9 @@ function SlotActionModal({ slot, visible, onClose, onCapsule, onAuction, onTimel
               <Text style={{ fontSize: 20 }}>📜</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>Вложить Капсулу Смысла</Text>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>{t.tl_action_capsule}</Text>
               <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>
-                {slot.isCapsuleSealed ? "Редактировать запечатанную капсулу" : "Запечатать историческое значение минуты"}
+                {slot.isCapsuleSealed ? t.tl_action_capsule_edit : t.tl_action_capsule_new}
               </Text>
             </View>
             <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
@@ -229,15 +232,15 @@ function SlotActionModal({ slot, visible, onClose, onCapsule, onAuction, onTimel
           {/* Action: Auction */}
           <Pressable
             style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: slot.isLocked ? "#f59e0b55" : colors.border, marginBottom: 10, opacity: slot.isLocked ? 0.6 : pressed ? 0.7 : 1, cursor: "pointer" as never })}
-            onPress={() => { if (slot.isLocked) { Alert.alert("🔥", "Событие уже выставлено на аукцион"); return; } onClose(); setTimeout(onAuction, 350); }}
+            onPress={() => { if (slot.isLocked) { Alert.alert("🔥", t.tl_already_auction); return; } onClose(); setTimeout(onAuction, 350); }}
           >
             <View style={{ width: 42, height: 42, borderRadius: 11, backgroundColor: "#f59e0b22", alignItems: "center", justifyContent: "center" }}>
               <Text style={{ fontSize: 20 }}>🔨</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>Выставить на Аукцион</Text>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>{t.tl_action_auction}</Text>
               <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>
-                {slot.isLocked ? "Уже на торгах — ожидайте завершения" : "Продать Событие другому гражданину"}
+                {slot.isLocked ? t.tl_action_on_auction : t.tl_action_sell}
               </Text>
             </View>
             {!slot.isLocked && <Feather name="chevron-right" size={16} color={colors.mutedForeground} />}
@@ -252,14 +255,14 @@ function SlotActionModal({ slot, visible, onClose, onCapsule, onAuction, onTimel
               <Text style={{ fontSize: 20 }}>📍</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>Перейти на Таймлайн</Text>
-              <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>Открыть временну́ю координату на карте</Text>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>{t.tl_go_timeline}</Text>
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 1 }}>{t.tl_go_timeline_sub}</Text>
             </View>
             <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
           </Pressable>
 
           <Pressable style={{ alignItems: "center", paddingVertical: 10, cursor: "pointer" as never }} onPress={onClose}>
-            <Text style={{ fontSize: 15, color: colors.mutedForeground }}>Отмена</Text>
+            <Text style={{ fontSize: 15, color: colors.mutedForeground }}>{t.cancel}</Text>
           </Pressable>
         </Pressable>
       </Pressable>
@@ -278,6 +281,7 @@ interface AttachCapsuleModalProps {
 }
 
 function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colors }: AttachCapsuleModalProps) {
+  const { t } = useLanguage();
   const [title, setTitle]     = useState(slot?.capsuleTitle ?? "");
   const [content, setContent] = useState(slot?.capsuleContent ?? "");
   const [mediaUrl, setMediaUrl] = useState(slot?.capsuleMediaUrl ?? "");
@@ -293,8 +297,8 @@ function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colo
 
   const handleSave = async () => {
     if (!slot) return;
-    if (!title.trim()) { Alert.alert("⚠️", "Укажите заголовок капсулы"); return; }
-    if (!content.trim()) { Alert.alert("⚠️", "Добавьте содержание капсулы"); return; }
+    if (!title.trim()) { Alert.alert("⚠️", t.tl_cap_err_title); return; }
+    if (!content.trim()) { Alert.alert("⚠️", t.tl_cap_err_content); return; }
     setSaving(true);
     try {
       const res = await fetch(`${BASE_URL}/api/chronopedia/slots/${slot.id}/capsule`, {
@@ -305,13 +309,13 @@ function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colo
       if (res.ok) {
         onSuccess();
         onClose();
-        Alert.alert("📜", "Капсула Смысла запечатана");
+        Alert.alert("📜", t.tl_cap_sealed);
       } else {
         const d = await res.json() as { error?: string };
-        Alert.alert("Ошибка", d.error ?? "Не удалось сохранить капсулу");
+        Alert.alert(t.error, d.error ?? t.tl_cap_err_save);
       }
     } catch {
-      Alert.alert("Ошибка", "Проверьте соединение");
+      Alert.alert(t.error, t.connection_error);
     } finally {
       setSaving(false);
     }
@@ -324,7 +328,7 @@ function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colo
           {/* Header */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border }}>
             <Text style={{ fontSize: 20 }}>📜</Text>
-            <Text style={{ fontSize: 17, fontWeight: "800", color: colors.foreground, flex: 1 }}>Капсула Смысла</Text>
+            <Text style={{ fontSize: 17, fontWeight: "800", color: colors.foreground, flex: 1 }}>{t.tl_cap_meaning}</Text>
             <Pressable onPress={onClose} hitSlop={8} style={{ cursor: "pointer" as never }}>
               <Feather name="x" size={22} color={colors.foreground} />
             </Pressable>
@@ -341,10 +345,10 @@ function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colo
           )}
 
           {/* Title */}
-          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Заголовок *</Text>
+          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{t.tl_cap_title_label}</Text>
           <TextInput
             style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 15, color: colors.foreground, backgroundColor: colors.card, marginBottom: 16 }}
-            placeholder="Краткое историческое значение этой минуты"
+            placeholder={t.tl_cap_title_ph}
             placeholderTextColor={colors.mutedForeground}
             value={title}
             onChangeText={setTitle}
@@ -352,10 +356,10 @@ function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colo
           />
 
           {/* Content */}
-          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Содержание *</Text>
+          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{t.tl_cap_content_label}</Text>
           <TextInput
             style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 14, color: colors.foreground, backgroundColor: colors.card, marginBottom: 6, minHeight: 120, textAlignVertical: "top" }}
-            placeholder="Глубокое описание исторического смысла, события или личного значения этой минуты..."
+            placeholder={t.tl_cap_content_ph}
             placeholderTextColor={colors.mutedForeground}
             value={content}
             onChangeText={setContent}
@@ -365,7 +369,7 @@ function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colo
           <Text style={{ fontSize: 11, color: colors.mutedForeground, textAlign: "right", marginBottom: 16 }}>{content.length}/5000</Text>
 
           {/* Media URL */}
-          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Ссылка на медиа (необязательно)</Text>
+          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{t.tl_cap_media_label}</Text>
           <TextInput
             style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 13, color: colors.foreground, backgroundColor: colors.card, marginBottom: 16 }}
             placeholder="https://..."
@@ -379,7 +383,7 @@ function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colo
           />
 
           {/* Visibility */}
-          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Видимость</Text>
+          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>{t.tl_cap_visibility}</Text>
           <View style={{ flexDirection: "row", gap: 10, marginBottom: 24 }}>
             {(["public", "private"] as const).map(v => (
               <Pressable
@@ -388,7 +392,7 @@ function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colo
                 onPress={() => setVisibility(v)}
               >
                 <Text style={{ fontSize: 14, fontWeight: "700", color: visibility === v ? colors.primary : colors.mutedForeground }}>
-                  {v === "public" ? "🌐 Публичная" : "🔒 Приватная"}
+                  {v === "public" ? `🌐 ${t.tl_cap_public}` : `🔒 ${t.tl_cap_private}`}
                 </Text>
               </Pressable>
             ))}
@@ -402,7 +406,7 @@ function AttachCapsuleModal({ slot, visible, onClose, onSuccess, citizenId, colo
           >
             {saving
               ? <ActivityIndicator color="#fff" />
-              : <Text style={{ fontSize: 16, fontWeight: "800", color: "#fff" }}>📜 Запечатать Капсулу</Text>}
+              : <Text style={{ fontSize: 16, fontWeight: "800", color: "#fff" }}>📜 {t.tl_cap_seal}</Text>}
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -421,19 +425,20 @@ interface CreateSlotAuctionModalProps {
 }
 
 function CreateSlotAuctionModal({ slot, visible, onClose, onSubmit, submitting, colors }: CreateSlotAuctionModalProps) {
+  const { t } = useLanguage();
   const [priceInput, setPriceInput]       = useState("10");
   const [durationInput, setDurationInput] = useState("24");
   const DURATIONS = [
-    { label: "12 ч",    value: "12"  },
-    { label: "24 ч",    value: "24"  },
-    { label: "48 ч",    value: "48"  },
-    { label: "7 дней",  value: "168" },
+    { label: t.auc_dur_12h, value: "12"  },
+    { label: t.auc_dur_24h, value: "24"  },
+    { label: t.auc_dur_48h, value: "48"  },
+    { label: t.auc_dur_7d,  value: "168" },
   ];
 
   const handleConfirm = () => {
     const price = parseFloat(priceInput);
     const hours = parseInt(durationInput, 10);
-    if (isNaN(price) || price <= 0) { Alert.alert("⚠️", "Укажите стартовую цену больше 0"); return; }
+    if (isNaN(price) || price <= 0) { Alert.alert("⚠️", t.auc_price_err); return; }
     onSubmit({ startingPrice: price, durationHours: hours });
   };
 
@@ -442,17 +447,17 @@ function CreateSlotAuctionModal({ slot, visible, onClose, onSubmit, submitting, 
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
         <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#555", alignSelf: "center", marginBottom: 16 }} />
-          <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground, marginBottom: 4 }}>🔨 Выставить Событие на аукцион</Text>
+          <Text style={{ fontSize: 18, fontWeight: "800", color: colors.foreground, marginBottom: 4 }}>{t.auc_slot_title}</Text>
           {slot && <Text style={{ fontSize: 13, color: colors.mutedForeground, marginBottom: 16, lineHeight: 18 }}>{slot.locationName} · {slot.timeMarker}</Text>}
 
           <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 20, flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Feather name="info" size={14} color={colors.primary} />
             <Text style={{ flex: 1, fontSize: 12, color: colors.mutedForeground, lineHeight: 17 }}>
-              Событие будет заблокировано на время аукциона. Победитель становится новым владельцем. Налог Казначейства: 2%.
+              {t.auc_slot_info}
             </Text>
           </View>
 
-          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Стартовая цена (Д)</Text>
+          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{t.auc_price_label}</Text>
           <TextInput
             style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 16, color: colors.foreground, backgroundColor: colors.card, marginBottom: 16 }}
             placeholder="10.00"
@@ -463,7 +468,7 @@ function CreateSlotAuctionModal({ slot, visible, onClose, onSubmit, submitting, 
             autoFocus
           />
 
-          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Длительность</Text>
+          <Text style={{ fontSize: 11, fontWeight: "600", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>{t.auc_duration_label}</Text>
           <View style={{ flexDirection: "row", gap: 8, marginBottom: 24 }}>
             {DURATIONS.map(d => (
               <Pressable
@@ -483,10 +488,10 @@ function CreateSlotAuctionModal({ slot, visible, onClose, onSubmit, submitting, 
           >
             {submitting
               ? <ActivityIndicator color="#000" />
-              : <Text style={{ fontSize: 16, fontWeight: "700", color: "#000" }}>Выставить на аукцион →</Text>}
+              : <Text style={{ fontSize: 16, fontWeight: "700", color: "#000" }}>{t.auc_slot_btn}</Text>}
           </Pressable>
           <Pressable onPress={onClose} style={{ alignItems: "center", padding: 10, cursor: "pointer" as never }}>
-            <Text style={{ fontSize: 15, color: colors.mutedForeground }}>Отмена</Text>
+            <Text style={{ fontSize: 15, color: colors.mutedForeground }}>{t.cancel}</Text>
           </Pressable>
         </View>
       </View>
@@ -710,7 +715,7 @@ export default function TimelineScreen() {
       }
     } catch (err) {
       console.error("[Picker Error]:", err);
-      Alert.alert("Ошибка пикера", err instanceof Error ? err.message : JSON.stringify(err));
+      Alert.alert(t.tl_picker_err, err instanceof Error ? err.message : JSON.stringify(err));
     } finally {
       setIsPickingMedia(false);
     }
@@ -773,11 +778,11 @@ export default function TimelineScreen() {
       qc.invalidateQueries({ queryKey: ["myAnchors", citizen?.id] });
       qc.invalidateQueries({ queryKey: ["auctions"] });
       void refetchMyAnchors();
-      Alert.alert("✅", "Временная координата выставлена на аукцион");
+      Alert.alert("✅", t.auc_anchor_ok);
     },
     onError: (e: Error) => {
       if (!e.message.includes("Государственная собственность")) {
-        Alert.alert("Ошибка", e.message);
+        Alert.alert(t.error, e.message);
       }
     },
   });
@@ -832,9 +837,9 @@ export default function TimelineScreen() {
       qc.invalidateQueries({ queryKey: ["mySlots", citizen?.id] });
       qc.invalidateQueries({ queryKey: ["auctions"] });
       void refetchMySlots();
-      Alert.alert("🔥", "Событие выставлено на аукцион");
+      Alert.alert("🔥", t.auc_slot_ok);
     },
-    onError: (e: Error) => Alert.alert("Ошибка", e.message),
+    onError: (e: Error) => Alert.alert(t.error, e.message),
   });
 
   const fetchOccupied = useCallback(async (year: number, month?: number, day?: number) => {
@@ -1167,17 +1172,17 @@ export default function TimelineScreen() {
                           <Text style={[styles.maCoordLabel, { color: colors.foreground }]}>{label}</Text>
                           {a.status === "on_auction" && (
                             <View style={{ backgroundColor: "#e6952222", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#e69522" }}>🏷️ На торгах</Text>
+                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#e69522" }}>🏷️ {t.tl_badge_on_auction}</Text>
                             </View>
                           )}
                           {isCenturyBoundaryCoord(c) && (
                             <View style={{ backgroundColor: "#f59e0b22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🏛️ Фонд</Text>
+                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🏛️ {t.tl_badge_fund}</Text>
                             </View>
                           )}
                           {a.capsuleText && (
                             <View style={{ backgroundColor: "#7c3aed22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#7c3aed" }}>📜 Капсула</Text>
+                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#7c3aed" }}>📜 {t.tl_badge_capsule}</Text>
                             </View>
                           )}
                         </View>
@@ -1196,8 +1201,8 @@ export default function TimelineScreen() {
             mySlots.length === 0 ? (
               <View style={styles.maEmpty}>
                 <Text style={{ fontSize: 36, marginBottom: 8 }}>📍</Text>
-                <Text style={[styles.maEmptyTitle, { color: colors.foreground }]}>Нет События в Хронопедии</Text>
-                <Text style={[styles.maEmptyText, { color: colors.mutedForeground }]}>Создайте Событие в Хронопедии — оно появится здесь</Text>
+                <Text style={[styles.maEmptyTitle, { color: colors.foreground }]}>{t.tl_slots_empty}</Text>
+                <Text style={[styles.maEmptyText, { color: colors.mutedForeground }]}>{t.tl_slots_empty_sub}</Text>
               </View>
             ) : (
               <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.maList} showsVerticalScrollIndicator={false}>
@@ -1217,12 +1222,12 @@ export default function TimelineScreen() {
                         <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground, flexShrink: 1 }} numberOfLines={1}>{s.locationName}</Text>
                         {s.isCapsuleSealed && (
                           <View style={{ backgroundColor: "#7c3aed22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#7c3aed" }}>📜 Капсула</Text>
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#7c3aed" }}>{`📜 ${t.tl_badge_capsule}`}</Text>
                           </View>
                         )}
                         {s.isLocked && (
                           <View style={{ backgroundColor: "#f59e0b22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>🔥 Аукцион</Text>
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b" }}>{`🔥 ${t.tl_badge_auction}`}</Text>
                           </View>
                         )}
                       </View>
@@ -1230,7 +1235,7 @@ export default function TimelineScreen() {
                       {s.isCapsuleSealed && s.capsuleTitle && (
                         <Text style={{ fontSize: 11, color: "#7c3aed", marginTop: 2 }} numberOfLines={1}>📜 {s.capsuleTitle}</Text>
                       )}
-                      <Text style={{ fontSize: 10, color: colors.mutedForeground, marginTop: 2 }}>{s.eventCount} событий</Text>
+                      <Text style={{ fontSize: 10, color: colors.mutedForeground, marginTop: 2 }}>{s.eventCount} {t.tl_events_count}</Text>
                     </View>
                     <Feather name="chevron-right" size={20} color={colors.primary} style={{ marginLeft: 8 }} />
                   </Pressable>
@@ -1313,7 +1318,7 @@ export default function TimelineScreen() {
                 return;
               }
               if (selectedAnchor.status === "on_auction") {
-                Alert.alert("🏷️", "Эта координата уже выставлена на аукцион");
+                Alert.alert("🏷️", t.tl_on_auction_alert);
                 return;
               }
               setShowAnchorActions(false);
@@ -1328,7 +1333,7 @@ export default function TimelineScreen() {
               </View>
               {selectedAnchor?.status === "on_auction" && (
                 <View style={[styles.asSoon, { backgroundColor: "#e6952222" }]}>
-                  <Text style={[styles.asSoonText, { color: "#e69522" }]}>На торгах</Text>
+                  <Text style={[styles.asSoonText, { color: "#e69522" }]}>{t.tl_badge_on_auction}</Text>
                 </View>
               )}
             </Pressable>
@@ -1418,7 +1423,7 @@ export default function TimelineScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }} numberOfLines={1}>{capsuleMedia.name}</Text>
                       <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
-                        {capsuleMedia.type === "audio" ? "Аудиофайл" : capsuleMedia.type === "video" ? "Видеофайл" : "Документ"} · прикреплён
+                        {capsuleMedia.type === "audio" ? t.tl_media_audio : capsuleMedia.type === "video" ? t.tl_media_video : t.tl_media_doc} · {t.tl_media_attached}
                       </Text>
                     </View>
                   </View>
@@ -1428,12 +1433,12 @@ export default function TimelineScreen() {
                   style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, padding: 10, backgroundColor: "#dc262611", cursor: "pointer" as never }}
                 >
                   <Feather name="trash-2" size={14} color="#dc2626" />
-                  <Text style={{ fontSize: 13, color: "#dc2626", fontWeight: "600" }}>Удалить вложение</Text>
+                  <Text style={{ fontSize: 13, color: "#dc2626", fontWeight: "600" }}>{t.tl_media_remove}</Text>
                 </Pressable>
               </View>
             ) : (
               <View>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground, marginBottom: 8 }}>📎 Вложение <Text style={{ fontWeight: "400", color: colors.mutedForeground }}>(до 10 МБ)</Text></Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground, marginBottom: 8 }}>📎 {t.tl_media_label} <Text style={{ fontWeight: "400", color: colors.mutedForeground }}>{t.tl_media_limit}</Text></Text>
                 <Pressable
                   onPress={pickFile}
                   disabled={isPickingMedia}
@@ -1448,7 +1453,7 @@ export default function TimelineScreen() {
                     ? <ActivityIndicator size="small" color={colors.primary} />
                     : <Text style={{ fontSize: 20 }}>📎</Text>}
                   <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
-                    {isPickingMedia ? "Выбор файла…" : "Прикрепить файл"}
+                    {isPickingMedia ? t.tl_media_picking : t.tl_media_attach}
                   </Text>
                 </Pressable>
               </View>
@@ -1499,7 +1504,7 @@ export default function TimelineScreen() {
                   Alert.alert("✓", t.save);
                 } else {
                   const d = await res.json() as { error?: string };
-                  Alert.alert("Error", d.error ?? t.connection_error);
+                  Alert.alert(t.error, d.error ?? t.connection_error);
                 }
               } catch (err) {
                 Alert.alert("Error", err instanceof Error ? err.message : t.connection_error);
@@ -1524,7 +1529,7 @@ export default function TimelineScreen() {
             <View style={styles.capHeaderLeft}>
               <Text style={{ fontSize: 20 }}>📜</Text>
               <View>
-                <Text style={[styles.capHeaderTitle, { color: colors.foreground }]}>Капсула Времени</Text>
+                <Text style={[styles.capHeaderTitle, { color: colors.foreground }]}>{t.tl_capsule_title}</Text>
                 {selectedAnchor && (() => {
                   const c = selectedAnchor.timelineCoord;
                   const label = `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)} ${c.slice(8,10)}:${c.slice(10,12)}`;
@@ -1546,7 +1551,7 @@ export default function TimelineScreen() {
                 <Text style={[styles.capCoordBadgeText, { color: colors.mutedForeground }]}>{c}</Text>
                 {selectedAnchor.status === "on_auction" && (
                   <View style={{ marginLeft: "auto" as never, backgroundColor: "#e6952222", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#e69522" }}>🏷️ На торгах</Text>
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#e69522" }}>🏷️ {t.tl_badge_on_auction}</Text>
                   </View>
                 )}
               </View>
@@ -1580,9 +1585,9 @@ export default function TimelineScreen() {
                     <Text style={{ fontSize: 32 }}>📄</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 14, fontWeight: "700", color: colors.foreground }} numberOfLines={2}>
-                        {selectedAnchor.mediaUrl!.split("/").pop() ?? "Документ"}
+                        {selectedAnchor.mediaUrl!.split("/").pop() ?? t.tl_media_doc}
                       </Text>
-                      <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }}>Нажмите, чтобы открыть</Text>
+                      <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }}>{t.tl_capsule_tap_open}</Text>
                     </View>
                     <Feather name="external-link" size={20} color="#7c3aed" />
                   </Pressable>
@@ -1625,7 +1630,7 @@ export default function TimelineScreen() {
               }}
             >
               <Feather name="edit-2" size={16} color="#fff" />
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Редактировать послание</Text>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>{t.tl_capsule_edit}</Text>
             </Pressable>
 
             <Pressable
@@ -1641,7 +1646,7 @@ export default function TimelineScreen() {
               }}
             >
               <Feather name="more-horizontal" size={16} color={colors.foreground} />
-              <Text style={{ color: colors.foreground, fontWeight: "600", fontSize: 15 }}>Другие действия</Text>
+              <Text style={{ color: colors.foreground, fontWeight: "600", fontSize: 15 }}>{t.tl_capsule_other}</Text>
             </Pressable>
 
             <Pressable
