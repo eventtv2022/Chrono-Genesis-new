@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>TimeNation — Цифровой Паспорт</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f0f1a;
+      --card:     #1a1a2e;
+      --border:   rgba(255,255,255,0.08);
+      --fg:       #e8e8f4;
+      --muted:    #8080a0;
+      --accent:   #6c63ff;
+      --gold:     #c9a84c;
+      --danger:   #ef4444;
+      --radius:   14px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    #app {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 40px;
+      gap: 20px;
+    }
+
+    /* ── Loading ── */
+    #screen-loading {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      text-align: center;
+    }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Shared card ── */
+    .card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    /* ── Header ── */
+    #header {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #header .logo { font-size: 22px; font-weight: 800; color: var(--accent); }
+    #header .sub  { font-size: 13px; color: var(--muted); }
+
+    /* ── Timer ── */
+    #timer-block {
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+    }
+    #timer-block .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    #timer-display {
+      font-size: 42px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+      font-family: "Courier New", monospace;
+    }
+    #timer-display.done { color: var(--gold); }
+
+    /* ── Steps ── */
+    #steps-nav {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      gap: 6px;
+    }
+    .step-dot {
+      flex: 1;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border);
+      transition: background .3s;
+    }
+    .step-dot.done    { background: var(--accent); }
+    .step-dot.active  { background: var(--accent); opacity: .5; }
+
+    .step-screen { display: none; width: 100%; max-width: 420px; }
+    .step-screen.visible { display: block; }
+
+    .step-title {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .step-hint {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    /* ── Photo ── */
+    #photo-preview {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 12px;
+      border: 2px dashed var(--border);
+      object-fit: cover;
+      display: none;
+      margin-bottom: 12px;
+    }
+    #photo-preview.shown { display: block; }
+    #photo-placeholder {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 12px;
+      border: 2px dashed var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 12px;
+      cursor: pointer;
+    }
+    #photo-placeholder .icon { font-size: 36px; }
+    #photo-input { display: none; }
+
+    /* ── Canvas signature ── */
+    #sig-canvas {
+      width: 100%;
+      height: 180px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      touch-action: none;
+      cursor: crosshair;
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    /* ── Input ── */
+    .field-label { font-size: 13px; color: var(--muted); margin-bottom: 6px; display: block; }
+    .text-input {
+      width: 100%;
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: var(--fg);
+      font-size: 15px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .text-input:focus { border-color: var(--accent); }
+
+    /* ── Checkbox row ── */
+    .check-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .check-box {
+      width: 20px; height: 20px;
+      border: 2px solid var(--border);
+      border-radius: 5px;
+      flex-shrink: 0;
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .2s, border-color .2s;
+    }
+    .check-box.checked { background: var(--accent); border-color: var(--accent); }
+    .check-box.checked::after { content: "✓"; color: #fff; font-size: 13px; font-weight: 700; }
+    .check-label { font-size: 13px; color: var(--muted); }
+    .check-label a { color: var(--accent); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary   { background: var(--accent); color: #fff; }
+    .btn-secondary { background: rgba(255,255,255,.08); color: var(--fg); border: 1px solid var(--border); }
+    .btn-ghost     { background: transparent; color: var(--muted); font-size: 13px; width: auto; padding: 6px 0; }
+
+    /* ── Passport card (active) ── */
+    #screen-active { display: none; width: 100%; max-width: 420px; flex-direction: column; align-items: center; gap: 16px; }
+    #screen-active.visible { display: flex; }
+
+    .passport-card {
+      width: 100%;
+      background: linear-gradient(135deg, #1a1040 0%, #0f1a2e 50%, #1a0f20 100%);
+      border: 1.5px solid var(--gold);
+      border-radius: 18px;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .passport-card::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 70% 20%, rgba(201,168,76,.08) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .passport-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .passport-logo { font-weight: 800; font-size: 16px; color: var(--gold); letter-spacing: .05em; }
+    .passport-type { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    .passport-status-badge {
+      background: var(--gold);
+      color: #1a1040;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      letter-spacing: .04em;
+    }
+    .passport-body { display: flex; gap: 16px; }
+    .passport-photo-wrap {
+      width: 80px; height: 80px; flex-shrink: 0;
+      border-radius: 10px;
+      border: 2px solid rgba(201,168,76,.4);
+      background: rgba(255,255,255,.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      overflow: hidden;
+    }
+    .passport-photo-wrap img { width: 100%; height: 100%; object-fit: cover; }
+    .passport-fields { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .passport-field-row { display: flex; flex-direction: column; gap: 1px; }
+    .passport-field-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .passport-field-value { font-size: 14px; font-weight: 600; color: var(--fg); }
+    .passport-id { font-size: 12px; color: var(--gold); font-family: monospace; margin-top: 10px; letter-spacing: .08em; }
+    .passport-footer {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(201,168,76,.2);
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      letter-spacing: .06em;
+    }
+
+    /* ── Error ── */
+    .error-box {
+      width: 100%;
+      max-width: 420px;
+      background: rgba(239,68,68,.1);
+      border: 1px solid rgba(239,68,68,.3);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 14px;
+      color: #fca5a5;
+      display: none;
+    }
+    .error-box.visible { display: block; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Loading -->
+  <div id="screen-loading">
+    <div class="spinner"></div>
+    <div style="color:var(--muted);font-size:14px">Авторизация через Telegram…</div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-box" id="error-box"></div>
+
+  <!-- Emission screens (hidden until auth) -->
+  <div id="header" style="display:none">
+    <div>
+      <div class="logo">TimeNation</div>
+      <div class="sub">Цифровое государство</div>
+    </div>
+  </div>
+
+  <div id="timer-block" style="display:none">
+    <div class="label">Эмиссия паспорта завершится через</div>
+    <div id="timer-display">01:00:00</div>
+  </div>
+
+  <div id="steps-nav" style="display:none">
+    <div class="step-dot active" id="dot-0"></div>
+    <div class="step-dot" id="dot-1"></div>
+    <div class="step-dot" id="dot-2"></div>
+    <div class="step-dot" id="dot-3"></div>
+  </div>
+
+  <!-- Step 0: Photo -->
+  <div class="step-screen card visible" id="step-0">
+    <div class="step-title">📷 Фото анфас</div>
+    <div class="step-hint">Сделайте фото или загрузите снимок для вашего цифрового паспорта.</div>
+    <img id="photo-preview" alt="Ваше фото" />
+    <div id="photo-placeholder" onclick="document.getElementById('photo-input').click()">
+      <div class="icon">📷</div>
+      <div>Нажмите для загрузки фото</div>
+    </div>
+    <input type="file" id="photo-input" accept="image/*" capture="user" />
+    <button class="btn btn-primary" id="btn-step0-next" onclick="goStep(1)">Далее →</button>
+    <button class="btn btn-ghost" onclick="goStep(1)" style="margin-top:6px">Пропустить</button>
+  </div>
+
+  <!-- Step 1: Signature -->
+  <div class="step-screen card" id="step-1">
+    <div class="step-title">✍️ Цифровая подпись</div>
+    <div class="step-hint">Нарисуйте вашу подпись пальцем или стилусом.</div>
+    <canvas id="sig-canvas"></canvas>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-secondary" onclick="clearSig()" style="flex:1">✕ Очистить</button>
+    </div>
+    <button class="btn btn-primary" id="btn-step1-next" onclick="goStep(2)">Далее →</button>
+    <button class="btn btn-ghost" onclick="goStep(2)" style="margin-top:6px">Пропустить</button>
+  </div>
+
+  <!-- Step 2: 2nd contact -->
+  <div class="step-screen card" id="step-2">
+    <div class="step-title">📬 Второй канал связи</div>
+    <div class="step-hint">Укажите email или номер WhatsApp. Это обязательное правило гражданства TimeNation.</div>
+    <label class="field-label" for="second-contact-input">Email или WhatsApp</label>
+    <input
+      class="text-input"
+      id="second-contact-input"
+      type="text"
+      placeholder="user@example.com или +7 999 000 00 00"
+      autocomplete="off"
+      inputmode="email"
+    />
+    <div style="height:12px"></div>
+    <button class="btn btn-primary" onclick="goStep(3)">Далее →</button>
+    <button class="btn btn-ghost" onclick="goStep(3)" style="margin-top:6px">Пропустить</button>
+  </div>
+
+  <!-- Step 3: Privacy -->
+  <div class="step-screen card" id="step-3">
+    <div class="step-title">🔒 Политика конфиденциальности</div>
+    <div class="step-hint">Для выдачи цифрового паспорта требуется ваше согласие.</div>
+    <div class="check-row" onclick="togglePrivacy()">
+      <div class="check-box" id="privacy-box"></div>
+      <div class="check-label">
+        Я даю согласие на обработку персональных данных (имя, фото) для выпуска
+        Цифрового Паспорта TimeNation (GDPR / 152-ФЗ).
+        <br/><a href="https://timenation.info/privacy" target="_blank" onclick="event.stopPropagation()">Политика конфиденциальности →</a>
+      </div>
+    </div>
+    <div style="height:16px"></div>
+    <button class="btn btn-primary" id="btn-submit" onclick="submitDraft()" disabled>
+      Отправить данные
+    </button>
+  </div>
+
+  <!-- Active passport -->
+  <div id="screen-active">
+    <div id="header-active">
+      <div class="logo" style="font-size:22px;font-weight:800;color:var(--accent)">TimeNation</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:2px">Цифровое государство</div>
+    </div>
+
+    <div style="text-align:center;padding:8px 0">
+      <div style="font-size:40px">🎉</div>
+      <div style="font-size:20px;font-weight:700;margin:8px 0">Паспорт активирован!</div>
+      <div style="font-size:14px;color:var(--muted)">Ваш Цифровой Паспорт TimeNation успешно выдан</div>
+    </div>
+
+    <div class="passport-card">
+      <div class="passport-header">
+        <div>
+          <div class="passport-logo">TIMENATION</div>
+          <div class="passport-type">Digital Passport · Цифровой Паспорт</div>
+        </div>
+        <div class="passport-status-badge">ACTIVE</div>
+      </div>
+      <div class="passport-body">
+        <div class="passport-photo-wrap" id="pp-photo">👤</div>
+        <div class="passport-fields">
+          <div class="passport-field-row">
+            <div class="passport-field-label">Имя гражданина</div>
+            <div class="passport-field-value" id="pp-name">—</div>
+          </div>
+          <div class="passport-field-row">
+            <div class="passport-field-label">Ранг</div>
+            <div class="passport-field-value" id="pp-rank">Гражданин</div>
+          </div>
+          <div class="passport-field-row">
+            <div class="passport-field-label">Баланс</div>
+            <div class="passport-field-value" id="pp-balance">1 Д</div>
+          </div>
+        </div>
+      </div>
+      <div class="passport-id" id="pp-number">№ 000000001</div>
+      <div class="passport-footer">ЦИФРОВОЕ ГОСУДАРСТВО · TIMENATION · <span id="pp-year"></span></div>
+    </div>
+
+    <button class="btn btn-primary" onclick="openWebApp()">
+      🌐 Открыть TimeNation
+    </button>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let authToken = null;
+let citizenId = null;
+let citizenData = {};
+let currentStep = 0;
+let photoBase64 = null;
+let sigCanvas = null;
+let sigCtx = null;
+let isDrawing = false;
+let privacyChecked = false;
+let timerInterval = null;
+
+// Derive API base from page path: /api-server/twa → /api-server
+const pathBase = window.location.pathname.replace(/\/twa.*$/, '');
+
+// ── Telegram WebApp init ───────────────────────────────────────────────────────
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  tg.setHeaderColor('#0f0f1a');
+  tg.setBackgroundColor('#0f0f1a');
+}
+
+document.getElementById('pp-year').textContent = new Date().getFullYear();
+
+// ── Auth ───────────────────────────────────────────────────────────────────────
+async function init() {
+  const initData = tg?.initData ?? '';
+
+  if (!initData) {
+    // Dev fallback: show emission screen with a fake 3600s for testing outside Telegram
+    showError('Откройте эту страницу через Telegram.');
+    return;
+  }
+
+  try {
+    const resp = await fetch(`${pathBase}/api/auth/telegram-webapp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      showError(data.error ?? 'Ошибка авторизации');
+      return;
+    }
+
+    authToken = data.authToken;
+    citizenId = data.citizenId;
+    citizenData = data;
+
+    hideLoading();
+
+    if (data.status === 'ACTIVE') {
+      showActivePassport(data);
+    } else {
+      showEmissionScreen(data.secondsLeft);
+    }
+  } catch (err) {
+    showError('Ошибка сети. Попробуйте позже.');
+    console.error(err);
+  }
+}
+
+// ── UI helpers ─────────────────────────────────────────────────────────────────
+function hideLoading() {
+  document.getElementById('screen-loading').style.display = 'none';
+}
+
+function showError(msg) {
+  hideLoading();
+  const box = document.getElementById('error-box');
+  box.textContent = msg;
+  box.classList.add('visible');
+}
+
+function showEmissionScreen(secondsLeft) {
+  document.getElementById('header').style.display = 'flex';
+  document.getElementById('timer-block').style.display = 'block';
+  document.getElementById('steps-nav').style.display = 'flex';
+  document.getElementById('step-0').style.display = 'block';
+  initSigCanvas();
+  startTimer(secondsLeft);
+}
+
+function showActivePassport(data) {
+  document.getElementById('screen-active').classList.add('visible');
+
+  document.getElementById('pp-name').textContent    = data.name ?? '—';
+  document.getElementById('pp-rank').textContent    = data.rank ?? 'Гражданин';
+  document.getElementById('pp-balance').textContent = (data.balanceMinutes ?? 1) + ' Д';
+  document.getElementById('pp-number').textContent  = '№ ' + (data.citizenNumber ?? '000000001');
+}
+
+function openWebApp() {
+  const url = 'https://timenation.info/web';
+  if (tg) {
+    tg.openLink(url);
+  } else {
+    window.open(url, '_blank');
+  }
+}
+
+// ── Timer ──────────────────────────────────────────────────────────────────────
+function startTimer(seconds) {
+  let remaining = seconds;
+  renderTimer(remaining);
+
+  timerInterval = setInterval(async () => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(timerInterval);
+      renderTimer(0, true);
+      // Check if passport is now active
+      await pollStatus();
+      return;
+    }
+    renderTimer(remaining);
+  }, 1000);
+}
+
+function renderTimer(s, done = false) {
+  const h = String(Math.floor(s / 3600)).padStart(2, '0');
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const sec = String(s % 60).padStart(2, '0');
+  const el = document.getElementById('timer-display');
+  el.textContent = `${h}:${m}:${sec}`;
+  el.className = done ? 'done' : '';
+}
+
+async function pollStatus() {
+  try {
+    const resp = await fetch(`${pathBase}/api/auth/telegram-webapp/status`, {
+      headers: { 'Authorization': `Bearer ${authToken}` },
+    });
+    const data = await resp.json();
+    if (data.status === 'ACTIVE') {
+      hideSteps();
+      showActivePassport(data);
+    }
+  } catch (e) { /* silent */ }
+}
+
+function hideSteps() {
+  document.getElementById('timer-block').style.display = 'none';
+  document.getElementById('steps-nav').style.display = 'none';
+  [0, 1, 2, 3].forEach(i => document.getElementById(`step-${i}`).style.display = 'none');
+}
+
+// ── Steps ──────────────────────────────────────────────────────────────────────
+function goStep(n) {
+  document.getElementById(`step-${currentStep}`).style.display = 'none';
+  document.getElementById(`dot-${currentStep}`).className = 'step-dot done';
+  currentStep = n;
+  document.getElementById(`step-${n}`).style.display = 'block';
+  document.getElementById(`dot-${n}`).className = 'step-dot active';
+}
+
+// ── Photo ──────────────────────────────────────────────────────────────────────
+document.getElementById('photo-input').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    photoBase64 = e.target.result;
+    const preview = document.getElementById('photo-preview');
+    preview.src = photoBase64;
+    preview.classList.add('shown');
+    document.getElementById('photo-placeholder').style.display = 'none';
+    document.getElementById('btn-step0-next').textContent = 'Далее →';
+  };
+  reader.readAsDataURL(file);
+});
+
+// ── Signature canvas ───────────────────────────────────────────────────────────
+function initSigCanvas() {
+  sigCanvas = document.getElementById('sig-canvas');
+  sigCtx = sigCanvas.getContext('2d');
+
+  // HiDPI resize
+  function resizeCanvas() {
+    const rect = sigCanvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    sigCanvas.width  = rect.width  * dpr;
+    sigCanvas.height = rect.height * dpr;
+    sigCtx.scale(dpr, dpr);
+    sigCtx.strokeStyle = '#a89eff';
+    sigCtx.lineWidth = 2.5;
+    sigCtx.lineCap = 'round';
+    sigCtx.lineJoin = 'round';
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  function getPos(e) {
+    const rect = sigCanvas.getBoundingClientRect();
+    const src  = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+  }
+
+  sigCanvas.addEventListener('pointerdown', e => {
+    isDrawing = true;
+    const p = getPos(e);
+    sigCtx.beginPath();
+    sigCtx.moveTo(p.x, p.y);
+    e.preventDefault();
+  });
+  sigCanvas.addEventListener('pointermove', e => {
+    if (!isDrawing) return;
+    const p = getPos(e);
+    sigCtx.lineTo(p.x, p.y);
+    sigCtx.stroke();
+    e.preventDefault();
+  });
+  sigCanvas.addEventListener('pointerup',   () => { isDrawing = false; });
+  sigCanvas.addEventListener('pointerleave',() => { isDrawing = false; });
+}
+
+function clearSig() {
+  if (!sigCtx || !sigCanvas) return;
+  sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+}
+
+// ── Privacy ────────────────────────────────────────────────────────────────────
+function togglePrivacy() {
+  privacyChecked = !privacyChecked;
+  const box = document.getElementById('privacy-box');
+  box.className = 'check-box' + (privacyChecked ? ' checked' : '');
+  document.getElementById('btn-submit').disabled = !privacyChecked;
+}
+
+// ── Submit draft ───────────────────────────────────────────────────────────────
+async function submitDraft() {
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.textContent = '⏳ Отправка…';
+
+  const body = {
+    privacyAccepted: privacyChecked,
+    secondContact: document.getElementById('second-contact-input').value.trim() || undefined,
+    photoBase64: photoBase64 || undefined,
+  };
+
+  try {
+    const resp = await fetch(`${pathBase}/api/auth/telegram-webapp/draft`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      btn.disabled = false;
+      btn.textContent = 'Отправить данные';
+      showError(data.error ?? 'Ошибка сохранения');
+      return;
+    }
+
+    // Success — show waiting screen
+    hideSteps();
+    document.getElementById('header').style.display = 'none';
+
+    const waiting = document.createElement('div');
+    waiting.style.cssText = 'text-align:center;padding:32px 16px;display:flex;flex-direction:column;align-items:center;gap:16px;';
+    waiting.innerHTML = `
+      <div style="font-size:48px">⏳</div>
+      <div style="font-size:20px;font-weight:700">Данные отправлены!</div>
+      <div style="font-size:14px;color:var(--muted);max-width:280px">
+        Ваш паспорт будет активирован по завершении эмиссии.
+        Мы уведомим вас в Telegram.
+      </div>
+      <div id="waiting-timer" style="font-size:32px;font-weight:700;font-family:monospace;color:var(--accent);font-variant-numeric:tabular-nums;">${document.getElementById('timer-display').textContent}</div>
+    `;
+    document.getElementById('app').appendChild(waiting);
+
+    // Keep timer updated in this new element
+    if (timerInterval) clearInterval(timerInterval);
+    const remaining0 = parseTimerDisplay();
+    let r = remaining0;
+    const wt = document.getElementById('waiting-timer');
+    const intervalId = setInterval(async () => {
+      r--;
+      if (r <= 0) {
+        clearInterval(intervalId);
+        if (wt) wt.textContent = '00:00:00';
+        await pollStatus();
+        return;
+      }
+      const h = String(Math.floor(r / 3600)).padStart(2,'0');
+      const m = String(Math.floor((r % 3600) / 60)).padStart(2,'0');
+      const s = String(r % 60).padStart(2,'0');
+      if (wt) wt.textContent = `${h}:${m}:${s}`;
+    }, 1000);
+
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = 'Отправить данные';
+    showError('Ошибка сети. Попробуйте позже.');
+    console.error(err);
+  }
+}
+
+function parseTimerDisplay() {
+  const txt = document.getElementById('timer-display')?.textContent ?? '00:00:00';
+  const [h, m, s] = txt.split(':').map(Number);
+  return (h * 3600) + (m * 60) + (s || 0);
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

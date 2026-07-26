@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import twaRouter from "./routes/twa";
 import { logger } from "./lib/logger";
 import { MEDIA_DIR } from "./services/renderService";
 
@@ -45,7 +46,17 @@ app.use("/api/payments/webhook", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+// ── Telegram WebApp HTML page ─────────────────────────────────────────────────
+// Served at GET /twa — must come before /api router to avoid prefix conflicts.
+app.get("/twa", (_req, res) => {
+  res.sendFile(path.join(process.cwd(), "public", "twa.html"));
+});
+
+// ── API routers ───────────────────────────────────────────────────────────────
 app.use("/api", router);
+
+// /api/v1 alias — exposes /api/v1/auth/telegram-webapp etc. per TWA spec
+app.use("/api/v1", twaRouter);
 
 // NOTE: citizen photos are stored in secure_vault/ (NOT served statically — privacy compliance)
 
