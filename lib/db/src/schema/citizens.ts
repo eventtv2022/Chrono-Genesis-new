@@ -82,6 +82,10 @@ export const citizensTable = pgTable("citizens", {
   tgNotifyMentions: integer("tg_notify_mentions").notNull().default(1), // @mentions in groups
   tgNotifyState: integer("tg_notify_state").notNull().default(1),   // state announcements
   tgNotifyAllGroups: integer("tg_notify_all_groups").notNull().default(0), // all group messages
+
+  // ── Multi-channel communication preferences ─────────────────────────────
+  whatsappPhone: text("whatsapp_phone"),        // WhatsApp contact number
+  preferredChannels: text("preferred_channels"), // JSON array: ['email','telegram','whatsapp','sms','phone'] — ≥2 required
 });
 
 export const insertCitizenSchema = createInsertSchema(citizensTable).omit({

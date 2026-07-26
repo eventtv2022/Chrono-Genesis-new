@@ -35,6 +35,28 @@ export function Register() {
   const [tosAccepted, setTosAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
+  // ── Communication channels (≥2 required) ────────────────────────────────
+  const [chEmail,    setChEmail]    = useState(false);
+  const [chEmailVal, setChEmailVal] = useState("");
+  const [chTelegram, setChTelegram] = useState(false);
+  const [chTelegramVal, setChTelegramVal] = useState("");
+  const [chWhatsapp, setChWhatsapp] = useState(false);
+  const [chWhatsappVal, setChWhatsappVal] = useState("");
+  const [chSms,      setChSms]      = useState(false);
+  const [chSmsVal,   setChSmsVal]   = useState("");
+  const [chPhone,    setChPhone]    = useState(false);
+  const [chPhoneVal, setChPhoneVal] = useState("");
+  const [channelTouched, setChannelTouched] = useState(false);
+
+  const channelCount = [
+    chEmail && chEmailVal.trim(),
+    chTelegram && chTelegramVal.trim(),
+    chWhatsapp && chWhatsappVal.trim(),
+    chSms && chSmsVal.trim(),
+    chPhone && chPhoneVal.trim(),
+  ].filter(Boolean).length;
+  const channelOk = channelCount >= 2;
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,7 +94,7 @@ export function Register() {
     setPhotoPreview(file ? URL.createObjectURL(file) : null);
   }
 
-  const canSubmit = tosAccepted && privacyAccepted && manifestoAccepted && !!signatureBase64;
+  const canSubmit = tosAccepted && privacyAccepted && manifestoAccepted && !!signatureBase64 && channelOk;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -91,6 +113,15 @@ export function Register() {
       formData.append("privacyAgreementAccepted", "true");
       if (photo) formData.append("passport_photo", photo);
       if (signatureBase64) formData.append("signatureBase64", signatureBase64);
+
+      // ── Communication channels ──────────────────────────────────────────
+      const preferredCh: string[] = [];
+      if (chEmail && chEmailVal.trim()) preferredCh.push("email");
+      if (chTelegram && chTelegramVal.trim()) preferredCh.push("telegram");
+      if (chWhatsapp && chWhatsappVal.trim()) { preferredCh.push("whatsapp"); formData.append("whatsappPhone", chWhatsappVal.trim()); }
+      if (chSms && chSmsVal.trim()) preferredCh.push("sms");
+      if (chPhone && chPhoneVal.trim()) preferredCh.push("phone");
+      formData.append("preferredChannels", JSON.stringify(preferredCh));
 
       const res = await fetch("/api/citizens", { method: "POST", body: formData });
       const data = await res.json() as { id?: number; name?: string; citizenNumber?: string; availableAt?: string; error?: string; };
@@ -266,6 +297,76 @@ export function Register() {
               <div className="space-y-1.5">
                 <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">{t.reg_email}</Label>
                 <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="example@timenation.com" className="bg-secondary border-border font-mono" />
+              </div>
+
+              {/* ── Communication channels ────────────────────────────────── */}
+              <div className="space-y-3 p-3 rounded-sm border border-border/60 bg-muted/10">
+                <div>
+                  <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5" />
+                    Каналы связи — выберите не менее 2
+                  </Label>
+                  <p className="text-xs text-muted-foreground/60 font-mono mt-0.5">Для получения важных уведомлений от государства</p>
+                </div>
+
+                {/* E-mail */}
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={chEmail} onChange={e => { setChEmail(e.target.checked); setChannelTouched(true); if (e.target.checked && !chEmailVal) setChEmailVal(email); }} className="accent-primary w-4 h-4" />
+                    <span className="text-sm font-mono text-foreground">📧 E-mail (почта)</span>
+                  </label>
+                  {chEmail && <Input value={chEmailVal} onChange={e => { setChEmailVal(e.target.value); setChannelTouched(true); }} placeholder="example@mail.com" className="ml-6 h-8 text-xs bg-secondary border-border font-mono" />}
+                </div>
+
+                {/* Telegram */}
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={chTelegram} onChange={e => { setChTelegram(e.target.checked); setChannelTouched(true); }} className="accent-primary w-4 h-4" />
+                    <span className="text-sm font-mono text-foreground">✈️ Telegram</span>
+                  </label>
+                  {chTelegram && <Input value={chTelegramVal} onChange={e => { setChTelegramVal(e.target.value); setChannelTouched(true); }} placeholder="@username или числовой ID" className="ml-6 h-8 text-xs bg-secondary border-border font-mono" />}
+                </div>
+
+                {/* WhatsApp */}
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={chWhatsapp} onChange={e => { setChWhatsapp(e.target.checked); setChannelTouched(true); if (e.target.checked && !chWhatsappVal) setChWhatsappVal(phone); }} className="accent-primary w-4 h-4" />
+                    <span className="text-sm font-mono text-foreground">📱 WhatsApp</span>
+                  </label>
+                  {chWhatsapp && <Input value={chWhatsappVal} onChange={e => { setChWhatsappVal(e.target.value); setChannelTouched(true); }} placeholder="+7XXXXXXXXXX" className="ml-6 h-8 text-xs bg-secondary border-border font-mono" />}
+                </div>
+
+                {/* SMS */}
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={chSms} onChange={e => { setChSms(e.target.checked); setChannelTouched(true); if (e.target.checked && !chSmsVal) setChSmsVal(phone); }} className="accent-primary w-4 h-4" />
+                    <span className="text-sm font-mono text-foreground">💬 SMS</span>
+                  </label>
+                  {chSms && <Input value={chSmsVal} onChange={e => { setChSmsVal(e.target.value); setChannelTouched(true); }} placeholder="+7XXXXXXXXXX" className="ml-6 h-8 text-xs bg-secondary border-border font-mono" />}
+                </div>
+
+                {/* Phone calls */}
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={chPhone} onChange={e => { setChPhone(e.target.checked); setChannelTouched(true); if (e.target.checked && !chPhoneVal) setChPhoneVal(phone); }} className="accent-primary w-4 h-4" />
+                    <span className="text-sm font-mono text-foreground">📞 Телефонные звонки</span>
+                  </label>
+                  {chPhone && <Input value={chPhoneVal} onChange={e => { setChPhoneVal(e.target.value); setChannelTouched(true); }} placeholder="+7XXXXXXXXXX" className="ml-6 h-8 text-xs bg-secondary border-border font-mono" />}
+                </div>
+
+                {/* Validation feedback */}
+                {channelTouched && !channelOk && (
+                  <div className="flex items-start gap-1.5 text-xs text-destructive font-mono">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    Выберите и заполните не менее 2 способов связи для получения важных уведомлений
+                  </div>
+                )}
+                {channelOk && (
+                  <p className="text-xs text-green-500 font-mono flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {channelCount} из 5 каналов активно
+                  </p>
+                )}
               </div>
 
               {/* ── Photo upload ─────────────────────────────────────────── */}

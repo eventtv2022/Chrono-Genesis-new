@@ -150,7 +150,27 @@ export default function RegisterScreen() {
   const [tosAccepted, setTosAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
-  const canSubmit = manifestoAccepted && tosAccepted && privacyAccepted && !!signatureBase64;
+  // ── Communication channels (≥2 required) ─────────────────────────────────
+  const [chEmail,       setChEmail]       = useState(false);
+  const [chEmailVal,    setChEmailVal]    = useState("");
+  const [chTelegram,    setChTelegram]    = useState(false);
+  const [chTelegramVal, setChTelegramVal] = useState("");
+  const [chWhatsapp,    setChWhatsapp]    = useState(false);
+  const [chWhatsappVal, setChWhatsappVal] = useState("");
+  const [chSms,         setChSms]         = useState(false);
+  const [chSmsVal,      setChSmsVal]      = useState("");
+  const [chPhone,       setChPhone]       = useState(false);
+  const [chPhoneVal,    setChPhoneVal]    = useState("");
+
+  const channelCount = [
+    chEmail && chEmailVal.trim(),
+    chTelegram && chTelegramVal.trim(),
+    chWhatsapp && chWhatsappVal.trim(),
+    chSms && chSmsVal.trim(),
+    chPhone && chPhoneVal.trim(),
+  ].filter(Boolean).length;
+
+  const canSubmit = manifestoAccepted && tosAccepted && privacyAccepted && !!signatureBase64 && channelCount >= 2;
 
   // Login
   const [loginPhone, setLoginPhone] = useState("");
@@ -282,7 +302,17 @@ export default function RegisterScreen() {
       return;
     }
     if (!canSubmit) {
-      Alert.alert("Подтвердите согласия", "Поставьте подпись и отметьте все три пункта.");
+      if (channelCount < 2) {
+        Alert.alert(
+          t("Каналы связи", "Communication channels"),
+          t("Выберите и заполните не менее 2 способов связи для получения важных уведомлений.", "Select and fill at least 2 communication channels for important notifications.")
+        );
+      } else {
+        Alert.alert(
+          t("Подтвердите согласия", "Confirm agreements"),
+          t("Поставьте подпись и отметьте все три пункта.", "Sign and check all three boxes.")
+        );
+      }
       return;
     }
     setLoading(true);
@@ -299,6 +329,15 @@ export default function RegisterScreen() {
       if (dateOfBirth.trim().match(/^\d{4}-\d{2}-\d{2}$/)) body["dateOfBirth"] = dateOfBirth.trim();
       if (email.trim()) body["email"] = email.trim();
       if (photoBase64) body["photoBase64"] = photoBase64;
+
+      // ── Communication channels ──────────────────────────────────────────
+      const preferredCh: string[] = [];
+      if (chEmail && chEmailVal.trim()) preferredCh.push("email");
+      if (chTelegram && chTelegramVal.trim()) preferredCh.push("telegram");
+      if (chWhatsapp && chWhatsappVal.trim()) { preferredCh.push("whatsapp"); body["whatsappPhone"] = chWhatsappVal.trim(); }
+      if (chSms && chSmsVal.trim()) preferredCh.push("sms");
+      if (chPhone && chPhoneVal.trim()) preferredCh.push("phone");
+      body["preferredChannels"] = JSON.stringify(preferredCh);
 
       const res = await fetch(`${BASE_URL}/api/auth/register`, {
         method: "POST",
@@ -509,6 +548,107 @@ export default function RegisterScreen() {
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("E-MAIL (для получения паспорта)", "E-MAIL (for passport delivery)")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={email} onChangeText={setEmail} placeholder="example@timenation.com" placeholderTextColor={colors.mutedForeground} keyboardType="email-address" autoCapitalize="none" />
+
+          {/* ── Communication Channels ─────────────────────────────────── */}
+          <View style={{ marginTop: 16, marginBottom: 4, padding: 12, backgroundColor: (colors.card ?? "#fff") + "80", borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <Feather name="bell" size={13} color={colors.mutedForeground} />
+              <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground, letterSpacing: 0.8, textTransform: "uppercase" }}>
+                {t("Каналы связи — не менее 2", "Communication Channels — min. 2")}
+              </Text>
+            </View>
+            <Text style={{ fontSize: 11, color: colors.mutedForeground, opacity: 0.7, marginBottom: 10 }}>
+              {t("Для получения важных уведомлений от государства", "For important state notifications")}
+            </Text>
+
+            {/* E-mail */}
+            <TouchableOpacity style={styles.checkRowInner} onPress={() => {
+              setChEmail(v => { const next = !v; if (next && !chEmailVal && email) setChEmailVal(email); return next; });
+            }}>
+              <View style={[styles.checkbox, { borderColor: colors.border, backgroundColor: chEmail ? colors.primary : "transparent" }]}>
+                {chEmail && <Feather name="check" size={12} color={colors.primaryForeground} />}
+              </View>
+              <Text style={[styles.checkLabel, { color: colors.foreground }]}>📧 {t("E-mail (почта)", "E-mail")}</Text>
+            </TouchableOpacity>
+            {chEmail && (
+              <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, marginLeft: 28, marginTop: 4 }]}
+                value={chEmailVal} onChangeText={setChEmailVal} placeholder="example@mail.com"
+                placeholderTextColor={colors.mutedForeground} keyboardType="email-address" autoCapitalize="none" />
+            )}
+
+            {/* Telegram */}
+            <TouchableOpacity style={[styles.checkRowInner, { marginTop: 8 }]} onPress={() => setChTelegram(v => !v)}>
+              <View style={[styles.checkbox, { borderColor: colors.border, backgroundColor: chTelegram ? colors.primary : "transparent" }]}>
+                {chTelegram && <Feather name="check" size={12} color={colors.primaryForeground} />}
+              </View>
+              <Text style={[styles.checkLabel, { color: colors.foreground }]}>✈️ Telegram</Text>
+            </TouchableOpacity>
+            {chTelegram && (
+              <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, marginLeft: 28, marginTop: 4 }]}
+                value={chTelegramVal} onChangeText={setChTelegramVal} placeholder="@username"
+                placeholderTextColor={colors.mutedForeground} autoCapitalize="none" />
+            )}
+
+            {/* WhatsApp */}
+            <TouchableOpacity style={[styles.checkRowInner, { marginTop: 8 }]} onPress={() => {
+              setChWhatsapp(v => { const next = !v; if (next && !chWhatsappVal && phone) setChWhatsappVal(phone); return next; });
+            }}>
+              <View style={[styles.checkbox, { borderColor: colors.border, backgroundColor: chWhatsapp ? colors.primary : "transparent" }]}>
+                {chWhatsapp && <Feather name="check" size={12} color={colors.primaryForeground} />}
+              </View>
+              <Text style={[styles.checkLabel, { color: colors.foreground }]}>📱 WhatsApp</Text>
+            </TouchableOpacity>
+            {chWhatsapp && (
+              <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, marginLeft: 28, marginTop: 4 }]}
+                value={chWhatsappVal} onChangeText={setChWhatsappVal} placeholder="+7XXXXXXXXXX"
+                placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" />
+            )}
+
+            {/* SMS */}
+            <TouchableOpacity style={[styles.checkRowInner, { marginTop: 8 }]} onPress={() => {
+              setChSms(v => { const next = !v; if (next && !chSmsVal && phone) setChSmsVal(phone); return next; });
+            }}>
+              <View style={[styles.checkbox, { borderColor: colors.border, backgroundColor: chSms ? colors.primary : "transparent" }]}>
+                {chSms && <Feather name="check" size={12} color={colors.primaryForeground} />}
+              </View>
+              <Text style={[styles.checkLabel, { color: colors.foreground }]}>💬 SMS</Text>
+            </TouchableOpacity>
+            {chSms && (
+              <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, marginLeft: 28, marginTop: 4 }]}
+                value={chSmsVal} onChangeText={setChSmsVal} placeholder="+7XXXXXXXXXX"
+                placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" />
+            )}
+
+            {/* Phone calls */}
+            <TouchableOpacity style={[styles.checkRowInner, { marginTop: 8 }]} onPress={() => {
+              setChPhone(v => { const next = !v; if (next && !chPhoneVal && phone) setChPhoneVal(phone); return next; });
+            }}>
+              <View style={[styles.checkbox, { borderColor: colors.border, backgroundColor: chPhone ? colors.primary : "transparent" }]}>
+                {chPhone && <Feather name="check" size={12} color={colors.primaryForeground} />}
+              </View>
+              <Text style={[styles.checkLabel, { color: colors.foreground }]}>📞 {t("Телефонные звонки", "Phone calls")}</Text>
+            </TouchableOpacity>
+            {chPhone && (
+              <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, marginLeft: 28, marginTop: 4 }]}
+                value={chPhoneVal} onChangeText={setChPhoneVal} placeholder="+7XXXXXXXXXX"
+                placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" />
+            )}
+
+            {/* Validation feedback */}
+            {channelCount > 0 && channelCount < 2 && (
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 10, padding: 8, backgroundColor: "#ff444420", borderRadius: 8, borderWidth: 1, borderColor: "#ff444440" }}>
+                <Feather name="alert-circle" size={12} color="#ff4444" style={{ marginTop: 1 }} />
+                <Text style={{ fontSize: 11, color: "#ff4444", flex: 1, fontFamily: "Inter_400Regular" }}>
+                  {t("Выберите и заполните не менее 2 способов связи", "Select and fill at least 2 communication channels")}
+                </Text>
+              </View>
+            )}
+            {channelCount >= 2 && (
+              <Text style={{ fontSize: 11, color: "#22c55e", marginTop: 8, fontFamily: "Inter_400Regular" }}>
+                ✓ {channelCount} {t("из 5 каналов активно", "of 5 channels active")}
+              </Text>
+            )}
+          </View>
 
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ПАРОЛЬ * (мин. 6 символов)", "PASSWORD * (min. 6 characters)")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}

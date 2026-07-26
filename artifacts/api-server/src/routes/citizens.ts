@@ -398,6 +398,8 @@ const RegisterCitizenBody = z.object({
   email: z.string().email("Неверный формат email").optional().or(z.literal("")).optional(),
   privacyAgreementAccepted: z.string().optional(), // "true" from FormData
   signatureBase64: z.string().optional(),
+  whatsappPhone: z.string().optional(),
+  preferredChannels: z.string().optional(), // JSON: ['email','telegram','whatsapp','sms','phone'] — ≥2
 });
 
 router.post("/citizens", upload.single("passport_photo"), async (req, res): Promise<void> => {
@@ -421,7 +423,7 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
   const citizenNumber = await generateNextCitizenNumber();
   const availableAt = new Date(Date.now() + 60 * 60 * 1000); // +1 hour
 
-  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted, signatureBase64: rawSignature } = parsed.data;
+  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted, signatureBase64: rawSignature, whatsappPhone, preferredChannels } = parsed.data;
 
   // ── 1. Normalise passport photo (resize to 400×514 px JPEG) ─────────────────
   let vaultPhotoRef: string | null = null;
@@ -458,6 +460,8 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
       privacyAgreementAccepted: privacyAccepted ? 1 : 0,
       privacyAgreementDate: privacyAccepted ? new Date() : null,
       signatureBase64,
+      whatsappPhone: whatsappPhone || null,
+      preferredChannels: preferredChannels || null,
     })
     .returning();
 
