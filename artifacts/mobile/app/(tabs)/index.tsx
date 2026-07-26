@@ -1391,6 +1391,16 @@ export default function TimerScreen() {
                 {ui.mod_delete_account}
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.passportLogout, { borderColor: colors.border, backgroundColor: "transparent" }]}
+              onPress={() => Linking.openURL("https://timenation.info/privacy")}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <Feather name="shield" size={13} color={colors.mutedForeground} />
+              <Text style={[styles.passportLogoutText, { color: colors.mutedForeground }]}>
+                Конфиденциальность
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       ) : (

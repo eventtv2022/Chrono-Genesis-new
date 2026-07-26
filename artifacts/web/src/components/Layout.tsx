@@ -249,6 +249,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <span>SYS: ONLINE</span>
               <span className="text-primary font-bold">OK</span>
             </div>
+            <Link
+              href="/privacy"
+              onClick={() => setSidebarOpen(false)}
+              className="block text-center text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors mt-1"
+            >
+              Политика конфиденциальности
+            </Link>
           </div>
         </div>
       </aside>

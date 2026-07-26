@@ -448,7 +448,16 @@ export function Register() {
                       required
                     />
                     <label htmlFor="privacy" className="text-xs text-muted-foreground font-mono leading-relaxed">
-                      {t.reg_check_privacy}
+                      {t.reg_check_privacy}{" "}
+                      <a
+                        href="/privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline hover:opacity-80 transition-opacity"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        Политика конфиденциальности ↗
+                      </a>
                     </label>
                   </div>
                 </div>
