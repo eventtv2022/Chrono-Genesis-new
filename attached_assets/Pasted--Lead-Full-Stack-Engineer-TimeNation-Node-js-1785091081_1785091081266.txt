@@ -1,0 +1,43 @@
+Ты — Lead Full-Stack Engineer. Создай/доработай полнофункциональное приложение TimeNation на Node.js (Express + Telegraf/grammY) или Python (FastAPI + aiogram) с поддержкой Telegram WebApp, авто-регистрации и сбора данных для Паспорта Гражданина TimeNation.
+
+АРХИТЕКТУРА И ЛОГИКА ТАЙМЕРА ЭМИССИИ ПАСПОРТА:
+
+1. База данных (SQLite/PostgreSQL):
+   - Таблица users: 
+     id, telegram_id, username, first_name, last_name, language_code, 
+     passport_status ("IN_EMISSION" | "ACTIVE"), created_at, passport_ready_at,
+     photo_url, signature_data (Canvas SVG/Base64), second_contact (email/phone),
+     agreed_to_terms (boolean).
+
+2. Авто-регистрация и Валидация Telegram WebApp (HMAC-SHA256):
+   - Эндпоинт POST /api/v1/auth/telegram-webapp.
+   - Принимает initData от фронтенда.
+   - Выполняет валидацию HMAC-SHA256 подписи с использованием секретного ключа process.env.BOT_TOKEN.
+   - Если пользователя НЕТ в базе:
+     * Создает пользователя со статусом IN_EMISSION.
+     * Устанавливает passport_ready_at = now() + 60 minutes.
+     * Отправляет в Telegram через Bot API сообщение в чат: "⏳ Профиль создан! Запущен 60-минутный процесс эмиссии вашего Цифрового Паспорта TimeNation. Заполните данные в открывшемся окне."
+   - Возвращает JSON: { success: true, token: "JWT...", isNewUser: boolean, seconds_left: number, status: string }.
+
+3. Фронтенд WebApp (index.html / React-компонент):
+   - Подключает <script src="https://telegram.org/js/telegram-web-app.js"></script>.
+   - Автоматически авторизует пользователя при старте через /api/v1/auth/telegram-webapp.
+   - ЭКРАН ЭМИССИИ (если `status == "IN_EMISSION"`):
+     * Показывает живой UI-таймер обратного отсчета (от seconds_left до `00:00:00`).
+     * Пока тикает таймер, показывает пошаговый мастер сбора персональных данных для Паспорта:
+       1) Загрузка/снимки фото анфас.
+       2) Интерактивный Canvas для рисования графической цифровой подписи пальцем/мышкой.
+       3) Поле ввода 2-й координаты (Email или WhatsApp) для соблюдения правила двух каналов связи.
+       4) Чекбокс согласия с Политикой конфиденциальности (timenation.info/privacy).
+     * Отправляет эти данные на POST /api/v1/passport/update-draft.
+   - ЭКРАН ГОТОВОГО ПАСПОРТА (если `status == "ACTIVE"`):
+     * Отображает готовый Цифровой Паспорт TimeNation с фото, сгенерированным ID, подписью и золотым статусом Активации.
+
+4. Фоновая задача обработки эмиссии (Cron / Interval):
+   - Каждую минуту проверяет пользователей со статусом IN_EMISSION, у которых passport_ready_at <= now().
+   - Переводит статус Паспорта в ACTIVE.
+   - Отправляет уведомление в Telegram через Bot API: "🎉 Проверка данных завершена! Ваш Цифровой Паспорт TimeNation успешно активирован. Откройте приложение, чтобы посмотреть документ."
+
+5. Telegram Бот (команда `/start`):
+   - Отправляет приветствие и Inline-кнопку/Menu Button для быстрого запуска WebApp https://c683d011-eb44-4e71-bc0d-350ee613e0ca-00-1bn0o04nfdvrm.expo.pike.replit.dev/
+Сгенерируй чистый, production-ready код с настройкой переменных окружения (BOT_TOKEN, JWT_SECRET).
