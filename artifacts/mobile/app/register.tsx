@@ -28,8 +28,8 @@ import { LogoBrand } from "@/components/LogoBrand";
 
 // ── Web-only canvas signature pad ────────────────────────────────────────────
 function WebSignaturePad({
-  onOK, onEmpty, clearText,
-}: { onOK: (sig: string) => void; onEmpty: () => void; clearText: string }) {
+  onOK, onEmpty, clearRef,
+}: { onOK: (sig: string) => void; onEmpty: () => void; clearRef: React.MutableRefObject<(() => void) | null> }) {
   const containerRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawing = useRef(false);
@@ -53,7 +53,6 @@ function WebSignaturePad({
       const src = "touches" in e ? e.touches[0] : (e as MouseEvent);
       return [src.clientX - r.left, src.clientY - r.top] as const;
     };
-    // Auto-confirm on mouse/touch release so users don't need a separate button
     const autoConfirm = () => {
       isDrawing.current = false;
       onOKRef.current(canvas.toDataURL("image/png"));
@@ -67,15 +66,19 @@ function WebSignaturePad({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function clear() { const c = canvasRef.current; if (c) { const ctx = c.getContext("2d"); ctx?.clearRect(0,0,c.width,c.height); } onEmpty(); }
+  // Expose clear() so parent can call it from the status-row button
+  useEffect(() => {
+    clearRef.current = () => {
+      const c = canvasRef.current;
+      if (c) { const ctx = c.getContext("2d"); ctx?.clearRect(0, 0, c.width, c.height); }
+      onEmpty();
+    };
+    return () => { clearRef.current = null; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <View>
-      <View ref={containerRef} style={{ height: 150, borderRadius: 8, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.04)" }} />
-      <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
-        <TouchableOpacity onPress={clear} style={{ flex: 1, alignItems: "center", padding: 8, backgroundColor: "#1a1a2e", borderRadius: 6, borderWidth: 1, borderColor: "#333" }}><Text style={{ color: "#aaa", fontSize: 13 }}>{clearText}</Text></TouchableOpacity>
-      </View>
-    </View>
+    <View ref={containerRef} style={{ height: 150, borderRadius: 8, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.04)" }} />
   );
 }
 
@@ -128,6 +131,19 @@ export default function RegisterScreen() {
   const [signatureBase64, setSignatureBase64] = useState<string | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+
+  // Refs for clearing signature from the status-row button
+  const webClearRef = useRef<(() => void) | null>(null);      // web canvas
+  const nativeSigRef = useRef<any>(null);                      // react-native-signature-canvas
+
+  function handleClearSignature() {
+    if (Platform.OS === "web") {
+      webClearRef.current?.();
+    } else {
+      nativeSigRef.current?.clearSignature();
+      setSignatureBase64(null);
+    }
+  }
 
   // Compliance
   const [manifestoAccepted, setManifestoAccepted] = useState(false);
@@ -532,10 +548,11 @@ export default function RegisterScreen() {
               <WebSignaturePad
                 onOK={(sig) => setSignatureBase64(sig)}
                 onEmpty={() => setSignatureBase64(null)}
-                clearText={t("Очистить", "Clear")}
+                clearRef={webClearRef}
               />
             ) : (
               <SignatureCanvas
+                ref={nativeSigRef}
                 onOK={(sig: string) => setSignatureBase64(sig)}
                 onEmpty={() => setSignatureBase64(null)}
                 penColor="rgb(10, 30, 80)"
@@ -548,9 +565,40 @@ export default function RegisterScreen() {
               />
             )}
           </View>
-          {signatureBase64 && (
-            <Text style={[styles.signatureStatus, { color: "#22c55e" }]}>{t("✓ Подпись сохранена", "✓ Signature saved")}</Text>
-          )}
+
+          {/* Status row — outside signatureContainer so it isn't clipped by overflow:hidden */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4, minHeight: 22 }}>
+            {signatureBase64 ? (
+              <Text style={[styles.signatureStatus, { color: "#22c55e" }]}>
+                {t("✓ Подпись сохранена", "✓ Signature saved")}
+              </Text>
+            ) : (
+              <Text style={[styles.signatureStatus, { color: colors.mutedForeground }]}>
+                {t("Нарисуйте подпись", "Draw your signature")}
+              </Text>
+            )}
+            {signatureBase64 && (
+              <TouchableOpacity
+                onPress={handleClearSignature}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  backgroundColor: "rgba(255,255,255,0.05)",
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderColor: "#333",
+                }}
+              >
+                <Feather name="x" size={11} color="#aaa" />
+                <Text style={{ color: "#aaa", fontSize: 12, fontFamily: "Inter_400Regular" }}>
+                  {t("Очистить", "Clear")}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* ── Compliance checkboxes ── */}
           <View style={[styles.complianceBlock, { borderTopColor: colors.border }]}>

@@ -298,9 +298,6 @@ export function Register() {
                   {t.reg_signature}
                 </Label>
                 <SignaturePad onChange={setSignatureBase64} />
-                <p className="text-xs text-muted-foreground font-mono">
-                  {signatureBase64 ? t.reg_signature_done : t.reg_signature_hint}
-                </p>
               </div>
 
               {/* ── Three compliance checkboxes ───────────────────────────── */}
