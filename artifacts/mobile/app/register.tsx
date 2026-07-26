@@ -785,9 +785,15 @@ export default function RegisterScreen() {
                 </View>
                 <Text style={[styles.checkLabel, { color: colors.mutedForeground }]}>
                   {t(
-                    "Я даю согласие на обработку персональных данных (ФИО, email, фото) для выпуска цифрового удостоверения TimeNation. Данные хранятся в защищённой базе (GDPR / 152-ФЗ).",
-                    "I consent to the processing of personal data (name, email, photo) for the issuance of a TimeNation digital ID. Data is stored in a secured database (GDPR compliant)."
+                    "Я даю согласие на обработку персональных данных (ФИО, email, фото) для выпуска цифрового удостоверения TimeNation. Данные хранятся в защищённой базе (GDPR / 152-ФЗ). ",
+                    "I consent to the processing of personal data (name, email, photo) for the issuance of a TimeNation digital ID. Data is stored in a secured database (GDPR compliant). "
                   )}
+                  <Text
+                    style={{ color: colors.primary, textDecorationLine: "underline" }}
+                    onPress={() => Linking.openURL("https://timenation.info/privacy")}
+                  >
+                    {t("Политика конфиденциальности", "Privacy Policy")}
+                  </Text>
                 </Text>
               </TouchableOpacity>
             </View>

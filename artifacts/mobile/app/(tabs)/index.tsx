@@ -1510,6 +1510,17 @@ export default function TimerScreen() {
               <Text style={styles.registerPromptText}>{loginUi.timer_get_citizenship}</Text>
               <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.privacyLink}
+              onPress={() => Linking.openURL("https://timenation.info/privacy")}
+              activeOpacity={0.7}
+            >
+              <Feather name="shield" size={12} color={colors.mutedForeground} />
+              <Text style={styles.privacyLinkText}>
+                {loginLang === "ru" ? "Политика конфиденциальности" : "Privacy Policy"}
+              </Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       )}
@@ -1743,6 +1754,8 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     loginDividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
     loginDividerText: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
     registerPrompt: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, marginBottom: 0 },
+    privacyLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, opacity: 0.7 },
+    privacyLinkText: { fontSize: 12, fontFamily: "Inter_400Regular", color: colors.mutedForeground, textDecorationLine: "underline" },
     registerPromptText: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium", color: colors.foreground },
     emptyState: { alignItems: "center", paddingTop: 40, gap: 8 },
     emptyText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground },
