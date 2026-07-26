@@ -1,0 +1,82 @@
+По теме **привязки и интеграции Telegram к аккаунту гражданина** в представленном коде реализована лишь **базовая схема структуры**.
+
+Ниже приведен подробный разбор: что уже присутствует в архитектуре, чего критически не хватает для полноценной работы и какие потенциальные проблемы (узкие места) есть в текущей реализации.
+
+---
+
+## 1. Что уже реализовано
+
+* **Поле в БД**: В таблице `citizensTable` (`lib/db/src/schema/citizens.ts`) присутствует строковое уникальное поле:
+`telegramId: text("telegram_id").unique()`
+* **Приём при регистрации**: Эндпоинт `POST /citizens` (`artifacts/api-server/src/routes/citizens.ts`) принимает поле `telegramId` из тела запроса и сохраняет его в базу данных.
+
+---
+
+## 2. Чего не хватает (Критический функционал)
+
+### A. Авторизация и привязка аккаунта (Auth & Linking Flow)
+
+1. **Поиск аккаунта по Telegram ID**:
+* Отсутствует API-эндпоинт вроде `GET /api/citizens/by-telegram/:telegramId` для идентификации гражданина, когда он пишет Telegram-боту.
+
+
+2. **Безопасная привязка через Telegram Widget / Mini App (OAuth / HMAC-SHA256)**:
+* Отсутствует эндпоинт верификации подписи Telegram WebApp/Widget (`initData` или `hash`). Без проверки подписи любой пользователь сможет передать чужой `telegramId` через API и привязать себе чужой аккаунт.
+
+
+3. **Привязка существующего аккаунта (Link Code Flow)**:
+* Нет механизма генерации одноразового кода (OTP/Token) в личном кабинете на сайте для последующего ввода этого кода в Telegram-боте (и наоборот).
+
+
+
+### B. Интеграция с Telegram-ботом и уведомительный сервис
+
+1. **Webhook / Bot Polling Handler**:
+* В коде отсутствует сам Telegram Bot API клиент (например, на `telegraf`, `grammy` или `node-telegram-bot-api`) или роут для приёма Webhook от Telegram (`POST /api/telegram/webhook`).
+
+
+2. **Push-уведомления гражданам в Telegram**:
+* Отсутствует механизм/сервис отправки уведомлений через Telegram при ключевых событиях системы:
+* Change-in-state сделок Escrow (`deals.ts`): отправка уведомлений о принятии задачи, отправке Proof-of-Work, подтверждении или споре.
+* Аукционы (`auctions.ts`): перебитие ставки (Outbid) или завершение аукциона.
+* Госуслуги / Паспорт (`citizens.ts`): уведомление о готовности паспорта после истечения 1 часа (`registrationStatus: 'issued'`).
+* Ноды и Посольства (`embassies.ts`): сбой в работе ноды или успешная верификация.
+
+
+
+
+
+### C. Двусторонняя идентификация и команды бота
+
+1. **Управление балансом и переводы в Telegram**:
+* Нет логики обработки команд бота (например, `/balance`, `/pay @username 10`, `/id`).
+
+
+2. **Привязка Telegram Username**:
+* В схеме хранится только `telegramId` (числовой ID). Часто требуется хранить также `telegramUsername` (`@username`), чтобы искать пользователей по имени в Telegram.
+
+
+
+---
+
+## 3. Рекомендуемый план доработки
+
+### 1. Расширение схемы БД (`citizens.ts`)
+
+```typescript
+// В citizensTable добавить:
+telegramUsername: text("telegram_username"),
+telegramAuthToken: text("telegram_auth_token"), // Одноразовый код привязки
+telegramTokenExpiresAt: timestamp("telegram_token_expires_at", { withTimezone: true }),
+
+```
+
+### 2. Добавление Telegram Auth / Link Роута (`routes/telegram.ts`)
+
+* **Генерация кода привязки**: `POST /api/citizens/:id/telegram/generate-code`
+* **Подтверждение привязки ботом**: `POST /api/telegram/link-account`
+* **Проверка подписи Telegram WebApp**: Валидация `initData` с использованием `TELEGRAM_BOT_TOKEN`.
+
+### 3. Сервис отправки уведомлений (`services/telegramNotificationService.ts`)
+
+* Создание единой функции `sendTelegramNotification(citizenId: number, message: string)`, интегрированной во все основные бизнес-процессы (сделки, аукционы, паспорта).
