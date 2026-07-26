@@ -1,0 +1,26 @@
+Ты — Lead Full-Stack Engineer и Compliance Officer (GDPR/CCPA/Store Guidelines). 
+Мне нужно разместить представленный ниже текст "Политики конфиденциальности" на Веб-версии (timenation.info/privacy) и в Мобильном приложении (iOS/Android Flutter/React Native) компании United Time Epochs (платформа TimeNation).
+
+ТРЕБОВАНИЯ К ВЕБ-ВЕРСИИ И МОБИЛЬНОМУ ПРИЛОЖЕНИЮ:
+
+1. ЛОКАЛИЗАЦИЯ И МУЛЬТИЯЗЫЧНОСТЬ (24 ЯЗЫКА):
+   - Реализуй автоматическое определение языка пользователя по заголовочным данным браузера (Navigator / Accept-Language) или системному языку смартфона.
+   - Поддерживаемые языки: EN (English), RU (Русский), KK (Қазақша), TR (Türkçe), ES (Español), DE (Deutsch), FR (Français), IT (Italiano), PT (Português), ZH (中文), JA (日本語), KO (한국어), AR (العربية - RTL support), HI (हिन्दी), NL (Nederlands), PL (Polski), SV (Svenska), UK (Українська), CS (Čeština), HU (Magyar), RO (Română), EL (Ελληνικά), VI (Tiếng Việt), ID (Bahasa Indonesia).
+   - Предусмотри выпадающий список (Dropdown Selector) для ручного выбора любого из 24 языков.
+   - Для юридических терминов обеспечь точную адаптацию под GDPR (EU), CCPA (USA), Закон № 152-ФЗ (RU) и Закон № 94-V (KZ).
+
+2. ТРЕБОВАНИЯ GOOGLE PLAY И APP STORE CONNECT (CRITICAL):
+   - Размести прямой и публичный URL: https://timenation.info/privacy
+   - Добавь нативный блок «Account & Data Deletion» (Удаление аккаунта и данных):
+     * Пошаговая инструкция: "Настройки -> Профиль -> Удалить аккаунт" или отправка запроса на privacy@timenation.info / support@timenation.info.
+     * Поясни, какие данные удаляются сразу (биометрия, подпись, профиль), а какие хранятся в рамках фин. отчетности Escrow.
+   - Создай динамический виджет Согласия на файлы Cookie / Трекинг (Cookie Consent Banner) для EU/USA с возможностью точечного согласия/отказа (Opt-in / Opt-out).
+
+3. ТЕХНИЧЕСКАЯ РЕАЛИЗАЦИЯ (HTML5 / React / Flutter):
+   - Напиши чистый, адаптивный (Responsive) HTML/CSS/JS код для веб-страницы /privacy.
+   - Добавь систему меток и якорных ссылок (#section-1, #account-deletion).
+   - Сделай дизайн минималистичным, читаемым, с темной и светлой темой.
+   - Вставь ссылку на контакты DPO: privacy@timenation.info.
+
+ИХОДНЫЙ ТЕКСТ ПОЛИТИКИ ДЛЯ ПЕРЕВОДА И РАЗМЕЩЕНИЯ:
+[ВСТАВИТЬ ТЕКСТ ПОЛИТИКИ ИЗ ВАШЕГО ЗАПРОСА]
