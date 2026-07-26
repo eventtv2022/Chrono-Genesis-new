@@ -5,7 +5,7 @@ import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { requireAuth } from "../middleware/auth";
-import { notifyTaxCollected } from "../services/telegramService";
+import { notifyTaxCollected, notifyUserConditional } from "../services/telegramService";
 import { getOnlineCitizenIds, pushToCitizen } from "../services/socialAlarmWs";
 import { TREASURY_CITIZEN_ID } from "../services/videoStorage";
 import { isCenturyBoundaryMinute, CENTURY_STATE_PROPERTY_CODE, CENTURY_STATE_PROPERTY_MSG } from "../lib/centuryGuard";
@@ -316,6 +316,16 @@ router.post("/auctions/:id/bid", requireAuth, async (req, res): Promise<void> =>
     pushToCitizen(cid, { type: "auction_bid_updated", auctionId: id, currentBid: bid, buyerId });
   }
 
+  // Notify previous bidder they were outbid
+  const prevBuyerId = auction.buyerId;
+  if (prevBuyerId && prevBuyerId !== buyerId) {
+    void notifyUserConditional(
+      prevBuyerId,
+      `🔔 *Вашу ставку перебили на аукционе #${id}!*\n💰 Новая ставка: ${bid.toFixed(2)} Д\n📦 _${auction.assetType}_\n\nСделайте новую ставку, пока аукцион не завершился.`,
+      "dm"
+    );
+  }
+
   req.log.info({ auctionId: id, buyerId, bid }, "Auction bid placed");
   res.json({ ok: true, currentBid: bid, buyerId });
 });
@@ -359,6 +369,27 @@ async function finalizeAuction(auction: typeof auctionsTable.$inferSelect): Prom
     await finalizeAnchorAuction(auction, finalPrice, tax);
   } else {
     await finalizeDarminAuction(auction, finalPrice, tax);
+  }
+
+  // ── Telegram notifications for buyer and seller ──────────────────────────
+  if (auction.buyerId) {
+    void notifyUserConditional(
+      auction.buyerId,
+      `🏆 *Аукцион #${id} завершён — вы победили!*\n💰 Финальная цена: ${finalPrice.toFixed(2)} Д\n📦 Тип лота: ${auction.assetType}`,
+      "dm"
+    );
+    void notifyUserConditional(
+      auction.sellerId,
+      `✅ *Аукцион #${id} завершён — лот продан!*\n💰 Цена продажи: ${finalPrice.toFixed(2)} Д\n💎 Выручка: ${(finalPrice - tax).toFixed(2)} Д (−2% налог)`,
+      "dm"
+    );
+  } else {
+    // No bids — notify seller of refund
+    void notifyUserConditional(
+      auction.sellerId,
+      `📦 *Аукцион #${id} завершён без ставок*\n🔄 Лот возвращён вам без изменений`,
+      "dm"
+    );
   }
 }
 

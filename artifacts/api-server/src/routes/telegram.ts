@@ -283,6 +283,109 @@ router.delete(
   },
 );
 
+// ─── GET /api/citizens/by-telegram/:telegramId ────────────────────────────────
+// Used by the Telegram bot to look up a citizen by their Telegram user ID.
+// No auth required — bot uses this to identify who's writing to it.
+
+router.get(
+  "/citizens/by-telegram/:telegramId",
+  async (req: Request, res: Response): Promise<void> => {
+    const telegramId = String(req.params["telegramId"] ?? "");
+    if (!telegramId) { res.status(400).json({ error: "telegramId required" }); return; }
+
+    const [citizen] = await db
+      .select({
+        id:              citizensTable.id,
+        name:            citizensTable.name,
+        citizenNumber:   citizensTable.citizenNumber,
+        rank:            citizensTable.rank,
+        balanceMinutes:  citizensTable.balanceMinutes,
+        telegramUsername: citizensTable.telegramUsername,
+      })
+      .from(citizensTable)
+      .where(eq(citizensTable.telegramId, telegramId))
+      .limit(1);
+
+    if (!citizen) { res.status(404).json({ error: "Citizen not found" }); return; }
+    res.json(citizen);
+  },
+);
+
+// ─── POST /api/telegram/verify-webapp ─────────────────────────────────────────
+// Verifies Telegram Mini App initData using HMAC-SHA256 as per official docs:
+// https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+// Returns { ok: true, telegramId, citizen? } or { ok: false, error }.
+
+router.post(
+  "/telegram/verify-webapp",
+  async (req: Request, res: Response): Promise<void> => {
+    const { initData } = req.body as { initData?: string };
+    if (!initData) {
+      res.status(400).json({ ok: false, error: "initData required" });
+      return;
+    }
+
+    const botToken = process.env["TELEGRAM_BOT_TOKEN"];
+    if (!botToken) {
+      res.status(503).json({ ok: false, error: "Bot not configured" });
+      return;
+    }
+
+    // 1. Parse initData and extract hash
+    const params = new URLSearchParams(initData);
+    const hash = params.get("hash");
+    if (!hash) {
+      res.status(400).json({ ok: false, error: "hash field missing from initData" });
+      return;
+    }
+
+    // 2. Build data-check-string (sorted key=value pairs, \n-separated, excluding hash)
+    params.delete("hash");
+    const checkString = [...params.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n");
+
+    // 3. Compute HMAC-SHA256 using secret_key = HMAC("WebAppData", bot_token)
+    const secretKey = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
+    const expectedHash = crypto.createHmac("sha256", secretKey).update(checkString).digest("hex");
+
+    if (expectedHash !== hash) {
+      res.status(401).json({ ok: false, error: "Signature invalid" });
+      return;
+    }
+
+    // 4. Extract Telegram user ID from the verified initData
+    let telegramId: string | null = null;
+    const userRaw = params.get("user");
+    if (userRaw) {
+      try {
+        const parsed = JSON.parse(userRaw) as { id?: number };
+        if (parsed.id) telegramId = String(parsed.id);
+      } catch { /* malformed user JSON */ }
+    }
+
+    // 5. Look up the bound citizen (if any)
+    let citizen = null;
+    if (telegramId) {
+      const [row] = await db
+        .select({
+          id:             citizensTable.id,
+          name:           citizensTable.name,
+          citizenNumber:  citizensTable.citizenNumber,
+          rank:           citizensTable.rank,
+          balanceMinutes: citizensTable.balanceMinutes,
+        })
+        .from(citizensTable)
+        .where(eq(citizensTable.telegramId, telegramId))
+        .limit(1);
+      citizen = row ?? null;
+    }
+
+    res.json({ ok: true, telegramId, citizen });
+  },
+);
+
 // ─── GET /api/telegram/config ─────────────────────────────────────────────────
 // Возвращает текущее состояние конфигурации (без секретов).
 

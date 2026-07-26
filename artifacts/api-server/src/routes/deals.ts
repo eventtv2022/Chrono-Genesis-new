@@ -7,7 +7,7 @@ import { eq, or, asc } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { sendTransactionNotification } from "../services/telegramService";
+import { notifyUserConditional } from "../services/telegramService";
 import { UPLOADS_DIR } from "../app";
 
 // ── Multer: disk storage for chat image uploads ────────────────────────────────
@@ -161,15 +161,17 @@ router.post("/deals", async (req, res): Promise<void> => {
   req.log.info({ dealId: deal.id, senderId, amount }, "TiMETR escrow deal created");
 
   // Notify sender
-  void sendTransactionNotification(
+  void notifyUserConditional(
     senderId,
-    `🔒 *Сделка #${deal.id} создана*\n💎 ${amount} Д заморожено в эскроу\n📋 _${description}_`
+    `🔒 *Сделка #${deal.id} создана*\n💎 ${amount} Д заморожено в эскроу\n📋 _${description}_`,
+    "dm"
   );
   // Notify receiver if already assigned
   if (receiverId) {
-    void sendTransactionNotification(
+    void notifyUserConditional(
       receiverId,
-      `📨 *Новая сделка для вас #${deal.id}*\n💰 Награда: ${amount} Д\n📋 _${description}_`
+      `📨 *Новая сделка для вас #${deal.id}*\n💰 Награда: ${amount} Д\n📋 _${description}_`,
+      "dm"
     );
   }
 
@@ -247,9 +249,10 @@ router.post("/deals/:id/accept-task", async (req, res): Promise<void> => {
   req.log.info({ dealId: id, receiverId: parsed.data.citizenId }, "Deal accepted by receiver");
 
   // Notify sender that someone took the task
-  void sendTransactionNotification(
+  void notifyUserConditional(
     deal.senderId,
-    `✅ *Сделка #${id} принята исполнителем*\n💰 ${deal.amount} Д в эскроу\n📋 _${deal.description}_`
+    `✅ *Сделка #${id} принята исполнителем*\n💰 ${deal.amount} Д в эскроу\n📋 _${deal.description}_`,
+    "dm"
   );
 
   res.json(updated);
@@ -287,9 +290,10 @@ router.post("/deals/:id/proof", async (req, res): Promise<void> => {
   req.log.info({ dealId: id }, "Proof of work submitted");
 
   // Notify sender to review the proof
-  void sendTransactionNotification(
+  void notifyUserConditional(
     deal.senderId,
-    `📤 *Доказательство по сделке #${id}*\n${parsed.data.proofText ? `_${parsed.data.proofText.slice(0, 200)}_` : ""}${parsed.data.proofUrl ? `\n🔗 ${parsed.data.proofUrl}` : ""}\n\nПодтвердите или отклоните работу.`
+    `📤 *Доказательство по сделке #${id}*\n${parsed.data.proofText ? `_${parsed.data.proofText.slice(0, 200)}_` : ""}${parsed.data.proofUrl ? `\n🔗 ${parsed.data.proofUrl}` : ""}\n\nПодтвердите или отклоните работу.`,
+    "dm"
   );
 
   res.json(updated);
@@ -333,9 +337,10 @@ router.post("/deals/:id/complete", async (req, res): Promise<void> => {
   req.log.info({ dealId: id, receiverId: deal.receiverId, amount: deal.amount }, "Deal completed, escrow released");
 
   // Notify receiver — payout confirmed
-  void sendTransactionNotification(
+  void notifyUserConditional(
     deal.receiverId,
-    `🎉 *Сделка #${id} завершена!*\n💎 +${deal.amount} Д зачислено на ваш баланс\n📋 _${deal.description}_`
+    `🎉 *Сделка #${id} завершена!*\n💎 +${deal.amount} Д зачислено на ваш баланс\n📋 _${deal.description}_`,
+    "dm"
   );
 
   res.json(updated);
@@ -365,9 +370,10 @@ router.post("/deals/:id/decline", async (req, res): Promise<void> => {
 
   // Notify receiver — proof rejected
   if (deal.receiverId) {
-    void sendTransactionNotification(
+    void notifyUserConditional(
       deal.receiverId,
-      `❌ *Доказательство по сделке #${id} отклонено*\n💎 ${deal.amount} Д остаются заморожены\n📋 _${deal.description}_\n\nВы можете открыть спор.`
+      `❌ *Доказательство по сделке #${id} отклонено*\n💎 ${deal.amount} Д остаются заморожены\n📋 _${deal.description}_\n\nВы можете открыть спор.`,
+      "dm"
     );
   }
 
@@ -414,9 +420,10 @@ router.post("/deals/:id/cancel", async (req, res): Promise<void> => {
   req.log.info({ dealId: id, senderId: deal.senderId, refunded: deal.amount }, "Deal cancelled, escrow returned to sender");
 
   // Notify sender — funds returned
-  void sendTransactionNotification(
+  void notifyUserConditional(
     deal.senderId,
-    `↩️ *Сделка #${id} отменена*\n💎 +${deal.amount} Д возвращено на ваш баланс\n📋 _${deal.description}_`
+    `↩️ *Сделка #${id} отменена*\n💎 +${deal.amount} Д возвращено на ваш баланс\n📋 _${deal.description}_`,
+    "dm"
   );
 
   res.json(updated);
@@ -493,14 +500,16 @@ ${claimText}
 
   // Notify both parties about the dispute
   const otherPartyId = parsed.data.citizenId === deal.senderId ? deal.receiverId : deal.senderId;
-  void sendTransactionNotification(
+  void notifyUserConditional(
     parsed.data.citizenId,
-    `⚖️ *Спор по сделке #${id} открыт*\n${aiVerdict ? `\n🤖 *Вердикт ИИ-Арбитра:*\n_${aiVerdict.slice(0, 500)}_` : "ИИ-арбитраж недоступен — ожидайте решения вручную."}`
+    `⚖️ *Спор по сделке #${id} открыт*\n${aiVerdict ? `\n🤖 *Вердикт ИИ-Арбитра:*\n_${aiVerdict.slice(0, 500)}_` : "ИИ-арбитраж недоступен — ожидайте решения вручную."}`,
+    "dm"
   );
   if (otherPartyId) {
-    void sendTransactionNotification(
+    void notifyUserConditional(
       otherPartyId,
-      `⚖️ *По сделке #${id} открыт спор*\n💎 ${deal.amount} Д заморожено до решения арбитра\n📋 _${deal.description}_${aiVerdict ? `\n\n🤖 *Вердикт ИИ-Арбитра:*\n_${aiVerdict.slice(0, 500)}_` : ""}`
+      `⚖️ *По сделке #${id} открыт спор*\n💎 ${deal.amount} Д заморожено до решения арбитра\n📋 _${deal.description}_${aiVerdict ? `\n\n🤖 *Вердикт ИИ-Арбитра:*\n_${aiVerdict.slice(0, 500)}_` : ""}`,
+      "dm"
     );
   }
 
@@ -589,9 +598,10 @@ router.post("/deals/:id/chat", async (req, res): Promise<void> => {
   const otherId = senderId === deal.senderId ? deal.receiverId : deal.senderId;
   if (otherId) {
     const [sender] = await db.select({ name: citizensTable.name }).from(citizensTable).where(eq(citizensTable.id, senderId)).limit(1);
-    void sendTransactionNotification(
+    void notifyUserConditional(
       otherId,
       `💬 *Новое сообщение по Сделке #${id}*\n👤 ${sender?.name ?? "Участник"}: ${messageText ? `_${messageText.slice(0, 200)}_` : "📎 фото"}`,
+      "dm"
     );
   }
 

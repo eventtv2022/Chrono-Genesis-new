@@ -20,7 +20,7 @@ import { cropSignature, normalizePassportPhoto } from "../services/imageService"
 import { logCitizenIssuedToSheets } from "../lib/googleSheets";
 import { requireAuth } from "../middleware/auth";
 import { sendPassportEmail, sendAdminTelegramNotify } from "../services/emailService";
-import { sendDirectMessage } from "../services/telegramService";
+import { sendDirectMessage, notifyUserConditional } from "../services/telegramService";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
 export const VAULT_DIR = path.join(process.cwd(), "secure_vault");
@@ -567,6 +567,17 @@ router.get("/citizens/number/:num/status", async (req, res): Promise<void> => {
       .where(eq(citizensTable.citizenNumber, num));
 
     req.log.info({ citizenNumber: num, citizenId: citizen.id }, "Passport auto-issued after 1-hour delay");
+
+    // Notify citizen in Telegram that their passport is ready
+    void notifyUserConditional(
+      citizen.id,
+      `🎉 *Ваш паспорт гражданина TimeNation готов!*\n\n` +
+      `👤 *${citizen.name}*\n` +
+      `🪪 Гражданин №${num}\n` +
+      `📜 Ранг: ${citizen.rank}\n\n` +
+      `Откройте приложение TimeNation, чтобы просмотреть удостоверение личности.`,
+      "state"
+    );
 
     // Log newly-issued citizen to Google Sheets (fire-and-forget)
     logCitizenIssuedToSheets({
