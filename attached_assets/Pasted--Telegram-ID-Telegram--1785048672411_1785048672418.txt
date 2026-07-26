@@ -1,0 +1,30 @@
+Добавь автоопределение Telegram ID и удобную связку аккаунта гражданина с Telegram (без необходимости вручную вводить цифровой ID).
+
+Необходимо реализовать следующие изменения:
+
+1. Схема базы данных (`lib/db/src/schema/citizens.ts`):
+   - Добавь в таблицу citizensTable необязательные поля:
+     • telegramAuthCode: text("telegram_auth_code")
+     • telegramAuthCodeExpiresAt: timestamp("telegram_auth_code_expires_at", { withTimezone: true })
+
+2. API Эндпоинты (`artifacts/api-server/src/routes/citizens.ts` или `telegram.ts`):
+   - Добавь эндпоинт `POST /api/citizens/:id/generate-telegram-link`:
+     • Генерирует уникальный случайный 6-8 значный код (или UUID) для гражданина с ограниченным сроком жизни (например, 15 минут).
+     • Сохраняет его в `telegramAuthCode` и дату истечения в `telegramAuthCodeExpiresAt`.
+     • Возвращает ссылку вида: `https://t.me/<BOT_USERNAME>?start=<AUTH_CODE>`
+
+3. Логика обработки входящих сообщений Telegram-бота / Webhook:
+   - В обработчике команды `/start` проверь наличие аргумента (payload):
+     • Если команда пришла как `/start <AUTH_CODE>`:
+       1. Найди гражданина по `telegramAuthCode` (проверив, что срок жизни кода не истек).
+       2. Если найден — обнови его `telegramId` значением `ctx.from.id` (и `telegramUsername` при наличии), затем очисти `telegramAuthCode`.
+       3. Отправь ответ в Telegram: "Аккаунт [Имя] успешно привязан!".
+     • Если команда пришла просто `/start`:
+       1. Попробуй найти гражданина по `ctx.from.id` через `GET /api/citizens/by-telegram/:telegramId`.
+       2. Если найден — приветствуй пользователя и покажи его статус/баланс.
+       3. Если не найден — отправь инструкцию: "Ваш Telegram не привязан к профилю. Зайдите в личный кабинет на сайте и нажмите 'Привязать Telegram'".
+
+4. Валидация Telegram WebApp (`POST /api/telegram/verify-webapp`):
+   - Убедись, что при открытии Mini App из `initData` автоматически извлекается `user.id` и по нему ищется/авторизуется гражданин без дополнительных ручных форм ввода.
+
+Выполни изменения, проверь типы TypeScript и убедись, что сервер запускается без ошибок.

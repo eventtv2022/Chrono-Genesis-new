@@ -73,8 +73,10 @@ export const citizensTable = pgTable("citizens", {
 
   // ── Telegram personal notifications ────────────────────────────────────────
   telegramUsername: text("telegram_username"),              // @username for display
-  tgBindToken: text("tg_bind_token"),                       // one-time token for deep-link binding
+  tgBindToken: text("tg_bind_token"),                       // one-time token for deep-link binding (legacy)
   tgBindTokenExpires: timestamp("tg_bind_token_expires", { withTimezone: true }),
+  telegramAuthCode: text("telegram_auth_code"),             // short-lived code for /start deep-link auth
+  telegramAuthCodeExpiresAt: timestamp("telegram_auth_code_expires_at", { withTimezone: true }),
   tgNotifyDm: integer("tg_notify_dm").notNull().default(1),         // private messages
   tgNotifyCapsules: integer("tg_notify_capsules").notNull().default(1), // capsules & timeline
   tgNotifyMentions: integer("tg_notify_mentions").notNull().default(1), // @mentions in groups

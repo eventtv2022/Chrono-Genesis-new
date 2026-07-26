@@ -49,7 +49,57 @@ export function initBot(token: string): Telegraf {
     const tgUsername = ctx.from.username ? `@${ctx.from.username}` : "";
     const firstName = ctx.from.first_name ?? "Гражданин";
 
-    // ── Deep-link binding: /start bind_<citizenId>_<token> ─────────────
+    // ── Auth-code binding: /start <8-char HEX CODE> ──────────────────
+    // New flow: citizen generates link from the app, code is looked up by value
+    if (/^[0-9A-F]{8}$/.test(payload)) {
+      try {
+        const now = new Date();
+        const [citizen] = await db
+          .select()
+          .from(citizensTable)
+          .where(eq(citizensTable.telegramAuthCode, payload))
+          .limit(1);
+
+        if (!citizen) {
+          await ctx.reply("❌ Код не найден. Сгенерируйте новую ссылку в приложении TimeNation.");
+          return;
+        }
+        if (!citizen.telegramAuthCodeExpiresAt || citizen.telegramAuthCodeExpiresAt < now) {
+          await ctx.reply(
+            "❌ Срок действия кода истёк (15 минут).\n\nОткройте приложение TimeNation и нажмите «Привязать Telegram» снова.",
+          );
+          return;
+        }
+
+        // Bind: save telegramId + username, clear code
+        await db
+          .update(citizensTable)
+          .set({
+            telegramId:               telegramId,
+            telegramUsername:         tgUsername || null,
+            telegramAuthCode:         null,
+            telegramAuthCodeExpiresAt: null,
+          })
+          .where(eq(citizensTable.id, citizen.id));
+
+        await ctx.reply(
+          `✅ *Аккаунт TimeNation успешно привязан!*\n\n` +
+          `👤 Гражданин: *${citizen.name}*\n` +
+          `📜 Ранг: *${citizen.rank}*\n` +
+          `💰 Баланс: *${citizen.balanceMinutes} Д*\n\n` +
+          `Теперь вы будете получать персональные уведомления TimeNation прямо сюда.`,
+          { parse_mode: "Markdown" },
+        );
+        logger.info({ citizenId: citizen.id, telegramId }, "Telegram account bound via auth code");
+        return;
+      } catch (err) {
+        logger.error({ err, payload }, "Telegram auth code bind failed");
+        await ctx.reply("❌ Внутренняя ошибка. Попробуйте позже.");
+        return;
+      }
+    }
+
+    // ── Legacy deep-link binding: /start bind_<citizenId>_<token> ──────
     if (payload.startsWith("bind_")) {
       const parts = payload.split("_");
       // format: bind_<citizenId>_<token>  — token itself may not contain _

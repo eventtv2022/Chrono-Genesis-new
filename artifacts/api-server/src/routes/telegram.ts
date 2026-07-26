@@ -283,6 +283,43 @@ router.delete(
   },
 );
 
+// ─── POST /api/citizens/:id/generate-telegram-link ────────────────────────────
+// Generates a short-lived auth code and returns a t.me deep-link.
+// Citizen must be authenticated; they click the link in the mobile app.
+
+router.post(
+  "/citizens/:id/generate-telegram-link",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const citizenId = req.citizen!.id;
+    // Ensure citizen can only generate their own link (or admin)
+    const requestedId = parseInt(String(req.params["id"] ?? ""), 10);
+    if (isNaN(requestedId) || requestedId !== citizenId) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    // Generate 8-char uppercase hex code (48 bits of entropy)
+    const code = crypto.randomBytes(6).toString("hex").toUpperCase();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    await db
+      .update(citizensTable)
+      .set({ telegramAuthCode: code, telegramAuthCodeExpiresAt: expiresAt })
+      .where(eq(citizensTable.id, citizenId));
+
+    const botUsername = getBotUsername();
+    if (!botUsername) {
+      res.status(503).json({ error: "Telegram bot not configured" });
+      return;
+    }
+
+    const link = `https://t.me/${botUsername}?start=${code}`;
+    logger.info({ citizenId, expiresAt }, "Telegram auth code generated");
+    res.json({ link, code, expiresAt: expiresAt.toISOString() });
+  },
+);
+
 // ─── GET /api/citizens/by-telegram/:telegramId ────────────────────────────────
 // Used by the Telegram bot to look up a citizen by their Telegram user ID.
 // No auth required — bot uses this to identify who's writing to it.
