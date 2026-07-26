@@ -1,0 +1,40 @@
+Ты — Lead Full-Stack Engineer. Внеси комплексные обновления в проект Telegram WebApp (TWA) для TimeNation (/twa).
+
+Выполни 3 ключевые задачи:
+
+---
+
+1. ГОСТЕВОЙ РЕЖИМ (GUEST PREVIEW MODE)
+- На экран ожидания таймера (IN_EMISSION) и стартовый экран добавь кнопку: "👁 Войти как Гость (Режим обзора)".
+- При клике переключай интерфейс на главный дашборд приложения в режиме `isGuest = true`.
+- В шапке профиля выводи индикатор: "Гость (Только чтение) 🔓".
+- Пока идет эмиссия (IN_EMISSION), показывай вверху компактную плашку обратного отсчета: "⏳ До активации Паспорта: MM:SS".
+- Все интерактивные действия (переводы, сделки, отправка форм) для гостя заблокируй с алертом: "Действие недоступно в гостевом режиме. Дождитесь завершения эмиссии Паспорта."
+
+---
+
+2. ПОЛНЫЙ ФИКС ПОДПИСИ CANVAS (TOUCH / MOBILE)
+- В CSS для #sig-canvas убедись в наличии:
+  touch-action: none; user-select: none; -webkit-user-select: none; z-index: 10;
+- Перепиши обработчики событий для подписи:
+  * Для мобильных устройств (touch) используй события touchstart, touchmove, touchend с { passive: false }.
+  * Вызывай e.preventDefault() во всех touch-событиях до любого другого кода.
+  * Блокируй вертикальный свайп Telegram при рисовании: tg.disableVerticalSwipes() на touchstart и tg.enableVerticalSwipes() на touchend/touchcancel.
+  * Явно задай стили линий при начале рисования: ctx.strokeStyle = '#000000'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  * Рассчитывай координаты строго через getBoundingClientRect():
+    const rect = canvas.getBoundingClientRect();
+    const x = e.touches[0].clientX - rect.left;
+    const y = e.touches[0].clientY - rect.top;
+
+---
+
+3. ИНТЕГРАЦИЯ С ПУБЛИЧНЫМ КАНАЛОМ (@timenation2026)
+- Задай константу/ENV: `CHANNEL_USERNAME = "@timenation2026"`.
+- Проверка подписки (Gating): перед запуском эмиссии или при входе проверяй статус подписки пользователя через Telegram Bot API (`getChatMember`).
+  * Если пользователь не подписан (статус 'left' или 'kicked'), показывай модальное окно: "Для активации Паспорта необходимо подписаться на наш канал @timenation2026" с кнопками "📢 Подписаться" (ссылка https://t.me/timenation2026) и "🔄 Я подписался".
+- Автопостинг с Mini App кнопкой: добавь бэкенд-функцию/команду для отправки сообщений в канал от имени бота. Каждый пост должен содержать инлайн-кнопку запуска WebApp:
+  inline_keyboard: [[ { text: "🚀 Открыть TimeNation App", url: "https://t.me/TimeNation_app_bot/app" } ]]
+
+---
+
+Убедись, что код production-ready, перезапусти API-сервер и проверь, что сборка TypeScript проходит без ошибок.

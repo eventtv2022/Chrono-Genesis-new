@@ -339,4 +339,124 @@ router.get("/auth/telegram-webapp/status", async (req, res): Promise<void> => {
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /auth/telegram-webapp/check-subscription
+// Checks whether the authenticated citizen is subscribed to the public channel.
+// Uses ADMIN_BOT_TOKEN (the bot must be admin/member of the channel).
+// On any API failure the endpoint returns { subscribed: true, fallback: true }
+// so a transient Telegram outage never blocks user access.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/auth/telegram-webapp/check-subscription", async (req, res): Promise<void> => {
+  const authHeader = req.headers.authorization ?? "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token) { res.status(401).json({ error: "Authorization required" }); return; }
+
+  const [citizen] = await db
+    .select({ id: citizensTable.id, telegramId: citizensTable.telegramId })
+    .from(citizensTable)
+    .where(eq(citizensTable.authToken, token))
+    .limit(1);
+
+  if (!citizen) { res.status(401).json({ error: "Invalid auth token" }); return; }
+  if (!citizen.telegramId) { res.json({ subscribed: true, fallback: true }); return; }
+
+  const adminToken = process.env["ADMIN_BOT_TOKEN"] ?? process.env["TELEGRAM_BOT_TOKEN"] ?? "";
+  const channelUsername = process.env["CHANNEL_USERNAME"] ?? "@timenation2026";
+
+  if (!adminToken) {
+    res.json({ subscribed: true, fallback: true });
+    return;
+  }
+
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${adminToken}/getChatMember`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: channelUsername, user_id: Number(citizen.telegramId) }),
+    });
+    const data = await resp.json() as {
+      ok: boolean;
+      result?: { status: string };
+      description?: string;
+    };
+
+    if (!data.ok) {
+      // Bot not admin of channel or other API error — don't block user
+      logger.warn({ channel: channelUsername, desc: data.description }, "TWA sub-check: API error (fallback=true)");
+      res.json({ subscribed: true, fallback: true });
+      return;
+    }
+
+    const memberStatus = data.result?.status ?? "left";
+    const subscribed = !["left", "kicked"].includes(memberStatus);
+    res.json({ subscribed, memberStatus });
+  } catch (err) {
+    logger.warn({ err }, "TWA sub-check: network error (fallback=true)");
+    res.json({ subscribed: true, fallback: true });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /channel/post
+// Sends a message to the public channel with a Mini App inline button.
+// Auth: Bearer token must belong to a citizen whose telegramId matches
+//       ADMIN_TELEGRAM_ID (env), or the header X-Admin-Key matches ADMIN_BOT_TOKEN.
+// Body: { text: string, parseMode?: "HTML"|"Markdown" }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/channel/post", async (req, res): Promise<void> => {
+  // Auth: X-Admin-Key must equal ADMIN_BOT_TOKEN value
+  const adminKey = req.headers["x-admin-key"];
+  const adminToken = process.env["ADMIN_BOT_TOKEN"] ?? process.env["TELEGRAM_BOT_TOKEN"] ?? "";
+  const channelUsername = process.env["CHANNEL_USERNAME"] ?? "@timenation2026";
+  const botWebAppUrl = process.env["BOT_WEBAPP_URL"] ?? "https://t.me/TimeNation_app_bot/app";
+
+  if (!adminKey || adminKey !== adminToken) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  if (!adminToken) {
+    res.status(503).json({ error: "Admin bot not configured" });
+    return;
+  }
+
+  const { text, parseMode = "HTML" } = req.body as { text?: string; parseMode?: string };
+  if (!text?.trim()) {
+    res.status(400).json({ error: "text is required" });
+    return;
+  }
+
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${adminToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: channelUsername,
+        text,
+        parse_mode: parseMode,
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🚀 Открыть TimeNation App", url: botWebAppUrl },
+          ]],
+        },
+      }),
+    });
+    const data = await resp.json() as {
+      ok: boolean;
+      result?: { message_id?: number };
+      description?: string;
+    };
+
+    if (!data.ok) {
+      res.status(400).json({ error: data.description ?? "Telegram API error" });
+      return;
+    }
+
+    req.log.info({ channel: channelUsername, messageId: data.result?.message_id }, "channel/post: sent");
+    res.json({ ok: true, messageId: data.result?.message_id });
+  } catch (err) {
+    logger.error({ err }, "channel/post: network error");
+    res.status(500).json({ error: "Network error" });
+  }
+});
+
 export default router;

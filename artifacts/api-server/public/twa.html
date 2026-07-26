@@ -165,10 +165,39 @@
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
+      z-index: 10;
       cursor: crosshair;
       display: block;
       margin-bottom: 10px;
     }
+
+    /* ── Subscription modal ── */
+    #sub-modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.75);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    #sub-modal-backdrop.visible { display: flex; }
+    #sub-modal {
+      background: var(--card);
+      border: 1px solid rgba(108,99,255,.4);
+      border-radius: 20px;
+      padding: 28px 24px;
+      max-width: 360px;
+      width: 100%;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    #sub-modal .modal-icon  { font-size: 48px; }
+    #sub-modal .modal-title { font-size: 18px; font-weight: 700; }
+    #sub-modal .modal-body  { font-size: 14px; color: var(--muted); line-height: 1.5; }
 
     /* ── Input ── */
     .field-label { font-size: 13px; color: var(--muted); margin-bottom: 6px; display: block; }
@@ -432,6 +461,29 @@
 </head>
 <body>
 <div id="app">
+
+  <!-- Subscription gate modal -->
+  <div id="sub-modal-backdrop">
+    <div id="sub-modal">
+      <div class="modal-icon">📢</div>
+      <div class="modal-title">Подпишитесь на канал</div>
+      <div class="modal-body">
+        Для активации Цифрового Паспорта необходимо подписаться на официальный канал
+        <strong>@timenation2026</strong>
+      </div>
+      <a href="https://t.me/timenation2026" target="_blank"
+         onclick="tg?.openLink?.('https://t.me/timenation2026')"
+         class="btn btn-primary" style="text-decoration:none">
+        📢 Подписаться
+      </a>
+      <button class="btn btn-secondary" id="sub-check-btn" onclick="recheckSubscription()">
+        🔄 Я подписался
+      </button>
+      <div id="sub-check-hint" style="font-size:12px;color:var(--muted);display:none">
+        Проверяем подписку…
+      </div>
+    </div>
+  </div>
 
   <!-- Loading -->
   <div id="screen-loading">
@@ -717,6 +769,10 @@ let toastTimeout = null;
 // Derive API base from page path: /api-server/twa → /api-server
 const pathBase = window.location.pathname.replace(/\/twa.*$/, '');
 
+// ── Channel config ─────────────────────────────────────────────────────────────
+const CHANNEL_USERNAME = '@timenation2026';
+const CHANNEL_URL      = 'https://t.me/timenation2026';
+
 // ── Telegram WebApp init ───────────────────────────────────────────────────────
 const tg = window.Telegram?.WebApp;
 if (tg) {
@@ -757,6 +813,16 @@ async function init() {
 
     hideLoading();
 
+    // ── Subscription gate ──────────────────────────────────────────────────────
+    const subscribed = await checkSubscription();
+    if (!subscribed) {
+      // Store what to show after subscription is confirmed
+      window._pendingScreen = data.status === 'ACTIVE' ? 'active' : 'emission';
+      window._pendingData   = data;
+      showSubModal();
+      return;
+    }
+
     if (data.status === 'ACTIVE') {
       showActivePassport(data);
     } else {
@@ -765,6 +831,51 @@ async function init() {
   } catch (err) {
     showError('Ошибка сети. Попробуйте позже.');
     console.error(err);
+  }
+}
+
+// ── Subscription check ─────────────────────────────────────────────────────────
+async function checkSubscription() {
+  if (!authToken) return true; // not authed yet — don't block
+  try {
+    const resp = await fetch(`${pathBase}/api/auth/telegram-webapp/check-subscription`, {
+      headers: { 'Authorization': `Bearer ${authToken}` },
+    });
+    const data = await resp.json();
+    return data.subscribed === true;
+  } catch {
+    return true; // network error — don't block
+  }
+}
+
+function showSubModal() {
+  document.getElementById('sub-modal-backdrop').classList.add('visible');
+}
+
+function hideSubModal() {
+  document.getElementById('sub-modal-backdrop').classList.remove('visible');
+}
+
+async function recheckSubscription() {
+  const btn  = document.getElementById('sub-check-btn');
+  const hint = document.getElementById('sub-check-hint');
+  btn.disabled  = true;
+  hint.style.display = 'block';
+  hint.textContent = 'Проверяем подписку…';
+
+  const subscribed = await checkSubscription();
+
+  if (subscribed) {
+    hideSubModal();
+    const pd = window._pendingData;
+    if (window._pendingScreen === 'active') {
+      showActivePassport(pd);
+    } else {
+      showEmissionScreen(pd.secondsLeft);
+    }
+  } else {
+    hint.textContent = '❌ Подписка не обнаружена. Подпишитесь и попробуйте снова.';
+    btn.disabled = false;
   }
 }
 
@@ -980,6 +1091,12 @@ function initSigCanvas() {
 
   function startDrawing(e) {
     isDrawing = true;
+    // Explicitly set stroke styles on every draw-start (spec requirement + ensures
+    // they survive canvas resize / context state resets on mobile).
+    sigCtx.strokeStyle = '#a89eff';
+    sigCtx.lineWidth   = 3;
+    sigCtx.lineCap     = 'round';
+    sigCtx.lineJoin    = 'round';
     const p = getPos(e);
     sigCtx.beginPath();
     sigCtx.moveTo(p.x, p.y);
