@@ -310,6 +310,124 @@
       display: none;
     }
     .error-box.visible { display: block; }
+
+    /* ── Guest mode ── */
+    #guest-emission-banner {
+      display: none;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      width: 100%;
+      max-width: 420px;
+      background: rgba(108,99,255,.15);
+      border: 1px solid rgba(108,99,255,.35);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--accent);
+      text-align: center;
+      backdrop-filter: blur(6px);
+    }
+    #guest-emission-banner.visible { display: block; }
+    #guest-emission-banner strong { font-variant-numeric: tabular-nums; font-family: monospace; }
+
+    #screen-guest {
+      display: none;
+      width: 100%;
+      max-width: 420px;
+      flex-direction: column;
+      gap: 14px;
+    }
+    #screen-guest.visible { display: flex; }
+
+    .guest-profile-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .guest-avatar {
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      background: rgba(108,99,255,.2);
+      border: 2px solid rgba(108,99,255,.4);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .guest-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(108,99,255,.18);
+      border: 1px solid rgba(108,99,255,.35);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .guest-section-title {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      margin-bottom: 6px;
+    }
+
+    .locked-action {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .locked-action:active { background: rgba(255,255,255,.08); }
+    .locked-action .la-icon { font-size: 20px; flex-shrink: 0; }
+    .locked-action .la-text { flex: 1; }
+    .locked-action .la-title { font-size: 14px; font-weight: 600; }
+    .locked-action .la-sub   { font-size: 12px; color: var(--muted); }
+    .locked-action .la-lock  { font-size: 16px; color: var(--muted); flex-shrink: 0; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(30,30,50,.95);
+      border: 1px solid rgba(108,99,255,.4);
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-size: 13px;
+      color: var(--fg);
+      max-width: 320px;
+      text-align: center;
+      opacity: 0;
+      transition: opacity .25s, transform .25s;
+      pointer-events: none;
+      z-index: 999;
+      backdrop-filter: blur(8px);
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Guest button ── */
+    .btn-guest {
+      background: rgba(108,99,255,.12);
+      color: var(--accent);
+      border: 1px solid rgba(108,99,255,.35);
+    }
+    .btn-guest:hover { background: rgba(108,99,255,.2); }
   </style>
 </head>
 <body>
@@ -342,6 +460,18 @@
     <div class="step-dot" id="dot-1"></div>
     <div class="step-dot" id="dot-2"></div>
     <div class="step-dot" id="dot-3"></div>
+  </div>
+
+  <!-- Guest invite — shown during emission alongside the wizard -->
+  <div id="guest-invite" style="display:none;width:100%;max-width:420px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <div style="font-size:12px;color:var(--muted);white-space:nowrap">или</div>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+    <button id="guest-btn" class="btn btn-guest" onclick="enterGuestMode()">
+      👁 Войти как Гость (Режим обзора)
+    </button>
   </div>
 
   <!-- Step 0: Photo -->
@@ -406,6 +536,119 @@
     </button>
   </div>
 
+  <!-- Guest emission countdown banner (sticky, shown while timer ticks) -->
+  <div id="guest-emission-banner">
+    ⏳ До активации Паспорта: <strong id="guest-banner-timer">00:00</strong>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast"></div>
+
+  <!-- Guest dashboard -->
+  <div id="screen-guest">
+
+    <!-- Profile header -->
+    <div class="guest-profile-header">
+      <div class="guest-avatar">👤</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:700;margin-bottom:4px" id="guest-tg-name">Гость</div>
+        <div class="guest-badge">🔓 Гость (Только чтение)</div>
+      </div>
+    </div>
+
+    <!-- Passport preview (locked) -->
+    <div>
+      <div class="guest-section-title">Ваш будущий паспорт</div>
+      <div class="passport-card" style="opacity:.7">
+        <div class="passport-header">
+          <div>
+            <div class="passport-logo">TIMENATION</div>
+            <div class="passport-type">Digital Passport · Цифровой Паспорт</div>
+          </div>
+          <div class="passport-status-badge" style="background:var(--muted);color:#fff">⏳ EMISSION</div>
+        </div>
+        <div class="passport-body">
+          <div class="passport-photo-wrap">👤</div>
+          <div class="passport-fields">
+            <div class="passport-field-row">
+              <div class="passport-field-label">Имя гражданина</div>
+              <div class="passport-field-value" id="guest-pp-name">—</div>
+            </div>
+            <div class="passport-field-row">
+              <div class="passport-field-label">Ранг</div>
+              <div class="passport-field-value">Гражданин</div>
+            </div>
+            <div class="passport-field-row">
+              <div class="passport-field-label">Баланс</div>
+              <div class="passport-field-value">— Д</div>
+            </div>
+          </div>
+        </div>
+        <div class="passport-id">№ — — — — — —</div>
+        <div class="passport-footer">ЦИФРОВОЕ ГОСУДАРСТВО · TIMENATION · <span id="guest-pp-year"></span></div>
+      </div>
+    </div>
+
+    <!-- Locked actions -->
+    <div>
+      <div class="guest-section-title">Возможности после активации</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+
+        <div class="locked-action" onclick="showGuestToast()">
+          <div class="la-icon">💸</div>
+          <div class="la-text">
+            <div class="la-title">Перевод Дарминов</div>
+            <div class="la-sub">Отправляйте минуты другим гражданам</div>
+          </div>
+          <div class="la-lock">🔒</div>
+        </div>
+
+        <div class="locked-action" onclick="showGuestToast()">
+          <div class="la-icon">🤝</div>
+          <div class="la-text">
+            <div class="la-title">Создать сделку</div>
+            <div class="la-sub">Обмен услугами и ресурсами</div>
+          </div>
+          <div class="la-lock">🔒</div>
+        </div>
+
+        <div class="locked-action" onclick="showGuestToast()">
+          <div class="la-icon">🏛</div>
+          <div class="la-text">
+            <div class="la-title">Посольства</div>
+            <div class="la-sub">Обменные курсы и внешние переводы</div>
+          </div>
+          <div class="la-lock">🔒</div>
+        </div>
+
+        <div class="locked-action" onclick="showGuestToast()">
+          <div class="la-icon">📺</div>
+          <div class="la-text">
+            <div class="la-title">TimeNation TV</div>
+            <div class="la-sub">Публикуйте капсулы времени</div>
+          </div>
+          <div class="la-lock">🔒</div>
+        </div>
+
+        <div class="locked-action" onclick="showGuestToast()">
+          <div class="la-icon">✏️</div>
+          <div class="la-text">
+            <div class="la-title">Редактировать профиль</div>
+            <div class="la-sub">Имя, фото, настройки</div>
+          </div>
+          <div class="la-lock">🔒</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CTA: complete wizard -->
+    <button class="btn btn-primary" onclick="exitGuestMode()">
+      ✅ Завершить оформление паспорта
+    </button>
+
+  </div><!-- /screen-guest -->
+
   <!-- Active passport -->
   <div id="screen-active">
     <div id="header-active">
@@ -467,6 +710,9 @@ let sigCtx = null;
 let isDrawing = false;
 let privacyChecked = false;
 let timerInterval = null;
+let isGuest = false;
+let guestTimerRemaining = 0;  // seconds — synced from main timer
+let toastTimeout = null;
 
 // Derive API base from page path: /api-server/twa → /api-server
 const pathBase = window.location.pathname.replace(/\/twa.*$/, '');
@@ -539,6 +785,7 @@ function showEmissionScreen(secondsLeft) {
   document.getElementById('timer-block').style.display = 'block';
   document.getElementById('steps-nav').style.display = 'flex';
   document.getElementById('step-0').style.display = 'block';
+  document.getElementById('guest-invite').style.display = 'block';
   initSigCanvas();
   startTimer(secondsLeft);
 }
@@ -564,19 +811,92 @@ function openWebApp() {
 // ── Timer ──────────────────────────────────────────────────────────────────────
 function startTimer(seconds) {
   let remaining = seconds;
+  guestTimerRemaining = seconds;
   renderTimer(remaining);
 
   timerInterval = setInterval(async () => {
     remaining--;
+    guestTimerRemaining = remaining;
+    renderGuestBanner(remaining);
     if (remaining <= 0) {
       clearInterval(timerInterval);
       renderTimer(0, true);
+      renderGuestBanner(0);
       // Check if passport is now active
       await pollStatus();
       return;
     }
     renderTimer(remaining);
   }, 1000);
+}
+
+function renderGuestBanner(s) {
+  const el = document.getElementById('guest-banner-timer');
+  if (!el) return;
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const sec = String(s % 60).padStart(2, '0');
+  el.textContent = `${m}:${sec}`;
+}
+
+// ── Guest mode ─────────────────────────────────────────────────────────────────
+function enterGuestMode() {
+  isGuest = true;
+
+  // Hide emission wizard
+  document.getElementById('header').style.display = 'none';
+  document.getElementById('timer-block').style.display = 'none';
+  document.getElementById('steps-nav').style.display = 'none';
+  document.getElementById('guest-invite').style.display = 'none';
+  [0, 1, 2, 3].forEach(i => {
+    const el = document.getElementById(`step-${i}`);
+    if (el) el.style.display = 'none';
+  });
+
+  // Fill guest profile from Telegram user data
+  const user = (() => {
+    try { return JSON.parse(decodeURIComponent(new URLSearchParams(tg?.initData ?? '').get('user') ?? '{}')); }
+    catch { return {}; }
+  })();
+  const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Гость';
+  document.getElementById('guest-tg-name').textContent = name;
+  document.getElementById('guest-pp-name').textContent = name;
+  document.getElementById('guest-pp-year').textContent = new Date().getFullYear();
+
+  // Show emission banner with current timer
+  const banner = document.getElementById('guest-emission-banner');
+  banner.classList.add('visible');
+  renderGuestBanner(guestTimerRemaining);
+
+  // Show guest dashboard
+  document.getElementById('screen-guest').classList.add('visible');
+
+  // Telegram: disable vertical swipes on the dashboard scroll
+  tg?.disableVerticalSwipes?.();
+}
+
+function exitGuestMode() {
+  isGuest = false;
+
+  // Hide guest UI
+  document.getElementById('screen-guest').classList.remove('visible');
+  document.getElementById('guest-emission-banner').classList.remove('visible');
+
+  // Restore emission wizard
+  document.getElementById('header').style.display = 'flex';
+  document.getElementById('timer-block').style.display = 'block';
+  document.getElementById('steps-nav').style.display = 'flex';
+  document.getElementById('guest-invite').style.display = 'block';
+  document.getElementById(`step-${currentStep}`).style.display = 'block';
+
+  tg?.enableVerticalSwipes?.();
+}
+
+function showGuestToast() {
+  const toast = document.getElementById('toast');
+  toast.textContent = '🔒 Действие недоступно в гостевом режиме. Дождитесь завершения эмиссии Паспорта.';
+  toast.classList.add('show');
+  if (toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => toast.classList.remove('show'), 3200);
 }
 
 function renderTimer(s, done = false) {
