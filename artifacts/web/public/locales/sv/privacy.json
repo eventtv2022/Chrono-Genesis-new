@@ -1,0 +1,129 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "1. Allmänna bestämmelser",
+      "paragraphs": [
+        "Denna integritetspolicy och policy för behandling av personuppgifter (\"Policyn\") beskriver hur TimeNation (\"vi\") samlar in, använder, lagrar och skyddar information från användare av webbplatsen timenation.info och mobilapplikationen TimeNation (gemensamt \"Plattformen\").",
+        "TimeNation är en digital stat grundad på konceptet om värdet av mänsklig tid. Vi respekterar din integritet och strävar efter maximal transparens i behandlingen av personuppgifter.",
+        "Genom att använda Plattformen godkänner du villkoren i denna Policy. Om du inte godkänner dess bestämmelser, upphör med att använda Plattformen.",
+        "Denna Policy är upprättad i enlighet med Europaparlamentets och rådets förordning (EU) 2016/679 (GDPR) och annan tillämplig dataskyddslagstiftning."
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "2. Personuppgiftsansvarig",
+      "paragraphs": [
+        "Personuppgiftsansvarig är: TimeNation (digital stat).",
+        "E-post för integritetsfrågor: privacy@timenation.info",
+        "Telegram: @timenation_support",
+        "För frågor om behandlingen av dina personuppgifter kan du kontakta oss via ovanstående kontaktuppgifter. Vi åtar oss att besvara din begäran inom 30 dagar från mottagandet."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "3. Uppgifter vi samlar in",
+      "paragraphs": [
+        "Vid registrering och användning av Plattformen kan vi samla in följande kategorier av uppgifter:",
+        "Identifikationsuppgifter: namn (smeknamn), e-postadress, profilfoto (valfritt), födelsedag (om angiven).",
+        "Kontaktuppgifter: telefonnummer, WhatsApp-adress, föredragna kommunikationskanaler (e-post, SMS, Telegram, WhatsApp, telefonsamtal).",
+        "Finansiella uppgifter: transaktionshistorik i Darmins (TimeNations interna valuta), skattebidragens register. Bankkortuppgifter behandlas uteslutande av betalningsleverantören (Stripe) och lagras inte på våra servrar.",
+        "Användningsuppgifter: IP-adress, webbläsar- och enhetstyp, besökta sidor, tid och varaktighet för besök, åtgärder i appen.",
+        "Innehållsuppgifter: videor uppladdade till TimeNation TV:s sändningssystem, offentliga meddelanden och kommentarer.",
+        "Kryptografiska uppgifter: offentliga nycklar för kryptering av direktmeddelanden (privata nycklar genereras uteslutande på din enhet och överförs aldrig till oss)."
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "4. Behandlingens ändamål",
+      "paragraphs": [
+        "Vi behandlar dina uppgifter för följande ändamål:",
+        "Tjänsteleverans: registrering och förvaltning av ditt TimeNation-medborgarskap, tillgång till plattformsfunktioner, behandling av Darmin-transaktioner, hantering av TimeNation TV-bokningar.",
+        "Kommunikation: skicka notifikationer om plattformshändelser, TimeNation-nyheter, svar på dina förfrågningar och tjänstemeddelanden via dina föredragna kanaler.",
+        "Säkerhet: skydd mot bedrägeri, obehörig åtkomst, identifiering av misstänkt aktivitet.",
+        "Tjänsteförbättring: analys av plattformsanvändning för optimering av funktionalitet och gränssnitt.",
+        "Rättslig efterlevnad: uppfyllande av skyldigheter enligt tillämplig lagstiftning."
+      ]
+    },
+    {
+      "id": "legal",
+      "title": "5. Rättslig grund",
+      "paragraphs": [
+        "Vi behandlar dina uppgifter med stöd av följande rättsliga grunder (art. 6 GDPR):",
+        "Fullgörande av avtal (art. 6(1)(b) GDPR): behandlingen är nödvändig för att tillhandahålla de tjänster du begärt, inklusive registrering, kontohantering och transaktioner.",
+        "Berättigat intresse (art. 6(1)(f) GDPR): behandlingen är nödvändig för att säkerställa plattformens säkerhet, förebygga bedrägerier och förbättra tjänstekvaliteten.",
+        "Samtycke (art. 6(1)(a) GDPR): för vissa typer av behandling (t.ex. marknadsföringskommunikation, analytiska kakor) begär vi ditt samtycke. Du kan när som helst återkalla det utan att påverka lagligheten av behandling som skett dessförinnan.",
+        "Rättslig förpliktelse (art. 6(1)(c) GDPR): behandlingen är nödvändig för att uppfylla kraven i tillämplig lagstiftning."
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "6. Lagringstider",
+      "paragraphs": [
+        "Vi lagrar dina uppgifter inte längre än nödvändigt för att uppnå de ändamål som anges i denna Policy.",
+        "Kontouppgifter: lagras under hela kontots aktiva period plus 90 dagar efter avslut (för hantering av eventuella anspråk).",
+        "Transaktionsuppgifter: lagras i 5 år i enlighet med skatte- och bokföringslagstiftning.",
+        "Säkerhetsloggar: lagras i högst 12 månader.",
+        "Kak- och analysuppgifter: lagras enligt användarens webbläsarinställningar och i högst 13 månader.",
+        "Efter lagringstidens slut raderas uppgifterna oåterkalleligt eller anonymiseras."
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Delning med tredje parter",
+      "paragraphs": [
+        "Vi säljer inte dina personuppgifter till tredje parter. Vi kan dela uppgifter med följande mottagarkategorier:",
+        "Betalningsleverantörer: Stripe Inc. för betalningsbehandling. Stripe behandlar uppgifter i enlighet med sin integritetspolicy (stripe.com/privacy) och är PCI DSS-certifierat.",
+        "Molntjänster: värdleverantörer som stödjer plattformens tekniska infrastruktur. Överföringar sker inom ramen för personuppgiftsbiträdesavtal (DPA).",
+        "Meddelande- och kommunikationsplattformar: Telegram (för notifikationer och chattar), Twilio (för SMS och samtal) — i den utsträckning som krävs för meddelandeleverans.",
+        "Myndigheter: i de fall som föreskrivs av tillämplig lagstiftning, på motiverad begäran från behöriga myndigheter.",
+        "Vid överföring av uppgifter utanför EES säkerställer vi lämpliga skyddsåtgärder i enlighet med GDPR (standardavtalsklausuler, adekvansbeslutet)."
+      ]
+    },
+    {
+      "id": "rights",
+      "title": "8. Dina rättigheter",
+      "paragraphs": [
+        "Enligt GDPR har du följande rättigheter avseende dina personuppgifter:",
+        "Rätt till tillgång (art. 15): du kan begära bekräftelse på behandlingen av dina uppgifter och få en kopia.",
+        "Rätt till rättelse (art. 16): du kan begära rättelse av felaktiga uppgifter.",
+        "Rätt till radering (art. 17, 'rätten att bli bortglömd'): du kan begära radering av dina uppgifter när rättsliga grunder föreligger.",
+        "Rätt till begränsning av behandling (art. 18): du kan begära begränsning av behandlingen när du bestrider uppgifternas korrekthet eller invänder mot behandlingen.",
+        "Rätt till dataportabilitet (art. 20): du kan ta emot dina uppgifter i ett strukturerat, maskinläsbart format.",
+        "Rätt att göra invändningar (art. 21): du kan invända mot behandling baserad på berättigat intresse.",
+        "Rätt att återkalla samtycke: om behandlingen baseras på ditt samtycke kan du återkalla det när som helst.",
+        "För att utöva dina rättigheter, skicka en begäran till privacy@timenation.info. Svarstid: 30 dagar. Du har även rätt att lämna in ett klagomål till en tillsynsmyndighet."
+      ]
+    },
+    {
+      "id": "security",
+      "title": "9. Datasäkerhet",
+      "paragraphs": [
+        "Vi tillämpar tekniska och organisatoriska åtgärder för att skydda dina uppgifter från obehörig åtkomst, ändring, röjande eller förstöring.",
+        "Säkerhetsåtgärder inkluderar: kryptering av data under överföring (TLS/HTTPS), lösenordshashning med moderna algoritmer (bcrypt), end-to-end-kryptering av direktmeddelanden (NaCl/TweetNaCl), begränsning av dataåtkomst enligt minsta behörighetsprincipen, regelbundna säkerhetsgranskningar.",
+        "Vid ett dataintrång som påverkar dina rättigheter och friheter underrättar vi dig och relevant tillsynsmyndighet inom de lagstadgade tidsfristerna (senast 72 timmar efter upptäckt)."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "10. Kakor",
+      "paragraphs": [
+        "Vi använder kakor och liknande tekniker (localStorage, sessionStorage) för att driva Plattformen.",
+        "Nödvändiga kakor: krävs för webbplatsens funktion (användarsession, språkinställningar). Kan inte inaktiveras.",
+        "Analytiska kakor: hjälper oss förstå hur användare interagerar med Plattformen. Används endast med ditt samtycke.",
+        "Marknadsföringskakor: används för att anpassa annonsering. Används endast med ditt samtycke.",
+        "Du kan hantera kakinställningar via bannern på vår webbplats eller din webbläsares inställningar. Att inaktivera nödvändiga kakor kan påverka Plattformens funktionalitet."
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "11. Kontakt och uppdateringar",
+      "paragraphs": [
+        "För alla frågor om integritet och databehandling, kontakta oss: privacy@timenation.info",
+        "Vi förbehåller oss rätten att ändra denna Policy. Vid väsentliga ändringar informerar vi dig via Plattformen minst 30 dagar innan de träder i kraft.",
+        "Den aktuella versionen av Policyn finns alltid tillgänglig på timenation.info/privacy.",
+        "Datum för senaste uppdatering: 26 juli 2026."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "1. Algemene bepalingen",
+      "paragraphs": [
+        "Dit Privacybeleid en Beleid inzake de verwerking van persoonsgegevens (het 'Beleid') beschrijft hoe TimeNation ('wij', 'ons', 'onze') informatie verzamelt, gebruikt, opslaat en beschermt die is ontvangen van gebruikers van de website timenation.info en de mobiele app TimeNation (samen het 'Platform').",
+        "TimeNation is een digitale staat gebaseerd op het concept van de waarde van menselijke tijd. Wij respecteren uw privacy en streven naar maximale transparantie bij de verwerking van persoonsgegevens.",
+        "Door het Platform te gebruiken, stemt u in met de voorwaarden van dit Beleid. Als u het niet eens bent met de bepalingen ervan, stop dan met het gebruik van het Platform.",
+        "Dit Beleid is opgesteld in overeenstemming met de Algemene Verordening Gegevensbescherming (AVG) van de Europese Unie en andere toepasselijke wetgeving inzake de bescherming van persoonsgegevens."
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "2. Verwerkingsverantwoordelijke",
+      "paragraphs": [
+        "De verwerkingsverantwoordelijke voor persoonsgegevens is: TimeNation (digitale staat).",
+        "E-mail voor privacyvragen: privacy@timenation.info",
+        "Telegram-messenger: @timenation_support",
+        "Voor vragen over de verwerking van uw persoonsgegevens kunt u contact met ons opnemen via de bovenstaande contactgegevens. Wij verbinden ons ertoe binnen 30 dagen op uw verzoek te reageren."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "3. Gegevens die wij verzamelen",
+      "paragraphs": [
+        "Bij registratie en gebruik van het Platform kunnen wij de volgende categorieën gegevens verzamelen:",
+        "Identificatiegegevens: naam (nickname), e-mailadres, profielfoto (optioneel), geboortedatum (indien opgegeven).",
+        "Contactgegevens: telefoonnummer, WhatsApp-adres, voorkeurscommunicatiekanalen (e-mail, sms, Telegram, WhatsApp, telefoongesprek).",
+        "Financiële gegevens: transactiegeschiedenis in Darmins (interne valuta van TimeNation), belastingbijdragen. Bankkaartgegevens worden uitsluitend verwerkt door de betalingsdienstaanbieder (Stripe) en worden niet op onze servers opgeslagen.",
+        "Gebruiksgegevens: IP-adres, browser- en apparaattype, bezochte pagina's, tijd en duur van bezoeken, acties in de app.",
+        "Inhoudsgegevens: video's geüpload naar het TimeNation TV-uitzendsysteem, openbare berichten en reacties.",
+        "Cryptografische gegevens: openbare sleutels voor versleuteling van directe berichten (privésleutels worden uitsluitend op uw apparaat gegenereerd en worden nooit aan ons doorgegeven)."
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "4. Verwerkingsdoeleinden",
+      "paragraphs": [
+        "Wij verwerken uw gegevens voor de volgende doeleinden:",
+        "Dienstverlening: registratie en beheer van uw TimeNation-burgerschap, toegang tot Platformfuncties, verwerking van Darmin-transacties, beheer van TimeNation TV-reserveringen.",
+        "Communicatie: verzending van meldingen over Platformevenementen, TimeNation-nieuws, antwoorden op uw vragen en serviceberichten via uw voorkeurskanalen.",
+        "Beveiliging: bescherming tegen fraude, ongeautoriseerde toegang, detectie van verdachte activiteit.",
+        "Serviceverbetering: analyse van Platformgebruik voor optimalisatie van functionaliteit en interface.",
+        "Wettelijke naleving: nakoming van verplichtingen op grond van toepasselijk recht."
+      ]
+    },
+    {
+      "id": "legal",
+      "title": "5. Rechtsgrondslag",
+      "paragraphs": [
+        "Wij verwerken uw gegevens op de volgende rechtsgrondslagen (art. 6 AVG):",
+        "Uitvoering van een overeenkomst (art. 6(1)(b) AVG): de verwerking is noodzakelijk voor de levering van de door u gevraagde diensten, waaronder registratie, accountbeheer en transacties.",
+        "Gerechtvaardigd belang (art. 6(1)(f) AVG): de verwerking is noodzakelijk voor de beveiliging van het Platform, het voorkomen van fraude en het verbeteren van de servicekwaliteit.",
+        "Toestemming (art. 6(1)(a) AVG): voor bepaalde verwerkingen (bijv. marketingcommunicatie, analytische cookies) vragen wij uw toestemming. U kunt uw toestemming te allen tijde intrekken zonder afbreuk te doen aan de rechtmatigheid van de verwerking vóór intrekking.",
+        "Wettelijke verplichting (art. 6(1)(c) AVG): de verwerking is noodzakelijk om te voldoen aan toepasselijk recht."
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "6. Bewaartermijnen",
+      "paragraphs": [
+        "Wij bewaren uw gegevens niet langer dan noodzakelijk voor de in dit Beleid genoemde doeleinden.",
+        "Accountgegevens: bewaard gedurende de gehele periode van accountactiviteit plus 90 dagen na sluiting (voor mogelijke claims).",
+        "Transactiegegevens: bewaard gedurende 5 jaar overeenkomstig fiscale en boekhoudkundige wetgeving.",
+        "Beveiligingslogboeken: bewaard gedurende maximaal 12 maanden.",
+        "Cookie- en analysegegevens: bewaard overeenkomstig browserinstellingen en maximaal 13 maanden.",
+        "Na afloop van de bewaartermijn worden gegevens onomkeerbaar verwijderd of geanonimiseerd."
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Delen met derden",
+      "paragraphs": [
+        "Wij verkopen uw persoonsgegevens niet aan derden. Wij kunnen gegevens delen met de volgende categorieën ontvangers:",
+        "Betalingsverwerkers: Stripe Inc. voor betalingsverwerking. Stripe verwerkt gegevens conform zijn privacybeleid (stripe.com/privacy) en is PCI DSS-gecertificeerd.",
+        "Clouddiensten: hostingproviders die de technische infrastructuur van het Platform ondersteunen. Overdrachten vinden plaats op basis van verwerkersovereenkomsten (DPA).",
+        "Berichten- en communicatieplatforms: Telegram (voor meldingen en chats), Twilio (voor sms en gesprekken) — voor zover noodzakelijk voor berichtbezorging.",
+        "Overheidsinstanties: in gevallen voorzien door toepasselijk recht, op gemotiveerd verzoek van bevoegde instanties.",
+        "Bij overdracht van gegevens buiten de EER zorgen wij voor passende waarborgen conform de AVG (standaardcontractbepalingen, adequaatheidsbesluiten)."
+      ]
+    },
+    {
+      "id": "rights",
+      "title": "8. Uw rechten",
+      "paragraphs": [
+        "Op grond van de AVG heeft u de volgende rechten met betrekking tot uw persoonsgegevens:",
+        "Recht op inzage (art. 15): u kunt bevestiging van de verwerking van uw gegevens opvragen en een kopie ontvangen.",
+        "Recht op rectificatie (art. 16): u kunt correctie van onjuiste gegevens verzoeken.",
+        "Recht op verwijdering (art. 17, 'recht op vergetelheid'): u kunt verwijdering van uw gegevens verzoeken indien de wettelijke gronden aanwezig zijn.",
+        "Recht op beperking van de verwerking (art. 18): u kunt beperking van de verwerking verzoeken bij betwisting van de juistheid van de gegevens of bezwaar tegen de verwerking.",
+        "Recht op gegevensoverdraagbaarheid (art. 20): u kunt uw gegevens in een gestructureerd, machineleesbaar formaat ontvangen.",
+        "Recht van bezwaar (art. 21): u kunt bezwaar maken tegen verwerking op basis van gerechtvaardigd belang.",
+        "Recht op intrekking van toestemming: indien de verwerking op uw toestemming berust, kunt u deze te allen tijde intrekken.",
+        "Om uw rechten uit te oefenen, stuurt u een verzoek naar privacy@timenation.info. Reactietijd: 30 dagen. U heeft ook het recht een klacht in te dienen bij een gegevensbeschermingsautoriteit."
+      ]
+    },
+    {
+      "id": "security",
+      "title": "9. Gegevensbeveiliging",
+      "paragraphs": [
+        "Wij passen technische en organisatorische maatregelen toe om uw gegevens te beschermen tegen ongeautoriseerde toegang, wijziging, openbaarmaking of vernietiging.",
+        "Beveiligingsmaatregelen omvatten: versleuteling van gegevens in transit (TLS/HTTPS), wachtwoordhashing met moderne algoritmen (bcrypt), end-to-end-versleuteling van directe berichten (NaCl/TweetNaCl), toegangsbeperking tot gegevens volgens het principe van minimale rechten, regelmatige beveiligingsaudits.",
+        "Bij een datalek dat uw rechten en vrijheden treft, stellen wij u en de bevoegde toezichthoudende autoriteit in kennis binnen de wettelijk vastgestelde termijnen (uiterlijk 72 uur na ontdekking)."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "10. Cookies",
+      "paragraphs": [
+        "Wij gebruiken cookies en vergelijkbare technologieën (localStorage, sessionStorage) voor het functioneren van het Platform.",
+        "Noodzakelijke cookies: vereist voor de werking van de website (gebruikerssessie, taalinstellingen). Kunnen niet worden uitgeschakeld.",
+        "Analytische cookies: helpen ons begrijpen hoe gebruikers met het Platform omgaan. Alleen gebruikt met uw toestemming.",
+        "Marketingcookies: gebruikt voor het personaliseren van advertenties. Alleen gebruikt met uw toestemming.",
+        "U kunt cookie-instellingen beheren via de banner op onze website of uw browserinstellingen. Het uitschakelen van noodzakelijke cookies kan de werking van het Platform beïnvloeden."
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "11. Contact en updates",
+      "paragraphs": [
+        "Voor alle vragen over privacy en gegevensverwerking kunt u contact met ons opnemen: privacy@timenation.info",
+        "Wij behouden ons het recht voor dit Beleid te wijzigen. Bij wezenlijke wijzigingen informeren wij u via het Platform minimaal 30 dagen voordat ze van kracht worden.",
+        "De huidige versie van het Beleid is altijd beschikbaar op timenation.info/privacy.",
+        "Datum van laatste update: 26 juli 2026."
+      ]
+    }
+  ]
+}

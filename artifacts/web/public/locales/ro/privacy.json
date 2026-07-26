@@ -1,0 +1,129 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "1. Dispoziții generale",
+      "paragraphs": [
+        "Prezenta Politică de confidențialitate și prelucrare a datelor cu caracter personal (\"Politica\") descrie modul în care TimeNation (\"noi\") colectează, utilizează, stochează și protejează informațiile primite de la utilizatorii site-ului timenation.info și ai aplicației mobile TimeNation (denumite colectiv \"Platforma\").",
+        "TimeNation este un stat digital fondat pe conceptul valorii timpului uman. Respectăm confidențialitatea dumneavoastră și urmărim să asigurăm transparență maximă în prelucrarea datelor cu caracter personal.",
+        "Prin utilizarea Platformei, sunteți de acord cu termenii acestei Politici. Dacă nu sunteți de acord cu vreuna dintre prevederile sale, vă rugăm să încetați utilizarea Platformei.",
+        "Prezenta Politică a fost elaborată în conformitate cu Regulamentul (UE) 2016/679 al Parlamentului European și al Consiliului (GDPR) și cu alte acte normative aplicabile în domeniul protecției datelor cu caracter personal."
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "2. Operatorul datelor",
+      "paragraphs": [
+        "Operatorul datelor cu caracter personal este: TimeNation (stat digital).",
+        "E-mail pentru întrebări privind confidențialitatea: privacy@timenation.info",
+        "Telegram: @timenation_support",
+        "Pentru orice întrebări privind prelucrarea datelor dumneavoastră cu caracter personal, ne puteți contacta prin datele de contact de mai sus. Ne angajăm să răspundem solicitării dumneavoastră în termen de 30 de zile de la primire."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "3. Datele pe care le colectăm",
+      "paragraphs": [
+        "La înregistrare și pe parcursul utilizării Platformei, putem colecta următoarele categorii de date:",
+        "Date de identificare: nume (pseudonim), adresă de e-mail, fotografie de profil (opțional), dată de naștere (dacă este furnizată).",
+        "Date de contact: număr de telefon, adresă WhatsApp, canale de comunicare preferate (e-mail, SMS, Telegram, WhatsApp, apel telefonic).",
+        "Date financiare: istoricul tranzacțiilor în Darmini (moneda internă a TimeNation), înregistrări ale contribuțiilor fiscale. Datele cardurilor bancare sunt procesate exclusiv de procesatorul de plăți (Stripe) și nu sunt stocate pe serverele noastre.",
+        "Date de utilizare: adresă IP, tip de browser și dispozitiv, pagini vizitate, ora și durata vizitelor, acțiuni în aplicație.",
+        "Date de conținut: videoclipuri încărcate în sistemul de difuzare TimeNation TV, mesaje publice și comentarii.",
+        "Date criptografice: chei publice pentru criptarea mesajelor directe (cheile private sunt generate exclusiv pe dispozitivul dumneavoastră și nu ne sunt transmise niciodată)."
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "4. Scopurile prelucrării",
+      "paragraphs": [
+        "Prelucrăm datele dumneavoastră în următoarele scopuri:",
+        "Furnizarea serviciilor: înregistrarea și gestionarea cetățeniei dumneavoastră TimeNation, accesul la funcționalitățile Platformei, procesarea tranzacțiilor Darmin, gestionarea rezervărilor TimeNation TV.",
+        "Comunicare: trimiterea de notificări despre evenimentele Platformei, știri TimeNation, răspunsuri la întrebările dumneavoastră și mesaje de serviciu prin canalele preferate.",
+        "Securitate: protecție împotriva fraudei, accesului neautorizat, detectarea activității suspecte.",
+        "Îmbunătățirea serviciului: analiza utilizării Platformei pentru optimizarea funcționalității și a interfeței.",
+        "Conformitate legală: îndeplinirea obligațiilor prevăzute de legislația aplicabilă."
+      ]
+    },
+    {
+      "id": "legal",
+      "title": "5. Temeiul juridic",
+      "paragraphs": [
+        "Prelucrăm datele dumneavoastră pe următoarele temeiuri juridice (art. 6 GDPR):",
+        "Executarea unui contract (art. 6(1)(b) GDPR): prelucrarea este necesară pentru furnizarea serviciilor solicitate, inclusiv înregistrarea, gestionarea contului și tranzacțiile.",
+        "Interese legitime (art. 6(1)(f) GDPR): prelucrarea este necesară pentru asigurarea securității Platformei, prevenirea fraudei și îmbunătățirea calității serviciilor.",
+        "Consimțământ (art. 6(1)(a) GDPR): pentru anumite tipuri de prelucrare (de ex. comunicări de marketing, cookie-uri analitice), solicităm consimțământul dumneavoastră. Îl puteți retrage oricând, fără a afecta legalitatea prelucrării efectuate anterior.",
+        "Obligație legală (art. 6(1)(c) GDPR): prelucrarea este necesară pentru respectarea legislației aplicabile."
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "6. Perioadele de retenție",
+      "paragraphs": [
+        "Păstrăm datele dumneavoastră numai atât timp cât este necesar pentru atingerea scopurilor din prezenta Politică.",
+        "Date de cont: păstrate pe întreaga perioadă de activitate a contului plus 90 de zile după închidere (pentru soluționarea eventualelor reclamații).",
+        "Date de tranzacții: păstrate timp de 5 ani în conformitate cu legislația fiscală și contabilă.",
+        "Jurnale de securitate: păstrate cel mult 12 luni.",
+        "Date cookie și analiză: păstrate conform setărilor browserului utilizatorului și cel mult 13 luni.",
+        "La expirarea perioadei de retenție, datele sunt șterse irevocabil sau anonimizate."
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Partajarea cu terți",
+      "paragraphs": [
+        "Nu vindem datele dumneavoastră cu caracter personal terților. Putem partaja date cu următoarele categorii de destinatari:",
+        "Procesatori de plăți: Stripe Inc. pentru procesarea plăților. Stripe prelucrează datele conform politicii sale de confidențialitate (stripe.com/privacy) și este certificat PCI DSS.",
+        "Servicii cloud: furnizori de găzduire care susțin infrastructura tehnică a Platformei. Transferurile se efectuează în baza acordurilor de prelucrare a datelor (DPA).",
+        "Platforme de mesagerie și comunicare: Telegram (pentru notificări și chat-uri), Twilio (pentru SMS și apeluri) — în măsura necesară livrării mesajelor.",
+        "Autorități guvernamentale: în cazurile prevăzute de legislația aplicabilă, la solicitarea justificată a autorităților competente.",
+        "La transferul datelor în afara SEE, asigurăm garanții adecvate în conformitate cu cerințele GDPR (clauze contractuale standard, decizii de adecvare)."
+      ]
+    },
+    {
+      "id": "rights",
+      "title": "8. Drepturile dumneavoastră",
+      "paragraphs": [
+        "În temeiul GDPR, aveți următoarele drepturi cu privire la datele dumneavoastră cu caracter personal:",
+        "Dreptul de acces (art. 15): puteți solicita confirmarea prelucrării datelor și obținerea unei copii.",
+        "Dreptul la rectificare (art. 16): puteți solicita corectarea datelor inexacte.",
+        "Dreptul la ștergere (art. 17, \"dreptul de a fi uitat\"): puteți solicita ștergerea datelor când există temeiuri legale.",
+        "Dreptul la restricționarea prelucrării (art. 18): puteți solicita restricționarea prelucrării când contestați exactitatea datelor sau vă opuneți prelucrării.",
+        "Dreptul la portabilitatea datelor (art. 20): puteți primi datele într-un format structurat, lizibil automat.",
+        "Dreptul la opoziție (art. 21): vă puteți opune prelucrării bazate pe interese legitime.",
+        "Dreptul de a retrage consimțământul: dacă prelucrarea se bazează pe consimțământul dumneavoastră, îl puteți retrage oricând.",
+        "Pentru exercitarea drepturilor, trimiteți o solicitare la privacy@timenation.info. Termen de răspuns: 30 de zile. Aveți și dreptul de a depune o plângere la o autoritate de supraveghere."
+      ]
+    },
+    {
+      "id": "security",
+      "title": "9. Securitatea datelor",
+      "paragraphs": [
+        "Aplicăm măsuri tehnice și organizatorice pentru a proteja datele dumneavoastră împotriva accesului neautorizat, modificării, divulgării sau distrugerii.",
+        "Măsurile de securitate utilizate includ: criptarea datelor în tranzit (TLS/HTTPS), hashing-ul parolelor cu algoritmi moderni (bcrypt), criptarea end-to-end a mesajelor directe (NaCl/TweetNaCl), restricționarea accesului la date conform principiului privilegiului minim, audituri de securitate periodice.",
+        "În cazul unei breșe de securitate care vă afectează drepturile și libertățile, vă vom notifica pe dumneavoastră și autoritatea de supraveghere competentă în termenele stabilite de lege (cel târziu 72 de ore de la descoperire)."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "10. Cookie-uri",
+      "paragraphs": [
+        "Utilizăm cookie-uri și tehnologii similare (localStorage, sessionStorage) pentru funcționarea Platformei.",
+        "Cookie-uri necesare: indispensabile pentru funcționarea site-ului (sesiunea utilizatorului, setările de limbă). Nu pot fi dezactivate.",
+        "Cookie-uri analitice: ne ajută să înțelegem cum interacționează utilizatorii cu Platforma. Utilizate numai cu consimțământul dumneavoastră.",
+        "Cookie-uri de marketing: utilizate pentru personalizarea publicității. Utilizate numai cu consimțământul dumneavoastră.",
+        "Puteți gestiona setările cookie-urilor prin bannerul de pe site-ul nostru sau setările browserului. Dezactivarea cookie-urilor necesare poate afecta funcționalitatea Platformei."
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "11. Contact și actualizări",
+      "paragraphs": [
+        "Pentru orice întrebări legate de confidențialitate și prelucrarea datelor, contactați-ne: privacy@timenation.info",
+        "Ne rezervăm dreptul de a modifica această Politică. Pentru modificări substanțiale, vă vom informa prin intermediul Platformei cu cel puțin 30 de zile înainte de intrarea în vigoare.",
+        "Versiunea actuală a Politicii este întotdeauna disponibilă la timenation.info/privacy.",
+        "Data ultimei actualizări: 26 iulie 2026."
+      ]
+    }
+  ]
+}

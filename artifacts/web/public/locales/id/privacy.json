@@ -1,0 +1,129 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "1. Ketentuan Umum",
+      "paragraphs": [
+        "Kebijakan Privasi dan Pemrosesan Data Pribadi ini (\"Kebijakan\") menjelaskan cara TimeNation (\"kami\") mengumpulkan, menggunakan, menyimpan, dan melindungi informasi yang diterima dari pengguna situs web timenation.info dan aplikasi mobile TimeNation (secara kolektif disebut \"Platform\").",
+        "TimeNation adalah negara digital yang didirikan berdasarkan konsep nilai waktu manusia. Kami menghormati privasi Anda dan bertujuan untuk memastikan transparansi maksimal dalam pemrosesan data pribadi.",
+        "Dengan menggunakan Platform, Anda menyetujui ketentuan Kebijakan ini. Jika Anda tidak setuju dengan ketentuan mana pun, harap berhenti menggunakan Platform.",
+        "Kebijakan ini disusun sesuai dengan Peraturan Perlindungan Data Umum (GDPR) Uni Eropa dan peraturan perundang-undangan lain yang berlaku di bidang perlindungan data pribadi."
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "2. Pengontrol Data",
+      "paragraphs": [
+        "Pengontrol data pribadi adalah: TimeNation (negara digital).",
+        "Email untuk pertanyaan privasi: privacy@timenation.info",
+        "Telegram: @timenation_support",
+        "Untuk pertanyaan apa pun mengenai pemrosesan data pribadi Anda, Anda dapat menghubungi kami melalui kontak di atas. Kami berkomitmen untuk merespons permintaan Anda dalam waktu 30 hari setelah diterima."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "3. Data yang Kami Kumpulkan",
+      "paragraphs": [
+        "Saat mendaftar dan menggunakan Platform, kami dapat mengumpulkan kategori data berikut:",
+        "Data identifikasi: nama (nama pengguna), alamat email, foto profil (opsional), tanggal lahir (jika disediakan).",
+        "Data kontak: nomor telepon, alamat WhatsApp, saluran komunikasi yang disukai (email, SMS, Telegram, WhatsApp, panggilan telepon).",
+        "Data keuangan: riwayat transaksi dalam Darmins (mata uang internal TimeNation), catatan kontribusi pajak. Data kartu bank diproses secara eksklusif oleh pemroses pembayaran (Stripe) dan tidak disimpan di server kami.",
+        "Data penggunaan: alamat IP, jenis browser dan perangkat, halaman yang dikunjungi, waktu dan durasi kunjungan, tindakan dalam aplikasi.",
+        "Data konten: video yang diunggah ke sistem siaran TimeNation TV, pesan publik dan komentar.",
+        "Data kriptografi: kunci publik untuk mengenkripsi pesan langsung (kunci privat dibuat secara eksklusif di perangkat Anda dan tidak pernah dikirimkan kepada kami)."
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "4. Tujuan Pemrosesan",
+      "paragraphs": [
+        "Kami memproses data Anda untuk tujuan berikut:",
+        "Penyediaan layanan: pendaftaran dan pengelolaan kewarganegaraan TimeNation Anda, akses ke fitur Platform, pemrosesan transaksi Darmin, pengelolaan reservasi TimeNation TV.",
+        "Komunikasi: pengiriman notifikasi tentang acara Platform, berita TimeNation, jawaban atas pertanyaan Anda, dan pesan layanan melalui saluran pilihan Anda.",
+        "Keamanan: perlindungan dari penipuan, akses tidak sah, deteksi aktivitas mencurigakan.",
+        "Peningkatan layanan: analisis penggunaan Platform untuk mengoptimalkan fungsionalitas dan antarmuka.",
+        "Kepatuhan hukum: pemenuhan kewajiban berdasarkan peraturan perundang-undangan yang berlaku."
+      ]
+    },
+    {
+      "id": "legal",
+      "title": "5. Dasar Hukum",
+      "paragraphs": [
+        "Kami memproses data Anda berdasarkan dasar hukum berikut (Pasal 6 GDPR):",
+        "Pelaksanaan kontrak (Pasal 6(1)(b) GDPR): pemrosesan diperlukan untuk menyediakan layanan yang Anda minta, termasuk pendaftaran, pengelolaan akun, dan transaksi.",
+        "Kepentingan sah (Pasal 6(1)(f) GDPR): pemrosesan diperlukan untuk memastikan keamanan Platform, mencegah penipuan, dan meningkatkan kualitas layanan.",
+        "Persetujuan (Pasal 6(1)(a) GDPR): untuk jenis pemrosesan tertentu (misalnya komunikasi pemasaran, cookie analitik), kami meminta persetujuan Anda. Anda dapat mencabutnya kapan saja tanpa memengaruhi keabsahan pemrosesan sebelumnya.",
+        "Kewajiban hukum (Pasal 6(1)(c) GDPR): pemrosesan diperlukan untuk mematuhi peraturan perundang-undangan yang berlaku."
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "6. Periode Penyimpanan",
+      "paragraphs": [
+        "Kami menyimpan data Anda tidak lebih lama dari yang diperlukan untuk mencapai tujuan yang ditetapkan dalam Kebijakan ini.",
+        "Data akun: disimpan selama seluruh periode aktivitas akun ditambah 90 hari setelah penutupan (untuk menangani klaim yang mungkin terjadi).",
+        "Data transaksi: disimpan selama 5 tahun sesuai peraturan perpajakan dan akuntansi.",
+        "Log keamanan: disimpan tidak lebih dari 12 bulan.",
+        "Data cookie dan analitik: disimpan sesuai pengaturan browser pengguna dan tidak lebih dari 13 bulan.",
+        "Setelah periode penyimpanan berakhir, data dihapus secara permanen atau dianonimkan."
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Berbagi dengan Pihak Ketiga",
+      "paragraphs": [
+        "Kami tidak menjual data pribadi Anda kepada pihak ketiga. Kami dapat berbagi data dengan kategori penerima berikut:",
+        "Pemroses pembayaran: Stripe Inc. untuk pemrosesan pembayaran. Stripe memproses data sesuai kebijakan privasinya (stripe.com/privacy) dan bersertifikat PCI DSS.",
+        "Layanan cloud: penyedia hosting yang mendukung infrastruktur teknis Platform. Transfer dilakukan berdasarkan perjanjian pemrosesan data (DPA).",
+        "Platform pesan dan komunikasi: Telegram (untuk notifikasi dan obrolan), Twilio (untuk SMS dan panggilan) — sejauh diperlukan untuk pengiriman pesan.",
+        "Otoritas pemerintah: dalam kasus yang diatur oleh peraturan perundang-undangan yang berlaku, atas permintaan yang dibenarkan dari otoritas berwenang.",
+        "Saat mentransfer data ke luar EEA, kami memastikan perlindungan yang memadai sesuai persyaratan GDPR (klausul kontrak standar, keputusan kecukupan)."
+      ]
+    },
+    {
+      "id": "rights",
+      "title": "8. Hak Anda",
+      "paragraphs": [
+        "Berdasarkan GDPR, Anda memiliki hak-hak berikut mengenai data pribadi Anda:",
+        "Hak akses (Pasal 15): Anda dapat meminta konfirmasi pemrosesan data dan mendapatkan salinannya.",
+        "Hak rektifikasi (Pasal 16): Anda dapat meminta koreksi data yang tidak akurat.",
+        "Hak penghapusan (Pasal 17, 'hak untuk dilupakan'): Anda dapat meminta penghapusan data saat alasan hukum ada.",
+        "Hak pembatasan pemrosesan (Pasal 18): Anda dapat meminta pembatasan saat menyengketakan akurasi data atau menolak pemrosesan.",
+        "Hak portabilitas data (Pasal 20): Anda dapat menerima data dalam format terstruktur yang dapat dibaca mesin.",
+        "Hak keberatan (Pasal 21): Anda dapat mengajukan keberatan terhadap pemrosesan berdasarkan kepentingan sah.",
+        "Hak mencabut persetujuan: jika pemrosesan berdasarkan persetujuan Anda, Anda dapat mencabutnya kapan saja.",
+        "Untuk menggunakan hak Anda, kirim permintaan ke privacy@timenation.info. Waktu respons: 30 hari. Anda juga berhak mengajukan pengaduan ke otoritas pengawas perlindungan data."
+      ]
+    },
+    {
+      "id": "security",
+      "title": "9. Keamanan Data",
+      "paragraphs": [
+        "Kami menerapkan langkah-langkah teknis dan organisasi untuk melindungi data Anda dari akses tidak sah, perubahan, pengungkapan, atau perusakan.",
+        "Langkah keamanan yang digunakan meliputi: enkripsi data saat transit (TLS/HTTPS), hashing kata sandi dengan algoritma modern (bcrypt), enkripsi end-to-end pesan langsung (NaCl/TweetNaCl), pembatasan akses data berdasarkan prinsip hak istimewa minimum, audit keamanan rutin.",
+        "Jika terjadi pelanggaran data yang memengaruhi hak dan kebebasan Anda, kami akan memberi tahu Anda dan otoritas pengawas terkait dalam batas waktu yang ditetapkan oleh hukum (tidak lebih dari 72 jam setelah ditemukan)."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "10. Cookie",
+      "paragraphs": [
+        "Kami menggunakan cookie dan teknologi serupa (localStorage, sessionStorage) untuk mengoperasikan Platform.",
+        "Cookie yang diperlukan: diperlukan untuk fungsi situs web (sesi pengguna, pengaturan bahasa). Tidak dapat dinonaktifkan.",
+        "Cookie analitik: membantu kami memahami cara pengguna berinteraksi dengan Platform. Hanya digunakan dengan persetujuan Anda.",
+        "Cookie pemasaran: digunakan untuk mempersonalisasi iklan. Hanya digunakan dengan persetujuan Anda.",
+        "Anda dapat mengelola pengaturan cookie melalui banner di situs web kami atau pengaturan browser. Menonaktifkan cookie yang diperlukan dapat memengaruhi fungsionalitas Platform."
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "11. Kontak dan Pembaruan",
+      "paragraphs": [
+        "Untuk semua pertanyaan terkait privasi dan pemrosesan data, hubungi kami: privacy@timenation.info",
+        "Kami berhak mengubah Kebijakan ini. Untuk perubahan material, kami akan memberi tahu Anda melalui Platform setidaknya 30 hari sebelum berlaku.",
+        "Versi Kebijakan saat ini selalu tersedia di timenation.info/privacy.",
+        "Tanggal pembaruan terakhir: 26 Juli 2026."
+      ]
+    }
+  ]
+}

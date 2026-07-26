@@ -1,0 +1,129 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "1. Allgemeine Bestimmungen",
+      "paragraphs": [
+        "Diese Datenschutz- und Datenverarbeitungsrichtlinie (die „Richtlinie") beschreibt, wie TimeNation („wir", „uns", „unser") Informationen von Nutzern der Website timenation.info und der mobilen App TimeNation (zusammen die „Plattform") erhebt, verwendet, speichert und schützt.",
+        "TimeNation ist ein digitaler Staat, der auf dem Konzept des Werts menschlicher Zeit basiert. Wir respektieren Ihre Privatsphäre und streben maximale Transparenz bei der Verarbeitung personenbezogener Daten an.",
+        "Durch die Nutzung der Plattform stimmen Sie den Bedingungen dieser Richtlinie zu. Wenn Sie mit Bestimmungen nicht einverstanden sind, stellen Sie bitte die Nutzung der Plattform ein.",
+        "Diese Richtlinie wurde gemäß der Datenschutz-Grundverordnung (DSGVO) der Europäischen Union sowie anderen anwendbaren Datenschutzgesetzen erstellt."
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "2. Verantwortlicher",
+      "paragraphs": [
+        "Verantwortlicher für personenbezogene Daten ist: TimeNation (digitaler Staat).",
+        "E-Mail für Datenschutzanfragen: privacy@timenation.info",
+        "Telegram-Messenger: @timenation_support",
+        "Bei Fragen zur Verarbeitung Ihrer personenbezogenen Daten können Sie uns über die oben genannten Kontaktdaten erreichen. Wir verpflichten uns, Ihre Anfrage innerhalb von 30 Tagen zu beantworten."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "3. Erhobene Daten",
+      "paragraphs": [
+        "Bei der Registrierung und Nutzung der Plattform können wir folgende Datenkategorien erheben:",
+        "Identifikationsdaten: Name (Nickname), E-Mail-Adresse, Profilfoto (optional), Geburtsdatum (falls angegeben).",
+        "Kontaktdaten: Telefonnummer, WhatsApp-Adresse, bevorzugte Kommunikationskanäle (E-Mail, SMS, Telegram, WhatsApp, Telefonanruf).",
+        "Finanzdaten: Transaktionsverlauf in Darmins (interne Währung von TimeNation), Steuerabgaben. Bankkarteninformationen werden ausschließlich vom Zahlungsanbieter (Stripe) verarbeitet und nicht auf unseren Servern gespeichert.",
+        "Nutzungsdaten: IP-Adresse, Browser- und Gerätetyp, besuchte Seiten, Zeitpunkt und Dauer der Besuche, In-App-Aktionen.",
+        "Inhaltsdaten: Videos, die in das TimeNation TV-Übertragungssystem hochgeladen werden, öffentliche Nachrichten und Kommentare.",
+        "Kryptografische Daten: Öffentliche Schlüssel zur Verschlüsselung von Direktnachrichten (private Schlüssel werden ausschließlich auf Ihrem Gerät generiert und niemals an uns übermittelt)."
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "4. Verarbeitungszwecke",
+      "paragraphs": [
+        "Wir verarbeiten Ihre Daten für folgende Zwecke:",
+        "Leistungserbringung: Registrierung und Verwaltung Ihrer TimeNation-Staatsbürgerschaft, Bereitstellung des Zugangs zu Plattformfunktionen, Verarbeitung von Darmin-Transaktionen, Verwaltung von TimeNation TV-Reservierungen.",
+        "Kommunikation: Versand von Benachrichtigungen über Plattformereignisse, TimeNation-Neuigkeiten, Antworten auf Ihre Anfragen und Servicemitteilungen über Ihre bevorzugten Kanäle.",
+        "Sicherheit: Schutz vor Betrug, unbefugtem Zugriff und Erkennung verdächtiger Aktivitäten.",
+        "Serviceverbesserung: Analyse der Plattformnutzung zur Optimierung von Funktionalität und Benutzeroberfläche.",
+        "Rechtliche Compliance: Erfüllung von Pflichten nach anwendbarem Recht."
+      ]
+    },
+    {
+      "id": "legal",
+      "title": "5. Rechtsgrundlage",
+      "paragraphs": [
+        "Wir verarbeiten Ihre Daten auf folgenden Rechtsgrundlagen (Art. 6 DSGVO):",
+        "Vertragserfüllung (Art. 6(1)(b) DSGVO): Die Verarbeitung ist erforderlich, um die von Ihnen angeforderten Dienste bereitzustellen, einschließlich Registrierung, Kontoverwaltung und Transaktionen.",
+        "Berechtigte Interessen (Art. 6(1)(f) DSGVO): Die Verarbeitung ist erforderlich, um die Plattformsicherheit zu gewährleisten, Betrug zu verhindern und die Servicequalität zu verbessern.",
+        "Einwilligung (Art. 6(1)(a) DSGVO): Für bestimmte Verarbeitungsarten (z. B. Marketing-Kommunikation, Analyse-Cookies) holen wir Ihre Einwilligung ein. Sie können die Einwilligung jederzeit widerrufen, ohne dass die Rechtmäßigkeit der bis dahin erfolgten Verarbeitung berührt wird.",
+        "Rechtliche Verpflichtung (Art. 6(1)(c) DSGVO): Die Verarbeitung ist erforderlich, um gesetzlichen Anforderungen zu erfüllen."
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "6. Speicherfristen",
+      "paragraphs": [
+        "Wir speichern Ihre Daten nicht länger als für die in dieser Richtlinie genannten Zwecke erforderlich.",
+        "Kontodaten: werden für den gesamten Zeitraum der Kontoaktivität zuzüglich 90 Tage nach Schließung aufbewahrt (zur Bearbeitung möglicher Ansprüche).",
+        "Transaktionsdaten: werden 5 Jahre gemäß steuer- und buchführungsrechtlichen Anforderungen aufbewahrt.",
+        "Sicherheitsprotokolle: werden maximal 12 Monate aufbewahrt.",
+        "Cookie- und Analysedaten: werden entsprechend den Browser-Einstellungen und für maximal 13 Monate aufbewahrt.",
+        "Nach Ablauf der Aufbewahrungsfrist werden die Daten unwiderruflich gelöscht oder anonymisiert."
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Weitergabe an Dritte",
+      "paragraphs": [
+        "Wir verkaufen Ihre personenbezogenen Daten nicht an Dritte. Wir können Daten an folgende Empfängerkategorien weitergeben:",
+        "Zahlungsdienstleister: Stripe Inc. für die Zahlungsabwicklung. Stripe verarbeitet Daten gemäß seiner Datenschutzrichtlinie (stripe.com/privacy) und ist PCI DSS-zertifiziert.",
+        "Cloud-Dienste: Hosting-Anbieter, die die technische Infrastruktur der Plattform unterstützen. Übertragungen erfolgen auf Basis von Datenverarbeitungsverträgen (AVV).",
+        "Messaging- und Kommunikationsplattformen: Telegram (für Benachrichtigungen und Chats), Twilio (für SMS und Anrufe) — im für die Nachrichtenübermittlung erforderlichen Umfang.",
+        "Behörden: in gesetzlich vorgesehenen Fällen auf begründete Anfrage befugter Stellen.",
+        "Bei der Übermittlung von Daten außerhalb des EWR stellen wir geeignete Garantien gemäß DSGVO sicher (Standardvertragsklauseln, Angemessenheitsbeschlüsse)."
+      ]
+    },
+    {
+      "id": "rights",
+      "title": "8. Ihre Rechte",
+      "paragraphs": [
+        "Gemäß DSGVO haben Sie folgende Rechte bezüglich Ihrer personenbezogenen Daten:",
+        "Auskunftsrecht (Art. 15): Sie können eine Bestätigung der Verarbeitung Ihrer Daten und eine Kopie anfordern.",
+        "Recht auf Berichtigung (Art. 16): Sie können die Korrektur unrichtiger Daten verlangen.",
+        "Recht auf Löschung (Art. 17, „Recht auf Vergessenwerden"): Sie können die Löschung Ihrer Daten verlangen, sofern gesetzliche Gründe vorliegen.",
+        "Recht auf Einschränkung der Verarbeitung (Art. 18): Sie können eine Einschränkung der Verarbeitung verlangen, wenn Sie die Richtigkeit der Daten bestreiten oder der Verarbeitung widersprechen.",
+        "Recht auf Datenübertragbarkeit (Art. 20): Sie können Ihre Daten in einem strukturierten, maschinenlesbaren Format erhalten.",
+        "Widerspruchsrecht (Art. 21): Sie können der Verarbeitung auf Basis berechtigter Interessen widersprechen.",
+        "Recht auf Widerruf der Einwilligung: Wenn die Verarbeitung auf Ihrer Einwilligung basiert, können Sie diese jederzeit widerrufen.",
+        "Zur Ausübung Ihrer Rechte senden Sie eine Anfrage an privacy@timenation.info. Antwortzeit — 30 Tage. Sie haben auch das Recht, eine Beschwerde bei einer Datenschutzaufsichtsbehörde einzulegen."
+      ]
+    },
+    {
+      "id": "security",
+      "title": "9. Datensicherheit",
+      "paragraphs": [
+        "Wir wenden technische und organisatorische Maßnahmen an, um Ihre Daten vor unbefugtem Zugriff, Veränderung, Offenlegung oder Vernichtung zu schützen.",
+        "Eingesetzte Sicherheitsmaßnahmen umfassen: Datenverschlüsselung bei der Übertragung (TLS/HTTPS), Passwort-Hashing mit modernen Algorithmen (bcrypt), End-to-End-Verschlüsselung von Direktnachrichten (NaCl/TweetNaCl), Datenzugriffsbeschränkung nach dem Prinzip der geringsten Rechte, regelmäßige Sicherheitsaudits.",
+        "Im Falle eines Datenschutzvorfalls, der Ihre Rechte und Freiheiten beeinträchtigt, werden wir Sie und die zuständige Aufsichtsbehörde innerhalb der gesetzlich festgelegten Fristen benachrichtigen (spätestens 72 Stunden nach Entdeckung)."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "10. Cookies",
+      "paragraphs": [
+        "Wir verwenden Cookies und ähnliche Technologien (localStorage, sessionStorage) für den Betrieb der Plattform.",
+        "Notwendige Cookies: für die Funktion der Website erforderlich (Benutzersitzung, Spracheinstellungen). Können nicht deaktiviert werden.",
+        "Analyse-Cookies: helfen uns zu verstehen, wie Nutzer mit der Plattform interagieren. Werden nur mit Ihrer Einwilligung verwendet.",
+        "Marketing-Cookies: werden zur Personalisierung von Werbung verwendet. Werden nur mit Ihrer Einwilligung verwendet.",
+        "Sie können Cookie-Einstellungen über das Banner auf unserer Website oder Ihre Browser-Einstellungen verwalten. Das Deaktivieren notwendiger Cookies kann die Plattformfunktionalität beeinträchtigen."
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "11. Kontakt & Aktualisierungen",
+      "paragraphs": [
+        "Für alle Fragen zum Datenschutz und zur Datenverarbeitung kontaktieren Sie uns: privacy@timenation.info",
+        "Wir behalten uns das Recht vor, diese Richtlinie zu ändern. Bei wesentlichen Änderungen werden wir Sie über die Plattform mindestens 30 Tage vor Inkrafttreten informieren.",
+        "Die aktuelle Version der Richtlinie ist stets unter timenation.info/privacy verfügbar.",
+        "Datum der letzten Aktualisierung: 26. Juli 2026."
+      ]
+    }
+  ]
+}

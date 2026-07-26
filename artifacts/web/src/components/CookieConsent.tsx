@@ -1,7 +1,4 @@
 import { useState, useEffect } from "react";
-import type { LangCode } from "@/i18n/ui";
-import type { PrivacyStrings } from "@/i18n/privacyStrings";
-import { RTL_LANGS } from "@/i18n/privacyStrings";
 
 interface CookiePreferences {
   necessary: true;
@@ -20,19 +17,29 @@ export function getCookieConsent(): CookiePreferences | null {
   }
 }
 
-interface CookieConsentProps {
-  lang: LangCode;
-  strings: PrivacyStrings;
-  onAccept: (prefs: CookiePreferences) => void;
+export interface CookieStrings {
+  cookie_title: string;
+  cookie_body: string;
+  cookie_accept: string;
+  cookie_decline: string;
+  cookie_settings: string;
+  cookie_necessary: string;
+  cookie_analytics: string;
+  cookie_marketing: string;
+  cookie_save: string;
 }
 
-export function CookieConsent({ lang, strings, onAccept }: CookieConsentProps) {
+interface CookieConsentProps {
+  isRtl?: boolean;
+  strings: CookieStrings;
+  onAccept?: (prefs: CookiePreferences) => void;
+}
+
+export function CookieConsent({ isRtl = false, strings, onAccept }: CookieConsentProps) {
   const [visible, setVisible] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [analytics, setAnalytics] = useState(false);
   const [marketing, setMarketing] = useState(false);
-
-  const isRtl = RTL_LANGS.includes(lang);
 
   useEffect(() => {
     const stored = getCookieConsent();
@@ -44,7 +51,7 @@ export function CookieConsent({ lang, strings, onAccept }: CookieConsentProps) {
   function save(prefs: CookiePreferences) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
     setVisible(false);
-    onAccept(prefs);
+    onAccept?.(prefs);
   }
 
   function acceptAll() {

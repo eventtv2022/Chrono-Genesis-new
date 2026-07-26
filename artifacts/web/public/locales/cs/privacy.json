@@ -1,0 +1,129 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "1. Obecná ustanovení",
+      "paragraphs": [
+        "Tyto Zásady ochrany osobních údajů a jejich zpracování (\"Zásady\") popisují, jak TimeNation (\"my\") shromažďuje, používá, uchovává a chrání informace získané od uživatelů webu timenation.info a mobilní aplikace TimeNation (společně \"Platforma\").",
+        "TimeNation je digitální stát založený na konceptu hodnoty lidského času. Respektujeme vaše soukromí a usilujeme o maximální transparentnost při zpracování osobních údajů.",
+        "Používáním Platformy vyjadřujete souhlas s těmito Zásadami. Pokud nesouhlasíte s jejich ustanoveními, přestaňte Platformu používat.",
+        "Tyto Zásady byly vypracovány v souladu s nařízením Evropského parlamentu a Rady (EU) 2016/679 (GDPR) a dalšími platnými právními předpisy v oblasti ochrany osobních údajů."
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "2. Správce údajů",
+      "paragraphs": [
+        "Správcem osobních údajů je: TimeNation (digitální stát).",
+        "E-mail pro dotazy týkající se ochrany soukromí: privacy@timenation.info",
+        "Telegram: @timenation_support",
+        "V případě jakýchkoli dotazů týkajících se zpracování vašich osobních údajů nás můžete kontaktovat prostřednictvím výše uvedených kontaktních údajů. Zavazujeme se odpovědět na váš požadavek do 30 dnů od jeho obdržení."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "3. Údaje, které shromažďujeme",
+      "paragraphs": [
+        "Při registraci a používání Platformy můžeme shromažďovat následující kategorie údajů:",
+        "Identifikační údaje: jméno (přezdívka), e-mailová adresa, profilová fotografie (volitelně), datum narození (je-li uvedeno).",
+        "Kontaktní údaje: telefonní číslo, adresa WhatsApp, preferované komunikační kanály (e-mail, SMS, Telegram, WhatsApp, telefonní hovor).",
+        "Finanční údaje: historie transakcí v Darminech (interní měna TimeNation), záznamy o daňových příspěvcích. Údaje o bankovních kartách zpracovává výhradně platební zprostředkovatel (Stripe) a nejsou uloženy na našich serverech.",
+        "Údaje o používání: IP adresa, typ prohlížeče a zařízení, navštívené stránky, čas a délka návštěv, akce v aplikaci.",
+        "Údaje o obsahu: videa nahraná do vysílacího systému TimeNation TV, veřejné zprávy a komentáře.",
+        "Kryptografické údaje: veřejné klíče pro šifrování přímých zpráv (soukromé klíče jsou generovány výhradně na vašem zařízení a nikdy nám nejsou předávány)."
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "4. Účely zpracování",
+      "paragraphs": [
+        "Vaše údaje zpracováváme pro následující účely:",
+        "Poskytování služeb: registrace a správa vašeho občanství TimeNation, přístup k funkcím Platformy, zpracování transakcí Darmin, správa rezervací TimeNation TV.",
+        "Komunikace: zasílání oznámení o událostech na Platformě, novinek TimeNation, odpovědí na vaše dotazy a servisních zpráv prostřednictvím vašich preferovaných kanálů.",
+        "Bezpečnost: ochrana před podvody, neoprávněným přístupem, detekce podezřelé aktivity.",
+        "Zlepšování služeb: analýza používání Platformy za účelem optimalizace funkcí a rozhraní.",
+        "Dodržování právních předpisů: plnění povinností vyplývajících z platných právních předpisů."
+      ]
+    },
+    {
+      "id": "legal",
+      "title": "5. Právní základ",
+      "paragraphs": [
+        "Vaše údaje zpracováváme na základě následujících právních základů (čl. 6 GDPR):",
+        "Plnění smlouvy (čl. 6(1)(b) GDPR): zpracování je nezbytné pro poskytnutí námi požadovaných služeb, včetně registrace, správy účtu a transakcí.",
+        "Oprávněný zájem (čl. 6(1)(f) GDPR): zpracování je nezbytné pro zajištění bezpečnosti Platformy, prevenci podvodů a zlepšení kvality služeb.",
+        "Souhlas (čl. 6(1)(a) GDPR): pro určité druhy zpracování (např. marketingová komunikace, analytické soubory cookie) žádáme o váš souhlas. Souhlas můžete kdykoli odvolat, aniž by to ovlivnilo zákonnost zpracování provedeného před odvoláním.",
+        "Právní povinnost (čl. 6(1)(c) GDPR): zpracování je nezbytné pro splnění požadavků platných právních předpisů."
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "6. Doba uchovávání",
+      "paragraphs": [
+        "Vaše údaje uchováváme pouze po dobu nezbytnou k dosažení účelů uvedených v těchto Zásadách.",
+        "Údaje o účtu: uchovávány po celou dobu aktivity účtu plus 90 dní po jeho zrušení (pro vyřízení případných nároků).",
+        "Transakční údaje: uchovávány 5 let v souladu s daňovými a účetními předpisy.",
+        "Bezpečnostní záznamy: uchovávány maximálně 12 měsíců.",
+        "Údaje o souborech cookie a analytice: uchovávány dle nastavení prohlížeče uživatele a maximálně 13 měsíců.",
+        "Po uplynutí doby uchovávání jsou údaje nevratně smazány nebo anonymizovány."
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Sdílení s třetími stranami",
+      "paragraphs": [
+        "Vaše osobní údaje třetím stranám neprodáváme. Údaje můžeme sdílet s následujícími kategoriemi příjemců:",
+        "Platební zprostředkovatelé: Stripe Inc. pro zpracování plateb. Stripe zpracovává údaje v souladu se svými zásadami ochrany soukromí (stripe.com/privacy) a je certifikován podle PCI DSS.",
+        "Cloudové služby: hostingoví poskytovatelé zajišťující technickou infrastrukturu Platformy. Předávání probíhá na základě smluv o zpracování údajů (DPA).",
+        "Platformy pro zasílání zpráv a komunikaci: Telegram (pro oznámení a chaty), Twilio (pro SMS a hovory) — v rozsahu nezbytném pro doručování zpráv.",
+        "Vládní orgány: v případech stanovených platnými právními předpisy, na odůvodněnou žádost příslušných orgánů.",
+        "Při předávání údajů mimo EHP zajišťujeme odpovídající záruky v souladu s požadavky GDPR (standardní smluvní doložky, rozhodnutí o přiměřenosti)."
+      ]
+    },
+    {
+      "id": "rights",
+      "title": "8. Vaše práva",
+      "paragraphs": [
+        "Podle GDPR máte v souvislosti s vašimi osobními údaji následující práva:",
+        "Právo na přístup (čl. 15): můžete požádat o potvrzení zpracování vašich údajů a získat jejich kopii.",
+        "Právo na opravu (čl. 16): můžete požádat o opravu nepřesných údajů.",
+        "Právo na výmaz (čl. 17, 'právo být zapomenut'): můžete požádat o výmaz svých údajů, existují-li zákonné důvody.",
+        "Právo na omezení zpracování (čl. 18): můžete požádat o omezení zpracování, pokud zpochybňujete přesnost údajů nebo namítáte proti zpracování.",
+        "Právo na přenositelnost údajů (čl. 20): můžete obdržet své údaje ve strukturovaném, strojově čitelném formátu.",
+        "Právo vznést námitku (čl. 21): můžete vznést námitku proti zpracování založenému na oprávněném zájmu.",
+        "Právo odvolat souhlas: pokud je zpracování založeno na vašem souhlasu, můžete jej kdykoli odvolat.",
+        "Pro uplatnění svých práv zašlete žádost na privacy@timenation.info. Lhůta pro odpověď: 30 dní. Máte také právo podat stížnost u dozorového úřadu pro ochranu osobních údajů."
+      ]
+    },
+    {
+      "id": "security",
+      "title": "9. Zabezpečení údajů",
+      "paragraphs": [
+        "Přijímáme technická a organizační opatření k ochraně vašich údajů před neoprávněným přístupem, pozměněním, zveřejněním nebo zničením.",
+        "Bezpečnostní opatření zahrnují: šifrování dat při přenosu (TLS/HTTPS), hashování hesel moderními algoritmy (bcrypt), end-to-end šifrování přímých zpráv (NaCl/TweetNaCl), omezení přístupu k datům dle principu nejmenšího oprávnění, pravidelné bezpečnostní audity.",
+        "V případě narušení zabezpečení dat, které se dotýká vašich práv a svobod, vás a příslušný dozorový úřad informujeme ve lhůtách stanovených zákonem (nejpozději do 72 hodin od zjištění)."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "10. Soubory cookie",
+      "paragraphs": [
+        "K provozování Platformy používáme soubory cookie a podobné technologie (localStorage, sessionStorage).",
+        "Nezbytné soubory cookie: vyžadovány pro fungování webu (uživatelská relace, nastavení jazyka). Nelze je zakázat.",
+        "Analytické soubory cookie: pomáhají nám pochopit, jak uživatelé s Platformou pracují. Používány pouze s vaším souhlasem.",
+        "Marketingové soubory cookie: používány k personalizaci reklamy. Používány pouze s vaším souhlasem.",
+        "Nastavení souborů cookie můžete spravovat prostřednictvím banneru na našem webu nebo nastavení prohlížeče. Zakázání nezbytných souborů cookie může ovlivnit funkčnost Platformy."
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "11. Kontakt a aktualizace",
+      "paragraphs": [
+        "Pro veškeré dotazy týkající se ochrany soukromí a zpracování dat nás kontaktujte: privacy@timenation.info",
+        "Vyhrazujeme si právo tyto Zásady měnit. V případě podstatných změn vás informujeme prostřednictvím Platformy nejméně 30 dní před jejich účinností.",
+        "Aktuální verze Zásad je vždy k dispozici na timenation.info/privacy.",
+        "Datum poslední aktualizace: 26. července 2026."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "1. Điều khoản chung",
+      "paragraphs": [
+        "Chính sách Bảo mật và Xử lý Dữ liệu Cá nhân này (\"Chính sách\") mô tả cách TimeNation (\"chúng tôi\") thu thập, sử dụng, lưu trữ và bảo vệ thông tin nhận được từ người dùng trang web timenation.info và ứng dụng di động TimeNation (gọi chung là \"Nền tảng\").",
+        "TimeNation là một nhà nước kỹ thuật số được thành lập dựa trên khái niệm về giá trị của thời gian con người. Chúng tôi tôn trọng quyền riêng tư của bạn và hướng đến sự minh bạch tối đa trong việc xử lý dữ liệu cá nhân.",
+        "Bằng cách sử dụng Nền tảng, bạn đồng ý với các điều khoản của Chính sách này. Nếu bạn không đồng ý với bất kỳ điều khoản nào, vui lòng ngừng sử dụng Nền tảng.",
+        "Chính sách này được soạn thảo phù hợp với Quy định Bảo vệ Dữ liệu Chung (GDPR) của Liên minh Châu Âu và các luật bảo vệ dữ liệu cá nhân hiện hành khác."
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "2. Bên kiểm soát dữ liệu",
+      "paragraphs": [
+        "Bên kiểm soát dữ liệu cá nhân là: TimeNation (nhà nước kỹ thuật số).",
+        "Email cho các câu hỏi về quyền riêng tư: privacy@timenation.info",
+        "Telegram: @timenation_support",
+        "Đối với bất kỳ câu hỏi nào về việc xử lý dữ liệu cá nhân của bạn, bạn có thể liên hệ với chúng tôi qua thông tin liên lạc trên. Chúng tôi cam kết trả lời yêu cầu của bạn trong vòng 30 ngày kể từ ngày nhận."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "3. Dữ liệu chúng tôi thu thập",
+      "paragraphs": [
+        "Khi đăng ký và sử dụng Nền tảng, chúng tôi có thể thu thập các danh mục dữ liệu sau:",
+        "Dữ liệu nhận dạng: tên (biệt danh), địa chỉ email, ảnh hồ sơ (tùy chọn), ngày sinh (nếu được cung cấp).",
+        "Dữ liệu liên lạc: số điện thoại, địa chỉ WhatsApp, kênh liên lạc ưu tiên (email, SMS, Telegram, WhatsApp, cuộc gọi điện thoại).",
+        "Dữ liệu tài chính: lịch sử giao dịch bằng Darmins (đơn vị tiền tệ nội bộ của TimeNation), hồ sơ đóng thuế. Dữ liệu thẻ ngân hàng được xử lý độc quyền bởi đơn vị xử lý thanh toán (Stripe) và không được lưu trữ trên máy chủ của chúng tôi.",
+        "Dữ liệu sử dụng: địa chỉ IP, loại trình duyệt và thiết bị, các trang đã truy cập, thời gian và thời lượng truy cập, các thao tác trong ứng dụng.",
+        "Dữ liệu nội dung: video được tải lên hệ thống phát sóng TimeNation TV, tin nhắn công khai và bình luận.",
+        "Dữ liệu mật mã: khóa công khai để mã hóa tin nhắn trực tiếp (khóa riêng tư chỉ được tạo trên thiết bị của bạn và không bao giờ được truyền cho chúng tôi)."
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "4. Mục đích xử lý",
+      "paragraphs": [
+        "Chúng tôi xử lý dữ liệu của bạn cho các mục đích sau:",
+        "Cung cấp dịch vụ: đăng ký và quản lý quyền công dân TimeNation của bạn, cung cấp quyền truy cập vào các tính năng Nền tảng, xử lý giao dịch Darmin, quản lý đặt chỗ TimeNation TV.",
+        "Liên lạc: gửi thông báo về các sự kiện Nền tảng, tin tức TimeNation, trả lời các câu hỏi của bạn và tin nhắn dịch vụ qua các kênh ưu tiên của bạn.",
+        "Bảo mật: bảo vệ chống gian lận, truy cập trái phép, phát hiện hoạt động đáng ngờ.",
+        "Cải thiện dịch vụ: phân tích việc sử dụng Nền tảng để tối ưu hóa chức năng và giao diện.",
+        "Tuân thủ pháp lý: thực hiện các nghĩa vụ theo luật hiện hành."
+      ]
+    },
+    {
+      "id": "legal",
+      "title": "5. Cơ sở pháp lý",
+      "paragraphs": [
+        "Chúng tôi xử lý dữ liệu của bạn dựa trên các cơ sở pháp lý sau (Điều 6 GDPR):",
+        "Thực hiện hợp đồng (Điều 6(1)(b) GDPR): việc xử lý là cần thiết để cung cấp các dịch vụ bạn yêu cầu, bao gồm đăng ký, quản lý tài khoản và giao dịch.",
+        "Lợi ích hợp pháp (Điều 6(1)(f) GDPR): việc xử lý là cần thiết để đảm bảo an ninh Nền tảng, ngăn chặn gian lận và nâng cao chất lượng dịch vụ.",
+        "Sự đồng ý (Điều 6(1)(a) GDPR): đối với một số loại xử lý nhất định (ví dụ: liên lạc marketing, cookie phân tích), chúng tôi yêu cầu sự đồng ý của bạn. Bạn có thể rút lại sự đồng ý bất kỳ lúc nào.",
+        "Nghĩa vụ pháp lý (Điều 6(1)(c) GDPR): việc xử lý là cần thiết để tuân thủ luật hiện hành."
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "6. Thời gian lưu trữ",
+      "paragraphs": [
+        "Chúng tôi lưu giữ dữ liệu của bạn không lâu hơn mức cần thiết để đạt được các mục đích nêu trong Chính sách này.",
+        "Dữ liệu tài khoản: được lưu giữ trong toàn bộ thời gian hoạt động của tài khoản cộng thêm 90 ngày sau khi đóng (để xử lý các khiếu nại có thể xảy ra).",
+        "Dữ liệu giao dịch: được lưu giữ 5 năm theo luật thuế và kế toán.",
+        "Nhật ký bảo mật: được lưu giữ không quá 12 tháng.",
+        "Dữ liệu cookie và phân tích: được lưu giữ theo cài đặt trình duyệt của người dùng và không quá 13 tháng.",
+        "Sau khi hết thời gian lưu giữ, dữ liệu sẽ bị xóa vĩnh viễn hoặc ẩn danh hóa."
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Chia sẻ với bên thứ ba",
+      "paragraphs": [
+        "Chúng tôi không bán dữ liệu cá nhân của bạn cho bên thứ ba. Chúng tôi có thể chia sẻ dữ liệu với các đối tượng nhận sau:",
+        "Đơn vị xử lý thanh toán: Stripe Inc. để xử lý thanh toán. Stripe xử lý dữ liệu theo chính sách bảo mật của mình (stripe.com/privacy) và được chứng nhận PCI DSS.",
+        "Dịch vụ đám mây: nhà cung cấp dịch vụ lưu trữ hỗ trợ cơ sở hạ tầng kỹ thuật của Nền tảng. Việc chuyển giao được thực hiện theo các thỏa thuận xử lý dữ liệu (DPA).",
+        "Nền tảng nhắn tin và liên lạc: Telegram (cho thông báo và trò chuyện), Twilio (cho SMS và cuộc gọi) — trong phạm vi cần thiết cho việc gửi tin nhắn.",
+        "Cơ quan chính phủ: trong các trường hợp theo luật hiện hành, theo yêu cầu có căn cứ của các cơ quan có thẩm quyền.",
+        "Khi chuyển dữ liệu ra ngoài EEA, chúng tôi đảm bảo các biện pháp bảo vệ phù hợp theo yêu cầu GDPR (điều khoản hợp đồng tiêu chuẩn, quyết định tương đương)."
+      ]
+    },
+    {
+      "id": "rights",
+      "title": "8. Quyền của bạn",
+      "paragraphs": [
+        "Theo GDPR, bạn có các quyền sau liên quan đến dữ liệu cá nhân của mình:",
+        "Quyền truy cập (Điều 15): bạn có thể yêu cầu xác nhận việc xử lý dữ liệu và nhận bản sao.",
+        "Quyền chỉnh sửa (Điều 16): bạn có thể yêu cầu sửa chữa dữ liệu không chính xác.",
+        "Quyền xóa (Điều 17, 'quyền được quên'): bạn có thể yêu cầu xóa dữ liệu khi có căn cứ pháp lý.",
+        "Quyền hạn chế xử lý (Điều 18): bạn có thể yêu cầu hạn chế khi tranh chấp tính chính xác của dữ liệu hoặc phản đối việc xử lý.",
+        "Quyền di chuyển dữ liệu (Điều 20): bạn có thể nhận dữ liệu theo định dạng có cấu trúc, máy có thể đọc được.",
+        "Quyền phản đối (Điều 21): bạn có thể phản đối việc xử lý dựa trên lợi ích hợp pháp.",
+        "Quyền rút lại sự đồng ý: nếu việc xử lý dựa trên sự đồng ý của bạn, bạn có thể rút lại bất kỳ lúc nào.",
+        "Để thực hiện quyền của bạn, gửi yêu cầu đến privacy@timenation.info. Thời gian phản hồi: 30 ngày. Bạn cũng có quyền khiếu nại với cơ quan giám sát bảo vệ dữ liệu."
+      ]
+    },
+    {
+      "id": "security",
+      "title": "9. Bảo mật dữ liệu",
+      "paragraphs": [
+        "Chúng tôi áp dụng các biện pháp kỹ thuật và tổ chức để bảo vệ dữ liệu của bạn khỏi truy cập trái phép, thay đổi, tiết lộ hoặc phá hủy.",
+        "Các biện pháp bảo mật bao gồm: mã hóa dữ liệu khi truyền (TLS/HTTPS), băm mật khẩu với thuật toán hiện đại (bcrypt), mã hóa đầu cuối tin nhắn trực tiếp (NaCl/TweetNaCl), hạn chế quyền truy cập dữ liệu theo nguyên tắc đặc quyền tối thiểu, kiểm tra bảo mật định kỳ.",
+        "Trong trường hợp vi phạm dữ liệu ảnh hưởng đến quyền và tự do của bạn, chúng tôi sẽ thông báo cho bạn và cơ quan giám sát có liên quan trong thời hạn theo luật định (không quá 72 giờ kể từ khi phát hiện)."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "10. Cookie",
+      "paragraphs": [
+        "Chúng tôi sử dụng cookie và các công nghệ tương tự (localStorage, sessionStorage) để vận hành Nền tảng.",
+        "Cookie cần thiết: bắt buộc cho chức năng trang web (phiên người dùng, cài đặt ngôn ngữ). Không thể tắt.",
+        "Cookie phân tích: giúp chúng tôi hiểu cách người dùng tương tác với Nền tảng. Chỉ sử dụng với sự đồng ý của bạn.",
+        "Cookie marketing: được sử dụng để cá nhân hóa quảng cáo. Chỉ sử dụng với sự đồng ý của bạn.",
+        "Bạn có thể quản lý cài đặt cookie thông qua banner trên trang web của chúng tôi hoặc cài đặt trình duyệt. Tắt cookie cần thiết có thể ảnh hưởng đến chức năng Nền tảng."
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "11. Liên hệ và cập nhật",
+      "paragraphs": [
+        "Đối với tất cả các câu hỏi liên quan đến quyền riêng tư và xử lý dữ liệu, hãy liên hệ với chúng tôi: privacy@timenation.info",
+        "Chúng tôi bảo lưu quyền sửa đổi Chính sách này. Đối với các thay đổi quan trọng, chúng tôi sẽ thông báo cho bạn qua Nền tảng ít nhất 30 ngày trước khi có hiệu lực.",
+        "Phiên bản hiện tại của Chính sách luôn có sẵn tại timenation.info/privacy.",
+        "Ngày cập nhật lần cuối: 26 tháng 7 năm 2026."
+      ]
+    }
+  ]
+}

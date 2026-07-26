@@ -1,0 +1,129 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "1. General Provisions",
+      "paragraphs": [
+        "This Privacy Policy and Personal Data Processing Policy (the \"Policy\") describes how TimeNation (\"we\", \"us\", \"our\") collects, uses, stores, and protects information received from users of the timenation.info website and the TimeNation mobile application (collectively, the \"Platform\").",
+        "TimeNation is a digital state founded on the concept of the value of human time. We respect your privacy and aim to ensure maximum transparency in the processing of personal data.",
+        "By using the Platform, you agree to the terms of this Policy. If you disagree with any of its provisions, please stop using the Platform.",
+        "This Policy is drafted in accordance with the General Data Protection Regulation (GDPR) of the European Union, the Russian Federal Law No. 152-FZ \"On Personal Data\", and other applicable legislation in the field of personal data protection."
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "2. Data Controller",
+      "paragraphs": [
+        "The personal data controller is: TimeNation (digital state).",
+        "Email for privacy inquiries: privacy@timenation.info",
+        "Telegram messenger: @timenation_support",
+        "For any questions regarding the processing of your personal data, you may contact us via the details above. We undertake to respond to your request within 30 days of receipt."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "3. Data We Collect",
+      "paragraphs": [
+        "When registering and using the Platform, we may collect the following categories of data:",
+        "Identification data: name (nickname), email address, profile photo (optional), date of birth (if provided).",
+        "Contact data: phone number, WhatsApp address, preferred communication channels (email, SMS, Telegram, WhatsApp, phone call).",
+        "Financial data: transaction history in Darmins (TimeNation's internal currency), tax contribution records. Payment card data is processed exclusively by the payment processor (Stripe) and is not stored on our servers.",
+        "Usage data: IP address, browser and device type, pages visited, time and duration of visits, in-app actions.",
+        "Content data: videos uploaded to the TimeNation TV broadcast system, public messages and comments.",
+        "Cryptographic data: public keys for encrypting direct messages (private keys are generated exclusively on your device and are never transmitted to us)."
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "4. Purposes of Processing",
+      "paragraphs": [
+        "We process your data for the following purposes:",
+        "Service delivery: registration and management of your TimeNation citizenship, providing access to Platform features, processing Darmin transactions, managing TimeNation TV reservations.",
+        "Communication: sending notifications about Platform events, TimeNation news, responses to your inquiries, and service messages via your preferred channels.",
+        "Security: protection against fraud, unauthorized access, detection of suspicious activity.",
+        "Service improvement: analysis of Platform usage to optimize functionality and interface.",
+        "Legal compliance: fulfillment of obligations under applicable legislation."
+      ]
+    },
+    {
+      "id": "legal",
+      "title": "5. Legal Basis",
+      "paragraphs": [
+        "We process your data on the following legal grounds (Art. 6 GDPR):",
+        "Performance of a contract (Art. 6(1)(b) GDPR): processing is necessary to provide the services you have requested, including registration, account management, and transactions.",
+        "Legitimate interests (Art. 6(1)(f) GDPR): processing is necessary to ensure Platform security, prevent fraud, and improve service quality.",
+        "Consent (Art. 6(1)(a) GDPR): for certain types of processing (e.g., marketing communications, analytics cookies), we request your consent. You may withdraw consent at any time without affecting the lawfulness of processing carried out before withdrawal.",
+        "Legal obligation (Art. 6(1)(c) GDPR): processing is necessary to comply with applicable legislation."
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "6. Retention Periods",
+      "paragraphs": [
+        "We retain your data no longer than necessary to achieve the purposes set out in this Policy.",
+        "Account data: retained for the entire period of account activity plus 90 days after closure (to handle possible claims).",
+        "Transaction data: retained for 5 years in accordance with tax and accounting legislation.",
+        "Security logs: retained for no more than 12 months.",
+        "Cookie and analytics data: retained in accordance with user browser settings and for no more than 13 months.",
+        "After the retention period expires, data is irreversibly deleted or anonymized."
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Sharing with Third Parties",
+      "paragraphs": [
+        "We do not sell your personal data to third parties. We may share data with the following categories of recipients:",
+        "Payment processors: Stripe Inc. for payment processing. Stripe processes data in accordance with its privacy policy (stripe.com/privacy) and is PCI DSS certified.",
+        "Cloud services: hosting providers supporting the Platform's technical infrastructure. Transfers are made under data processing agreements (DPAs).",
+        "Messaging and communication platforms: Telegram (for notifications and chats), Twilio (for SMS and calls) — to the extent necessary for message delivery.",
+        "Government authorities: in cases provided for by applicable legislation, upon justified request from authorized bodies.",
+        "When transferring data outside the EEA, we ensure appropriate safeguards in accordance with GDPR requirements (standard contractual clauses, adequacy decisions)."
+      ]
+    },
+    {
+      "id": "rights",
+      "title": "8. Your Rights",
+      "paragraphs": [
+        "Under GDPR, you have the following rights regarding your personal data:",
+        "Right of access (Art. 15): you may request confirmation of the processing of your data and obtain a copy.",
+        "Right to rectification (Art. 16): you may request correction of inaccurate data.",
+        "Right to erasure (Art. 17, \"right to be forgotten\"): you may request deletion of your data where grounds under applicable law exist.",
+        "Right to restriction of processing (Art. 18): you may request restriction of processing when disputing data accuracy or objecting to processing.",
+        "Right to data portability (Art. 20): you may receive your data in a structured, machine-readable format.",
+        "Right to object (Art. 21): you may object to processing based on legitimate interests.",
+        "Right to withdraw consent: if processing is based on your consent, you may withdraw it at any time.",
+        "To exercise your rights, send a request to privacy@timenation.info. Response time — 30 days. You also have the right to lodge a complaint with a data protection supervisory authority."
+      ]
+    },
+    {
+      "id": "security",
+      "title": "9. Data Security",
+      "paragraphs": [
+        "We apply technical and organizational measures to protect your data from unauthorized access, alteration, disclosure, or destruction.",
+        "Security measures in use include: encryption of data in transit (TLS/HTTPS), password hashing using modern algorithms (bcrypt), end-to-end encryption of direct messages (NaCl/TweetNaCl), data access restriction by least-privilege principle, regular security audits.",
+        "In the event of a data breach affecting your rights and freedoms, we will notify you and the relevant supervisory authority within the timeframes established by law (no later than 72 hours from discovery)."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "10. Cookies",
+      "paragraphs": [
+        "We use cookies and similar technologies (localStorage, sessionStorage) to operate the Platform.",
+        "Necessary cookies: required for the website to function (user session, language settings). Cannot be disabled.",
+        "Analytics cookies: help us understand how users interact with the Platform. Used only with your consent.",
+        "Marketing cookies: used to personalize advertising. Used only with your consent.",
+        "You can manage cookie settings via the banner on our website or your browser settings. Disabling necessary cookies may affect Platform functionality."
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "11. Contact & Updates",
+      "paragraphs": [
+        "For all questions related to privacy and data processing, contact us: privacy@timenation.info",
+        "We reserve the right to amend this Policy. For material changes, we will notify you through the Platform no less than 30 days before they take effect.",
+        "The current version of the Policy is always available at timenation.info/privacy.",
+        "Date of last update: July 26, 2026."
+      ]
+    }
+  ]
+}

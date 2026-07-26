@@ -1,0 +1,129 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "1. Általános rendelkezések",
+      "paragraphs": [
+        "Ez az Adatvédelmi és személyes adatok kezelésére vonatkozó szabályzat (\"Szabályzat\") leírja, hogy a TimeNation (\"mi\") hogyan gyűjti, használja, tárolja és védi a timenation.info webhely és a TimeNation mobilalkalmazás (együttesen \"Platform\") felhasználóitól kapott információkat.",
+        "A TimeNation az emberi idő értékének koncepcióján alapuló digitális állam. Tiszteletben tartjuk az Ön magánéletét, és a személyes adatok kezelése terén maximális átláthatóságra törekszünk.",
+        "A Platform használatával Ön elfogadja jelen Szabályzat feltételeit. Ha bármelyik rendelkezésével nem ért egyet, kérjük, szüntesse meg a Platform használatát.",
+        "E Szabályzat az Európai Parlament és a Tanács (EU) 2016/679 rendeletével (GDPR) és a személyes adatok védelmére vonatkozó egyéb alkalmazandó jogszabályokkal összhangban készült."
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "2. Adatkezelő",
+      "paragraphs": [
+        "A személyes adatok kezelője: TimeNation (digitális állam).",
+        "Adatvédelmi kérdésekre vonatkozó e-mail: privacy@timenation.info",
+        "Telegram: @timenation_support",
+        "Személyes adatainak kezelésével kapcsolatos kérdéseivel a fenti elérhetőségeken fordulhat hozzánk. Kötelezettséget vállalunk arra, hogy kérésére a kézhezvételtől számított 30 napon belül válaszolunk."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "3. Az általunk gyűjtött adatok",
+      "paragraphs": [
+        "A Platformon való regisztrációkor és annak használatakor a következő adatkategóriákat gyűjthetjük:",
+        "Azonosítási adatok: név (becenév), e-mail cím, profilkép (opcionális), születési dátum (ha megadta).",
+        "Kapcsolattartási adatok: telefonszám, WhatsApp-cím, előnyben részesített kommunikációs csatornák (e-mail, SMS, Telegram, WhatsApp, telefonhívás).",
+        "Pénzügyi adatok: Darminokban (a TimeNation belső valutájában) végzett tranzakciók előzményei, adóbefizetési nyilvántartások. A bankkártya-adatokat kizárólag a fizetési feldolgozó (Stripe) kezeli, és nem tárolódnak szervereiken.",
+        "Használati adatok: IP-cím, böngésző és eszköz típusa, meglátogatott oldalak, látogatások ideje és időtartama, alkalmazáson belüli műveletek.",
+        "Tartalmi adatok: a TimeNation TV műsorsugárzó rendszerére feltöltött videók, nyilvános üzenetek és hozzászólások.",
+        "Kriptográfiai adatok: közvetlen üzenetek titkosításához szükséges nyilvános kulcsok (a privát kulcsok kizárólag az Ön eszközén keletkeznek, és soha nem kerülnek hozzánk)."
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "4. Az adatkezelés célja",
+      "paragraphs": [
+        "Adatait a következő célokból kezeljük:",
+        "Szolgáltatásnyújtás: TimeNation-állampolgárságának regisztrálása és kezelése, a Platform funkcióihoz való hozzáférés biztosítása, Darmin-tranzakciók feldolgozása, TimeNation TV-foglalások kezelése.",
+        "Kommunikáció: értesítések küldése platformeseményekről, TimeNation-hírekről, kérdéseire adott válaszok és szolgáltatási üzenetek küldése az Ön által preferált csatornákon.",
+        "Biztonság: csalás, jogosulatlan hozzáférés elleni védelem, gyanús tevékenységek észlelése.",
+        "Szolgáltatásfejlesztés: a Platform használatának elemzése a funkcionalitás és a felhasználói felület optimalizálása érdekében.",
+        "Jogszabályi megfelelés: az alkalmazandó jogszabályok által előírt kötelezettségek teljesítése."
+      ]
+    },
+    {
+      "id": "legal",
+      "title": "5. Jogalap",
+      "paragraphs": [
+        "Az adatokat a következő jogalapokon kezeljük (GDPR 6. cikk):",
+        "Szerződés teljesítése (GDPR 6. cikk (1) b) pont): az adatkezelés szükséges az Ön által kért szolgáltatások nyújtásához, beleértve a regisztrációt, fiókkezelést és tranzakciókat.",
+        "Jogos érdek (GDPR 6. cikk (1) f) pont): az adatkezelés szükséges a Platform biztonságának biztosításához, a csalások megelőzéséhez és a szolgáltatás minőségének javításához.",
+        "Hozzájárulás (GDPR 6. cikk (1) a) pont): bizonyos típusú adatkezelésekhez (pl. marketingkommunikáció, analitikai sütik) kérjük hozzájárulását. Azt bármikor visszavonhatja a visszavonás előtti adatkezelés jogszerűségének sérelme nélkül.",
+        "Jogi kötelezettség (GDPR 6. cikk (1) c) pont): az adatkezelés szükséges az alkalmazandó jogszabályok követelményeinek teljesítéséhez."
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "6. Megőrzési idők",
+      "paragraphs": [
+        "Az adatokat csak a jelen Szabályzatban meghatározott célok eléréséhez szükséges ideig őrizzük.",
+        "Fiókadatok: a fiók teljes aktív időszakára és lezárása után 90 napig megőrizve (esetleges igények kezelésére).",
+        "Tranzakciós adatok: adó- és számviteli jogszabályoknak megfelelően 5 évig megőrizve.",
+        "Biztonsági naplók: legfeljebb 12 hónapig megőrizve.",
+        "Süti- és elemzési adatok: a felhasználói böngészőbeállításoknak megfelelően és legfeljebb 13 hónapig megőrizve.",
+        "A megőrzési idő lejárta után az adatokat visszaállíthatatlanul töröljük vagy anonimizáljuk."
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Harmadik felekkel való megosztás",
+      "paragraphs": [
+        "Személyes adatait nem adjuk el harmadik feleknek. Adatokat a következő kategóriájú címzettekkel oszthatunk meg:",
+        "Fizetési feldolgozók: Stripe Inc. a fizetések feldolgozásához. A Stripe az adatokat a saját adatvédelmi szabályzatának (stripe.com/privacy) megfelelően kezeli, és PCI DSS tanúsítvánnyal rendelkezik.",
+        "Felhőszolgáltatások: a Platform technikai infrastruktúráját támogató tárhelyszolgáltatók. Az adattovábbítás adatfeldolgozási megállapodások (DPA) keretében történik.",
+        "Üzenetküldő és kommunikációs platformok: Telegram (értesítésekhez és chathez), Twilio (SMS-hez és hívásokhoz) — az üzenetek kézbesítéséhez szükséges mértékben.",
+        "Kormányzati hatóságok: az alkalmazandó jogszabályok által előírt esetekben, az arra felhatalmazott szervek indokolt kérésére.",
+        "Az EGT-n kívülre történő adattovábbítás esetén a GDPR követelményeivel összhangban megfelelő garanciákat biztosítunk (általános szerződési feltételek, megfelelőségi határozatok)."
+      ]
+    },
+    {
+      "id": "rights",
+      "title": "8. Az Ön jogai",
+      "paragraphs": [
+        "A GDPR értelmében Ön az alábbi jogokkal rendelkezik a személyes adataival kapcsolatban:",
+        "Hozzáférési jog (15. cikk): kérheti az adatkezelés megerősítését és másolatot kaphat az adatairól.",
+        "Helyesbítési jog (16. cikk): kérheti a pontatlan adatok kijavítását.",
+        "Törlési jog (17. cikk, 'elfeledtetéshez való jog'): kérheti adatai törlését, ha fennállnak a jogszabályi feltételek.",
+        "Az adatkezelés korlátozásához való jog (18. cikk): kérheti az adatkezelés korlátozását, ha vitatja az adatok pontosságát vagy tiltakozik az adatkezelés ellen.",
+        "Adathordozhatósághoz való jog (20. cikk): adatait strukturált, géppel olvasható formátumban kaphatja meg.",
+        "Tiltakozási jog (21. cikk): tiltakozhat a jogos érdeken alapuló adatkezelés ellen.",
+        "Hozzájárulás visszavonásának joga: ha az adatkezelés az Ön hozzájárulásán alapul, azt bármikor visszavonhatja.",
+        "Jogai érvényesítéséhez kérelmet küldhet a privacy@timenation.info e-mail-címre. Válaszidő: 30 nap. Panaszt nyújthat be az illetékes adatvédelmi felügyeleti hatósághoz is."
+      ]
+    },
+    {
+      "id": "security",
+      "title": "9. Adatbiztonság",
+      "paragraphs": [
+        "Technikai és szervezeti intézkedéseket alkalmazunk, hogy megvédjük adatait az illetéktelen hozzáféréstől, módosítástól, nyilvánosságra hozataltól vagy megsemmisítéstől.",
+        "Az alkalmazott biztonsági intézkedések: adatok átvitel közbeni titkosítása (TLS/HTTPS), jelszavak kivonatolása modern algoritmusokkal (bcrypt), közvetlen üzenetek végponttól végpontig történő titkosítása (NaCl/TweetNaCl), adatokhoz való hozzáférés korlátozása a legkisebb jogosultság elve alapján, rendszeres biztonsági auditok.",
+        "Az Ön jogait és szabadságait érintő adatvédelmi incidens esetén jogszabályi határidőn belül (a felfedezéstől számított legfeljebb 72 órán belül) értesítjük Önt és az illetékes felügyeleti hatóságot."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "10. Sütik",
+      "paragraphs": [
+        "A Platform működtetéséhez sütiket és hasonló technológiákat (localStorage, sessionStorage) használunk.",
+        "Szükséges sütik: a weboldal működéséhez elengedhetetlenek (felhasználói munkamenet, nyelvi beállítások). Nem tilthatók le.",
+        "Elemzési sütik: segítenek megérteni, hogyan lépnek kapcsolatba a felhasználók a Platformmal. Csak az Ön hozzájárulásával használjuk.",
+        "Marketing sütik: a hirdetések személyre szabásához használjuk. Csak az Ön hozzájárulásával használjuk.",
+        "A sütibeállításokat weboldalunk bannerjén vagy böngészőjének beállításaiban kezelheti. A szükséges sütik letiltása befolyásolhatja a Platform funkcionalitását."
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "11. Kapcsolat és frissítések",
+      "paragraphs": [
+        "Az adatvédelemmel és adatkezeléssel kapcsolatos kérdéseivel forduljon hozzánk: privacy@timenation.info",
+        "Fenntartjuk a jogot e Szabályzat módosítására. Lényeges változások esetén legalább 30 nappal a hatálybalépés előtt értesítjük Önt a Platformon keresztül.",
+        "A Szabályzat aktuális verziója mindig elérhető a timenation.info/privacy oldalon.",
+        "Az utolsó frissítés dátuma: 2026. július 26."
+      ]
+    }
+  ]
+}

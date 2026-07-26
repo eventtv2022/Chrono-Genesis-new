@@ -1,0 +1,129 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "1. Postanowienia ogólne",
+      "paragraphs": [
+        "Niniejsza Polityka prywatności i przetwarzania danych osobowych (\"Polityka\") opisuje, w jaki sposób TimeNation (\"my\") gromadzi, wykorzystuje, przechowuje i chroni informacje uzyskane od użytkowników witryny timenation.info i aplikacji mobilnej TimeNation (łącznie \"Platforma\").",
+        "TimeNation to cyfrowe państwo oparte na koncepcji wartości ludzkiego czasu. Szanujemy Twoją prywatność i dążymy do zapewnienia maksymalnej przejrzystości w zakresie przetwarzania danych osobowych.",
+        "Korzystając z Platformy, zgadzasz się z warunkami niniejszej Polityki. Jeśli nie zgadzasz się z jej postanowieniami, prosimy o zaprzestanie korzystania z Platformy.",
+        "Niniejsza Polityka została sporządzona zgodnie z Rozporządzeniem Parlamentu Europejskiego i Rady (UE) 2016/679 (RODO) oraz innymi mającymi zastosowanie przepisami dotyczącymi ochrony danych osobowych."
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "2. Administrator danych",
+      "paragraphs": [
+        "Administratorem danych osobowych jest: TimeNation (cyfrowe państwo).",
+        "Adres e-mail do zapytań dotyczących prywatności: privacy@timenation.info",
+        "Komunikator Telegram: @timenation_support",
+        "W przypadku pytań dotyczących przetwarzania Twoich danych osobowych możesz skontaktować się z nami za pośrednictwem powyższych danych kontaktowych. Zobowiązujemy się odpowiedzieć na Twoje zapytanie w ciągu 30 dni od jego otrzymania."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "3. Zbierane dane",
+      "paragraphs": [
+        "Podczas rejestracji i korzystania z Platformy możemy gromadzić następujące kategorie danych:",
+        "Dane identyfikacyjne: imię (pseudonim), adres e-mail, zdjęcie profilowe (opcjonalnie), data urodzenia (jeśli podana).",
+        "Dane kontaktowe: numer telefonu, adres WhatsApp, preferowane kanały komunikacji (e-mail, SMS, Telegram, WhatsApp, rozmowa telefoniczna).",
+        "Dane finansowe: historia transakcji w Darminach (wewnętrzna waluta TimeNation), zapisy składek podatkowych. Dane kart bankowych są przetwarzane wyłącznie przez operatora płatności (Stripe) i nie są przechowywane na naszych serwerach.",
+        "Dane dotyczące użytkowania: adres IP, typ przeglądarki i urządzenia, odwiedzane strony, czas i czas trwania wizyt, działania w aplikacji.",
+        "Dane dotyczące treści: filmy przesyłane do systemu transmisji TimeNation TV, publiczne wiadomości i komentarze.",
+        "Dane kryptograficzne: klucze publiczne do szyfrowania wiadomości bezpośrednich (klucze prywatne są generowane wyłącznie na Twoim urządzeniu i nigdy nie są nam przekazywane)."
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "4. Cele przetwarzania",
+      "paragraphs": [
+        "Przetwarzamy Twoje dane w następujących celach:",
+        "Świadczenie usług: rejestracja i zarządzanie Twoim obywatelstwem TimeNation, zapewnienie dostępu do funkcji Platformy, przetwarzanie transakcji Darmin, zarządzanie rezerwacjami TimeNation TV.",
+        "Komunikacja: wysyłanie powiadomień o wydarzeniach na Platformie, wiadomości TimeNation, odpowiedzi na Twoje pytania i komunikatów serwisowych za pośrednictwem preferowanych przez Ciebie kanałów.",
+        "Bezpieczeństwo: ochrona przed oszustwami, nieautoryzowanym dostępem, wykrywanie podejrzanej aktywności.",
+        "Usprawnienie usług: analiza korzystania z Platformy w celu optymalizacji funkcjonalności i interfejsu.",
+        "Zgodność z prawem: wypełnianie obowiązków wynikających z obowiązującego prawa."
+      ]
+    },
+    {
+      "id": "legal",
+      "title": "5. Podstawa prawna",
+      "paragraphs": [
+        "Przetwarzamy Twoje dane na następujących podstawach prawnych (art. 6 RODO):",
+        "Wykonanie umowy (art. 6(1)(b) RODO): przetwarzanie jest niezbędne do świadczenia zamówionych przez Ciebie usług, w tym rejestracji, zarządzania kontem i transakcji.",
+        "Prawnie uzasadniony interes (art. 6(1)(f) RODO): przetwarzanie jest niezbędne do zapewnienia bezpieczeństwa Platformy, zapobiegania oszustwom i poprawy jakości usług.",
+        "Zgoda (art. 6(1)(a) RODO): w przypadku niektórych rodzajów przetwarzania (np. komunikaty marketingowe, analityczne pliki cookie) prosimy o Twoją zgodę. Możesz ją wycofać w dowolnym momencie bez wpływu na zgodność z prawem przetwarzania dokonanego przed jej wycofaniem.",
+        "Obowiązek prawny (art. 6(1)(c) RODO): przetwarzanie jest niezbędne do wypełnienia wymogów obowiązującego prawa."
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "6. Okresy przechowywania",
+      "paragraphs": [
+        "Przechowujemy Twoje dane nie dłużej niż jest to konieczne do realizacji celów wskazanych w niniejszej Polityce.",
+        "Dane konta: przechowywane przez cały okres aktywności konta plus 90 dni po jego zamknięciu (w celu rozpatrzenia ewentualnych roszczeń).",
+        "Dane transakcji: przechowywane przez 5 lat zgodnie z przepisami podatkowymi i rachunkowymi.",
+        "Dzienniki bezpieczeństwa: przechowywane przez maksymalnie 12 miesięcy.",
+        "Dane plików cookie i analityki: przechowywane zgodnie z ustawieniami przeglądarki użytkownika i przez maksymalnie 13 miesięcy.",
+        "Po upływie okresu przechowywania dane są nieodwracalnie usuwane lub anonimizowane."
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Udostępnianie stronom trzecim",
+      "paragraphs": [
+        "Nie sprzedajemy Twoich danych osobowych stronom trzecim. Możemy udostępniać dane następującym kategoriom odbiorców:",
+        "Operatorzy płatności: Stripe Inc. do przetwarzania płatności. Stripe przetwarza dane zgodnie ze swoją polityką prywatności (stripe.com/privacy) i posiada certyfikat PCI DSS.",
+        "Usługi chmurowe: dostawcy hostingu wspierający infrastrukturę techniczną Platformy. Przekazywanie odbywa się na podstawie umów powierzenia przetwarzania danych (DPA).",
+        "Platformy komunikacyjne i do przesyłania wiadomości: Telegram (powiadomienia i czaty), Twilio (SMS i połączenia) — w zakresie niezbędnym do dostarczenia wiadomości.",
+        "Organy rządowe: w przypadkach przewidzianych obowiązującym prawem, na uzasadnione żądanie uprawnionych organów.",
+        "Przy przekazywaniu danych poza EOG zapewniamy odpowiednie zabezpieczenia zgodnie z wymogami RODO (standardowe klauzule umowne, decyzje stwierdzające odpowiedni poziom ochrony)."
+      ]
+    },
+    {
+      "id": "rights",
+      "title": "8. Twoje prawa",
+      "paragraphs": [
+        "Zgodnie z RODO przysługują Ci następujące prawa dotyczące Twoich danych osobowych:",
+        "Prawo dostępu (art. 15): możesz żądać potwierdzenia przetwarzania Twoich danych i uzyskać ich kopię.",
+        "Prawo do sprostowania (art. 16): możesz żądać poprawienia niedokładnych danych.",
+        "Prawo do usunięcia (art. 17, 'prawo do bycia zapomnianym'): możesz żądać usunięcia danych, gdy istnieją ku temu podstawy prawne.",
+        "Prawo do ograniczenia przetwarzania (art. 18): możesz żądać ograniczenia przetwarzania, gdy kwestionujesz dokładność danych lub sprzeciwiasz się przetwarzaniu.",
+        "Prawo do przenoszenia danych (art. 20): możesz otrzymać swoje dane w ustrukturyzowanym, czytelnym maszynowo formacie.",
+        "Prawo do sprzeciwu (art. 21): możesz sprzeciwić się przetwarzaniu opartemu na prawnie uzasadnionym interesie.",
+        "Prawo do cofnięcia zgody: jeśli przetwarzanie odbywa się na podstawie zgody, możesz ją wycofać w dowolnym momencie.",
+        "Aby skorzystać ze swoich praw, wyślij wniosek na adres privacy@timenation.info. Czas odpowiedzi: 30 dni. Masz również prawo wnieść skargę do organu nadzorczego ds. ochrony danych."
+      ]
+    },
+    {
+      "id": "security",
+      "title": "9. Bezpieczeństwo danych",
+      "paragraphs": [
+        "Stosujemy środki techniczne i organizacyjne w celu ochrony Twoich danych przed nieautoryzowanym dostępem, zmianą, ujawnieniem lub zniszczeniem.",
+        "Stosowane środki bezpieczeństwa obejmują: szyfrowanie danych przesyłanych (TLS/HTTPS), haszowanie haseł z użyciem nowoczesnych algorytmów (bcrypt), szyfrowanie end-to-end wiadomości bezpośrednich (NaCl/TweetNaCl), ograniczenie dostępu do danych zgodnie z zasadą minimalnych uprawnień, regularne audyty bezpieczeństwa.",
+        "W przypadku naruszenia ochrony danych dotykającego Twoich praw i wolności powiadomimy Ciebie i właściwy organ nadzorczy w terminach określonych prawem (nie później niż 72 godziny od wykrycia)."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "10. Pliki cookie",
+      "paragraphs": [
+        "Do obsługi Platformy używamy plików cookie i podobnych technologii (localStorage, sessionStorage).",
+        "Niezbędne pliki cookie: wymagane do działania witryny (sesja użytkownika, ustawienia językowe). Nie można ich wyłączyć.",
+        "Analityczne pliki cookie: pomagają nam zrozumieć, jak użytkownicy wchodzą w interakcję z Platformą. Używane wyłącznie za Twoją zgodą.",
+        "Marketingowe pliki cookie: używane do personalizacji reklam. Używane wyłącznie za Twoją zgodą.",
+        "Możesz zarządzać ustawieniami plików cookie za pośrednictwem banera na naszej witrynie lub ustawień przeglądarki. Wyłączenie niezbędnych plików cookie może wpłynąć na funkcjonalność Platformy."
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "11. Kontakt i aktualizacje",
+      "paragraphs": [
+        "W przypadku wszystkich pytań dotyczących prywatności i przetwarzania danych prosimy o kontakt: privacy@timenation.info",
+        "Zastrzegamy sobie prawo do wprowadzania zmian w niniejszej Polityce. O istotnych zmianach poinformujemy Cię za pośrednictwem Platformy co najmniej 30 dni przed ich wejściem w życie.",
+        "Aktualna wersja Polityki jest zawsze dostępna na timenation.info/privacy.",
+        "Data ostatniej aktualizacji: 26 lipca 2026."
+      ]
+    }
+  ]
+}

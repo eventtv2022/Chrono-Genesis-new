@@ -1,0 +1,129 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "1. Genel Hükümler",
+      "paragraphs": [
+        "Bu Gizlilik ve Kişisel Veri İşleme Politikası (\"Politika\"), TimeNation'ın (\"biz\") timenation.info web sitesi ve TimeNation mobil uygulaması (birlikte \"Platform\") kullanıcılarından elde edilen bilgileri nasıl topladığını, kullandığını, sakladığını ve koruduğunu açıklar.",
+        "TimeNation, insan zamanının değeri kavramı üzerine kurulmuş bir dijital devlettir. Gizliliğinize saygı duyuyor ve kişisel verilerin işlenmesinde maksimum şeffaflığı sağlamayı hedefliyoruz.",
+        "Platformu kullanarak bu Politikanın şartlarını kabul etmiş olursunuz. Herhangi bir hükmüne katılmıyorsanız lütfen Platformu kullanmayı bırakın.",
+        "Bu Politika, Avrupa Birliği Genel Veri Koruma Yönetmeliği (GDPR) ve kişisel verilerin korunmasına ilişkin diğer yürürlükteki mevzuata uygun olarak hazırlanmıştır."
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "2. Veri Sorumlusu",
+      "paragraphs": [
+        "Kişisel verilerin sorumlusu: TimeNation (dijital devlet).",
+        "Gizlilik talepleri için e-posta: privacy@timenation.info",
+        "Telegram: @timenation_support",
+        "Kişisel verilerinizin işlenmesine ilişkin tüm sorularınız için yukarıdaki iletişim bilgileri aracılığıyla bizimle iletişime geçebilirsiniz. Talebinize alındığından itibaren 30 gün içinde yanıt vermeyi taahhüt ediyoruz."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "3. Topladığımız Veriler",
+      "paragraphs": [
+        "Platforma kayıt olurken ve kullanırken aşağıdaki veri kategorilerini toplayabiliriz:",
+        "Kimlik verileri: Ad (takma ad), e-posta adresi, profil fotoğrafı (isteğe bağlı), doğum tarihi (sağlanmışsa).",
+        "İletişim verileri: Telefon numarası, WhatsApp adresi, tercih edilen iletişim kanalları (e-posta, SMS, Telegram, WhatsApp, telefon görüşmesi).",
+        "Finansal veriler: Darmin (TimeNation'ın dahili para birimi) işlem geçmişi, vergi katkı kayıtları. Banka kartı verileri yalnızca ödeme işlemcisi (Stripe) tarafından işlenir ve sunucularımızda saklanmaz.",
+        "Kullanım verileri: IP adresi, tarayıcı ve cihaz türü, ziyaret edilen sayfalar, ziyaret zamanı ve süresi, uygulama içi işlemler.",
+        "İçerik verileri: TimeNation TV yayın sistemine yüklenen videolar, kamuya açık mesajlar ve yorumlar.",
+        "Kriptografik veriler: Doğrudan mesajların şifrelenmesi için açık anahtarlar (özel anahtarlar yalnızca cihazınızda oluşturulur ve bize iletilmez)."
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "4. İşleme Amaçları",
+      "paragraphs": [
+        "Verilerinizi aşağıdaki amaçlarla işliyoruz:",
+        "Hizmet sunumu: TimeNation vatandaşlığınızın kaydı ve yönetimi, Platform özelliklerine erişim sağlama, Darmin işlemlerinin gerçekleştirilmesi, TimeNation TV rezervasyonlarının yönetimi.",
+        "İletişim: Platform etkinliklerine ilişkin bildirimler, TimeNation haberleri, sorgularınıza yanıtlar ve tercih ettiğiniz kanallar aracılığıyla hizmet mesajları gönderme.",
+        "Güvenlik: Dolandırıcılığa, yetkisiz erişime karşı koruma ve şüpheli etkinliğin tespiti.",
+        "Hizmet geliştirme: İşlevsellik ve arayüzü optimize etmek için Platform kullanımının analizi.",
+        "Yasal uyum: Yürürlükteki mevzuat kapsamındaki yükümlülüklerin yerine getirilmesi."
+      ]
+    },
+    {
+      "id": "legal",
+      "title": "5. Hukuki Dayanak",
+      "paragraphs": [
+        "Verilerinizi aşağıdaki hukuki dayanaklar (GDPR Madde 6) çerçevesinde işliyoruz:",
+        "Sözleşmenin ifası (GDPR Md. 6(1)(b)): İşlem, kayıt, hesap yönetimi ve işlemler dahil olmak üzere talep ettiğiniz hizmetlerin sağlanması için zorunludur.",
+        "Meşru menfaat (GDPR Md. 6(1)(f)): İşlem, Platform güvenliğini sağlamak, dolandırıcılığı önlemek ve hizmet kalitesini artırmak için zorunludur.",
+        "Rıza (GDPR Md. 6(1)(a)): Belirli işlem türleri (örn. pazarlama iletişimleri, analitik çerezler) için rızanızı talep ediyoruz. Geri çekilmeden önce gerçekleştirilen işlemin hukuki geçerliliğini etkilemeksizin rızanızı istediğiniz zaman geri çekebilirsiniz.",
+        "Hukuki yükümlülük (GDPR Md. 6(1)(c)): İşlem, yürürlükteki mevzuata uymak için zorunludur."
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "6. Saklama Süreleri",
+      "paragraphs": [
+        "Verilerinizi bu Politikada belirtilen amaçlara ulaşmak için gerekli olandan daha uzun süre saklamıyoruz.",
+        "Hesap verileri: Hesap etkinliğinin tüm süresi boyunca ve kapatılmasından sonra 90 gün boyunca saklanır (olası taleplerin işlenmesi için).",
+        "İşlem verileri: Vergi ve muhasebe mevzuatına uygun olarak 5 yıl saklanır.",
+        "Güvenlik günlükleri: En fazla 12 ay saklanır.",
+        "Çerez ve analitik verileri: Kullanıcı tarayıcı ayarlarına göre ve en fazla 13 ay saklanır.",
+        "Saklama süresi sona erdikten sonra veriler geri alınamaz şekilde silinir veya anonimleştirilir."
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Üçüncü Taraflarla Paylaşım",
+      "paragraphs": [
+        "Kişisel verilerinizi üçüncü taraflara satmıyoruz. Aşağıdaki alıcı kategorileriyle veri paylaşabiliriz:",
+        "Ödeme işlemcileri: Ödeme işlemleri için Stripe Inc. Stripe, gizlilik politikasına (stripe.com/privacy) uygun olarak verileri işler ve PCI DSS sertifikalıdır.",
+        "Bulut hizmetleri: Platformun teknik altyapısını destekleyen barındırma sağlayıcıları. Aktarımlar veri işleme sözleşmeleri (DPA) kapsamında gerçekleştirilir.",
+        "Mesajlaşma ve iletişim platformları: Telegram (bildirimler ve sohbet için), Twilio (SMS ve aramalar için) — yalnızca mesaj iletimi için gerekli ölçüde.",
+        "Devlet kurumları: Yürürlükteki mevzuatın öngördüğü durumlarda, yetkili makamların gerekçeli talebi üzerine.",
+        "Verileri AEA dışına aktarırken GDPR gereklilikleri (standart sözleşme maddeleri, yeterlilik kararları) doğrultusunda uygun güvenceler sağlıyoruz."
+      ]
+    },
+    {
+      "id": "rights",
+      "title": "8. Haklarınız",
+      "paragraphs": [
+        "GDPR kapsamında kişisel verilerinize ilişkin aşağıdaki haklara sahipsiniz:",
+        "Erişim hakkı (Md. 15): Verilerinizin işlendiğine dair onay talep edebilir ve bir kopyasını alabilirsiniz.",
+        "Düzeltme hakkı (Md. 16): Yanlış verilerin düzeltilmesini talep edebilirsiniz.",
+        "Silme hakkı (Md. 17, 'unutulma hakkı'): Yasal gerekçeler mevcut olduğunda verilerinizin silinmesini talep edebilirsiniz.",
+        "İşlemenin kısıtlanması hakkı (Md. 18): Verilerin doğruluğuna itiraz ettiğinizde veya işlemeye karşı çıktığınızda kısıtlama talep edebilirsiniz.",
+        "Veri taşınabilirliği hakkı (Md. 20): Verilerinizi yapılandırılmış, makine tarafından okunabilir bir biçimde alabilirsiniz.",
+        "İtiraz hakkı (Md. 21): Meşru menfaate dayalı işlemeye itiraz edebilirsiniz.",
+        "Rızayı geri çekme hakkı: İşlem rızanıza dayanıyorsa istediğiniz zaman geri çekebilirsiniz.",
+        "Haklarınızı kullanmak için privacy@timenation.info adresine talep gönderin. Yanıt süresi: 30 gün. Ayrıca bir veri koruma denetim makamına şikâyette bulunma hakkınız da bulunmaktadır."
+      ]
+    },
+    {
+      "id": "security",
+      "title": "9. Veri Güvenliği",
+      "paragraphs": [
+        "Verilerinizi yetkisiz erişim, değiştirme, ifşa etme veya imhadan korumak için teknik ve organizasyonel önlemler uyguluyoruz.",
+        "Kullanılan güvenlik önlemleri: İletim sırasında veri şifreleme (TLS/HTTPS), modern algoritmalarla parola karma işlemi (bcrypt), doğrudan mesajların uçtan uca şifrelenmesi (NaCl/TweetNaCl), en az ayrıcalık ilkesiyle veri erişim kısıtlaması, düzenli güvenlik denetimleri.",
+        "Haklarınızı ve özgürlüklerinizi etkileyen bir veri ihlali durumunda, yasal süreler dahilinde (tespitinden itibaren en fazla 72 saat içinde) sizi ve ilgili denetim makamını bilgilendiririz."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "10. Çerezler",
+      "paragraphs": [
+        "Platformu işletmek için çerezler ve benzer teknolojiler (localStorage, sessionStorage) kullanıyoruz.",
+        "Zorunlu çerezler: Web sitesinin işlevi için gereklidir (kullanıcı oturumu, dil ayarları). Devre dışı bırakılamaz.",
+        "Analitik çerezler: Kullanıcıların Platform ile nasıl etkileşime girdiğini anlamamıza yardımcı olur. Yalnızca rızanızla kullanılır.",
+        "Pazarlama çerezleri: Reklamları kişiselleştirmek için kullanılır. Yalnızca rızanızla kullanılır.",
+        "Çerez ayarlarını sitemizin başlığındaki banner veya tarayıcı ayarlarınız aracılığıyla yönetebilirsiniz. Zorunlu çerezleri devre dışı bırakmak Platform işlevselliğini etkileyebilir."
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "11. İletişim ve Güncellemeler",
+      "paragraphs": [
+        "Gizlilik ve veri işlemeye ilişkin tüm sorularınız için: privacy@timenation.info",
+        "Bu Politikayı değiştirme hakkımızı saklı tutuyoruz. Önemli değişiklikler için yürürlüğe girmeden en az 30 gün önce Platform üzerinden sizi bilgilendireceğiz.",
+        "Politikanın güncel sürümü her zaman timenation.info/privacy adresinde mevcuttur.",
+        "Son güncelleme tarihi: 26 Temmuz 2026."
+      ]
+    }
+  ]
+}

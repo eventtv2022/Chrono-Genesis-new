@@ -1,0 +1,129 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "1. Disposizioni generali",
+      "paragraphs": [
+        "La presente Informativa sulla privacy e sul trattamento dei dati personali (l'«Informativa») descrive come TimeNation («noi», «ci», «nostro») raccoglie, utilizza, conserva e protegge le informazioni ricevute dagli utenti del sito web timenation.info e dell'applicazione mobile TimeNation (collettivamente, la «Piattaforma»).",
+        "TimeNation è uno stato digitale fondato sul concetto del valore del tempo umano. Rispettiamo la tua privacy e miriamo a garantire la massima trasparenza nel trattamento dei dati personali.",
+        "Utilizzando la Piattaforma, accetti i termini di questa Informativa. Se non sei d'accordo con le sue disposizioni, ti chiediamo di smettere di utilizzare la Piattaforma.",
+        "Questa Informativa è redatta in conformità al Regolamento generale sulla protezione dei dati (GDPR) dell'Unione europea e ad altra normativa applicabile in materia di protezione dei dati personali."
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "2. Titolare del trattamento",
+      "paragraphs": [
+        "Il titolare del trattamento dei dati personali è: TimeNation (stato digitale).",
+        "E-mail per richieste sulla privacy: privacy@timenation.info",
+        "Telegram: @timenation_support",
+        "Per qualsiasi domanda riguardante il trattamento dei tuoi dati personali, puoi contattarci tramite i recapiti indicati. Ci impegniamo a rispondere alla tua richiesta entro 30 giorni dal ricevimento."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "3. Dati raccolti",
+      "paragraphs": [
+        "Durante la registrazione e l'utilizzo della Piattaforma, possiamo raccogliere le seguenti categorie di dati:",
+        "Dati identificativi: nome (nickname), indirizzo e-mail, foto del profilo (opzionale), data di nascita (se fornita).",
+        "Dati di contatto: numero di telefono, indirizzo WhatsApp, canali di comunicazione preferiti (e-mail, SMS, Telegram, WhatsApp, chiamata telefonica).",
+        "Dati finanziari: cronologia delle transazioni in Darmins (valuta interna di TimeNation), registri dei contributi fiscali. I dati delle carte di pagamento sono trattati esclusivamente dal fornitore di servizi di pagamento (Stripe) e non vengono conservati sui nostri server.",
+        "Dati di utilizzo: indirizzo IP, tipo di browser e dispositivo, pagine visitate, orario e durata delle visite, azioni nell'app.",
+        "Dati di contenuto: video caricati nel sistema di trasmissione TimeNation TV, messaggi pubblici e commenti.",
+        "Dati crittografici: chiavi pubbliche per la cifratura dei messaggi diretti (le chiavi private vengono generate esclusivamente sul tuo dispositivo e non ci vengono mai trasmesse)."
+      ]
+    },
+    {
+      "id": "purposes",
+      "title": "4. Finalità del trattamento",
+      "paragraphs": [
+        "Trattiamo i tuoi dati per le seguenti finalità:",
+        "Erogazione dei servizi: registrazione e gestione della tua cittadinanza in TimeNation, accesso alle funzionalità della Piattaforma, elaborazione delle transazioni Darmin, gestione delle prenotazioni su TimeNation TV.",
+        "Comunicazione: invio di notifiche sugli eventi della Piattaforma, notizie di TimeNation, risposte alle tue richieste e messaggi di servizio tramite i tuoi canali preferiti.",
+        "Sicurezza: protezione da frodi, accessi non autorizzati, rilevamento di attività sospette.",
+        "Miglioramento del servizio: analisi dell'utilizzo della Piattaforma per ottimizzare funzionalità e interfaccia.",
+        "Conformità legale: adempimento degli obblighi previsti dalla normativa applicabile."
+      ]
+    },
+    {
+      "id": "legal",
+      "title": "5. Base giuridica",
+      "paragraphs": [
+        "Trattiamo i tuoi dati sulle seguenti basi giuridiche (art. 6 GDPR):",
+        "Esecuzione di un contratto (art. 6(1)(b) GDPR): il trattamento è necessario per fornire i servizi richiesti, inclusi registrazione, gestione dell'account e transazioni.",
+        "Legittimo interesse (art. 6(1)(f) GDPR): il trattamento è necessario per garantire la sicurezza della Piattaforma, prevenire le frodi e migliorare la qualità del servizio.",
+        "Consenso (art. 6(1)(a) GDPR): per alcuni tipi di trattamento (es. comunicazioni di marketing, cookie analitici), richiediamo il tuo consenso. Puoi revocarlo in qualsiasi momento senza pregiudicare la liceità del trattamento effettuato prima della revoca.",
+        "Obbligo legale (art. 6(1)(c) GDPR): il trattamento è necessario per rispettare la normativa applicabile."
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "6. Periodi di conservazione",
+      "paragraphs": [
+        "Conserviamo i tuoi dati solo per il tempo necessario al raggiungimento delle finalità indicate in questa Informativa.",
+        "Dati dell'account: conservati per tutto il periodo di attività dell'account più 90 giorni dopo la chiusura (per gestire eventuali reclami).",
+        "Dati delle transazioni: conservati per 5 anni in conformità alla normativa fiscale e contabile.",
+        "Log di sicurezza: conservati per un massimo di 12 mesi.",
+        "Dati di cookie e analisi: conservati in base alle impostazioni del browser dell'utente e per non più di 13 mesi.",
+        "Alla scadenza del periodo di conservazione, i dati vengono eliminati in modo irreversibile o anonimizzati."
+      ]
+    },
+    {
+      "id": "sharing",
+      "title": "7. Condivisione con terzi",
+      "paragraphs": [
+        "Non vendiamo i tuoi dati personali a terzi. Possiamo condividere dati con le seguenti categorie di destinatari:",
+        "Fornitori di pagamento: Stripe Inc. per l'elaborazione dei pagamenti. Stripe tratta i dati in conformità alla propria informativa sulla privacy (stripe.com/privacy) ed è certificato PCI DSS.",
+        "Servizi cloud: provider di hosting che supportano l'infrastruttura tecnica della Piattaforma. I trasferimenti avvengono sulla base di accordi di trattamento dei dati (DPA).",
+        "Piattaforme di messaggistica e comunicazione: Telegram (per notifiche e chat), Twilio (per SMS e chiamate), nella misura necessaria per la consegna dei messaggi.",
+        "Autorità governative: nei casi previsti dalla normativa applicabile, su richiesta giustificata delle autorità competenti.",
+        "Nel trasferire dati al di fuori del SEE, garantiamo adeguate protezioni in conformità al GDPR (clausole contrattuali standard, decisioni di adeguatezza)."
+      ]
+    },
+    {
+      "id": "rights",
+      "title": "8. I tuoi diritti",
+      "paragraphs": [
+        "Ai sensi del GDPR, hai i seguenti diritti in merito ai tuoi dati personali:",
+        "Diritto di accesso (art. 15): puoi richiedere la conferma del trattamento dei tuoi dati e ottenerne una copia.",
+        "Diritto di rettifica (art. 16): puoi richiedere la correzione di dati inesatti.",
+        "Diritto alla cancellazione (art. 17, «diritto all'oblio»): puoi richiedere la cancellazione dei tuoi dati quando sussistono i presupposti di legge.",
+        "Diritto alla limitazione del trattamento (art. 18): puoi richiedere la limitazione del trattamento in caso di contestazione dell'esattezza dei dati o di opposizione al trattamento.",
+        "Diritto alla portabilità dei dati (art. 20): puoi ricevere i tuoi dati in un formato strutturato e leggibile da dispositivo automatico.",
+        "Diritto di opposizione (art. 21): puoi opporti al trattamento basato su legittimo interesse.",
+        "Diritto di revoca del consenso: se il trattamento è basato sul tuo consenso, puoi revocarlo in qualsiasi momento.",
+        "Per esercitare i tuoi diritti, invia una richiesta a privacy@timenation.info. Tempo di risposta: 30 giorni. Hai anche il diritto di presentare un reclamo a un'autorità di controllo."
+      ]
+    },
+    {
+      "id": "security",
+      "title": "9. Sicurezza dei dati",
+      "paragraphs": [
+        "Applichiamo misure tecniche e organizzative per proteggere i tuoi dati da accessi non autorizzati, alterazioni, divulgazioni o distruzione.",
+        "Le misure di sicurezza adottate includono: cifratura dei dati in transito (TLS/HTTPS), hashing delle password con algoritmi moderni (bcrypt), cifratura end-to-end dei messaggi diretti (NaCl/TweetNaCl), limitazione dell'accesso ai dati secondo il principio del minimo privilegio, audit di sicurezza periodici.",
+        "In caso di violazione dei dati che coinvolga i tuoi diritti e libertà, ti informeremo e lo comunicheremo all'autorità di controllo competente nei tempi stabiliti dalla legge (entro 72 ore dalla scoperta)."
+      ]
+    },
+    {
+      "id": "cookies",
+      "title": "10. Cookie",
+      "paragraphs": [
+        "Utilizziamo cookie e tecnologie simili (localStorage, sessionStorage) per il funzionamento della Piattaforma.",
+        "Cookie necessari: indispensabili per il funzionamento del sito (sessione utente, impostazioni della lingua). Non possono essere disattivati.",
+        "Cookie analitici: ci aiutano a capire come gli utenti interagiscono con la Piattaforma. Usati solo con il tuo consenso.",
+        "Cookie di marketing: usati per personalizzare la pubblicità. Usati solo con il tuo consenso.",
+        "Puoi gestire le impostazioni dei cookie tramite il banner sul nostro sito o le impostazioni del tuo browser. La disattivazione dei cookie necessari potrebbe compromettere le funzionalità della Piattaforma."
+      ]
+    },
+    {
+      "id": "contact",
+      "title": "11. Contatti e aggiornamenti",
+      "paragraphs": [
+        "Per tutte le domande relative alla privacy e al trattamento dei dati, contattaci: privacy@timenation.info",
+        "Ci riserviamo il diritto di modificare questa Informativa. Per modifiche sostanziali, ti informeremo tramite la Piattaforma con almeno 30 giorni di preavviso.",
+        "La versione aggiornata dell'Informativa è sempre disponibile su timenation.info/privacy.",
+        "Data dell'ultimo aggiornamento: 26 luglio 2026."
+      ]
+    }
+  ]
+}
