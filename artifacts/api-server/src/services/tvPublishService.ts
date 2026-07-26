@@ -165,11 +165,12 @@ export async function publishVideoToTelegram(
   options: PublishVideoOptions,
   maxRetries = 3,
 ): Promise<PublishResult> {
-  const token  = process.env["TELEGRAM_BOT_TOKEN"];
+  // TV publishing uses the admin/broadcast bot (ADMIN_BOT_TOKEN).
+  const token  = process.env["ADMIN_BOT_TOKEN"] ?? process.env["TELEGRAM_BOT_TOKEN"];
   const chatId = process.env["TELEGRAM_CHAT_ID"];
 
   if (!token) {
-    return { ok: false, description: "TELEGRAM_BOT_TOKEN не настроен", errorCode: 0 };
+    return { ok: false, description: "ADMIN_BOT_TOKEN не настроен", errorCode: 0 };
   }
   if (!chatId) {
     return { ok: false, description: "TELEGRAM_CHAT_ID не настроен", errorCode: 0 };

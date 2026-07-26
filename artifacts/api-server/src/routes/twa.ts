@@ -70,6 +70,8 @@ function emissionState(citizen: { registrationStatus: string | null; availableAt
   return { status, secondsLeft };
 }
 
+// TWA initData validation MUST use the client bot token (@timenation_bot).
+// This is TELEGRAM_BOT_TOKEN — distinct from ADMIN_BOT_TOKEN (admin/alert bot).
 function resolvedBotToken(): string {
   return process.env.TELEGRAM_BOT_TOKEN ?? process.env.BOT_TOKEN ?? "";
 }

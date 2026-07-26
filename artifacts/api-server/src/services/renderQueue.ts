@@ -140,7 +140,8 @@ export function enqueueRender(job: RenderJob): string {
           renderLog.info("Capsule auto-published to broadcast");
 
           // ── Auto-publish to Telegram TV group ────────────────────────────
-          if (process.env["TELEGRAM_CHAT_ID"] && process.env["TELEGRAM_BOT_TOKEN"]) {
+          // Admin alerts use ADMIN_BOT_TOKEN (broadcast/notification bot).
+          if (process.env["TELEGRAM_CHAT_ID"] && (process.env["ADMIN_BOT_TOKEN"] ?? process.env["TELEGRAM_BOT_TOKEN"])) {
             void (async () => {
               try {
                 // Load slot + capsule + citizen for caption

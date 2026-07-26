@@ -24,10 +24,14 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-if (process.env["TELEGRAM_BOT_TOKEN"]) {
-  initBot(process.env["TELEGRAM_BOT_TOKEN"]);
+// Admin/notification bot — uses ADMIN_BOT_TOKEN (old bot for alerts & commands).
+// Client-facing bot (@timenation_bot) token lives in TELEGRAM_BOT_TOKEN and is
+// used exclusively for TWA initData validation.
+const adminBotToken = process.env["ADMIN_BOT_TOKEN"] ?? process.env["TELEGRAM_BOT_TOKEN"];
+if (adminBotToken) {
+  initBot(adminBotToken);
 } else {
-  logger.info("TELEGRAM_BOT_TOKEN not set — Telegram bot disabled");
+  logger.info("ADMIN_BOT_TOKEN not set — Telegram admin bot disabled");
 }
 
 function scheduleDailyEntropy() {

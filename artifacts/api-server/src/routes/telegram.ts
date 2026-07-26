@@ -362,6 +362,7 @@ router.post(
       return;
     }
 
+    // TWA initData validation — must use client bot token (TELEGRAM_BOT_TOKEN = @timenation_bot)
     const botToken = process.env["TELEGRAM_BOT_TOKEN"];
     if (!botToken) {
       res.status(503).json({ ok: false, error: "Bot not configured" });
@@ -429,7 +430,8 @@ router.post(
 router.get(
   "/telegram/config",
   async (_req: Request, res: Response): Promise<void> => {
-    const hasBotToken = !!process.env["TELEGRAM_BOT_TOKEN"];
+    // Config status reflects the admin/broadcast bot (ADMIN_BOT_TOKEN).
+    const hasBotToken = !!(process.env["ADMIN_BOT_TOKEN"] ?? process.env["TELEGRAM_BOT_TOKEN"]);
     const hasChatId   = !!process.env["TELEGRAM_CHAT_ID"];
 
     res.json({
