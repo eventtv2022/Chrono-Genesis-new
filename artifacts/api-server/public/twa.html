@@ -163,6 +163,8 @@
       border: 1px solid var(--border);
       background: rgba(255,255,255,.04);
       touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
       cursor: crosshair;
       display: block;
       margin-bottom: 10px;
@@ -656,13 +658,29 @@ function initSigCanvas() {
     return { x: src.clientX - rect.left, y: src.clientY - rect.top };
   }
 
-  sigCanvas.addEventListener('pointerdown', e => {
+  function startDrawing(e) {
     isDrawing = true;
     const p = getPos(e);
     sigCtx.beginPath();
     sigCtx.moveTo(p.x, p.y);
-    e.preventDefault();
-  });
+  }
+
+  function draw(e) {
+    if (!isDrawing) return;
+    const rect = sigCanvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    sigCtx.lineTo(x, y);
+    sigCtx.stroke();
+  }
+
+  function stopDrawing() {
+    isDrawing = false;
+  }
+
+  // ── Pointer events (mouse / stylus) ─────────────────────────────────────────
+  sigCanvas.addEventListener('pointerdown', e => { startDrawing(e); e.preventDefault(); });
   sigCanvas.addEventListener('pointermove', e => {
     if (!isDrawing) return;
     const p = getPos(e);
@@ -670,8 +688,35 @@ function initSigCanvas() {
     sigCtx.stroke();
     e.preventDefault();
   });
-  sigCanvas.addEventListener('pointerup',   () => { isDrawing = false; });
-  sigCanvas.addEventListener('pointerleave',() => { isDrawing = false; });
+  sigCanvas.addEventListener('pointerup',    () => stopDrawing());
+  sigCanvas.addEventListener('pointerleave', () => stopDrawing());
+
+  // ── Touch events (mobile / Telegram WebApp) ─────────────────────────────────
+  // { passive: false } required so preventDefault() can suppress scrolling.
+  sigCanvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    // Disable Telegram bottom-sheet vertical swipe while signing
+    window.Telegram?.WebApp?.disableVerticalSwipes?.();
+    startDrawing(e);
+  }, { passive: false });
+
+  sigCanvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    draw(e);
+  }, { passive: false });
+
+  sigCanvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    stopDrawing();
+    // Re-enable Telegram vertical swipe after pen is lifted
+    window.Telegram?.WebApp?.enableVerticalSwipes?.();
+  }, { passive: false });
+
+  sigCanvas.addEventListener('touchcancel', e => {
+    e.preventDefault();
+    stopDrawing();
+    window.Telegram?.WebApp?.enableVerticalSwipes?.();
+  }, { passive: false });
 }
 
 function clearSig() {
