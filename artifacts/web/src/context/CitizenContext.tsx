@@ -18,6 +18,8 @@ export interface CitizenProfile {
   walletAddress: string | null;
   walletVerified: number;
   ageVerified: number;
+  isAdmin?: number;
+  govRole?: string | null;
 }
 
 interface CitizenContextType {

@@ -195,6 +195,46 @@ export async function sendPassportEmail(params: NewCitizenNotifyParams): Promise
   }
 }
 
+/** Send admin registry 2FA OTP to a fixed admin email address. */
+export async function sendRegistryOtpEmail(otp: string): Promise<boolean> {
+  const adminEmail = "support@timenation.info";
+  const transport = createTransport();
+  if (!transport) {
+    logger.warn("SMTP not configured — skipping registry OTP email");
+    return false;
+  }
+  try {
+    await transport.sendMail({
+      from: FROM,
+      to: adminEmail,
+      subject: "🔐 TimeNation — Код доступа к Реестру Граждан",
+      html: `
+        <div style="font-family:'Segoe UI',Arial,sans-serif;background:#0D0D14;padding:40px;color:#E8EDF2;border-radius:12px;max-width:480px;margin:auto">
+          <div style="text-align:center;margin-bottom:24px">
+            <div style="font-size:32px">🛡️</div>
+            <div style="font-size:20px;font-weight:700;color:#C9A84C;margin-top:8px">Реестр Граждан TimeNation</div>
+            <div style="font-size:12px;color:#9a9ab0;margin-top:4px">Запрос двухфакторной авторизации</div>
+          </div>
+          <div style="background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.25);border-radius:10px;padding:24px;text-align:center;margin-bottom:20px">
+            <div style="font-size:12px;color:#9a9ab0;margin-bottom:10px;text-transform:uppercase;letter-spacing:2px">Ваш OTP-код</div>
+            <div style="font-size:42px;font-weight:900;letter-spacing:8px;color:#C9A84C;font-family:monospace">${otp}</div>
+            <div style="font-size:12px;color:#9a9ab0;margin-top:10px">Действителен 5 минут</div>
+          </div>
+          <div style="font-size:12px;color:#4a4a6a;text-align:center">
+            Если вы не запрашивали код — проигнорируйте это письмо.<br/>
+            TimeNation · support@timenation.info
+          </div>
+        </div>`,
+      text: `TimeNation — Код доступа к Реестру Граждан\n\nВаш OTP-код: ${otp}\n\nДействителен 5 минут.\n\nЕсли вы не запрашивали код — проигнорируйте это письмо.`,
+    });
+    logger.info("Registry OTP email sent to admin");
+    return true;
+  } catch (err) {
+    logger.error({ err }, "Failed to send registry OTP email");
+    return false;
+  }
+}
+
 export async function sendAdminTelegramNotify(opts: {
   sendDirectMessage: (id: string, msg: string) => Promise<boolean>;
   name: string;

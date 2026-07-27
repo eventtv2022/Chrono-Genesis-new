@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X, ShieldCheck, QrCode } from "lucide-react";
+import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X, ShieldCheck, QrCode, Database } from "lucide-react";
 import { SystemClock } from "./SystemClock";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -82,6 +82,16 @@ function CitizenWidget() {
           </div>
         </div>
         <div className="text-[9px] text-muted-foreground font-mono truncate">{citizen.rank}</div>
+
+        {/* Admin — Registry button */}
+        {!!citizen.isAdmin && (
+          <Link href="/admin/registry">
+            <button className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[11px] font-bold transition-colors">
+              <Database className="w-3.5 h-3.5" />
+              🛡 База Данных Граждан
+            </button>
+          </Link>
+        )}
       </div>
     );
   }
