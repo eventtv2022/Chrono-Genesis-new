@@ -1253,9 +1253,30 @@
       💰 Пополнить баланс Дарминов
     </button>
 
-    <button class="btn btn-primary" onclick="openWebApp()">
-      🌐 Открыть TimeNation
-    </button>
+    <!-- Ecosystem links -->
+    <div style="display:flex;flex-direction:column;gap:10px;width:100%">
+      <a href="https://timenation.info" target="_blank"
+         style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--fg);text-decoration:none;font-family:inherit;font-size:14px;font-weight:600;transition:background .18s"
+         onclick="tg?.openLink?.('https://timenation.info');return false">
+        <span style="font-size:22px">🌐</span>
+        <span>Официальный сайт</span>
+      </a>
+      <a href="https://c683d011-eb44-4e71-bc0d-350ee613e0ca-00-1bn0o04nfdvrm.expo.pike.replit.dev/" target="_blank"
+         style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--fg);text-decoration:none;font-family:inherit;font-size:14px;font-weight:600;transition:background .18s"
+         onclick="tg?.openLink?.('https://c683d011-eb44-4e71-bc0d-350ee613e0ca-00-1bn0o04nfdvrm.expo.pike.replit.dev/');return false">
+        <span style="font-size:22px">📱</span>
+        <span>Мобильное приложение (Mini App)</span>
+      </a>
+      <a href="https://c683d011-eb44-4e71-bc0d-350ee613e0ca-00-1bn0o04nfdvrm.pike.replit.dev/web/" target="_blank"
+         style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--fg);text-decoration:none;font-family:inherit;font-size:14px;font-weight:600;transition:background .18s"
+         onclick="tg?.openLink?.('https://c683d011-eb44-4e71-bc0d-350ee613e0ca-00-1bn0o04nfdvrm.pike.replit.dev/web/');return false">
+        <span style="font-size:22px">🖥</span>
+        <span>Web-версия (Десктоп)</span>
+      </a>
+      <p style="font-size:11px;color:var(--muted);text-align:center;line-height:1.6;margin:0">
+        Исследуйте экосистему TimeNation на сайте, в приложении или на ПК.
+      </p>
+    </div>
   </div>
 
   <!-- ── Payment Modal (Buy Darmins) ── -->
@@ -1997,6 +2018,29 @@ async function submitDraft() {
         Мы уведомим вас в Telegram.
       </div>
       <div id="waiting-timer" style="font-size:32px;font-weight:700;font-family:monospace;color:var(--accent);font-variant-numeric:tabular-nums;">${document.getElementById('timer-display').textContent}</div>
+      <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:360px;margin-top:8px">
+        <a href="https://timenation.info" target="_blank"
+           style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--fg);text-decoration:none;font-family:inherit;font-size:14px;font-weight:600"
+           onclick="window.tg?.openLink?.('https://timenation.info');return false">
+          <span style="font-size:22px">🌐</span>
+          <span>Официальный сайт</span>
+        </a>
+        <a href="https://c683d011-eb44-4e71-bc0d-350ee613e0ca-00-1bn0o04nfdvrm.expo.pike.replit.dev/" target="_blank"
+           style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--fg);text-decoration:none;font-family:inherit;font-size:14px;font-weight:600"
+           onclick="window.tg?.openLink?.('https://c683d011-eb44-4e71-bc0d-350ee613e0ca-00-1bn0o04nfdvrm.expo.pike.replit.dev/');return false">
+          <span style="font-size:22px">📱</span>
+          <span>Мобильное приложение (Mini App)</span>
+        </a>
+        <a href="https://c683d011-eb44-4e71-bc0d-350ee613e0ca-00-1bn0o04nfdvrm.pike.replit.dev/web/" target="_blank"
+           style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--fg);text-decoration:none;font-family:inherit;font-size:14px;font-weight:600"
+           onclick="window.tg?.openLink?.('https://c683d011-eb44-4e71-bc0d-350ee613e0ca-00-1bn0o04nfdvrm.pike.replit.dev/web/');return false">
+          <span style="font-size:22px">🖥</span>
+          <span>Web-версия (Десктоп)</span>
+        </a>
+        <p style="font-size:11px;color:var(--muted);text-align:center;line-height:1.6;margin:0">
+          Пока идёт эмиссия Паспорта, вы можете исследовать экосистему на сайте, в приложении или на ПК.
+        </p>
+      </div>
     `;
     document.getElementById('app').appendChild(waiting);
 
