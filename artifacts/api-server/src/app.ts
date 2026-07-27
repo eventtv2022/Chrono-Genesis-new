@@ -52,6 +52,11 @@ app.get("/twa", (_req, res) => {
   res.sendFile(path.join(process.cwd(), "public", "twa.html"));
 });
 
+// ── TON Connect manifest — required for Telegram Wallet / TON Connect SDK ─────
+app.get("/tonconnect-manifest.json", (_req, res) => {
+  res.sendFile(path.join(process.cwd(), "public", "tonconnect-manifest.json"));
+});
+
 // ── API routers ───────────────────────────────────────────────────────────────
 app.use("/api", router);
 

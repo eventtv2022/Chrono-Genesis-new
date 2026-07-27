@@ -86,6 +86,9 @@ export const citizensTable = pgTable("citizens", {
   // ── Multi-channel communication preferences ─────────────────────────────
   whatsappPhone: text("whatsapp_phone"),        // WhatsApp contact number
   preferredChannels: text("preferred_channels"), // JSON array: ['email','telegram','whatsapp','sms','phone'] — ≥2 required
+
+  // ── TON Wallet (Telegram Wallet / TON Connect) ───────────────────────────
+  tonWalletAddress: text("ton_wallet_address"), // TON address in raw/user-friendly format (EQ…/UQ…)
 });
 
 export const insertCitizenSchema = createInsertSchema(citizensTable).omit({

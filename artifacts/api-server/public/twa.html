@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>TimeNation — Цифровой Паспорт</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- TON Connect UI — Telegram Wallet / Tonkeeper / MyTonWallet -->
+  <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -713,6 +715,65 @@
       box-shadow: 0 4px 18px rgba(201,168,76,.35);
     }
     .fm-close:active { opacity: .88; }
+
+    /* ── TON Wallet ── */
+    .ton-wallet-gate {
+      width: 100%; max-width: 420px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(88,196,220,.25);
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .ton-wallet-gate-icon { font-size: 22px; flex-shrink: 0; }
+    .ton-wallet-gate-info { flex: 1; min-width: 0; }
+    .ton-wallet-gate-title {
+      font-size: 13px; font-weight: 700; color: #58c4dc;
+      margin-bottom: 3px;
+    }
+    .ton-wallet-gate-sub { font-size: 12px; color: var(--muted); }
+    .ton-wallet-gate-btn {
+      padding: 8px 14px; border-radius: 10px; border: none;
+      background: rgba(88,196,220,.15);
+      border: 1px solid rgba(88,196,220,.35);
+      color: #58c4dc; font-size: 13px; font-weight: 700;
+      cursor: pointer; font-family: inherit; white-space: nowrap;
+      transition: background .2s;
+    }
+    .ton-wallet-gate-btn:active { background: rgba(88,196,220,.28); }
+    .ton-wallet-gate-btn.connected {
+      background: rgba(88,196,220,.22);
+      border-color: rgba(88,196,220,.55);
+      color: #7fdaed;
+    }
+
+    /* TON card in active passport */
+    .ton-passport-card {
+      width: 100%; max-width: 420px;
+      background: linear-gradient(135deg, rgba(88,196,220,.08) 0%, rgba(0,161,214,.06) 100%);
+      border: 1px solid rgba(88,196,220,.22);
+      border-radius: 16px;
+      padding: 16px 18px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .ton-pc-gem { font-size: 28px; flex-shrink: 0; }
+    .ton-pc-body { flex: 1; min-width: 0; }
+    .ton-pc-title { font-size: 14px; font-weight: 700; color: #58c4dc; margin-bottom: 4px; }
+    .ton-pc-desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .ton-pc-addr {
+      font-size: 11px; color: #7fdaed; font-family: monospace;
+      margin-top: 4px; word-break: break-all;
+    }
+    .ton-pc-btn {
+      padding: 9px 16px; border-radius: 12px; border: none;
+      background: rgba(88,196,220,.18);
+      border: 1px solid rgba(88,196,220,.4);
+      color: #58c4dc; font-size: 13px; font-weight: 700;
+      cursor: pointer; font-family: inherit; white-space: nowrap;
+      transition: background .2s;
+    }
+    .ton-pc-btn:active { background: rgba(88,196,220,.32); }
+    .ton-pc-btn.connected { color: #7fdaed; border-color: rgba(88,196,220,.6); }
   </style>
 </head>
 <body>
@@ -811,6 +872,18 @@
     <div class="gate-ctas">
       <button class="btn-gate-primary" onclick="startEmissionWizard()">⏳ Оформить Паспорт Гражданина (Эмиссия)</button>
       <button class="btn-gate-secondary" onclick="enterGuestModeFromGate()">👁 Войти как Гость и исследовать Хронопедию</button>
+    </div>
+
+    <!-- TON Wallet connect (emission screen) -->
+    <div class="ton-wallet-gate" id="ton-wallet-gate">
+      <div class="ton-wallet-gate-icon">💎</div>
+      <div class="ton-wallet-gate-info">
+        <div class="ton-wallet-gate-title">TON Wallet</div>
+        <div class="ton-wallet-gate-sub" id="ton-gate-sub">Привязать для быстрых выплат и оплаты</div>
+      </div>
+      <button class="ton-wallet-gate-btn" id="ton-gate-btn" onclick="tonWalletAction()">
+        🔗 Подключить
+      </button>
     </div>
   </div>
 
@@ -1063,6 +1136,17 @@
       <div class="passport-footer">ЦИФРОВОЕ ГОСУДАРСТВО · TIMENATION · <span id="pp-year"></span></div>
     </div>
 
+    <!-- TON Wallet card -->
+    <div class="ton-passport-card" id="ton-passport-card">
+      <div class="ton-pc-gem">💎</div>
+      <div class="ton-pc-body">
+        <div class="ton-pc-title">TON Wallet</div>
+        <div class="ton-pc-desc" id="ton-pc-desc">Подключите кошелёк для оплаты в TON и быстрых переводов</div>
+        <div class="ton-pc-addr" id="ton-pc-addr" style="display:none"></div>
+      </div>
+      <button class="ton-pc-btn" id="ton-pc-btn" onclick="tonWalletAction()">🔗 Подключить</button>
+    </div>
+
     <button class="btn btn-primary" onclick="openWebApp()">
       🌐 Открыть TimeNation
     </button>
@@ -1156,6 +1240,7 @@ async function init() {
     citizenData = data;
 
     hideLoading();
+    initTonConnect(); // non-blocking — loads TON Connect UI in background
 
     // ── Subscription gate ──────────────────────────────────────────────────────
     const subscribed = await checkSubscription();
@@ -1731,6 +1816,154 @@ function parseTimerDisplay() {
   const txt = document.getElementById('timer-display')?.textContent ?? '00:00:00';
   const [h, m, s] = txt.split(':').map(Number);
   return (h * 3600) + (m * 60) + (s || 0);
+}
+
+// ── TON Connect ───────────────────────────────────────────────────────────────
+let tonConnectUI = null;
+let tonWalletAddress = null;
+
+/** Initialize TonConnectUI — called after successful auth */
+async function initTonConnect() {
+  // TON_CONNECT_UI is loaded from the @tonconnect/ui CDN script
+  if (typeof TON_CONNECT_UI === 'undefined') return;
+
+  const manifestUrl = window.location.origin + pathBase + '/tonconnect-manifest.json';
+  try {
+    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl });
+  } catch (e) {
+    console.warn('TonConnectUI init failed:', e);
+    return;
+  }
+
+  // Restore state if wallet was already connected
+  tonConnectUI.onStatusChange(wallet => {
+    if (wallet) {
+      tonWalletAddress = wallet.account.address;
+      _updateTonWalletUI(tonWalletAddress);
+      _saveTonWalletAddress(tonWalletAddress);
+    } else {
+      tonWalletAddress = null;
+      _updateTonWalletUI(null);
+    }
+  });
+}
+
+/** Toggle connect / disconnect */
+async function tonWalletAction() {
+  if (!tonConnectUI) {
+    showToast('Загрузка TON Connect…');
+    return;
+  }
+  if (tonWalletAddress) {
+    await tonConnectUI.disconnect();
+  } else {
+    await tonConnectUI.openModal();
+  }
+}
+
+/** Update all TON wallet UI elements based on current address */
+function _updateTonWalletUI(addr) {
+  const short = addr ? (addr.slice(0, 6) + '…' + addr.slice(-4)) : null;
+
+  // Gate screen card
+  const gateBtn  = document.getElementById('ton-gate-btn');
+  const gateSub  = document.getElementById('ton-gate-sub');
+  if (gateBtn) {
+    gateBtn.textContent = addr ? ('✅ ' + short) : '🔗 Подключить';
+    gateBtn.classList.toggle('connected', !!addr);
+  }
+  if (gateSub) {
+    gateSub.textContent = addr
+      ? 'Кошелёк привязан к аккаунту'
+      : 'Привязать для быстрых выплат и оплаты';
+  }
+
+  // Active passport card
+  const pcBtn  = document.getElementById('ton-pc-btn');
+  const pcDesc = document.getElementById('ton-pc-desc');
+  const pcAddr = document.getElementById('ton-pc-addr');
+  if (pcBtn) {
+    pcBtn.textContent = addr ? '✅ Привязан' : '🔗 Подключить';
+    pcBtn.classList.toggle('connected', !!addr);
+  }
+  if (pcDesc) {
+    pcDesc.textContent = addr
+      ? 'Кошелёк успешно привязан к Паспорту'
+      : 'Подключите кошелёк для оплаты в TON и быстрых переводов';
+  }
+  if (pcAddr) {
+    pcAddr.textContent = addr ?? '';
+    pcAddr.style.display = addr ? 'block' : 'none';
+  }
+}
+
+/** Save TON wallet address to backend (linked to citizen authToken) */
+async function _saveTonWalletAddress(addr) {
+  if (!authToken) return;
+  try {
+    await fetch(`${pathBase}/api/auth/telegram-webapp/ton-wallet`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ tonWalletAddress: addr }),
+    });
+  } catch (e) {
+    console.warn('TON wallet save failed:', e);
+  }
+}
+
+/**
+ * Send a TON payment.
+ * @param {number}  amountTon  Amount in TON (e.g. 0.5)
+ * @param {string}  comment    Text comment attached to the transaction
+ * @param {string}  [toAddress] Recipient address (default: TimeNation treasury)
+ */
+async function sendTonPayment(amountTon, comment, toAddress) {
+  if (!tonConnectUI) {
+    showToast('TON Connect не инициализирован');
+    return null;
+  }
+  if (!tonWalletAddress) {
+    await tonConnectUI.openModal();
+    return null;
+  }
+
+  // TimeNation treasury — update when the real contract is deployed
+  const TREASURY = toAddress || 'EQD2NmD_lH5f5u1Kj3KfGyTvhZSX0Eg6qp2a5IQUKXxOG3E';
+  const nanotons = String(Math.floor(amountTon * 1e9));
+
+  const tx = {
+    validUntil: Math.floor(Date.now() / 1000) + 600,
+    messages: [
+      {
+        address: TREASURY,
+        amount:  nanotons,
+        payload: btoa(unescape(encodeURIComponent(comment))), // UTF-8 → base64
+      },
+    ],
+  };
+
+  try {
+    const result = await tonConnectUI.sendTransaction(tx);
+    showToast('✅ TON-транзакция отправлена!');
+    return result;
+  } catch (e) {
+    if (e?.message !== 'UserRejectsError') {
+      showToast('❌ Ошибка TON-транзакции');
+    }
+    throw e;
+  }
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.classList.add('show');
+  if (toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => toast.classList.remove('show'), 3200);
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────

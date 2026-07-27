@@ -459,4 +459,45 @@ router.post("/channel/post", async (req, res): Promise<void> => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /auth/telegram-webapp/ton-wallet
+// Save TON wallet address (from TON Connect) linked to authenticated citizen.
+// Body: { tonWalletAddress: string }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/auth/telegram-webapp/ton-wallet", async (req, res): Promise<void> => {
+  const authHeader = req.headers.authorization ?? "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+
+  if (!token) {
+    res.status(401).json({ error: "Missing auth token" });
+    return;
+  }
+
+  const { tonWalletAddress } = req.body as { tonWalletAddress?: string };
+  if (!tonWalletAddress || typeof tonWalletAddress !== "string" || tonWalletAddress.length < 10) {
+    res.status(400).json({ error: "tonWalletAddress is required" });
+    return;
+  }
+
+  const [citizen] = await db
+    .select({ id: citizensTable.id, telegramId: citizensTable.telegramId })
+    .from(citizensTable)
+    .where(eq(citizensTable.authToken, token))
+    .limit(1);
+
+  if (!citizen) {
+    res.status(401).json({ error: "Invalid auth token" });
+    return;
+  }
+
+  await db
+    .update(citizensTable)
+    .set({ tonWalletAddress })
+    .where(eq(citizensTable.id, citizen.id));
+
+  req.log.info({ citizenId: citizen.id, tonWalletAddress }, "TON wallet linked");
+
+  res.json({ success: true, tonWalletAddress });
+});
+
 export default router;
