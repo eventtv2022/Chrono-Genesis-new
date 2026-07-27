@@ -163,12 +163,36 @@ export function Register() {
               <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">{t.reg_citizen_number}</p>
               <p className="text-3xl font-mono font-bold text-primary tracking-widest">{pendingData.citizenNumber}</p>
               <p className="text-xs text-muted-foreground font-mono">{t.reg_save_number}</p>
-              <div className="pt-3 border-t border-border">
-                <p className="text-xs text-muted-foreground font-mono leading-relaxed">
-                  {t.reg_tab_closed}{" "}
-                  <a href={`${BASE_WEB}/passport-lookup`} className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors">
-                    {t.reg_citizen_registry}
-                  </a>
+              <div className="pt-3 border-t border-border space-y-2">
+                <a
+                  href="https://timenation.info"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 w-full px-4 py-3 rounded-sm border border-border bg-secondary/40 hover:bg-secondary/70 text-sm font-mono font-semibold transition-colors"
+                >
+                  <span className="text-lg">🌐</span>
+                  <span>Официальный сайт</span>
+                </a>
+                <a
+                  href="https://c683d011-eb44-4e71-bc0d-350ee613e0ca-00-1bn0o04nfdvrm.expo.pike.replit.dev/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 w-full px-4 py-3 rounded-sm border border-border bg-secondary/40 hover:bg-secondary/70 text-sm font-mono font-semibold transition-colors"
+                >
+                  <span className="text-lg">📱</span>
+                  <span>Мобильное приложение (Mini App)</span>
+                </a>
+                <a
+                  href="https://c683d011-eb44-4e71-bc0d-350ee613e0ca-00-1bn0o04nfdvrm.pike.replit.dev/web/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 w-full px-4 py-3 rounded-sm border border-border bg-secondary/40 hover:bg-secondary/70 text-sm font-mono font-semibold transition-colors"
+                >
+                  <span className="text-lg">🖥</span>
+                  <span>Web-версия (Десктоп)</span>
+                </a>
+                <p className="text-xs text-muted-foreground font-mono leading-relaxed pt-1">
+                  Пока идёт эмиссия Паспорта, вы можете исследовать экосистему на сайте, в приложении или на ПК.
                 </p>
               </div>
             </CardContent>
