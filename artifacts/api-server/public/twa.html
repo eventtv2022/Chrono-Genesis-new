@@ -622,6 +622,97 @@
       transition: background .15s;
     }
     .btn-gate-secondary:active { background: rgba(255,255,255,0.08); }
+
+    /* ── Feature Modal (BottomSheet) ──────────────────────────────────────── */
+    #fm-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.65);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 200;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    #fm-backdrop.open { display: flex; }
+
+    #fm-sheet {
+      width: 100%; max-width: 480px;
+      background: #1a1d26;
+      border: 1px solid rgba(201,168,76,.3);
+      border-bottom: none;
+      border-radius: 22px 22px 0 0;
+      padding: 0 0 env(safe-area-inset-bottom,0);
+      max-height: 88vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      transform: translateY(100%);
+      transition: transform .32s cubic-bezier(.32,1,.42,1);
+      box-shadow: 0 -8px 48px rgba(0,0,0,.6), 0 0 0 1px rgba(201,168,76,.08);
+    }
+    #fm-backdrop.open #fm-sheet { transform: translateY(0); }
+
+    .fm-handle {
+      width: 36px; height: 4px;
+      background: rgba(255,255,255,.18);
+      border-radius: 2px;
+      margin: 12px auto 0;
+    }
+
+    .fm-inner { padding: 20px 20px 28px; }
+
+    .fm-icon { font-size: 36px; text-align: center; margin-bottom: 10px; }
+
+    .fm-title {
+      font-size: 19px; font-weight: 800;
+      text-align: center; line-height: 1.2;
+      margin-bottom: 14px;
+      background: linear-gradient(135deg, #c9a84c, #a89eff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .fm-body {
+      font-size: 14px; color: #b0b0cc;
+      line-height: 1.7; margin-bottom: 18px;
+      white-space: pre-line;
+    }
+
+    .fm-highlight {
+      font-size: 13px; color: var(--fg);
+      background: rgba(108,99,255,.12);
+      border: 1px solid rgba(108,99,255,.25);
+      border-left: 3px solid #a89eff;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+
+    .fm-timer-badge {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(201,168,76,.08);
+      border: 1px solid rgba(201,168,76,.25);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+    }
+    .fm-timer-badge .fmtb-icon { font-size: 20px; flex-shrink: 0; }
+    .fm-timer-badge .fmtb-text { flex: 1; }
+    .fm-timer-badge .fmtb-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .fm-timer-badge .fmtb-countdown { font-size: 22px; font-weight: 700; color: var(--gold); font-family: "Courier New", monospace; letter-spacing: 2px; }
+
+    .fm-close {
+      width: 100%; padding: 14px;
+      border-radius: 14px; border: none;
+      background: linear-gradient(135deg, #c9a84c 0%, #e8c870 60%, #c9a84c 100%);
+      color: #0f0f1a;
+      font-size: 15px; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+      box-shadow: 0 4px 18px rgba(201,168,76,.35);
+    }
+    .fm-close:active { opacity: .88; }
   </style>
 </head>
 <body>
@@ -875,7 +966,7 @@
       <div class="guest-section-title">Возможности после активации</div>
       <div style="display:flex;flex-direction:column;gap:8px">
 
-        <div class="locked-action" onclick="showGuestToast()">
+        <div class="locked-action" onclick="showFeatureModal('darmins')">
           <div class="la-icon">💸</div>
           <div class="la-text">
             <div class="la-title">Перевод Дарминов</div>
@@ -884,7 +975,7 @@
           <div class="la-lock">🔒</div>
         </div>
 
-        <div class="locked-action" onclick="showGuestToast()">
+        <div class="locked-action" onclick="showFeatureModal('escrow')">
           <div class="la-icon">🤝</div>
           <div class="la-text">
             <div class="la-title">Создать сделку</div>
@@ -893,7 +984,7 @@
           <div class="la-lock">🔒</div>
         </div>
 
-        <div class="locked-action" onclick="showGuestToast()">
+        <div class="locked-action" onclick="showFeatureModal('embassy')">
           <div class="la-icon">🏛</div>
           <div class="la-text">
             <div class="la-title">Посольства</div>
@@ -902,7 +993,7 @@
           <div class="la-lock">🔒</div>
         </div>
 
-        <div class="locked-action" onclick="showGuestToast()">
+        <div class="locked-action" onclick="showFeatureModal('tv')">
           <div class="la-icon">📺</div>
           <div class="la-text">
             <div class="la-title">TimeNation TV</div>
@@ -911,7 +1002,7 @@
           <div class="la-lock">🔒</div>
         </div>
 
-        <div class="locked-action" onclick="showGuestToast()">
+        <div class="locked-action" onclick="showFeatureModal('profile')">
           <div class="la-icon">✏️</div>
           <div class="la-text">
             <div class="la-title">Редактировать профиль</div>
@@ -975,6 +1066,28 @@
     <button class="btn btn-primary" onclick="openWebApp()">
       🌐 Открыть TimeNation
     </button>
+  </div>
+
+  <!-- ── Feature Modal ── -->
+  <div id="fm-backdrop" onclick="fmBackdropClick(event)">
+    <div id="fm-sheet">
+      <div class="fm-handle"></div>
+      <div class="fm-inner">
+        <div class="fm-icon" id="fm-icon">🔒</div>
+        <div class="fm-title" id="fm-title"></div>
+        <div class="fm-body" id="fm-body"></div>
+        <div class="fm-highlight" id="fm-highlight"></div>
+        <div class="fm-timer-badge">
+          <div class="fmtb-icon">⏳</div>
+          <div class="fmtb-text">
+            <div class="fmtb-label">Функция станет доступна через</div>
+            <div class="fmtb-countdown" id="fm-countdown">--:--</div>
+            <div class="fmtb-label" style="margin-top:2px">по завершении эмиссии Паспорта</div>
+          </div>
+        </div>
+        <button class="fm-close" onclick="closeFeatureModal()">✦ Понятно — исследую дальше</button>
+      </div>
+    </div>
   </div>
 
 </div><!-- /app -->
@@ -1298,6 +1411,85 @@ function showGuestToast() {
   toast.classList.add('show');
   if (toastTimeout) clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => toast.classList.remove('show'), 3200);
+}
+
+// ── Feature Modal ──────────────────────────────────────────────────────────────
+const FEATURE_INFO = {
+  darmins: {
+    icon: '💸',
+    title: 'Перевод Дарминов',
+    body: 'Дармин (Д) — цифровая валюта TimeNation, обеспеченная реальным временем. Каждый Дармин равен одной минуте жизни, зафиксированной в системе.\n\nПосле активации Паспорта ты сможешь отправлять Дармины другим гражданам: оплачивать услуги, делиться ценностью, поддерживать проекты и идеи.\n\nЭкономика смыслов — не метафора, а работающий механизм обмена. Здесь твоё время буквально конвертируется в возможности.',
+    highlight: '💡 Первый баланс формируется в момент эмиссии Паспорта. Чем раньше ты зарегистрируешься — тем выгоднее стартовый курс.',
+  },
+  escrow: {
+    icon: '🤝',
+    title: 'Сделки (Escrow)',
+    body: 'Система эскроу TimeNation позволяет безопасно обмениваться услугами, знаниями и ресурсами без посредников.\n\nТы создаёшь сделку с чёткими условиями — Дармины замораживаются до выполнения договорённостей. Ни обмана, ни споров: смарт-контракт на базе репутации граждан.\n\nИдеально для фриланса, наставничества, совместных проектов и любых коллабораций внутри TimeNation.',
+    highlight: '🔐 Репутация участников сделки публична. Это создаёт естественный механизм доверия без посредников.',
+  },
+  embassy: {
+    icon: '🏛',
+    title: 'Посольства',
+    body: 'Посольства — мосты между TimeNation и внешними сообществами. Здесь происходит конвертация Дарминов в ценности других экосистем.\n\nТы сможешь создавать дипломатические связи между гражданами разных государств, открывать новые экономические маршруты и участвовать в межнациональных проектах Хронопедии.\n\nКаждое посольство — это узел в глобальной сети смыслов, где твоё время имеет ценность за пределами одной страны.',
+    highlight: '🌍 Посольства открывают доступ к партнёрским экономикам и уникальным обменным курсам.',
+  },
+  tv: {
+    icon: '📺',
+    title: 'TimeNation TV',
+    body: 'Публикуй капсулы времени в эфир TimeNation. Каждая капсула — зафиксированный момент твоей жизни: мысль, решение, открытие, достижение или эмоция.\n\nКапсулы становятся частью Хронопедии — живой летописи нации. Другие граждане могут поддержать твои публикации Дарминами.\n\nЭто не контент ради лайков. Это документ истории — твоей личной и общей.',
+    highlight: '📡 Лучшие капсулы попадают в «Эфир» — публичную ленту TimeNation, доступную всем гражданам.',
+  },
+  profile: {
+    icon: '✏️',
+    title: 'Профиль Гражданина',
+    body: 'После активации Паспорта ты сможешь полностью персонализировать свой цифровой профиль: сменить имя, загрузить фото, написать биографию и настроить видимость данных.\n\nПрофиль — это лицо гражданина TimeNation. Он отражает твои ценности, путь и вехи Хронопедии.\n\nЗдесь будет твоя история, рассказанная тобой самим — не алгоритмом.',
+    highlight: '🛡 Уровни приватности позволяют выбрать, что видит публика, а что остаётся только тебе.',
+  },
+};
+
+let _fmTimerInterval = null;
+
+function showFeatureModal(featureId) {
+  const info = FEATURE_INFO[featureId];
+  if (!info) return;
+
+  document.getElementById('fm-icon').textContent      = info.icon;
+  document.getElementById('fm-title').textContent     = info.title;
+  document.getElementById('fm-body').textContent      = info.body;
+  document.getElementById('fm-highlight').textContent = info.highlight;
+
+  // Tick countdown immediately, then every second
+  function updateCountdown() {
+    const s   = guestTimerRemaining;
+    const m   = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+    const sec = String(s % 60).padStart(2, '0');
+    const el  = document.getElementById('fm-countdown');
+    if (el) el.textContent = s > 0 ? `${m}:${sec}` : '00:00 ✅';
+  }
+  updateCountdown();
+  if (_fmTimerInterval) clearInterval(_fmTimerInterval);
+  _fmTimerInterval = setInterval(updateCountdown, 1000);
+
+  // Disable Telegram vertical swipe while modal is open
+  tg?.disableVerticalSwipes?.();
+
+  const backdrop = document.getElementById('fm-backdrop');
+  backdrop.style.display = 'flex'; // ensure display:flex before adding class
+  requestAnimationFrame(() => backdrop.classList.add('open'));
+}
+
+function closeFeatureModal() {
+  const backdrop = document.getElementById('fm-backdrop');
+  backdrop.classList.remove('open');
+  clearInterval(_fmTimerInterval);
+  tg?.enableVerticalSwipes?.();
+  // Wait for slide-out animation before hiding
+  setTimeout(() => { backdrop.style.display = 'none'; }, 350);
+}
+
+function fmBackdropClick(e) {
+  // Close only if the user taps the dark backdrop, not the sheet itself
+  if (e.target === document.getElementById('fm-backdrop')) closeFeatureModal();
 }
 
 function renderTimer(s, done = false) {
