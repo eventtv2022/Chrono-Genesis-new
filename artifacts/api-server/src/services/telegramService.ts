@@ -49,6 +49,75 @@ export function initBot(token: string): Telegraf {
     const tgUsername = ctx.from.username ? `@${ctx.from.username}` : "";
     const firstName = ctx.from.first_name ?? "Гражданин";
 
+    // ── QR desktop login: /start qr_<token> ─────────────────────────
+    if (payload.startsWith("qr_")) {
+      const qrToken = payload.slice(3); // strip 'qr_' prefix
+      try {
+        // Citizen must already have a linked Telegram account
+        const [citizen] = await db
+          .select({
+            id:             citizensTable.id,
+            name:           citizensTable.name,
+            balanceMinutes: citizensTable.balanceMinutes,
+            authToken:      citizensTable.authToken,
+          })
+          .from(citizensTable)
+          .where(eq(citizensTable.telegramId, telegramId))
+          .limit(1);
+
+        if (!citizen || !citizen.authToken) {
+          await ctx.reply(
+            "❌ Ваш Telegram не привязан к аккаунту TimeNation.\n\n" +
+            "Откройте приложение TimeNation → Профиль → «Подключить Telegram».",
+          );
+          return;
+        }
+
+        const { authorizeQrToken, isValidQrToken } = await import("./qrAuthService");
+        const { pushQrLogin } = await import("./socialAlarmWs");
+
+        if (!isValidQrToken(qrToken)) {
+          await ctx.reply(
+            "❌ QR-код истёк или недействителен. Обновите страницу на компьютере и попробуйте снова.",
+          );
+          return;
+        }
+
+        const ok = authorizeQrToken(qrToken, {
+          authToken:      citizen.authToken,
+          id:             citizen.id,
+          name:           citizen.name,
+          balanceMinutes: citizen.balanceMinutes,
+        });
+
+        if (!ok) {
+          await ctx.reply("❌ Не удалось авторизовать QR-код. Попробуйте снова.");
+          return;
+        }
+
+        // Push WS login event to the desktop browser waiting on this token
+        pushQrLogin(qrToken, {
+          type:           "qr_login",
+          citizenId:      citizen.id,
+          authToken:      citizen.authToken,
+          name:           citizen.name,
+          balanceMinutes: citizen.balanceMinutes,
+        });
+
+        await ctx.reply(
+          `✅ *Вы успешно вошли в TimeNation Web на ПК!*\n\n` +
+          `👤 ${citizen.name}\n💰 Баланс: *${citizen.balanceMinutes} Д*`,
+          { parse_mode: "Markdown" },
+        );
+        logger.info({ citizenId: citizen.id, telegramId }, "QR desktop login via Telegram bot");
+        return;
+      } catch (err) {
+        logger.error({ err, qrToken }, "QR login via bot failed");
+        await ctx.reply("❌ Внутренняя ошибка. Попробуйте позже.");
+        return;
+      }
+    }
+
     // ── Auth-code binding: /start <8-char HEX CODE> ──────────────────
     // New flow: citizen generates link from the app, code is looked up by value
     if (/^[0-9A-F]{8}$/.test(payload)) {

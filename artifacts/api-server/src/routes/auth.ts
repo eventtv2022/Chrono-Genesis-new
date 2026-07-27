@@ -341,16 +341,21 @@ router.post("/auth/set-password", async (req, res): Promise<void> => {
 });
 
 // ── QR Login ─────────────────────────────────────────────────────────────────
-import { generateQrToken, consumeQrToken } from "../services/qrAuthService";
+import { generateQrToken, consumeQrToken, authorizeQrToken } from "../services/qrAuthService";
 import { pushQrLogin } from "../services/socialAlarmWs";
+import { getBotUsername } from "../services/telegramService";
 
-// GET /auth/qr-token — web requests a short-lived token to display as QR
+// GET /auth/qr-token — web requests a short-lived token to display as QR.
+// Returns the bot username so the frontend can build the correct t.me deep-link.
 router.get("/auth/qr-token", (_req, res) => {
   const token = generateQrToken();
-  res.json({ token, expiresIn: 120 });
+  const botUsername = getBotUsername() || "TimeNation_app_bot";
+  res.json({ token, expiresIn: 120, botUsername });
 });
 
-// POST /auth/qr-verify — mobile scans QR, verifies and pushes login to web WS
+// POST /auth/qr-verify — fallback: mobile app scans QR, verifies and pushes login to web WS.
+// The primary flow is now via Telegram bot (/start qr_<token>), but this endpoint
+// remains so existing mobile builds keep working.
 router.post("/auth/qr-verify", async (req, res): Promise<void> => {
   const { qrToken, authToken } = req.body as { qrToken?: string; authToken?: string };
   if (!qrToken || !authToken) {
@@ -361,11 +366,11 @@ router.post("/auth/qr-verify", async (req, res): Promise<void> => {
   // Verify mobile citizen by authToken
   const [citizen] = await db
     .select({
-      id: citizensTable.id,
-      name: citizensTable.name,
+      id:             citizensTable.id,
+      name:           citizensTable.name,
       balanceMinutes: citizensTable.balanceMinutes,
-      rank: citizensTable.rank,
-      authToken: citizensTable.authToken,
+      rank:           citizensTable.rank,
+      authToken:      citizensTable.authToken,
     })
     .from(citizensTable)
     .where(eq(citizensTable.authToken, authToken))
@@ -376,23 +381,29 @@ router.post("/auth/qr-verify", async (req, res): Promise<void> => {
     return;
   }
 
-  // Check and consume the QR token
-  const valid = consumeQrToken(qrToken);
-  if (!valid) {
+  // Authorize and consume the QR token
+  const ok = authorizeQrToken(qrToken, {
+    authToken:      citizen.authToken ?? "",
+    id:             citizen.id,
+    name:           citizen.name,
+    balanceMinutes: citizen.balanceMinutes,
+  });
+  const entry = ok ? consumeQrToken(qrToken) : null;
+  if (!ok || !entry) {
     res.status(400).json({ error: "QR-код недействителен или истёк. Обновите страницу." });
     return;
   }
 
-  // Push login event to web socket waiting on this token
+  // Push login event to the web socket waiting on this token
   const pushed = pushQrLogin(qrToken, {
-    type: "qr_login",
-    citizenId: citizen.id,
-    authToken: citizen.authToken ?? "",
-    name: citizen.name,
+    type:           "qr_login",
+    citizenId:      citizen.id,
+    authToken:      citizen.authToken ?? "",
+    name:           citizen.name,
     balanceMinutes: citizen.balanceMinutes,
   });
 
-  logger.info({ citizenId: citizen.id, pushed }, "QR login verified");
+  logger.info({ citizenId: citizen.id, pushed }, "QR login verified (mobile fallback)");
   res.json({ ok: true, pushed, citizenId: citizen.id });
 });
 

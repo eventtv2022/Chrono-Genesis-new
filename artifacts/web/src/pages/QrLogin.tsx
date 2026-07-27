@@ -11,6 +11,7 @@ export function QrLogin() {
   const { citizen, setAuthToken, refreshCitizen } = useCitizen();
   const [, navigate] = useLocation();
   const [token, setToken] = useState<string | null>(null);
+  const [botUsername, setBotUsername] = useState<string>("TimeNation_app_bot");
   const [phase, setPhase] = useState<Phase>("loading");
   const [error, setError] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<number>(0);
@@ -26,9 +27,10 @@ export function QrLogin() {
     setError(null);
     try {
       const res = await fetch("/api/auth/qr-token");
-      const data = await res.json() as { token?: string; expiresIn?: number };
+      const data = await res.json() as { token?: string; expiresIn?: number; botUsername?: string };
       if (!data.token) throw new Error("No token");
       setToken(data.token);
+      if (data.botUsername) setBotUsername(data.botUsername);
       setExpiresAt(Date.now() + (data.expiresIn ?? 120) * 1000);
       setSecondsLeft(data.expiresIn ?? 120);
       setPhase("ready");
@@ -63,8 +65,10 @@ export function QrLogin() {
     },
   });
 
+  // Encode a Telegram deep-link so any smartphone camera can open it directly.
+  // When scanned, Telegram opens @botUsername and sends /start qr_<token>.
   const qrContent = token
-    ? JSON.stringify({ action: "qr_login", token })
+    ? `https://t.me/${botUsername}?start=qr_${token}`
     : "";
 
   return (
@@ -74,7 +78,7 @@ export function QrLogin() {
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight">Вход через QR</h1>
             <p className="text-muted-foreground font-mono text-sm mt-2">
-              Отсканируйте код мобильным приложением TimeNation
+              Отсканируйте QR-код камерой смартфона или через Telegram, чтобы войти в аккаунт.
             </p>
           </div>
 
@@ -137,9 +141,9 @@ export function QrLogin() {
           {/* Instructions */}
           {(phase === "ready") && (
             <ol className="text-xs font-mono text-muted-foreground space-y-1 list-decimal list-inside">
-              <li>Откройте приложение TimeNation на телефоне</li>
-              <li>Перейдите во вкладку «Синхро» → «Сканировать QR»</li>
-              <li>Наведите камеру на код выше</li>
+              <li>Наведите камеру смартфона на QR-код</li>
+              <li>Telegram откроется автоматически — нажмите «Запустить»</li>
+              <li>Вход выполнится мгновенно</li>
             </ol>
           )}
 
