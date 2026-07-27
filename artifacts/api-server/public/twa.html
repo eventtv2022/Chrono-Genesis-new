@@ -7,6 +7,8 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <!-- TON Connect UI — Telegram Wallet / Tonkeeper / MyTonWallet -->
   <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+  <!-- QR-code generator (for TRC20 address display) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -774,6 +776,105 @@
     }
     .ton-pc-btn:active { background: rgba(88,196,220,.32); }
     .ton-pc-btn.connected { color: #7fdaed; border-color: rgba(88,196,220,.6); }
+
+    /* ── Payment Modal (Buy Darmins / TRC20) ── */
+    #pm-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,.78);
+      align-items: flex-end; justify-content: center;
+    }
+    #pm-backdrop.open { display: flex; }
+    #pm-sheet {
+      width: 100%; max-width: 480px;
+      background: #1a1d26;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 24px 24px 0 0;
+      max-height: 92vh; overflow-y: auto;
+      transform: translateY(100%);
+      transition: transform .32s cubic-bezier(.32,1,.42,1);
+    }
+    #pm-backdrop.open #pm-sheet { transform: translateY(0); }
+    .pm-handle { width:40px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:12px auto 0; }
+    .pm-inner { padding:20px; display:flex; flex-direction:column; gap:14px; }
+    .pm-title { font-size:18px;font-weight:700; }
+    .pm-sub { font-size:13px;color:var(--muted); }
+    .pm-presets { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+    .pm-preset-btn {
+      padding:9px 6px; border-radius:12px;
+      border:1.5px solid rgba(255,255,255,.1);
+      background:rgba(255,255,255,.04); cursor:pointer;
+      font-family:inherit; color:var(--fg); text-align:center;
+      transition:all .18s;
+    }
+    .pm-preset-btn.active { border-color:var(--gold); background:rgba(201,168,76,.1); }
+    .pm-preset-d { font-size:14px;font-weight:700; }
+    .pm-preset-u { font-size:10px;color:var(--muted);margin-top:2px; }
+    .pm-methods { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .pm-method-btn {
+      padding:12px 8px; border-radius:14px;
+      border:1.5px solid rgba(255,255,255,.1);
+      background:rgba(255,255,255,.04); cursor:pointer;
+      font-family:inherit; color:var(--fg); text-align:center; transition:all .2s;
+    }
+    .pm-method-btn.active { border-color:var(--gold);background:rgba(201,168,76,.1); }
+    .pm-method-icon { font-size:22px;margin-bottom:4px; }
+    .pm-method-name { font-size:12px;font-weight:700; }
+    .pm-method-sub { font-size:10px;color:var(--muted);margin-top:2px; }
+    .pm-trc20 { display:flex;flex-direction:column;gap:14px; }
+    .pm-addr-card {
+      background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1);
+      border-radius:12px; padding:12px 14px; display:flex; align-items:center; gap:10px;
+    }
+    .pm-addr-text { flex:1;font-family:monospace;font-size:11px;word-break:break-all;color:#7fdaed; }
+    .pm-copy-btn {
+      padding:7px 12px; border-radius:8px;
+      border:1px solid rgba(88,196,220,.4);
+      background:rgba(88,196,220,.12); color:#58c4dc;
+      font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;
+    }
+    .pm-copy-btn:active { background:rgba(88,196,220,.25); }
+    .pm-qr-wrap { display:flex;justify-content:center;background:rgba(255,255,255,.95);border-radius:14px;padding:14px; }
+    .pm-amount-box {
+      background:rgba(201,168,76,.08); border:1px solid rgba(201,168,76,.25);
+      border-radius:12px; padding:12px 16px;
+      display:flex; justify-content:space-between; align-items:center;
+    }
+    .pm-amount-label { font-size:11px;color:var(--muted);margin-bottom:4px; }
+    .pm-amount-val { font-size:22px;font-weight:700;color:var(--gold);font-family:monospace; }
+    .pm-amount-sub { font-size:11px;color:var(--muted);text-align:right; }
+    .pm-txid-label { font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600; }
+    .pm-txid-input {
+      width:100%;padding:11px 14px;border-radius:10px;
+      border:1px solid rgba(255,255,255,.15);
+      background:rgba(255,255,255,.05);color:var(--fg);
+      font-family:monospace;font-size:12px;outline:none;box-sizing:border-box;
+    }
+    .pm-txid-input:focus { border-color:rgba(88,196,220,.5); }
+    .pm-submit-btn {
+      width:100%;padding:14px;border-radius:14px;border:none;
+      background:linear-gradient(135deg,#0ea5e9 0%,#06b6d4 100%);
+      color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;
+      box-shadow:0 4px 18px rgba(14,165,233,.3);
+    }
+    .pm-submit-btn:disabled { opacity:.45;cursor:default; }
+    .pm-submit-btn:active:not(:disabled) { opacity:.88; }
+    .pm-success {
+      background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);
+      border-radius:12px;padding:16px;text-align:center;
+    }
+    .pm-success-icon { font-size:32px;margin-bottom:8px; }
+    .pm-success-text { font-size:14px;color:#6ee7b7;font-weight:700; }
+    .pm-success-sub { font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5; }
+    .pm-ton-note {
+      font-size:13px;color:var(--muted);line-height:1.6;padding:14px;
+      background:rgba(108,99,255,.08);border-radius:12px;border:1px solid rgba(108,99,255,.2);
+    }
+    .pm-note { font-size:11px;color:var(--muted);text-align:center;line-height:1.6; }
+    .pm-close-btn {
+      width:100%;padding:12px;border-radius:14px;border:1px solid rgba(255,255,255,.1);
+      background:transparent;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;
+    }
+    .pm-close-btn:active { background:rgba(255,255,255,.05); }
   </style>
 </head>
 <body>
@@ -1147,9 +1248,123 @@
       <button class="ton-pc-btn" id="ton-pc-btn" onclick="tonWalletAction()">🔗 Подключить</button>
     </div>
 
+    <!-- Buy Darmins button -->
+    <button class="btn btn-secondary" onclick="showBuyModal(100)" style="background:rgba(201,168,76,.12);border-color:rgba(201,168,76,.35);color:var(--gold);font-weight:700">
+      💰 Пополнить баланс Дарминов
+    </button>
+
     <button class="btn btn-primary" onclick="openWebApp()">
       🌐 Открыть TimeNation
     </button>
+  </div>
+
+  <!-- ── Payment Modal (Buy Darmins) ── -->
+  <div id="pm-backdrop" onclick="pmBackdropClick(event)">
+    <div id="pm-sheet">
+      <div class="pm-handle"></div>
+      <div class="pm-inner">
+        <div>
+          <div class="pm-title">💰 Пополнить баланс</div>
+          <div class="pm-sub">Выберите количество Дарминов и способ оплаты</div>
+        </div>
+
+        <!-- Preset amounts -->
+        <div class="pm-presets">
+          <button class="pm-preset-btn active" id="pm-pre-100" onclick="setPmDarmins(100)">
+            <div class="pm-preset-d">100 Д</div>
+            <div class="pm-preset-u" id="pm-pre-u-100">~105 USDT</div>
+          </button>
+          <button class="pm-preset-btn" id="pm-pre-500" onclick="setPmDarmins(500)">
+            <div class="pm-preset-d">500 Д</div>
+            <div class="pm-preset-u" id="pm-pre-u-500">~494 USDT</div>
+          </button>
+          <button class="pm-preset-btn" id="pm-pre-1000" onclick="setPmDarmins(1000)">
+            <div class="pm-preset-d">1000 Д</div>
+            <div class="pm-preset-u" id="pm-pre-u-1000">~976 USDT</div>
+          </button>
+        </div>
+
+        <!-- Method selector -->
+        <div class="pm-methods">
+          <button class="pm-method-btn" id="pm-method-ton" onclick="selectPayMethod('ton')">
+            <div class="pm-method-icon">💎</div>
+            <div class="pm-method-name">TON / USDT</div>
+            <div class="pm-method-sub">TON Connect</div>
+          </button>
+          <button class="pm-method-btn active" id="pm-method-trc20" onclick="selectPayMethod('trc20')">
+            <div class="pm-method-icon">💵</div>
+            <div class="pm-method-name">USDT TRC20</div>
+            <div class="pm-method-sub">Tron Network</div>
+          </button>
+        </div>
+
+        <!-- TON Connect section -->
+        <div id="pm-ton-section" style="display:none;flex-direction:column;gap:12px">
+          <div class="pm-ton-note">
+            💎 Для оплаты через TON Connect подключите кошелёк (кнопка выше) и подтвердите транзакцию прямо в Telegram Wallet.
+          </div>
+          <button class="pm-submit-btn" onclick="tonWalletAction()">
+            💎 Оплатить через TON Connect
+          </button>
+        </div>
+
+        <!-- TRC20 section -->
+        <div id="pm-trc20-section" class="pm-trc20">
+          <!-- Address card -->
+          <div class="pm-addr-card">
+            <div class="pm-addr-text">TJZZWWKU1L2v4EetVmMPKKfK396sZn82XC</div>
+            <button class="pm-copy-btn" onclick="copyTrc20Address()">📋 Копировать</button>
+          </div>
+
+          <!-- QR code (rendered by qrcodejs) -->
+          <div class="pm-qr-wrap">
+            <div id="pm-qr-canvas"></div>
+          </div>
+
+          <!-- Amount -->
+          <div class="pm-amount-box">
+            <div>
+              <div class="pm-amount-label">Точная сумма к переводу</div>
+              <div class="pm-amount-val" id="pm-trc20-amount">—</div>
+            </div>
+            <div class="pm-amount-sub">
+              <div id="pm-trc20-darmins">— Дарминов</div>
+              <div>USDT · TRC20 (Tron)</div>
+              <div style="margin-top:4px;font-size:10px;color:var(--muted)">вкл. комиссию 5%</div>
+            </div>
+          </div>
+
+          <!-- TxID input -->
+          <div>
+            <div class="pm-txid-label">Хэш транзакции (TxID) после перевода</div>
+            <input class="pm-txid-input" id="pm-txid-input" type="text"
+              placeholder="Вставьте TxID из Tron кошелька..." oninput="pmTxidChanged(this)" />
+          </div>
+
+          <!-- Success (hidden) -->
+          <div id="pm-success" style="display:none" class="pm-success">
+            <div class="pm-success-icon">✅</div>
+            <div class="pm-success-text">Транзакция принята на проверку!</div>
+            <div class="pm-success-sub">Дармины будут зачислены после подтверждения администратором в блокчейне Tron.</div>
+          </div>
+
+          <button class="pm-submit-btn" id="pm-submit-btn" onclick="submitTrc20TxId()" disabled>
+            ✅ Подтвердить оплату
+          </button>
+
+          <div class="pm-note">
+            Переведите точную сумму USDT (TRC20) на адрес казначейства,<br>
+            затем вставьте хэш транзакции выше и нажмите «Подтвердить».<br>
+            <a href="https://tronscan.org/#/address/TJZZWWKU1L2v4EetVmMPKKfK396sZn82XC"
+               style="color:#58c4dc" onclick="tg?.openLink?.('https://tronscan.org/#/address/TJZZWWKU1L2v4EetVmMPKKfK396sZn82XC');return false">
+              🔍 Открыть на Tronscan
+            </a>
+          </div>
+        </div>
+
+        <button class="pm-close-btn" onclick="closeBuyModal()">✕ Закрыть</button>
+      </div>
+    </div>
   </div>
 
   <!-- ── Feature Modal ── -->
@@ -1816,6 +2031,214 @@ function parseTimerDisplay() {
   const txt = document.getElementById('timer-display')?.textContent ?? '00:00:00';
   const [h, m, s] = txt.split(':').map(Number);
   return (h * 3600) + (m * 60) + (s || 0);
+}
+
+// ── Payment Modal (Buy Darmins / TRC20) ───────────────────────────────────────
+const TRC20_WALLET  = 'TJZZWWKU1L2v4EetVmMPKKfK396sZn82XC';
+const SYSTEM_FEE    = 0.05; // 5 %
+let _pmDarmins   = 100;
+let _pmRequestId = null;
+let _pmQrInited  = false;
+let _pmMethod    = 'trc20'; // 'ton' | 'trc20'
+
+function showBuyModal(darmins) {
+  _pmDarmins   = darmins || 100;
+  _pmRequestId = null;
+
+  // Reset UI
+  const success   = document.getElementById('pm-success');
+  const submitBtn = document.getElementById('pm-submit-btn');
+  const txidInput = document.getElementById('pm-txid-input');
+  if (success)   success.style.display = 'none';
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '✅ Подтвердить оплату'; }
+  if (txidInput) { txidInput.value = ''; txidInput.disabled = false; }
+
+  // Reset presets UI
+  ['100','500','1000'].forEach(n => {
+    document.getElementById(`pm-pre-${n}`)?.classList.toggle('active', Number(n) === _pmDarmins);
+  });
+
+  // Start TRC20 mode by default
+  selectPayMethod('trc20');
+
+  // Load pricing from backend and generate QR
+  _loadTrc20Pricing(_pmDarmins);
+  _generatePaymentQr();
+
+  const backdrop = document.getElementById('pm-backdrop');
+  if (backdrop) {
+    backdrop.style.display = 'flex';
+    requestAnimationFrame(() => backdrop.classList.add('open'));
+  }
+  tg?.disableVerticalSwipes?.();
+}
+
+function closeBuyModal() {
+  const backdrop = document.getElementById('pm-backdrop');
+  if (!backdrop) return;
+  backdrop.classList.remove('open');
+  tg?.enableVerticalSwipes?.();
+  setTimeout(() => { backdrop.style.display = 'none'; }, 350);
+}
+
+function pmBackdropClick(e) {
+  if (e.target === document.getElementById('pm-backdrop')) closeBuyModal();
+}
+
+function setPmDarmins(n) {
+  _pmDarmins = n;
+  ['100','500','1000'].forEach(v => {
+    document.getElementById(`pm-pre-${v}`)?.classList.toggle('active', Number(v) === n);
+  });
+  _loadTrc20Pricing(n);
+}
+
+async function _loadTrc20Pricing(darmins) {
+  const amountEl  = document.getElementById('pm-trc20-amount');
+  const darminsEl = document.getElementById('pm-trc20-darmins');
+  if (amountEl) amountEl.textContent = '⏳ расчёт...';
+
+  // Optimistic local calculation while waiting
+  function localCalc(d) {
+    let disc = 0;
+    if (d > 10000) disc = 10;
+    else if (d >= 5000) disc = 8;
+    else if (d >= 1000) disc = 7;
+    else if (d >= 500)  disc = 6;
+    else if (d >= 100)  disc = 5;
+    return parseFloat((d * (1 - disc / 100) * (1 + SYSTEM_FEE)).toFixed(4));
+  }
+
+  // Update preset hints (local calc)
+  const presets = { 100: 100, 500: 500, 1000: 1000 };
+  Object.entries(presets).forEach(([k, v]) => {
+    const el = document.getElementById(`pm-pre-u-${k}`);
+    if (el) el.textContent = `~${localCalc(v).toFixed(0)} USDT`;
+  });
+
+  try {
+    const resp = await fetch(`${pathBase}/api/payments/trc20/request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ citizenId: citizenId || 0, darmins, purpose: 'darmins' }),
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      _pmRequestId = data.requestId;
+      if (amountEl)  amountEl.textContent  = data.totalUsdt.toFixed(4) + ' USDT';
+      if (darminsEl) darminsEl.textContent = darmins + ' Дарминов';
+    } else {
+      if (amountEl) amountEl.textContent = localCalc(darmins) + ' USDT';
+    }
+  } catch {
+    if (amountEl)  amountEl.textContent  = localCalc(darmins).toFixed(4) + ' USDT';
+    if (darminsEl) darminsEl.textContent = darmins + ' Дарминов';
+  }
+}
+
+function _generatePaymentQr() {
+  if (_pmQrInited) return;
+  const container = document.getElementById('pm-qr-canvas');
+  if (!container || typeof QRCode === 'undefined') return;
+  container.innerHTML = '';
+  new QRCode(container, {
+    text: TRC20_WALLET,
+    width: 180, height: 180,
+    colorDark: '#000000', colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M,
+  });
+  _pmQrInited = true;
+}
+
+function selectPayMethod(method) {
+  _pmMethod = method;
+  const tonBtn   = document.getElementById('pm-method-ton');
+  const trc20Btn = document.getElementById('pm-method-trc20');
+  const tonSec   = document.getElementById('pm-ton-section');
+  const trc20Sec = document.getElementById('pm-trc20-section');
+
+  if (method === 'ton') {
+    tonBtn?.classList.add('active');
+    trc20Btn?.classList.remove('active');
+    if (tonSec)   tonSec.style.display = 'flex';
+    if (trc20Sec) trc20Sec.style.display = 'none';
+  } else {
+    trc20Btn?.classList.add('active');
+    tonBtn?.classList.remove('active');
+    if (trc20Sec) { trc20Sec.style.display = 'flex'; _generatePaymentQr(); }
+    if (tonSec)   tonSec.style.display = 'none';
+  }
+}
+
+function copyTrc20Address() {
+  const addr = TRC20_WALLET;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(addr)
+      .then(() => showToast('📋 Адрес скопирован!'))
+      .catch(() => _fallbackCopy(addr));
+  } else {
+    _fallbackCopy(addr);
+  }
+}
+
+function _fallbackCopy(text) {
+  const el = document.createElement('textarea');
+  el.value = text;
+  el.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+  document.body.appendChild(el);
+  el.select();
+  try { document.execCommand('copy'); showToast('📋 Адрес скопирован!'); } catch {}
+  document.body.removeChild(el);
+}
+
+function pmTxidChanged(input) {
+  const btn = document.getElementById('pm-submit-btn');
+  if (btn) btn.disabled = input.value.trim().length < 10;
+}
+
+async function submitTrc20TxId() {
+  const txidInput = document.getElementById('pm-txid-input');
+  const submitBtn = document.getElementById('pm-submit-btn');
+  const success   = document.getElementById('pm-success');
+  const txId = txidInput?.value?.trim();
+  if (!txId || txId.length < 10) return;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = '⏳ Отправка...';
+
+  const amountEl   = document.getElementById('pm-trc20-amount');
+  const amountText = amountEl?.textContent?.replace(' USDT', '').replace('⏳ расчёт...', '') || '0';
+  const amountUsdt = parseFloat(amountText) || (_pmDarmins * 1.05);
+
+  try {
+    const resp = await fetch(`${pathBase}/api/payments/trc20/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requestId:  _pmRequestId,
+        citizenId:  citizenId || 0,
+        txId,
+        amountUsdt,
+        darmins:    _pmDarmins,
+        purpose:    'darmins',
+      }),
+    });
+    const data = await resp.json();
+
+    if (resp.ok) {
+      if (success) success.style.display = 'block';
+      submitBtn.textContent = '✅ Отправлено!';
+      if (txidInput) txidInput.disabled = true;
+    } else {
+      showToast('❌ ' + (data.error || 'Ошибка отправки'));
+      submitBtn.disabled = false;
+      submitBtn.textContent = '✅ Подтвердить оплату';
+    }
+  } catch {
+    showToast('❌ Ошибка сети');
+    submitBtn.disabled = false;
+    submitBtn.textContent = '✅ Подтвердить оплату';
+  }
 }
 
 // ── TON Connect ───────────────────────────────────────────────────────────────

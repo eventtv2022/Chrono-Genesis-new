@@ -31,6 +31,7 @@ import {
   CheckCircle,
   AlertCircle,
   Loader,
+  Copy,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCitizen } from "@/context/CitizenContext";
@@ -130,6 +131,15 @@ const FIAT_PRICES: Record<string, string> = {
   half: "9.99€",
   apex: "24.99€",
 };
+
+// USDT prices for TV slots (≈ EUR, flat for simplicity)
+const TRC20_SLOT_PRICES: Record<string, number> = {
+  citizen: 2.09,  // 1.99 + 5%
+  quarter: 5.24,
+  half:    10.49,
+  apex:    26.24,
+};
+const TV_TRC20_WALLET = "TJZZWWKU1L2v4EetVmMPKKfK396sZn82XC";
 
 const VISUAL_STYLE_DEFS = [
   { value: "space",     labelKey: "tv_style_space" as const,     descKey: "tv_style_space_desc" as const,     color: "#0D1B2A" },
@@ -353,7 +363,13 @@ export function Tv() {
   const [debouncedSeed, setDebouncedSeed] = useState("");
   const [mode, setMode] = useState<"a" | "b">("a");
   const [visualStyle, setVisualStyle] = useState("space");
-  const [paymentType, setPaymentType] = useState<"fiat" | "timeltr" | "crypto">("timeltr");
+  const [paymentType, setPaymentType] = useState<"fiat" | "timeltr" | "crypto" | "trc20">("timeltr");
+  const [trc20TxId,   setTrc20TxId]   = useState("");
+  const [trc20ReqId,  setTrc20ReqId]  = useState<number | null>(null);
+  const [trc20Amount, setTrc20Amount] = useState<number | null>(null);
+  const [trc20Copied, setTrc20Copied] = useState(false);
+  const [trc20Submitted, setTrc20Submitted] = useState(false);
+  const [trc20Submitting, setTrc20Submitting] = useState(false);
   const [booking, setBooking] = useState(false);
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
@@ -564,6 +580,46 @@ export function Tv() {
         const data = (await res.json()) as { paymentUrl?: string; error?: string };
         if (!res.ok) { setBookingError(data.error ?? t.tv_err_crypto); return; }
         if (data.paymentUrl) window.location.href = data.paymentUrl;
+        return;
+      }
+
+      // TRC20: submit payment proof — admin verifies and activates slot
+      if (paymentType === "trc20") {
+        if (!trc20TxId.trim()) { setBookingError("Вставьте TxID транзакции USDT TRC20"); return; }
+        setTrc20Submitting(true);
+        const slotUsdtPrice = TRC20_SLOT_PRICES[selectedSlot.slotType] ?? 2.09;
+
+        // First request a payment record
+        let reqId: number | null = trc20ReqId;
+        if (!reqId) {
+          try {
+            const r = await fetch("/api/payments/trc20/request", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ citizenId: citizen.id, darmins: Math.round(slotUsdtPrice * 100), purpose: "tv_slot", referenceId: selectedSlot.id }),
+            });
+            const d = await r.json() as { requestId?: number };
+            reqId = d.requestId ?? null;
+          } catch { /* non-fatal */ }
+        }
+
+        const confirmRes = await fetch("/api/payments/trc20/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            requestId:  reqId,
+            citizenId:  citizen.id,
+            txId:       trc20TxId.trim(),
+            amountUsdt: slotUsdtPrice,
+            darmins:    Math.round(slotUsdtPrice * 100),
+            purpose:    "tv_slot",
+          }),
+        });
+        const confirmData = await confirmRes.json() as { success?: boolean; error?: string };
+        if (!confirmRes.ok) { setBookingError(confirmData.error ?? "Ошибка подтверждения платежа"); setTrc20Submitting(false); return; }
+        setTrc20Submitted(true);
+        setBookingResult({ message: "✅ Оплата принята на проверку! Слот будет активирован после подтверждения администратором." });
+        setTrc20Submitting(false);
         return;
       }
 
@@ -864,7 +920,7 @@ export function Tv() {
                 {/* Payment type */}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{t.tv_payment_label}</Label>
-                  <div className="grid grid-cols-3 gap-1.5">
+                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                     <button
                       onClick={() => setPaymentType("timeltr")}
                       className={`flex flex-col items-start gap-0.5 p-2 rounded-sm border text-xs font-mono transition-colors ${paymentType === "timeltr" ? "border-primary/60 bg-primary/15 text-primary" : "border-border text-muted-foreground hover:border-border/80"}`}
@@ -886,8 +942,90 @@ export function Tv() {
                       <div className="flex items-center gap-1"><Bitcoin className="w-3 h-3 shrink-0" /><span>Crypto</span></div>
                       <span className="text-[10px] opacity-70">USDT/USDC</span>
                     </button>
+                    <button
+                      onClick={() => {
+                        setPaymentType("trc20");
+                        setTrc20TxId(""); setTrc20Submitted(false); setTrc20ReqId(null); setTrc20Amount(null);
+                      }}
+                      className={`flex flex-col items-start gap-0.5 p-2 rounded-sm border text-xs font-mono transition-colors ${paymentType === "trc20" ? "border-sky-400/60 bg-sky-500/10 text-sky-400" : "border-border text-muted-foreground hover:border-border/80"}`}
+                    >
+                      <div className="flex items-center gap-1"><Bitcoin className="w-3 h-3 shrink-0" /><span>TRC20</span></div>
+                      {selectedSlot && <span className="text-[10px] opacity-70">{TRC20_SLOT_PRICES[selectedSlot.slotType]?.toFixed(2) ?? "?"} USDT</span>}
+                    </button>
                   </div>
                 </div>
+
+                {/* TRC20 payment panel */}
+                {paymentType === "trc20" && selectedSlot && !trc20Submitted && (
+                  <div className="space-y-2.5 p-3 rounded-sm border border-sky-700/40 bg-sky-950/30">
+                    <div className="text-xs font-mono text-sky-400 font-semibold flex items-center gap-1.5">
+                      <Bitcoin className="w-3.5 h-3.5" /> Оплата USDT TRC20 (Tron Network)
+                    </div>
+
+                    {/* Amount */}
+                    <div className="flex items-center justify-between p-2 bg-sky-900/20 rounded-sm border border-sky-800/40">
+                      <span className="text-xs font-mono text-muted-foreground">Сумма к переводу</span>
+                      <span className="text-sm font-bold font-mono text-sky-400">
+                        {TRC20_SLOT_PRICES[selectedSlot.slotType]?.toFixed(2) ?? "?"} USDT
+                      </span>
+                    </div>
+
+                    {/* Address + copy */}
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Адрес казначейства (TRC20)</div>
+                      <div className="flex items-center gap-1.5 p-2 bg-secondary/50 rounded-sm border border-border">
+                        <code className="flex-1 text-[10px] text-sky-400 font-mono break-all">{TV_TRC20_WALLET}</code>
+                        <button
+                          onClick={() => {
+                            void navigator.clipboard.writeText(TV_TRC20_WALLET).then(() => {
+                              setTrc20Copied(true);
+                              setTimeout(() => setTrc20Copied(false), 2500);
+                            });
+                          }}
+                          className="shrink-0 flex items-center gap-1 px-1.5 py-1 rounded border border-sky-700/40 bg-sky-900/20 text-sky-400 text-[10px] hover:bg-sky-900/40 transition-colors"
+                        >
+                          {trc20Copied ? <CheckCircle className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* QR code */}
+                    <div className="flex justify-center">
+                      <div className="p-2 bg-white rounded-sm border border-border">
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(TV_TRC20_WALLET)}&margin=8`}
+                          alt="TRC20 QR"
+                          width={140}
+                          height={140}
+                        />
+                      </div>
+                    </div>
+
+                    {/* TxID input */}
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">TxID транзакции (после перевода)</div>
+                      <input
+                        type="text"
+                        value={trc20TxId}
+                        onChange={e => setTrc20TxId(e.target.value)}
+                        placeholder="Вставьте хэш транзакции из кошелька..."
+                        className="w-full px-2.5 py-1.5 text-xs font-mono rounded-sm border border-border bg-background text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-sky-500/50"
+                      />
+                    </div>
+
+                    <p className="text-[9px] text-muted-foreground font-mono leading-relaxed">
+                      Переведите точную сумму USDT (TRC20/Tron) на адрес казначейства, затем вставьте TxID и нажмите «Забронировать». Слот активируется после подтверждения администратором.
+                    </p>
+                  </div>
+                )}
+
+                {/* TRC20 success */}
+                {paymentType === "trc20" && trc20Submitted && (
+                  <div className="flex items-center gap-2 p-2.5 bg-emerald-900/20 border border-emerald-700/40 rounded-sm text-xs font-mono text-emerald-400">
+                    <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                    Оплата принята на проверку · слот будет активирован после подтверждения
+                  </div>
+                )}
 
                 {/* Error */}
                 {bookingError && (
@@ -1009,10 +1147,20 @@ export function Tv() {
                   </div>
                 )}
 
-                {/* Book button */}
-                <Button onClick={handleBook} disabled={!canBook} className="w-full font-mono text-sm gap-2">
-                  {booking ? t.tv_booking : (<>{t.tv_book_cta}<ChevronRight className="w-4 h-4" /></>)}
-                </Button>
+                {/* Book button — hidden for TRC20 after submission */}
+                {!(paymentType === "trc20" && trc20Submitted) && (
+                  <Button
+                    onClick={handleBook}
+                    disabled={!canBook || (paymentType === "trc20" && trc20TxId.trim().length < 10)}
+                    className={`w-full font-mono text-sm gap-2 ${paymentType === "trc20" ? "bg-sky-600 hover:bg-sky-500 text-white" : ""}`}
+                  >
+                    {(booking || trc20Submitting)
+                      ? t.tv_booking
+                      : paymentType === "trc20"
+                        ? (<>✅ Подтвердить TRC20 оплату<ChevronRight className="w-4 h-4" /></>)
+                        : (<>{t.tv_book_cta}<ChevronRight className="w-4 h-4" /></>)}
+                  </Button>
+                )}
 
                 {paymentType === "fiat" && selectedSlot && (
                   <p className="text-[10px] text-muted-foreground font-mono text-center">{t.tv_stripe_note}</p>

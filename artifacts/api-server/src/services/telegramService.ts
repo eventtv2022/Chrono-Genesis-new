@@ -511,6 +511,53 @@ export async function sendDirectMessage(
   }
 }
 
+// ─── Admin TRC20 payment notification ────────────────────────────────────────
+export async function notifyAdminTrc20Payment({
+  citizenId, citizenName, amountUsdt, darmins, purpose, txId, requestId,
+}: {
+  citizenId:   number;
+  citizenName: string;
+  amountUsdt:  number;
+  darmins:     number;
+  purpose:     string;
+  txId:        string;
+  requestId:   number | null;
+}): Promise<void> {
+  const adminId = process.env["ADMIN_TELEGRAM_ID"] ?? "";
+  if (!bot || !adminId) return;
+
+  const purposeLabel: Record<string, string> = {
+    darmins:  "💰 Покупка Дарминов",
+    tv_slot:  "📺 Слот TimeNation TV",
+    escrow:   "🤝 Escrow-сделка",
+    embassy:  "🏛 Посольство",
+  };
+
+  const shortWallet = `TJZZWW...n82XC`;
+  const tronscanUrl = `https://tronscan.org/#/transaction/${txId}`;
+
+  const text =
+    `🎉 *НОВАЯ ОПЛАТА USDT TRC20 — TimeNation*\n\n` +
+    `💵 *Сумма:* ${amountUsdt.toFixed(4)} USDT\n` +
+    `🪙 *Дармины:* ${darmins} Д\n` +
+    `📌 *Назначение:* ${purposeLabel[purpose] ?? purpose}\n` +
+    `👤 *Гражданин:* ${citizenName} (ID: ${citizenId})\n` +
+    `🔑 *TxID:* \`${txId}\`\n` +
+    `💳 *Кошелёк:* ${shortWallet}\n` +
+    (requestId ? `🆔 *Request ID:* #${requestId}\n` : "") +
+    `\n🔍 [Проверить на Tronscan](${tronscanUrl})\n\n` +
+    `⚠️ После подтверждения вручную зачисли ${darmins} Д гражданину ID ${citizenId}.`;
+
+  try {
+    await bot.telegram.sendMessage(adminId, text, {
+      parse_mode: "Markdown",
+      link_preview_options: { is_disabled: true },
+    } as Parameters<typeof bot.telegram.sendMessage>[2]);
+  } catch (err) {
+    logger.warn({ err }, "notifyAdminTrc20Payment: failed to send Telegram alert");
+  }
+}
+
 export async function sendTransactionNotification(
   citizenId: number,
   message: string,

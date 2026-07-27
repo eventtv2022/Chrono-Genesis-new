@@ -23,6 +23,7 @@ import adminRouter from "./admin";
 import chatRouter from "./chat";
 import heritageRouter from "./heritage";
 import moderationRouter from "./moderation";
+import trc20Router from "./trc20";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(telegramRouter);
 router.use(chatRouter);
 router.use(heritageRouter);
 router.use(moderationRouter);
+router.use(trc20Router);
 
 export default router;
