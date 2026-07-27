@@ -20,6 +20,7 @@ import { ResetPassword } from "./pages/ResetPassword";
 import { Admin } from "./pages/Admin";
 import { QrLogin } from "./pages/QrLogin";
 import { Privacy } from "./pages/Privacy";
+import { Welcome } from "./pages/Welcome";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +48,7 @@ function Router() {
       <Route path="/admin" component={Admin} />
       <Route path="/qr-login" component={QrLogin} />
       <Route path="/privacy" component={Privacy} />
+      <Route path="/welcome" component={Welcome} />
       <Route component={NotFound} />
     </Switch>
   );

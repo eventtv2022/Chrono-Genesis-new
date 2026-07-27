@@ -457,6 +457,171 @@
       border: 1px solid rgba(108,99,255,.35);
     }
     .btn-guest:hover { background: rgba(108,99,255,.2); }
+
+    /* ── Gate Landing ─────────────────────────────────────────────────────── */
+    #screen-gate {
+      display: none;
+      width: 100%;
+      max-width: 420px;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    #screen-gate.visible { display: flex; }
+
+    .gate-ambient {
+      position: fixed;
+      top: -120px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 500px;
+      height: 320px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(201,168,76,0.07) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .gate-clock-wrap { text-align: center; width: 100%; position: relative; z-index: 1; }
+    .gate-clock {
+      font-size: 42px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      font-variant-numeric: tabular-nums;
+      font-family: "Courier New", monospace;
+      color: var(--gold);
+      text-shadow: 0 0 30px rgba(201,168,76,0.5), 0 0 60px rgba(201,168,76,0.2);
+      line-height: 1;
+    }
+    .gate-clock-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    .gate-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    .gate-brand-name { font-size: 18px; font-weight: 800; color: var(--gold); }
+    .gate-brand-badge {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 2px 7px;
+    }
+
+    .gate-headline { text-align: center; padding: 0 4px; position: relative; z-index: 1; }
+    .gate-headline h1 {
+      font-size: clamp(20px, 5.5vw, 26px);
+      font-weight: 800;
+      line-height: 1.25;
+      margin: 0;
+      color: var(--fg);
+    }
+    .gate-headline h1 .strike { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(239,68,68,0.45); }
+    .gate-headline h1 .gold  { color: var(--gold); text-shadow: 0 0 20px rgba(201,168,76,0.35); }
+
+    .gate-cards { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+    .gate-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      cursor: pointer;
+      transition: border-color .2s, box-shadow .2s, transform .15s;
+      position: relative;
+      overflow: hidden;
+    }
+    .gate-card.open {
+      border-color: rgba(201,168,76,0.45);
+      box-shadow: 0 0 24px rgba(201,168,76,0.09);
+      transform: scale(1.005);
+    }
+    .gate-card-bar {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: linear-gradient(180deg, var(--gold), transparent);
+      border-radius: 16px 0 0 16px;
+      opacity: 0;
+      transition: opacity .2s;
+    }
+    .gate-card.open .gate-card-bar { opacity: 1; }
+    .gate-card-icon { font-size: 22px; margin-bottom: 6px; }
+    .gate-card-title { font-size: 13px; font-weight: 700; color: var(--gold); margin-bottom: 6px; }
+    .gate-card-body {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      overflow: hidden;
+      max-height: 44px;
+      transition: max-height .35s ease;
+    }
+    .gate-card.open .gate-card-body { max-height: 400px; }
+    .gate-card-toggle { font-size: 11px; color: var(--accent); margin-top: 6px; }
+
+    .gate-moment {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 16px;
+      padding: 18px 16px;
+    }
+    .gate-moment-title {
+      font-size: 13px; font-weight: 700;
+      color: var(--gold); text-align: center;
+      margin-bottom: 12px;
+    }
+    .gate-moment-btns { display: flex; flex-direction: column; gap: 8px; }
+    .gate-moment-btn {
+      background: rgba(108,99,255,0.08);
+      border: 1px solid rgba(108,99,255,0.18);
+      border-radius: 11px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--fg);
+      cursor: pointer;
+      text-align: left;
+      font-family: inherit;
+      transition: background .15s, border-color .15s;
+    }
+    .gate-moment-btn:active {
+      background: rgba(108,99,255,0.2);
+      border-color: var(--accent);
+    }
+
+    .gate-ctas { display: flex; flex-direction: column; gap: 10px; width: 100%; padding-bottom: 24px; }
+    .btn-gate-primary {
+      width: 100%; padding: 15px 20px;
+      border-radius: 16px; border: none;
+      background: linear-gradient(135deg, #c9a84c 0%, #e8c870 60%, #c9a84c 100%);
+      color: #0f0f1a;
+      font-size: 14px; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+      box-shadow: 0 4px 22px rgba(201,168,76,0.4), 0 0 40px rgba(201,168,76,0.12);
+      transition: box-shadow .2s;
+    }
+    .btn-gate-primary:active { box-shadow: 0 2px 12px rgba(201,168,76,0.3); }
+    .btn-gate-secondary {
+      width: 100%; padding: 13px 20px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--fg);
+      font-size: 13px; font-weight: 500;
+      cursor: pointer; font-family: inherit;
+      transition: background .15s;
+    }
+    .btn-gate-secondary:active { background: rgba(255,255,255,0.08); }
   </style>
 </head>
 <body>
@@ -494,7 +659,71 @@
   <!-- Error -->
   <div class="error-box" id="error-box"></div>
 
-  <!-- Emission screens (hidden until auth) -->
+  <!-- ── Gate Landing Screen (shown after auth, before emission wizard) ── -->
+  <div id="screen-gate">
+    <div class="gate-ambient" aria-hidden="true"></div>
+
+    <!-- Clock -->
+    <div class="gate-clock-wrap">
+      <div class="gate-brand">
+        <span class="gate-brand-name">TimeNation</span>
+        <span class="gate-brand-badge">Цифровое государство</span>
+      </div>
+      <div class="gate-clock" id="gate-clock">00:00:00</div>
+      <div class="gate-clock-label">Время — твой главный актив</div>
+    </div>
+
+    <!-- Headline -->
+    <div class="gate-headline">
+      <h1>
+        Перестань сливать время в <span class="strike">цифровой шум</span>.<br>
+        <span class="gold">Начни создавать Капитал Смыслов.</span>
+      </h1>
+    </div>
+
+    <!-- Story cards -->
+    <div class="gate-cards">
+      <div class="gate-card" onclick="toggleGateCard(this)">
+        <div class="gate-card-bar"></div>
+        <div class="gate-card-icon">🛑</div>
+        <div class="gate-card-title">Борьба с «цифровым мусором»</div>
+        <div class="gate-card-body">В твоём телефоне лежат тысячи случайных скриншотов и расфокусированных видео, которые умрут на жёстком диске. В TimeNation ты не сливаешь контент, а создаёшь цифровой капитал смыслов. Зафиксировать 1 минуту в Хронопедии — это как поставить несгораемую точку: «Вот здесь произошёл момент, который сформировал меня». Здесь ценность определяется не лайками, а значимостью.</div>
+        <div class="gate-card-toggle">Читать далее ↓</div>
+      </div>
+      <div class="gate-card" onclick="toggleGateCard(this)">
+        <div class="gate-card-bar"></div>
+        <div class="gate-card-icon">🗺</div>
+        <div class="gate-card-title">Топография жизни (Время + Место + Значимое)</div>
+        <div class="gate-card-body">Обычные соцсети дают плоскую ленту: пролистал и забыл. Хронопедия даёт 3D-картину твоей судьбы. Через 5 или 10 лет ты увидишь не просто «какие-то фото за 2026 год», а точную карту вех: какие решения, эмоции и смыслы происходили с тобой и твоей семьёй в конкретных точках планеты.</div>
+        <div class="gate-card-toggle">Читать далее ↓</div>
+      </div>
+      <div class="gate-card" onclick="toggleGateCard(this)">
+        <div class="gate-card-bar"></div>
+        <div class="gate-card-icon">🌉</div>
+        <div class="gate-card-title">Межпоколенческий мост (Наследие)</div>
+        <div class="gate-card-body">Представь, если бы ты мог открыть Хронопедию и услышать живой голос, мысли и эмоции своего прадеда, зафиксированные им в том же возрасте, что и ты сейчас. TimeNation гарантирует, что твоя личная история не растворится в цифровом шуме, а останется живым наследием для будущих поколений.</div>
+        <div class="gate-card-toggle">Читать далее ↓</div>
+      </div>
+    </div>
+
+    <!-- Quick moment -->
+    <div class="gate-moment">
+      <div class="gate-moment-title">✨ Зафиксируй момент прямо сейчас</div>
+      <div class="gate-moment-btns">
+        <button class="gate-moment-btn" onclick="quickMoment()">💡 Зафиксировать решение, которое изменило мой день</button>
+        <button class="gate-moment-btn" onclick="quickMoment()">⏳ Записать мысль или эмоцию себе в будущее</button>
+        <button class="gate-moment-btn" onclick="quickMoment()">✨ Запечатлеть знание этого момента</button>
+      </div>
+    </div>
+
+    <!-- CTAs -->
+    <div class="gate-ctas">
+      <button class="btn-gate-primary" onclick="startEmissionWizard()">⏳ Оформить Паспорт Гражданина (Эмиссия)</button>
+      <button class="btn-gate-secondary" onclick="enterGuestModeFromGate()">👁 Войти как Гость и исследовать Хронопедию</button>
+    </div>
+  </div>
+
+  <!-- Emission screens (hidden until emission wizard starts) -->
   <div id="header" style="display:none">
     <div>
       <div class="logo">TimeNation</div>
@@ -527,7 +756,7 @@
   </div>
 
   <!-- Step 0: Photo -->
-  <div class="step-screen card visible" id="step-0">
+  <div class="step-screen card" id="step-0">
     <div class="step-title">📷 Фото анфас</div>
     <div class="step-hint">Сделайте фото или загрузите снимок для вашего цифрового паспорта.</div>
     <img id="photo-preview" alt="Ваше фото" />
@@ -765,6 +994,8 @@ let timerInterval = null;
 let isGuest = false;
 let guestTimerRemaining = 0;  // seconds — synced from main timer
 let toastTimeout = null;
+let _emissionSecondsLeft = 3600;  // stored from auth response, used when wizard starts
+let _gateClockInterval = null;    // gate live-clock interval
 
 // Derive API base from page path: /api-server/twa → /api-server
 const pathBase = window.location.pathname.replace(/\/twa.*$/, '');
@@ -891,14 +1122,71 @@ function showError(msg) {
   box.classList.add('visible');
 }
 
-function showEmissionScreen(secondsLeft) {
+// ── Gate Landing ───────────────────────────────────────────────────────────────
+
+/** Tick the live clock in the gate landing */
+function _tickGateClock() {
+  const el = document.getElementById('gate-clock');
+  if (!el) return;
+  const n = new Date();
+  el.textContent =
+    String(n.getHours()).padStart(2, '0') + ':' +
+    String(n.getMinutes()).padStart(2, '0') + ':' +
+    String(n.getSeconds()).padStart(2, '0');
+}
+
+/** Show gate landing after successful auth */
+function showGate() {
+  hideLoading();
+  document.getElementById('screen-gate').classList.add('visible');
+  _tickGateClock();
+  _gateClockInterval = setInterval(_tickGateClock, 1000);
+}
+
+/** Called when user taps a story card — toggle expand */
+function toggleGateCard(card) {
+  const isOpen = card.classList.contains('open');
+  // Collapse all
+  document.querySelectorAll('.gate-card').forEach(c => {
+    c.classList.remove('open');
+    const t = c.querySelector('.gate-card-toggle');
+    if (t) t.textContent = 'Читать далее ↓';
+  });
+  if (!isOpen) {
+    card.classList.add('open');
+    const t = card.querySelector('.gate-card-toggle');
+    if (t) t.textContent = 'Свернуть ↑';
+  }
+}
+
+/** Quick moment button — just start the wizard */
+function quickMoment() {
+  startEmissionWizard();
+}
+
+/** Start the actual emission wizard from gate */
+function startEmissionWizard() {
+  clearInterval(_gateClockInterval);
+  document.getElementById('screen-gate').classList.remove('visible');
   document.getElementById('header').style.display = 'flex';
   document.getElementById('timer-block').style.display = 'block';
   document.getElementById('steps-nav').style.display = 'flex';
   document.getElementById('step-0').style.display = 'block';
   document.getElementById('guest-invite').style.display = 'block';
   initSigCanvas();
-  startTimer(secondsLeft);
+  startTimer(_emissionSecondsLeft);
+}
+
+/** Enter guest mode from gate CTA (hides gate first) */
+function enterGuestModeFromGate() {
+  clearInterval(_gateClockInterval);
+  document.getElementById('screen-gate').classList.remove('visible');
+  enterGuestMode();
+}
+
+function showEmissionScreen(secondsLeft) {
+  _emissionSecondsLeft = secondsLeft ?? 3600;
+  showGate();
 }
 
 function showActivePassport(data) {
