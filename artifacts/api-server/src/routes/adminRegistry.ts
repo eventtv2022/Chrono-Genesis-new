@@ -17,10 +17,10 @@ import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import { db } from "@workspace/db";
-import { citizensTable } from "@workspace/db";
-import { eq, or, ilike, sql } from "drizzle-orm";
+import { citizensTable, blockVoteRequestsTable } from "@workspace/db";
+import { eq, or, ilike, sql, ne } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middleware/auth";
-import { sendDirectMessage } from "../services/telegramService";
+import { sendDirectMessage, getBot } from "../services/telegramService";
 import { sendRegistryOtpEmail } from "../services/emailService";
 import { logger } from "../lib/logger";
 
@@ -352,8 +352,14 @@ router.post(
     const id = parseInt(String(req.params["id"] ?? ""), 10);
     if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
 
-    const { action } = req.body as { action?: string };
+    const { action, reason } = req.body as { action?: string; reason?: string };
     if (!action) { res.status(400).json({ error: "action required" }); return; }
+
+    // Citizen #1 (первый администратор) защищён от любой блокировки
+    if (action === "block" && id === 1) {
+      res.status(403).json({ error: "Блокировка администратора (гражданина №1) невозможна" });
+      return;
+    }
 
     const [citizen] = await db
       .select({ id: citizensTable.id, name: citizensTable.name, registrationStatus: citizensTable.registrationStatus })
@@ -383,17 +389,127 @@ router.post(
       res.json({ ok: true, message: `${citizen.name} — паспорт активирован вручную` });
 
     } else if (action === "block") {
-      await db
-        .update(citizensTable)
-        .set({ status: "banned" })
-        .where(eq(citizensTable.id, id));
-      logger.info({ adminId, citizenId: id }, "Admin: block citizen");
-      res.json({ ok: true, message: `${citizen.name} — заблокирован` });
+      // Требуем причину блокировки
+      if (!reason?.trim()) {
+        res.status(400).json({ error: "Укажите причину блокировки" });
+        return;
+      }
+
+      // Создаём запрос на голосование (не блокируем сразу)
+      const endsAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const [voteRequest] = await db
+        .insert(blockVoteRequestsTable)
+        .values({
+          citizenId:     id,
+          citizenName:   citizen.name ?? "—",
+          reason:        reason.trim(),
+          initiatedById: adminId ?? 0,
+          endsAt,
+        })
+        .returning({ id: blockVoteRequestsTable.id });
+
+      logger.info({ adminId, citizenId: id, voteRequestId: voteRequest!.id }, "Admin: block vote initiated");
+
+      // Уведомляем всех eligible voters (govRole != 'citizen' + isAdmin=1)
+      await notifyBlockVoters(voteRequest!.id, citizen.name ?? "—", reason.trim(), endsAt);
+
+      res.json({
+        ok: true,
+        voteRequestId: voteRequest!.id,
+        message: `Голосование о блокировке ${citizen.name} инициировано. Членам правительства и судьям отправлено уведомление в Telegram.`,
+      });
 
     } else {
       res.status(400).json({ error: `Unknown action: ${action}` });
     }
   }
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notify eligible voters via Telegram
+// ─────────────────────────────────────────────────────────────────────────────
+async function notifyBlockVoters(
+  voteRequestId: number,
+  citizenName: string,
+  reason: string,
+  endsAt: Date,
+): Promise<void> {
+  const bot = getBot();
+  if (!bot) return;
+
+  // Eligible: govRole != 'citizen' OR isAdmin = 1, with linked Telegram
+  const voters = await db
+    .select({ id: citizensTable.id, telegramId: citizensTable.telegramId, name: citizensTable.name })
+    .from(citizensTable)
+    .where(
+      eq(citizensTable.isAdmin, 1),
+    );
+
+  // Also fetch non-citizen gov members
+  const govMembers = await db
+    .select({ id: citizensTable.id, telegramId: citizensTable.telegramId, name: citizensTable.name })
+    .from(citizensTable)
+    .where(ne(citizensTable.govRole, "citizen"));
+
+  const allVoters = [...voters, ...govMembers].filter(
+    (v, i, arr) => v.telegramId && arr.findIndex(x => x.id === v.id) === i,
+  );
+
+  const domain = process.env["REPLIT_DEV_DOMAIN"] ?? "";
+  const voteUrl = domain
+    ? `https://${domain}/gov/block-votes`
+    : "https://timenation.info/gov/block-votes";
+
+  const endsStr = endsAt.toLocaleString("ru-RU", { timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+
+  const msg =
+    `🗳️ *Голосование о блокировке гражданина*\n\n` +
+    `👤 *Гражданин:* ${citizenName}\n` +
+    `📋 *Причина:* ${reason}\n\n` +
+    `⏰ Голосование открыто до *${endsStr} (МСК)*\n\n` +
+    `Нажмите кнопку ниже, чтобы проголосовать.`;
+
+  for (const voter of allVoters) {
+    if (!voter.telegramId) continue;
+    bot.telegram
+      .sendMessage(voter.telegramId, msg, {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🗳 Голосовать", url: voteUrl },
+          ]],
+        },
+      })
+      .catch((err) => logger.warn({ err, voterId: voter.id }, "notifyBlockVoter: TG send failed"));
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /admin/registry/block-votes  — admin view of all vote requests
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { blockVoteBallotsTable } from "@workspace/db";
+
+router.get("/admin/registry/block-votes", requireRegistrySession, async (req, res): Promise<void> => {
+  const votes = await db
+    .select()
+    .from(blockVoteRequestsTable)
+    .orderBy(blockVoteRequestsTable.createdAt);
+
+  const withCounts = await Promise.all(votes.map(async (v) => {
+    const ballots = await db
+      .select({ vote: blockVoteBallotsTable.vote, voterName: blockVoteBallotsTable.voterName })
+      .from(blockVoteBallotsTable)
+      .where(eq(blockVoteBallotsTable.requestId, v.id));
+    return {
+      ...v,
+      yesCount: ballots.filter(b => b.vote === "yes").length,
+      noCount:  ballots.filter(b => b.vote === "no").length,
+      ballots,
+    };
+  }));
+
+  res.json(withCounts);
+});
 
 export default router;

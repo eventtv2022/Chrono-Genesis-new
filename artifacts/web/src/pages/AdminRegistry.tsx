@@ -36,6 +36,20 @@ interface CitizenDetail extends CitizenRow {
 
 type Phase = "gate_password" | "gate_otp" | "table";
 type StatusFilter = "all" | "active" | "rejected" | "pending" | "banned";
+type RegistryTab = "citizens" | "votes";
+
+interface BlockVoteEntry {
+  id: number;
+  citizenId: number;
+  citizenName: string;
+  reason: string;
+  createdAt: string;
+  endsAt: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  yesCount: number;
+  noCount: number;
+  ballots: { voterName: string; vote: string }[];
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -271,12 +285,16 @@ function ProfileModal({
   citizenId: number;
   registryToken: string;
   onClose: () => void;
-  onAction: (id: number, action: string) => Promise<void>;
+  onAction: (id: number, action: string, extra?: { reason?: string }) => Promise<{ message?: string; error?: string }>;
 }) {
   const [citizen, setCitizen] = useState<CitizenDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  // Block reason dialog state
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
+  const [blockReason, setBlockReason] = useState("");
 
   useEffect(() => {
     void (async () => {
@@ -289,17 +307,32 @@ function ProfileModal({
     })();
   }, [citizenId, registryToken]);
 
-  async function handleAction(action: string) {
+  async function handleAction(action: string, extra?: { reason?: string }) {
     setActionLoading(action);
     setActionMsg(null);
-    await onAction(citizenId, action);
+    const result = await onAction(citizenId, action, extra);
     // Refresh detail
     const res = await fetch(`/api/admin/registry/users/${citizenId}`, {
       headers: { "X-Registry-Token": registryToken },
     });
     if (res.ok) setCitizen(await res.json() as CitizenDetail);
     setActionLoading(null);
-    setActionMsg(action === "block" ? "Гражданин заблокирован" : action === "activate" ? "Паспорт активирован" : "Эмиссия перезапущена");
+    if (result.error) {
+      setActionMsg(`⚠️ ${result.error}`);
+    } else {
+      setActionMsg(
+        result.message ??
+        (action === "block" ? "Голосование о блокировке инициировано" :
+         action === "activate" ? "Паспорт активирован" : "Эмиссия перезапущена")
+      );
+    }
+  }
+
+  async function confirmBlock() {
+    if (!blockReason.trim()) return;
+    setBlockDialogOpen(false);
+    await handleAction("block", { reason: blockReason.trim() });
+    setBlockReason("");
   }
 
   const ps = citizen ? passportStatusLabel(citizen) : null;
@@ -397,15 +430,19 @@ function ProfileModal({
 
             {/* Action message */}
             {actionMsg && (
-              <div className="p-3 bg-emerald-900/20 border border-emerald-700/30 rounded-lg text-sm text-emerald-300 text-center">
-                ✅ {actionMsg}
+              <div className={`p-3 rounded-lg text-sm text-center ${
+                actionMsg.startsWith("⚠️")
+                  ? "bg-red-900/20 border border-red-700/30 text-red-300"
+                  : "bg-emerald-900/20 border border-emerald-700/30 text-emerald-300"
+              }`}>
+                {actionMsg.startsWith("⚠️") ? actionMsg : `✅ ${actionMsg}`}
               </div>
             )}
 
             {/* Actions */}
             <div className="flex flex-col gap-2 pt-1">
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Действия</div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className={`grid gap-2 ${citizen.id !== 1 ? "grid-cols-3" : "grid-cols-2"}`}>
                 <button
                   onClick={() => void handleAction("restart_emission")}
                   disabled={!!actionLoading}
@@ -420,18 +457,85 @@ function ProfileModal({
                 >
                   {actionLoading === "activate" ? "⏳" : "✅"} Активировать вручную
                 </button>
-                <button
-                  onClick={() => void handleAction("block")}
-                  disabled={!!actionLoading}
-                  className="py-2.5 px-2 text-xs font-semibold rounded-xl bg-red-900/30 border border-red-700/40 text-red-300 hover:bg-red-900/50 disabled:opacity-40 transition-colors"
-                >
-                  {actionLoading === "block" ? "⏳" : "⛔"} Заблокировать
-                </button>
+                {/* Block button — HIDDEN for citizen #1 (the protected administrator) */}
+                {citizen.id !== 1 && (
+                  <button
+                    onClick={() => { setBlockReason(""); setBlockDialogOpen(true); }}
+                    disabled={!!actionLoading}
+                    className="py-2.5 px-2 text-xs font-semibold rounded-xl bg-red-900/30 border border-red-700/40 text-red-300 hover:bg-red-900/50 disabled:opacity-40 transition-colors"
+                  >
+                    {actionLoading === "block" ? "⏳" : "⛔"} Инициировать блокировку
+                  </button>
+                )}
               </div>
+
+              {/* Citizen #1 protection note */}
+              {citizen.id === 1 && (
+                <div className="text-[10px] text-muted-foreground/60 text-center mt-1">
+                  🛡 Блокировка администратора (гражданина №1) недоступна
+                </div>
+              )}
             </div>
           </div>
         )}
       </div>
+
+      {/* ── Block reason dialog ───────────────────────────────────────────── */}
+      {blockDialogOpen && citizen && (
+        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4" onClick={() => setBlockDialogOpen(false)}>
+          <div
+            className="w-full max-w-sm bg-card border border-red-800/60 rounded-2xl shadow-2xl p-5"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="font-bold text-foreground text-base mb-1">⛔ Инициировать блокировку</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Голосование будет открыто для членов правительства и судей на <strong>24 часа</strong>.
+              Гражданин будет заблокирован только при большинстве голосов «За».
+            </p>
+
+            {/* Citizen info */}
+            <div className="bg-muted/30 rounded-xl px-3 py-2 mb-4">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Гражданин</div>
+              <div className="text-sm font-semibold text-foreground">{citizen.name}</div>
+              <div className="text-[10px] text-muted-foreground font-mono">ID #{citizen.id}</div>
+            </div>
+
+            {/* Reason input */}
+            <label className="block mb-3">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                Причина блокировки <span className="text-red-400">*</span>
+              </span>
+              <textarea
+                value={blockReason}
+                onChange={e => setBlockReason(e.target.value)}
+                placeholder="Опишите причину блокировки подробно…"
+                rows={4}
+                className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-red-600/60 resize-none"
+                maxLength={500}
+                autoFocus
+              />
+              <div className="text-[10px] text-muted-foreground text-right mt-0.5">{blockReason.length}/500</div>
+            </label>
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setBlockDialogOpen(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-muted text-muted-foreground hover:text-foreground transition-colors border border-border"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => void confirmBlock()}
+                disabled={!blockReason.trim()}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-red-900/50 border border-red-700/60 text-red-200 hover:bg-red-800/60 disabled:opacity-40 transition-colors"
+              >
+                ⛔ Инициировать голосование
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -447,6 +551,7 @@ export function AdminRegistry() {
     : {};
 
   const [phase, setPhase] = useState<Phase>("gate_password");
+  const [activeTab, setActiveTab] = useState<RegistryTab>("citizens");
   const [registryToken, setRegistryToken] = useState<string | null>(null);
   const [citizens, setCitizens] = useState<CitizenRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -455,6 +560,8 @@ export function AdminRegistry() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [profileId, setProfileId] = useState<number | null>(null);
   const [actionToast, setActionToast] = useState<string | null>(null);
+  const [blockVotes, setBlockVotes] = useState<BlockVoteEntry[]>([]);
+  const [votesLoading, setVotesLoading] = useState(false);
 
   // Redirect non-admins
   useEffect(() => {
@@ -496,22 +603,40 @@ export function AdminRegistry() {
     return () => clearTimeout(t);
   }, [search, statusFilter, registryToken, phase, fetchCitizens]);
 
-  async function handleAction(id: number, action: string) {
-    if (!registryToken) return;
+  const fetchBlockVotes = useCallback(async (token: string) => {
+    setVotesLoading(true);
+    try {
+      const res = await fetch("/api/admin/registry/block-votes", {
+        headers: { "X-Registry-Token": token },
+      });
+      if (res.ok) setBlockVotes(await res.json() as BlockVoteEntry[]);
+    } catch { /* silent */ }
+    setVotesLoading(false);
+  }, []);
+
+  // Load votes when switching to the votes tab
+  useEffect(() => {
+    if (activeTab === "votes" && registryToken) void fetchBlockVotes(registryToken);
+  }, [activeTab, registryToken, fetchBlockVotes]);
+
+  async function handleAction(id: number, action: string, extra?: { reason?: string }): Promise<{ message?: string; error?: string }> {
+    if (!registryToken) return {};
     try {
       const res = await fetch(`/api/admin/registry/users/${id}/action`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Registry-Token": registryToken },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, ...extra }),
       });
       const data = await res.json() as { ok?: boolean; message?: string; error?: string };
       if (data.message) {
         setActionToast(data.message);
-        setTimeout(() => setActionToast(null), 3500);
+        setTimeout(() => setActionToast(null), 6000);
       }
-      // Refresh list
+      // Refresh list and votes
       await fetchCitizens(registryToken, search, statusFilter);
-    } catch { /* silent */ }
+      if (action === "block" && registryToken) void fetchBlockVotes(registryToken);
+      return data;
+    } catch { return {}; }
   }
 
   // Not logged in or not admin
@@ -568,6 +693,28 @@ export function AdminRegistry() {
         {/* Registry table */}
         {phase === "table" && (
           <>
+            {/* Tabs */}
+            <div className="flex gap-2 mb-5 border-b border-border">
+              {([
+                { key: "citizens", label: "👥 Граждане" },
+                { key: "votes",    label: `🗳 Голосования${blockVotes.filter(v => v.status === "pending").length > 0 ? ` (${blockVotes.filter(v => v.status === "pending").length})` : ""}` },
+              ] as { key: RegistryTab; label: string }[]).map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setActiveTab(t.key)}
+                  className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors -mb-px ${
+                    activeTab === t.key
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Citizens Tab ──────────────────────────────────────────────── */}
+            {activeTab === "citizens" && <>
             {/* Search + filter bar */}
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
               <input
@@ -700,6 +847,79 @@ export function AdminRegistry() {
                 <div className="text-center py-10 text-muted-foreground text-sm">Граждане не найдены</div>
               )}
             </div>
+            </> /* end citizens tab */}
+
+            {/* ── Votes Tab ─────────────────────────────────────────────────── */}
+            {activeTab === "votes" && (
+              <div className="space-y-4 max-w-2xl">
+                {votesLoading && (
+                  <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
+                    <span className="animate-spin mr-2">⏳</span> Загрузка голосований…
+                  </div>
+                )}
+
+                {!votesLoading && blockVotes.length === 0 && (
+                  <div className="text-center py-12 text-muted-foreground text-sm bg-muted/20 rounded-xl border border-border">
+                    Нет голосований о блокировке
+                  </div>
+                )}
+
+                {!votesLoading && blockVotes.map(v => {
+                  const statusMap: Record<string, { label: string; cls: string }> = {
+                    pending:   { label: "🗳 Идёт голосование",    cls: "text-yellow-300 bg-yellow-900/30 border-yellow-700/40" },
+                    approved:  { label: "⛔ Блокировка одобрена",  cls: "text-red-300 bg-red-900/30 border-red-700/40" },
+                    rejected:  { label: "✅ Блокировка отклонена", cls: "text-emerald-300 bg-emerald-900/30 border-emerald-700/40" },
+                    cancelled: { label: "🚫 Отменено",             cls: "text-zinc-400 bg-zinc-900/30 border-zinc-700/40" },
+                  };
+                  const sb = statusMap[v.status] ?? statusMap["cancelled"]!;
+                  const total = v.yesCount + v.noCount;
+                  const endsAt = new Date(v.endsAt);
+                  const now = Date.now();
+                  const diffMs = endsAt.getTime() - now;
+                  const timeLeft = diffMs > 0
+                    ? `${Math.floor(diffMs / 3_600_000)}ч ${Math.floor((diffMs % 3_600_000) / 60_000)}м`
+                    : "Истекло";
+
+                  return (
+                    <div key={v.id} className="bg-card border border-border rounded-2xl overflow-hidden">
+                      <div className="px-4 py-3 border-b border-border flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-foreground">{v.citizenName}</div>
+                          <div className="text-xs text-muted-foreground font-mono">ID {v.citizenId} · #{v.id}</div>
+                        </div>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border whitespace-nowrap ${sb.cls}`}>
+                          {sb.label}
+                        </span>
+                      </div>
+                      <div className="px-4 py-3 space-y-2">
+                        <div className="bg-red-950/20 border border-red-800/20 rounded-lg px-3 py-2">
+                          <div className="text-[10px] text-red-400 uppercase tracking-wider font-semibold mb-0.5">Причина</div>
+                          <div className="text-xs text-red-200">{v.reason}</div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          {v.status === "pending"
+                            ? <span>⏰ Осталось: <strong className="text-foreground">{timeLeft}</strong></span>
+                            : <span>Завершено: {new Date(v.endsAt).toLocaleDateString("ru-RU")}</span>
+                          }
+                          <span className="font-mono">✅ {v.yesCount} / ❌ {v.noCount} / Всего {total}</span>
+                        </div>
+                        {v.ballots.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {v.ballots.map((b, i) => (
+                              <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                b.vote === "yes" ? "text-emerald-400 bg-emerald-900/20 border-emerald-700/30" : "text-red-400 bg-red-900/20 border-red-700/30"
+                              }`}>
+                                {b.voterName} · {b.vote === "yes" ? "За" : "Против"}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
 

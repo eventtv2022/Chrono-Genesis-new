@@ -19,6 +19,7 @@ import { Clock } from "./pages/Clock";
 import { ResetPassword } from "./pages/ResetPassword";
 import { Admin } from "./pages/Admin";
 import { AdminRegistry } from "./pages/AdminRegistry";
+import { GovBlockVotes } from "./pages/GovBlockVotes";
 import { QrLogin } from "./pages/QrLogin";
 import { Privacy } from "./pages/Privacy";
 import { Welcome } from "./pages/Welcome";
@@ -48,6 +49,7 @@ function Router() {
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/registry" component={AdminRegistry} />
+      <Route path="/gov/block-votes" component={GovBlockVotes} />
       <Route path="/qr-login" component={QrLogin} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/welcome" component={Welcome} />

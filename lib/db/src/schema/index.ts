@@ -23,3 +23,4 @@ export * from "./socialAlarms";
 export * from "./dmMessages";
 export * from "./dmReactions";
 export * from "./groupChats";
+export * from "./blockVotes";
