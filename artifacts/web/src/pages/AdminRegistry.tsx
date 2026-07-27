@@ -95,6 +95,7 @@ function TwoFAGate({
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setInfo(null);
     setLoading(true);
     try {
       const res = await fetch("/api/admin/registry/verify", {
@@ -103,8 +104,49 @@ function TwoFAGate({
         body: JSON.stringify({ masterPassword, otp: otp.trim() }),
       });
       const data = await res.json() as { ok?: boolean; token?: string; error?: string };
-      if (!res.ok) { setError(data.error ?? "Ошибка верификации"); setLoading(false); return; }
+      if (!res.ok) {
+        const msg = data.error ?? "Ошибка верификации";
+        // OTP expired or missing → auto-resend if we still have the master password
+        const isExpired = msg.toLowerCase().includes("истёк") || msg.toLowerCase().includes("запрошен");
+        if (isExpired && masterPassword) {
+          setOtp("");
+          setError("Код истёк. Автоматически запрашиваем новый…");
+          setLoading(false);
+          // small delay so user reads the message, then auto-request
+          setTimeout(() => void resendOtp(), 1200);
+        } else {
+          setError(msg);
+          setLoading(false);
+        }
+        return;
+      }
       onSuccess(data.token!);
+    } catch { setError("Ошибка сети"); }
+    setLoading(false);
+  }
+
+  /** Resend OTP without leaving the OTP phase (master password already in state). */
+  async function resendOtp() {
+    setError(null);
+    setInfo(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/registry/request-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ masterPassword }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string; tgSent?: boolean; emailSent?: boolean };
+      if (!res.ok) {
+        setError(data.error ?? "Ошибка запроса кода");
+        setLoading(false);
+        return;
+      }
+      const channels: string[] = [];
+      if (data.tgSent)    channels.push("Telegram");
+      if (data.emailSent) channels.push("support@timenation.info");
+      setInfo(`Новый код отправлен${channels.length ? ` на: ${channels.join(", ")}` : " (проверьте логи сервера)"}`);
+      setTimeout(() => otpRef.current?.focus(), 100);
     } catch { setError("Ошибка сети"); }
     setLoading(false);
   }
@@ -178,7 +220,7 @@ function TwoFAGate({
                   ref={otpRef}
                   type="text"
                   value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  onChange={e => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(null); }}
                   placeholder="000000"
                   inputMode="numeric"
                   autoComplete="one-time-code"
@@ -194,6 +236,15 @@ function TwoFAGate({
                 className="w-full py-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-sm disabled:opacity-40 transition-colors"
               >
                 {loading ? "⏳ Проверка…" : "🔓 Войти в реестр"}
+              </button>
+              {/* Resend without going back to password */}
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => { setOtp(""); setError(null); setInfo(null); void resendOtp(); }}
+                className="w-full py-2.5 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-primary/40 disabled:opacity-40 transition-colors"
+              >
+                🔄 Запросить новый код
               </button>
               <button
                 type="button"
