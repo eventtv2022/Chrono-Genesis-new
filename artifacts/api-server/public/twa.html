@@ -1173,7 +1173,9 @@ function startEmissionWizard() {
   document.getElementById('steps-nav').style.display = 'flex';
   document.getElementById('step-0').style.display = 'block';
   document.getElementById('guest-invite').style.display = 'block';
-  initSigCanvas();
+  // NOTE: initSigCanvas() is NOT called here — the canvas is in step-1 which is
+  // still hidden at this point. It will be called by goStep(1) via rAF once
+  // step-1 is visible and has real layout dimensions.
   startTimer(_emissionSecondsLeft);
 }
 
@@ -1333,6 +1335,9 @@ function goStep(n) {
   currentStep = n;
   document.getElementById(`step-${n}`).style.display = 'block';
   document.getElementById(`dot-${n}`).className = 'step-dot active';
+  // Canvas must be measured AFTER the step is visible so getBoundingClientRect()
+  // returns real dimensions. Use rAF to let the browser do layout first.
+  if (n === 1) requestAnimationFrame(initSigCanvas);
 }
 
 // ── Photo ──────────────────────────────────────────────────────────────────────
@@ -1354,33 +1359,39 @@ document.getElementById('photo-input').addEventListener('change', function() {
 // ── Signature canvas ───────────────────────────────────────────────────────────
 function initSigCanvas() {
   sigCanvas = document.getElementById('sig-canvas');
+  if (!sigCanvas) return;
   sigCtx = sigCanvas.getContext('2d');
 
-  // HiDPI resize
+  // ── Resize / calibrate ──────────────────────────────────────────────────────
+  // Must be called after step-1 is visible so getBoundingClientRect() is valid.
   function resizeCanvas() {
     const rect = sigCanvas.getBoundingClientRect();
+    if (rect.width === 0) return; // guard: still hidden, skip
     const dpr = window.devicePixelRatio || 1;
     sigCanvas.width  = rect.width  * dpr;
     sigCanvas.height = rect.height * dpr;
+    sigCtx.setTransform(1, 0, 0, 1, 0, 0); // reset transform before re-scaling
     sigCtx.scale(dpr, dpr);
     sigCtx.strokeStyle = '#a89eff';
-    sigCtx.lineWidth = 2.5;
-    sigCtx.lineCap = 'round';
-    sigCtx.lineJoin = 'round';
+    sigCtx.lineWidth   = 2.5;
+    sigCtx.lineCap     = 'round';
+    sigCtx.lineJoin    = 'round';
   }
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas);
 
+  // ── Drawing helpers ─────────────────────────────────────────────────────────
   function getPos(e) {
     const rect = sigCanvas.getBoundingClientRect();
-    const src  = e.touches ? e.touches[0] : e;
+    // Support both TouchEvent and PointerEvent / MouseEvent
+    const src = (e.touches && e.touches.length > 0) ? e.touches[0] : e;
     return { x: src.clientX - rect.left, y: src.clientY - rect.top };
   }
 
   function startDrawing(e) {
     isDrawing = true;
-    // Explicitly set stroke styles on every draw-start (spec requirement + ensures
-    // they survive canvas resize / context state resets on mobile).
+    // Re-apply stroke style on every stroke-start; mobile browsers can reset
+    // canvas context state when the element is scrolled or re-painted.
     sigCtx.strokeStyle = '#a89eff';
     sigCtx.lineWidth   = 3;
     sigCtx.lineCap     = 'round';
@@ -1392,11 +1403,8 @@ function initSigCanvas() {
 
   function draw(e) {
     if (!isDrawing) return;
-    const rect = sigCanvas.getBoundingClientRect();
-    const touch = e.touches[0];
-    const x = touch.clientX - rect.left;
-    const y = touch.clientY - rect.top;
-    sigCtx.lineTo(x, y);
+    const p = getPos(e); // unified — works for both touch and pointer events
+    sigCtx.lineTo(p.x, p.y);
     sigCtx.stroke();
   }
 
@@ -1404,23 +1412,20 @@ function initSigCanvas() {
     isDrawing = false;
   }
 
-  // ── Pointer events (mouse / stylus) ─────────────────────────────────────────
-  sigCanvas.addEventListener('pointerdown', e => { startDrawing(e); e.preventDefault(); });
-  sigCanvas.addEventListener('pointermove', e => {
-    if (!isDrawing) return;
-    const p = getPos(e);
-    sigCtx.lineTo(p.x, p.y);
-    sigCtx.stroke();
-    e.preventDefault();
-  });
+  // Guard: register event listeners only once per canvas element.
+  if (sigCanvas._sigInited) return;
+  sigCanvas._sigInited = true;
+
+  // ── Pointer events (mouse / stylus on desktop/emulator) ─────────────────────
+  sigCanvas.addEventListener('pointerdown', e => { e.preventDefault(); startDrawing(e); });
+  sigCanvas.addEventListener('pointermove', e => { e.preventDefault(); draw(e); });
   sigCanvas.addEventListener('pointerup',    () => stopDrawing());
   sigCanvas.addEventListener('pointerleave', () => stopDrawing());
 
-  // ── Touch events (mobile / Telegram WebApp) ─────────────────────────────────
-  // { passive: false } required so preventDefault() can suppress scrolling.
+  // ── Touch events (finger on mobile / Telegram WebApp) ───────────────────────
+  // { passive: false } is mandatory so e.preventDefault() suppresses page scroll.
   sigCanvas.addEventListener('touchstart', e => {
     e.preventDefault();
-    // Disable Telegram bottom-sheet vertical swipe while signing
     window.Telegram?.WebApp?.disableVerticalSwipes?.();
     startDrawing(e);
   }, { passive: false });
@@ -1433,7 +1438,6 @@ function initSigCanvas() {
   sigCanvas.addEventListener('touchend', e => {
     e.preventDefault();
     stopDrawing();
-    // Re-enable Telegram vertical swipe after pen is lifted
     window.Telegram?.WebApp?.enableVerticalSwipes?.();
   }, { passive: false });
 
