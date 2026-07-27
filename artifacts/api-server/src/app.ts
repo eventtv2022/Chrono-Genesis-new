@@ -53,7 +53,11 @@ app.get("/twa", (_req, res) => {
 });
 
 // ── TON Connect manifest — required for Telegram Wallet / TON Connect SDK ─────
+// Must be served with explicit Content-Type and permissive CORS so the
+// Telegram Wallet app can fetch it from any origin (including t.me frame).
 app.get("/tonconnect-manifest.json", (_req, res) => {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.sendFile(path.join(process.cwd(), "public", "tonconnect-manifest.json"));
 });
 
