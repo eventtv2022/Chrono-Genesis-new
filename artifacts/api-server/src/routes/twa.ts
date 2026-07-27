@@ -61,6 +61,9 @@ function validateInitData(initData: string, botToken: string): boolean {
 
 /** Map registrationStatus + availableAt to TWA status string and secondsLeft. */
 function emissionState(citizen: { registrationStatus: string | null; availableAt: Date | null }) {
+  if (citizen.registrationStatus === "rejected") {
+    return { status: "APPLICATION_REJECTED" as const, secondsLeft: 0 };
+  }
   const now = Date.now();
   const ready = citizen.availableAt?.getTime() ?? now;
   const secondsLeft = Math.max(0, Math.floor((ready - now) / 1000));
@@ -68,6 +71,38 @@ function emissionState(citizen: { registrationStatus: string | null; availableAt
   const status: "IN_EMISSION" | "ACTIVE" =
     secondsLeft > 0 && citizen.registrationStatus === "pending" ? "IN_EMISSION" : "ACTIVE";
   return { status, secondsLeft };
+}
+
+/** Validate the 3 passport-activation criteria for a citizen. */
+interface EmissionCriteria {
+  hasPhoto:      boolean;
+  hasSignature:  boolean;
+  hasTelegram:   boolean;
+  hasEmail:      boolean;
+  hasWhatsapp:   boolean;
+  verifiedCount: number;
+  contactsOk:    boolean;
+  allPassed:     boolean;
+}
+
+function checkCriteria(citizen: {
+  photoUrl:       string | null | undefined;
+  signatureBase64: string | null | undefined;
+  telegramId:     string | null | undefined;
+  email:          string | null | undefined;
+  whatsappPhone:  string | null | undefined;
+}): EmissionCriteria {
+  const hasPhoto     = !!citizen.photoUrl;
+  const hasSignature = !!citizen.signatureBase64;
+  const hasTelegram  = !!citizen.telegramId;
+  const hasEmail     = !!citizen.email;
+  const hasWhatsapp  = !!citizen.whatsappPhone;
+  const verifiedCount =
+    (hasTelegram ? 1 : 0) + (hasEmail ? 1 : 0) + (hasWhatsapp ? 1 : 0);
+  const contactsOk = verifiedCount >= 2;
+  const allPassed  = hasPhoto && hasSignature && contactsOk;
+  return { hasPhoto, hasSignature, hasTelegram, hasEmail, hasWhatsapp,
+           verifiedCount, contactsOk, allPassed };
 }
 
 // TWA initData validation MUST use the client bot token (@timenation_bot).
@@ -233,10 +268,12 @@ router.post("/auth/telegram-webapp/draft", async (req, res): Promise<void> => {
     photoBase64,
     secondContact,   // email or WhatsApp number
     privacyAccepted, // boolean
+    signatureBase64, // canvas signature data-url
   } = req.body as {
     photoBase64?: string;
     secondContact?: string;
     privacyAccepted?: boolean;
+    signatureBase64?: string;
   };
 
   const updates: Partial<typeof citizensTable.$inferInsert> = {};
@@ -275,6 +312,11 @@ router.post("/auth/telegram-webapp/draft", async (req, res): Promise<void> => {
     }
   }
 
+  // Canvas signature (Constitution pledge)
+  if (signatureBase64?.startsWith("data:image/")) {
+    updates.signatureBase64 = signatureBase64;
+  }
+
   // Privacy
   if (privacyAccepted) {
     updates.privacyAgreementAccepted = 1;
@@ -308,14 +350,18 @@ router.get("/auth/telegram-webapp/status", async (req, res): Promise<void> => {
 
   const [citizen] = await db
     .select({
-      id: citizensTable.id,
-      name: citizensTable.name,
-      citizenNumber: citizensTable.citizenNumber,
-      rank: citizensTable.rank,
-      photoUrl: citizensTable.photoUrl,
-      registrationStatus: citizensTable.registrationStatus,
-      availableAt: citizensTable.availableAt,
-      balanceMinutes: citizensTable.balanceMinutes,
+      id:                  citizensTable.id,
+      name:                citizensTable.name,
+      citizenNumber:       citizensTable.citizenNumber,
+      rank:                citizensTable.rank,
+      photoUrl:            citizensTable.photoUrl,
+      signatureBase64:     citizensTable.signatureBase64,
+      telegramId:          citizensTable.telegramId,
+      email:               citizensTable.email,
+      whatsappPhone:       citizensTable.whatsappPhone,
+      registrationStatus:  citizensTable.registrationStatus,
+      availableAt:         citizensTable.availableAt,
+      balanceMinutes:      citizensTable.balanceMinutes,
     })
     .from(citizensTable)
     .where(eq(citizensTable.authToken, token))
@@ -327,15 +373,47 @@ router.get("/auth/telegram-webapp/status", async (req, res): Promise<void> => {
   }
 
   const { status, secondsLeft } = emissionState(citizen);
+  let finalStatus = status;
+  let criteria: EmissionCriteria | null = null;
+
+  // ── Auto-validate when timer just expired ────────────────────────────────
+  if (status === "IN_EMISSION" && secondsLeft === 0) {
+    criteria = checkCriteria(citizen);
+    const newDbStatus = criteria.allPassed ? "issued" : "rejected";
+    await db
+      .update(citizensTable)
+      .set({ registrationStatus: newDbStatus })
+      .where(eq(citizensTable.id, citizen.id));
+    finalStatus = criteria.allPassed ? "ACTIVE" : "APPLICATION_REJECTED";
+
+    // Notify on rejection
+    if (!criteria.allPassed && citizen.telegramId) {
+      const missing: string[] = [];
+      if (!criteria.hasPhoto)     missing.push("📷 Фото профиля");
+      if (!criteria.hasSignature) missing.push("✍️ Подпись под Конституцией");
+      if (!criteria.contactsOk)   missing.push(`📬 Координаты связи (${criteria.verifiedCount}/2)`);
+
+      sendDirectMessage(
+        citizen.telegramId,
+        `❌ *Заявление на Гражданство отклонено*\n\nПо истечении 60 минут профиль не прошёл валидацию.\n\n` +
+        `Не выполнено:\n${missing.map(m => `• ${m}`).join("\n")}\n\n` +
+        `Откройте Mini App для повторной подачи заявки.`,
+      ).catch((err: unknown) => logger.warn({ err }, "TWA: rejection notification failed"));
+    }
+  } else if (status === "APPLICATION_REJECTED") {
+    criteria = checkCriteria(citizen);
+  }
+
   res.json({
-    citizenId: citizen.id,
-    name: citizen.name,
+    citizenId:     citizen.id,
+    name:          citizen.name,
     citizenNumber: citizen.citizenNumber,
-    rank: citizen.rank,
-    photoUrl: citizen.photoUrl ? "vault:protected" : null,
+    rank:          citizen.rank,
+    photoUrl:      citizen.photoUrl ? "vault:protected" : null,
     balanceMinutes: citizen.balanceMinutes,
-    status,
+    status:        finalStatus,
     secondsLeft,
+    criteria,
   });
 });
 
@@ -394,6 +472,42 @@ router.get("/auth/telegram-webapp/check-subscription", async (req, res): Promise
     logger.warn({ err }, "TWA sub-check: network error (fallback=true)");
     res.json({ subscribed: true, fallback: true });
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /auth/telegram-webapp/resubmit
+// Restart emission for a rejected application. Resets timer to +60 min.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/auth/telegram-webapp/resubmit", async (req, res): Promise<void> => {
+  const authHeader = req.headers.authorization ?? "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token) { res.status(401).json({ error: "Authorization required" }); return; }
+
+  const [citizen] = await db
+    .select({
+      id:                 citizensTable.id,
+      telegramId:         citizensTable.telegramId,
+      registrationStatus: citizensTable.registrationStatus,
+    })
+    .from(citizensTable)
+    .where(eq(citizensTable.authToken, token))
+    .limit(1);
+
+  if (!citizen) { res.status(401).json({ error: "Invalid auth token" }); return; }
+
+  if (citizen.registrationStatus !== "rejected") {
+    res.status(400).json({ error: "Заявка не находится в статусе отклонения" });
+    return;
+  }
+
+  const newAvailableAt = new Date(Date.now() + 60 * 60 * 1000); // +60 min
+  await db
+    .update(citizensTable)
+    .set({ registrationStatus: "pending", availableAt: newAvailableAt })
+    .where(eq(citizensTable.id, citizen.id));
+
+  req.log.info({ citizenId: citizen.id }, "TWA: application resubmitted");
+  res.json({ ok: true, status: "IN_EMISSION", secondsLeft: 3600 });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
