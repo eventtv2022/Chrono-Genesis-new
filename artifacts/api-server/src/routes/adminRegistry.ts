@@ -14,6 +14,8 @@
 
 import { Router } from "express";
 import { randomUUID } from "crypto";
+import fs from "fs";
+import path from "path";
 import { db } from "@workspace/db";
 import { citizensTable } from "@workspace/db";
 import { eq, or, ilike, sql } from "drizzle-orm";
@@ -278,7 +280,64 @@ router.get("/admin/registry/users/:id", requireRegistrySession, async (req, res)
     .limit(1);
 
   if (!citizen) { res.status(404).json({ error: "Citizen not found" }); return; }
-  res.json(citizen);
+
+  // Never expose raw filesystem path to the client
+  res.json({
+    ...citizen,
+    hasPhoto: !!citizen.photoUrl,
+    photoUrl: undefined,
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /admin/registry/users/:id/photo?token=<session-token>
+// Serves the citizen's vault photo. Uses query-param auth because <img> tags
+// cannot set custom headers.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/admin/registry/users/:id/photo", async (req, res): Promise<void> => {
+  // Validate registry session via query param
+  const token = req.query["token"] as string | undefined;
+  if (!token) { res.status(403).json({ error: "token required" }); return; }
+  const session = sessionStore.get(token);
+  if (!session || Date.now() > session.expiresAt) {
+    sessionStore.delete(token ?? "");
+    res.status(403).json({ error: "Registry session expired" });
+    return;
+  }
+
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid ID" }); return; }
+
+  const [citizen] = await db
+    .select({ photoUrl: citizensTable.photoUrl })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, id))
+    .limit(1);
+
+  if (!citizen || !citizen.photoUrl) {
+    res.status(404).json({ error: "No photo" });
+    return;
+  }
+
+  const filePath = citizen.photoUrl;
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: "Photo file not found on disk" });
+    return;
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeMap: Record<string, string> = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+  };
+  const contentType = mimeMap[ext] ?? "image/jpeg";
+
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Cache-Control", "private, max-age=300");
+  fs.createReadStream(filePath).pipe(res);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

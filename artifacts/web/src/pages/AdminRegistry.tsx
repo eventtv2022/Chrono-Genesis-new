@@ -28,7 +28,6 @@ interface CitizenRow {
 }
 
 interface CitizenDetail extends CitizenRow {
-  photoUrl: string | null;
   signatureBase64: string | null;
   meritScore: number | null;
   totalGiven: number | null;
@@ -329,8 +328,13 @@ function ProfileModal({
             <div className="flex gap-4 items-start">
               {/* Photo */}
               <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 border-2 border-primary/30 bg-muted flex items-center justify-center">
-                {citizen.photoUrl ? (
-                  <img src={citizen.photoUrl} alt="Фото" className="w-full h-full object-cover" />
+                {citizen.hasPhoto ? (
+                  <img
+                    src={`/api/admin/registry/users/${citizen.id}/photo?token=${encodeURIComponent(registryToken)}`}
+                    alt="Фото"
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
                 ) : (
                   <span className="text-2xl text-muted-foreground">👤</span>
                 )}
