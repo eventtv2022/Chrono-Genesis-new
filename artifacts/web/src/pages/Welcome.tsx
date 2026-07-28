@@ -5,225 +5,342 @@ import { useGetStats } from "@workspace/api-client-react";
 /* ─────────────────────── helpers ─────────────────────── */
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
-/* ─────────────────────── Emblem image ─────────────────────── */
-function Emblem({ size = 220, pulse = true }: { size?: number; pulse?: boolean }) {
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        overflow: "hidden",
-        flexShrink: 0,
-        animation: pulse ? "tn-emblem-pulse 2.8s ease-in-out infinite" : undefined,
-        filter: "drop-shadow(0 0 18px rgba(201,168,76,0.6)) drop-shadow(0 0 44px rgba(74,160,255,0.35))",
-      }}
-    >
-      <img
-        src="/web/emblem.jpg"
-        alt="TimeNation Emblem"
-        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-        draggable={false}
-      />
-      <style>{`
-        @keyframes tn-emblem-pulse {
-          0%,100% { filter: drop-shadow(0 0 14px rgba(201,168,76,.5)) drop-shadow(0 0 30px rgba(74,160,255,.3)); }
-          50%      { filter: drop-shadow(0 0 28px rgba(201,168,76,.95)) drop-shadow(0 0 56px rgba(74,160,255,.55)); }
-        }
-      `}</style>
-    </div>
-  );
-}
+const FONT_ORBITRON = "'Orbitron', 'Space Mono', monospace";
+const FONT_EXO      = "'Exo 2', 'Space Grotesk', sans-serif";
 
-/* ─────────────────────── Flag ─────────────────────── */
-function Flag({ width = 280 }: { width?: number }) {
-  const h = Math.round(width * 0.665);
-  return (
-    <div
-      style={{
-        width,
-        height: h,
-        borderRadius: 8,
-        overflow: "hidden",
-        boxShadow:
-          "0 8px 48px rgba(0,0,0,0.65), 0 0 0 1.5px rgba(255,255,255,0.10), 0 0 40px rgba(74,160,255,0.15)",
-        animation: "flag-wave 3.8s ease-in-out infinite",
-        transformOrigin: "center center",
-        flexShrink: 0,
-      }}
-    >
-      <img
-        src="/web/flag-flat.jpg"
-        alt="TimeNation Flag"
-        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-        draggable={false}
-      />
-      <style>{`
-        @keyframes flag-wave {
-          0%,100% { transform: perspective(600px) rotateY(0deg)    skewY(0deg); }
-          25%      { transform: perspective(600px) rotateY(1.5deg)  skewY(.5deg); }
-          50%      { transform: perspective(600px) rotateY(-1deg)   skewY(-.4deg); }
-          75%      { transform: perspective(600px) rotateY(.8deg)   skewY(.3deg); }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-/* ─────────────────────── Particle canvas ─────────────────────── */
-function StarField() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+/* ═══════════════════════════════════════════════════════════════════
+   HYPERSPACE CANVAS — converging neon threads + star-dust
+═══════════════════════════════════════════════════════════════════ */
+function HyperspaceCanvas() {
+  const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = ref.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let animId: number;
-    let W = 0, H = 0;
+    let W = 0, H = 0, cx = 0, cy = 0, raf = 0;
 
-    interface Particle { x: number; y: number; r: number; vx: number; vy: number; a: number; va: number; }
-    let particles: Particle[] = [];
+    // Neon thread colors
+    const COLORS = [
+      "rgba(0,212,255,",   // cyan
+      "rgba(120,80,255,",  // violet
+      "rgba(201,168,76,",  // gold
+      "rgba(0,255,136,",   // green
+      "rgba(255,80,180,",  // pink
+    ];
+
+    interface Thread {
+      angle: number; speed: number; len: number;
+      dist: number; color: string; width: number;
+    }
+    const N_THREADS = 220;
+    let threads: Thread[] = [];
+
+    const mkThread = (): Thread => ({
+      angle: Math.random() * Math.PI * 2,
+      speed: 0.4 + Math.random() * 2.2,
+      len:   40 + Math.random() * 180,
+      dist:  Math.random() * Math.min(W, H) * 0.52,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      width: 0.4 + Math.random() * 1.4,
+    });
+
+    // Star dust
+    interface Dust { x: number; y: number; r: number; a: number; va: number; }
+    const N_DUST = 160;
+    let dust: Dust[] = [];
 
     const resize = () => {
       W = canvas.width  = window.innerWidth;
       H = canvas.height = window.innerHeight;
-      particles = Array.from({ length: 140 }, () => ({
-        x:  Math.random() * W,
-        y:  Math.random() * H,
-        r:  Math.random() * 1.4 + 0.3,
-        vx: (Math.random() - 0.5) * 0.18,
-        vy: (Math.random() - 0.5) * 0.18,
-        a:  Math.random(),
-        va: (Math.random() - 0.5) * 0.008,
+      cx = W / 2; cy = H / 2;
+      threads = Array.from({ length: N_THREADS }, mkThread);
+      dust = Array.from({ length: N_DUST }, () => ({
+        x: Math.random() * W, y: Math.random() * H,
+        r: 0.3 + Math.random() * 1.2,
+        a: Math.random(), va: (Math.random() - 0.5) * 0.009,
       }));
     };
 
     const draw = () => {
-      ctx.clearRect(0, 0, W, H);
-      for (const p of particles) {
-        p.x  = (p.x + p.vx + W) % W;
-        p.y  = (p.y + p.vy + H) % H;
-        p.a  = Math.max(0.05, Math.min(1, p.a + p.va));
-        if (p.a <= 0.06 || p.a >= 0.99) p.va *= -1;
+      // Fade trail
+      ctx.fillStyle = "rgba(4,4,20,0.18)";
+      ctx.fillRect(0, 0, W, H);
+
+      // ── Hyperspace threads ──
+      for (const t of threads) {
+        t.dist += t.speed;
+        if (t.dist > Math.max(W, H) * 0.72) {
+          t.dist  = 2;
+          t.angle = Math.random() * Math.PI * 2;
+          t.speed = 0.4 + Math.random() * 2.2;
+          t.len   = 40 + Math.random() * 180;
+          t.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+          t.width = 0.4 + Math.random() * 1.4;
+        }
+        const progress = t.dist / (Math.max(W, H) * 0.72);
+        const alpha    = Math.min(1, progress * 3) * (1 - progress * 0.6);
+        const x1 = cx + Math.cos(t.angle) * t.dist;
+        const y1 = cy + Math.sin(t.angle) * t.dist;
+        const x2 = cx + Math.cos(t.angle) * (t.dist + t.len * progress);
+        const y2 = cy + Math.sin(t.angle) * (t.dist + t.len * progress);
 
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(200,190,255,${p.a * 0.75})`;
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = `${t.color}${(alpha * 0.9).toFixed(2)})`;
+        ctx.lineWidth   = t.width * (0.3 + progress * 1.2);
+        ctx.stroke();
+      }
+
+      // ── Star dust ──
+      for (const d of dust) {
+        d.a = Math.max(0.04, Math.min(0.85, d.a + d.va));
+        if (d.a <= 0.05 || d.a >= 0.84) d.va *= -1;
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(180,200,255,${(d.a * 0.65).toFixed(2)})`;
         ctx.fill();
       }
 
-      // Subtle nebula blobs
-      const nb = [
-        { x: W * 0.15, y: H * 0.3,  c: "58,120,220", r: W * 0.22 },
-        { x: W * 0.82, y: H * 0.65, c: "201,168,76",  r: W * 0.18 },
-        { x: W * 0.5,  y: H * 0.1,  c: "100,60,180",  r: W * 0.28 },
-      ];
-      for (const n of nb) {
-        const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r);
-        g.addColorStop(0,   `rgba(${n.c},0.06)`);
-        g.addColorStop(1,   `rgba(${n.c},0)`);
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-        ctx.fillStyle = g;
-        ctx.fill();
-      }
+      // ── Central nebula core (radial glow) ──
+      const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(W, H) * 0.35);
+      rg.addColorStop(0,    "rgba(60,30,140,0.22)");
+      rg.addColorStop(0.5,  "rgba(0,80,180,0.10)");
+      rg.addColorStop(1,    "rgba(0,0,0,0)");
+      ctx.fillStyle = rg;
+      ctx.fillRect(0, 0, W, H);
 
-      animId = requestAnimationFrame(draw);
+      raf = requestAnimationFrame(draw);
     };
 
     resize();
     draw();
     window.addEventListener("resize", resize);
-    return () => { cancelAnimationFrame(animId); window.removeEventListener("resize", resize); };
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
   }, []);
 
   return (
     <canvas
-      ref={canvasRef}
-      style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }}
+      ref={ref}
+      style={{
+        position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none",
+        background: "linear-gradient(160deg,#02020f 0%,#05041a 45%,#03051e 100%)",
+      }}
     />
   );
 }
 
-/* ─────────────────────── Stat card ─────────────────────── */
-function StatCard({ icon, label, value, sub }: { icon: string; label: string; value: string | number; sub?: string }) {
-  const [hov, setHov] = useState(false);
+/* ═══════════════════════════════════════════════════════════════════
+   EMBLEM — official image with pulsing glow rings
+═══════════════════════════════════════════════════════════════════ */
+function Emblem({ size = 240 }: { size?: number }) {
   return (
-    <div
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        background: hov ? "rgba(30,30,60,0.85)" : "rgba(18,16,42,0.75)",
-        border: hov ? "1px solid rgba(201,168,76,0.55)" : "1px solid rgba(255,255,255,0.09)",
-        borderRadius: 18,
-        padding: "22px 26px",
-        transition: "all .22s",
-        backdropFilter: "blur(12px)",
-        boxShadow: hov ? "0 0 28px rgba(201,168,76,0.18), inset 0 0 20px rgba(201,168,76,0.04)" : "0 4px 24px rgba(0,0,0,0.3)",
-        cursor: "default",
-        minWidth: 160,
-        flex: 1,
-      }}
-    >
-      <div style={{ fontSize: 26, marginBottom: 6 }}>{icon}</div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: "#c9a84c", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
-        {value}
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      {/* Outer animated rings */}
+      {[1.55, 1.35, 1.18].map((scale, i) => (
+        <div
+          key={i}
+          style={{
+            position: "absolute",
+            top: "50%", left: "50%",
+            transform: "translate(-50%,-50%)",
+            width: size * scale, height: size * scale,
+            borderRadius: "50%",
+            border: `1px solid rgba(${i === 0 ? "0,212,255" : i === 1 ? "201,168,76" : "120,80,255"},0.25)`,
+            animation: `ring-spin-${i} ${14 + i * 6}s linear infinite`,
+          }}
+        />
+      ))}
+      {/* Gold glow halo */}
+      <div
+        style={{
+          position: "absolute", top: "50%", left: "50%",
+          transform: "translate(-50%,-50%)",
+          width: size * 1.1, height: size * 1.1,
+          borderRadius: "50%",
+          background: "radial-gradient(circle,rgba(201,168,76,0.22) 0%,rgba(0,212,255,0.10) 50%,transparent 75%)",
+          animation: "emblem-halo 3s ease-in-out infinite",
+        }}
+      />
+      {/* Actual emblem image */}
+      <div
+        style={{
+          width: size, height: size, borderRadius: "50%", overflow: "hidden",
+          boxShadow: "0 0 40px rgba(0,212,255,0.55), 0 0 80px rgba(201,168,76,0.35), 0 0 120px rgba(120,80,255,0.2)",
+          animation: "emblem-pulse 3s ease-in-out infinite",
+        }}
+      >
+        <img
+          src="/web/emblem.jpg"
+          alt="TimeNation Emblem"
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          draggable={false}
+        />
       </div>
-      <div style={{ fontSize: 12, color: "#8080a0", marginTop: 5, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-        {label}
-      </div>
-      {sub && (
-        <div style={{ fontSize: 11, color: "#4ec94e", marginTop: 4, fontWeight: 600 }}>{sub}</div>
-      )}
+
+      <style>{`
+        @keyframes emblem-pulse {
+          0%,100% { box-shadow:0 0 30px rgba(0,212,255,.45),0 0 60px rgba(201,168,76,.28),0 0 100px rgba(120,80,255,.15); }
+          50%      { box-shadow:0 0 60px rgba(0,212,255,.85),0 0 110px rgba(201,168,76,.55),0 0 160px rgba(120,80,255,.35); }
+        }
+        @keyframes emblem-halo {
+          0%,100% { opacity:.6; transform:translate(-50%,-50%) scale(1); }
+          50%      { opacity:1;  transform:translate(-50%,-50%) scale(1.08); }
+        }
+        @keyframes ring-spin-0 { from{transform:translate(-50%,-50%) rotate(0deg)}  to{transform:translate(-50%,-50%) rotate(360deg)} }
+        @keyframes ring-spin-1 { from{transform:translate(-50%,-50%) rotate(0deg)}  to{transform:translate(-50%,-50%) rotate(-360deg)} }
+        @keyframes ring-spin-2 { from{transform:translate(-50%,-50%) rotate(45deg)} to{transform:translate(-50%,-50%) rotate(405deg)} }
+      `}</style>
     </div>
   );
 }
 
-/* ─────────────────────── CTA button ─────────────────────── */
-function CtaButton({
-  children,
-  onClick,
-  primary = false,
+/* ═══════════════════════════════════════════════════════════════════
+   NEON CLOCK — bottom-left floating widget
+═══════════════════════════════════════════════════════════════════ */
+function NeonClock() {
+  const [time, setTime] = useState({ h: "00", m: "00", s: "00" });
+  const [tilt, setTilt] = useState(0);
+
+  useEffect(() => {
+    const tick = () => {
+      const n = new Date();
+      setTime({ h: pad2(n.getHours()), m: pad2(n.getMinutes()), s: pad2(n.getSeconds()) });
+      setTilt(Math.sin(Date.now() / 3000) * 6);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div
+      style={{
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+        transform: `perspective(400px) rotateY(${tilt}deg) rotateX(${tilt * 0.4}deg)`,
+        transition: "transform 1s ease-in-out",
+      }}
+    >
+      <div style={{ fontSize: 9, letterSpacing: "0.2em", color: "#00d4ff", fontFamily: FONT_ORBITRON, opacity: 0.7, textTransform: "uppercase" }}>
+        Chronosphere Time
+      </div>
+      <div
+        style={{
+          fontFamily: FONT_ORBITRON,
+          fontSize: 28,
+          fontWeight: 700,
+          letterSpacing: "0.12em",
+          color: "#00d4ff",
+          textShadow: "0 0 14px rgba(0,212,255,0.9), 0 0 30px rgba(0,212,255,0.5), 0 0 50px rgba(0,212,255,0.25)",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {time.h}<span style={{ opacity: 0.5, animation: "colon-blink 1s step-end infinite" }}>:</span>
+        {time.m}<span style={{ opacity: 0.5, animation: "colon-blink 1s step-end infinite" }}>:</span>
+        {time.s}
+      </div>
+      <div style={{ fontSize: 8, color: "#8080a0", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+        UTC+0 · Live
+      </div>
+      <style>{`
+        @keyframes colon-blink { 0%,49%{opacity:.5} 50%,100%{opacity:.1} }
+      `}</style>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   GLOBAL ACTIVITY WIDGET — bottom-right
+═══════════════════════════════════════════════════════════════════ */
+function ActivityWidget({ stats }: { stats: { activeCitizens: number; totalMinutesCirculated: number | string; totalTransactions: number } | undefined }) {
+  const rows = [
+    { icon: "⚡", label: "Citizens Active",         value: stats ? stats.activeCitizens.toLocaleString()                              : "—", color: "#00ff88" },
+    { icon: "⏳", label: "Darmīn in Circulation",   value: stats ? Number(stats.totalMinutesCirculated).toFixed(0)                    : "—", color: "#c9a84c" },
+    { icon: "🔄", label: "Transactions",             value: stats ? stats.totalTransactions.toLocaleString()                          : "—", color: "#00d4ff" },
+  ];
+
+  return (
+    <div
+      style={{
+        background: "rgba(4,8,30,0.78)",
+        border: "1px solid rgba(0,212,255,0.22)",
+        borderRadius: 16,
+        padding: "16px 20px",
+        backdropFilter: "blur(16px)",
+        boxShadow: "0 0 30px rgba(0,212,255,0.08), inset 0 0 20px rgba(0,212,255,0.03)",
+        minWidth: 230,
+      }}
+    >
+      <div style={{ fontSize: 10, letterSpacing: "0.18em", color: "#00d4ff", fontFamily: FONT_ORBITRON, marginBottom: 12, textTransform: "uppercase", opacity: 0.8 }}>
+        ◉ Global Activity
+      </div>
+      {rows.map(r => (
+        <div key={r.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12 }}>{r.icon}</span>
+            <span style={{ fontSize: 11, color: "#8080a0", fontFamily: FONT_EXO }}>{r.label}</span>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: r.color, fontFamily: FONT_ORBITRON, textShadow: `0 0 10px ${r.color}80` }}>
+            {r.value}
+          </span>
+        </div>
+      ))}
+      {/* Pulse bar */}
+      <div style={{ marginTop: 10, height: 2, background: "rgba(0,212,255,0.12)", borderRadius: 2, overflow: "hidden" }}>
+        <div style={{ height: "100%", background: "linear-gradient(90deg,#00d4ff,#7850ff)", borderRadius: 2, animation: "scan-bar 2.4s ease-in-out infinite" }} />
+      </div>
+      <style>{`
+        @keyframes scan-bar {
+          0%   { width:0%;   margin-left:0 }
+          50%  { width:100%; margin-left:0 }
+          100% { width:0%;   margin-left:100% }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   NEON CTA BUTTON
+═══════════════════════════════════════════════════════════════════ */
+function NeonButton({
+  children, onClick, primary = false, color = "#00d4ff",
 }: {
-  children: React.ReactNode;
-  onClick: () => void;
-  primary?: boolean;
+  children: React.ReactNode; onClick: () => void; primary?: boolean; color?: string;
 }) {
   const [hov, setHov] = useState(false);
+
+  const rgb = primary ? "201,168,76" : color === "#00ff88" ? "0,255,136" : color === "#7850ff" ? "120,80,255" : "0,212,255";
+
   return (
     <button
       onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        padding: "14px 28px",
-        borderRadius: 14,
-        fontSize: 14,
+        padding: "13px 28px",
+        borderRadius: 10,
+        border: `1px solid rgba(${rgb},${hov ? 0.9 : 0.45})`,
+        background: hov
+          ? `rgba(${rgb},0.18)`
+          : `rgba(${rgb},0.07)`,
+        color: primary ? `rgba(${rgb},1)` : `rgba(${rgb},${hov ? 1 : 0.8})`,
+        fontSize: 12,
         fontWeight: 700,
-        fontFamily: "inherit",
+        fontFamily: FONT_ORBITRON,
+        letterSpacing: "0.12em",
         cursor: "pointer",
+        textTransform: "uppercase" as const,
+        backdropFilter: "blur(8px)",
         transition: "all .18s",
-        letterSpacing: "0.01em",
-        ...(primary
-          ? {
-              background: hov
-                ? "linear-gradient(135deg,#ffe082 0%,#c9a84c 60%,#f5cc6a 100%)"
-                : "linear-gradient(135deg,#c9a84c 0%,#e8c870 60%,#c9a84c 100%)",
-              border: "none",
-              color: "#0f0f1a",
-              boxShadow: hov
-                ? "0 6px 36px rgba(201,168,76,0.65), 0 0 60px rgba(201,168,76,0.25)"
-                : "0 4px 20px rgba(201,168,76,0.4)",
-              transform: hov ? "translateY(-2px)" : "none",
-            }
-          : {
-              background: hov ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)",
-              border: hov ? "1px solid rgba(255,255,255,0.28)" : "1px solid rgba(255,255,255,0.12)",
-              color: "#e8e8f4",
-              transform: hov ? "translateY(-1px)" : "none",
-            }),
+        boxShadow: hov
+          ? `0 0 20px rgba(${rgb},0.55), 0 0 40px rgba(${rgb},0.2), inset 0 0 16px rgba(${rgb},0.08)`
+          : `0 0 8px rgba(${rgb},0.2)`,
+        transform: hov ? "translateY(-2px)" : "none",
+        whiteSpace: "nowrap" as const,
       }}
     >
       {children}
@@ -231,330 +348,219 @@ function CtaButton({
   );
 }
 
-/* ─────────────────────── DESKTOP HERO ─────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════
+   DESKTOP AAA HERO
+═══════════════════════════════════════════════════════════════════ */
 function DesktopHero() {
   const [, navigate] = useLocation();
   const { data: stats } = useGetStats();
-  const [clock, setClock] = useState("00:00:00");
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
   const heroRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const tick = () => {
-      const n = new Date();
-      setClock(`${pad2(n.getHours())}:${pad2(n.getMinutes())}:${pad2(n.getSeconds())}`);
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const rect = heroRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const x = ((e.clientX - rect.left) / rect.width  - 0.5) * 2;
-    const y = ((e.clientY - rect.top)  / rect.height - 0.5) * 2;
-    setMouse({ x, y });
+    setMouse({
+      x: ((e.clientX - rect.left)  / rect.width  - 0.5) * 2,
+      y: ((e.clientY - rect.top)   / rect.height - 0.5) * 2,
+    });
   }, []);
 
-  const px = (factor: number) => `${mouse.x * factor}px`;
-  const py = (factor: number) => `${mouse.y * factor}px`;
+  const px = (f: number) => `${mouse.x * f}px`;
+  const py = (f: number) => `${mouse.y * f}px`;
 
   return (
     <div
       ref={heroRef}
       onMouseMove={handleMouseMove}
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "40px 60px",
-        position: "relative",
-        zIndex: 1,
-        gap: 0,
-      }}
+      style={{ minHeight: "100vh", display: "flex", flexDirection: "column", position: "relative", zIndex: 1 }}
     >
-      {/* ── Top bar ── */}
+      {/* ── TOP BAR ─────────────────────────────────────────────── */}
       <div
         style={{
-          position: "absolute",
-          top: 28,
-          left: 0,
-          right: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 60px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "20px 48px",
+          background: "linear-gradient(180deg,rgba(2,2,20,0.85) 0%,transparent 100%)",
+          borderBottom: "1px solid rgba(0,212,255,0.08)",
+          backdropFilter: "blur(8px)",
+          position: "relative", zIndex: 10,
         }}
       >
+        {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 16, fontWeight: 800, color: "#c9a84c", letterSpacing: "0.05em" }}>TIMENATION</span>
-          <span
-            style={{
-              fontSize: 10,
-              color: "#8080a0",
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.09)",
-              borderRadius: 5,
-              padding: "2px 8px",
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
-            }}
-          >
-            Digital State
+          <div style={{ width: 32, height: 32, borderRadius: "50%", overflow: "hidden", boxShadow: "0 0 12px rgba(0,212,255,0.5)" }}>
+            <img src="/web/emblem.jpg" alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} draggable={false} />
+          </div>
+          <span style={{ fontFamily: FONT_ORBITRON, fontSize: 16, fontWeight: 700, color: "#00d4ff", letterSpacing: "0.08em", textShadow: "0 0 12px rgba(0,212,255,0.6)" }}>
+            TIMENATION
           </span>
         </div>
-        <div
-          style={{
-            fontFamily: "'Space Mono', monospace",
-            fontSize: 18,
-            fontWeight: 700,
-            color: "#c9a84c",
-            textShadow: "0 0 20px rgba(201,168,76,0.6)",
-            letterSpacing: "0.08em",
-          }}
-        >
-          {clock}
+
+        {/* Status center */}
+        <div style={{ display: "flex", alignItems: "center", gap: 20, fontFamily: FONT_EXO, fontSize: 12 }}>
+          <StatusPill label="SERVER STATUS" value="ONLINE" color="#00ff88" />
+          <StatusPill label="EMISSION" value="LIVE" color="#c9a84c" />
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ec94e", boxShadow: "0 0 8px #4ec94e", animation: "tn-blink 2s infinite" }} />
-          <span style={{ fontSize: 11, color: "#4ec94e", letterSpacing: "0.08em", fontWeight: 600, textTransform: "uppercase" }}>Chronosphere Online</span>
+
+        {/* Auth buttons */}
+        <div style={{ display: "flex", gap: 12 }}>
+          <NeonButton onClick={() => navigate("/")} color="#00d4ff">Log In</NeonButton>
+          <NeonButton onClick={() => navigate("/register")} primary color="#c9a84c">Join DAO</NeonButton>
         </div>
       </div>
 
-      {/* ── Main content grid ── */}
+      {/* ── MAIN STAGE ──────────────────────────────────────────── */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto 1fr",
-          gap: 60,
-          alignItems: "center",
-          width: "100%",
-          maxWidth: 1280,
-          paddingTop: 20,
+          flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          padding: "0 60px 80px", gap: 0,
+          position: "relative",
         }}
       >
-        {/* LEFT — headline + stats + CTAs */}
+        {/* Arched label above emblem */}
         <div
           style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 32,
-            transform: `translate(${px(-8)}, ${py(-5)})`,
-            transition: "transform .12s ease-out",
+            fontFamily: FONT_ORBITRON, fontSize: 11, fontWeight: 600,
+            color: "#c9a84c", letterSpacing: "0.22em", textTransform: "uppercase",
+            textShadow: "0 0 14px rgba(201,168,76,0.6)",
+            marginBottom: 28,
+            transform: `translate(${px(-6)},${py(-4)})`,
+            transition: "transform .14s ease-out",
           }}
         >
-          {/* Headline */}
-          <div>
-            <div
-              style={{
-                fontSize: 11,
-                textTransform: "uppercase",
-                letterSpacing: "0.16em",
-                color: "#6c63ff",
-                fontWeight: 600,
-                marginBottom: 14,
-              }}
-            >
-              ✦ Добро пожаловать в Цифровое Государство
-            </div>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "clamp(32px, 3.2vw, 52px)",
-                fontWeight: 900,
-                lineHeight: 1.12,
-                background: "linear-gradient(135deg, #ffffff 0%, #c9a84c 55%, #ffe082 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              WELCOME,<br />TEMPORAL CITIZEN
-            </h1>
-            <div
-              style={{
-                marginTop: 16,
-                fontSize: "clamp(14px, 1.2vw, 17px)",
-                color: "#a0a0c4",
-                lineHeight: 1.65,
-                maxWidth: 440,
-              }}
-            >
-              Цифровое Государство Времени.<br />
-              <span style={{ color: "#c9a84c", fontWeight: 600 }}>Твоё Время. Твоя Империя.</span>
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-            <StatCard
-              icon="👥"
-              label="Active Citizens"
-              value={stats?.activeCitizens ?? "—"}
-            />
-            <StatCard
-              icon="⏳"
-              label="Darmīn in Circulation"
-              value={stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—"}
-            />
-            <StatCard
-              icon="⚡"
-              label="Chronosphere"
-              value="LIVE"
-              sub="● ONLINE"
-            />
-          </div>
-
-          {/* CTA buttons */}
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <CtaButton primary onClick={() => navigate("/")}>
-              👑 Личный кабинет / Паспорт
-            </CtaButton>
-            <CtaButton onClick={() => window.open("https://issuu.com/timenation2025/docs/_timenatio", "_blank")}>
-              📜 Конституция
-            </CtaButton>
-            <CtaButton onClick={() => navigate("/register")}>
-              🚀 Присоединиться к DAO
-            </CtaButton>
-          </div>
+          ✦ &nbsp;TIMENATION: THE CHRONOSPHERE IS ACTIVE&nbsp; ✦
         </div>
 
-        {/* CENTER — Emblem */}
+        {/* Emblem */}
         <div
           style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 24,
-            transform: `translate(${px(-4)}, ${py(-3)})`,
+            transform: `translate(${px(-5)},${py(-4)}) perspective(900px) rotateX(${mouse.y * 5}deg) rotateY(${mouse.x * 5}deg)`,
             transition: "transform .16s ease-out",
+            marginBottom: 36,
           }}
         >
-          {/* Outer glow rings */}
-          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div
-              style={{
-                position: "absolute",
-                width: 300,
-                height: 300,
-                borderRadius: "50%",
-                background: "radial-gradient(circle, rgba(201,168,76,0.12) 0%, transparent 70%)",
-                animation: "tn-glow-ring 4s ease-in-out infinite",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                width: 260,
-                height: 260,
-                borderRadius: "50%",
-                border: "1px solid rgba(201,168,76,0.15)",
-                animation: "tn-spin-slow 24s linear infinite",
-              }}
-            />
-            <Emblem size={220} pulse />
-          </div>
-
-          {/* Tagline below emblem */}
-          <div
-            style={{
-              fontSize: 11,
-              textTransform: "uppercase",
-              letterSpacing: "0.18em",
-              color: "#8080a0",
-              textAlign: "center",
-            }}
-          >
-            Tempus · Aeternitas · Dignitas
-          </div>
+          <Emblem size={220} />
         </div>
 
-        {/* RIGHT — Flag + description */}
+        {/* Main headline */}
         <div
           style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-start",
-            gap: 28,
-            transform: `translate(${px(8)}, ${py(-5)})`,
-            transition: "transform .12s ease-out",
+            transform: `translate(${px(-8)},${py(-5)})`,
+            transition: "transform .13s ease-out",
+            textAlign: "center",
+            marginBottom: 12,
           }}
         >
-          {/* Flag */}
-          <div
+          <h1
             style={{
-              transform: `perspective(800px) rotateY(${mouse.x * -6}deg) rotateX(${mouse.y * 3}deg)`,
-              transition: "transform .15s ease-out",
+              margin: 0,
+              fontFamily: FONT_ORBITRON,
+              fontSize: "clamp(32px, 3.6vw, 58px)",
+              fontWeight: 900,
+              lineHeight: 1.1,
+              background: "linear-gradient(135deg,#ffffff 0%,#00d4ff 40%,#a0e8ff 70%,#ffffff 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              textShadow: "none",
+              filter: "drop-shadow(0 0 18px rgba(0,212,255,0.5))",
+              letterSpacing: "0.05em",
             }}
           >
-            <Flag width={260} />
-          </div>
+            WELCOME, TEMPORAL CITIZEN!
+          </h1>
+        </div>
 
-          {/* Description bullets */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {[
-              { icon: "🕰", title: "Хронос-Консоль", text: "Пульс экономики в реальном времени" },
-              { icon: "🪙", title: "Дармин (Д)", text: "Валюта нации — каждый дармин стоит минуты" },
-              { icon: "📜", title: "Паспорт Гражданина", text: "Эмиссия открыта — оформи свой документ" },
-              { icon: "🗳", title: "DAO & Голосование", text: "Участвуй в управлении государством" },
-            ].map(item => (
-              <div key={item.title} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                <div style={{ fontSize: 20, lineHeight: 1.3 }}>{item.icon}</div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#e8e8f4" }}>{item.title}</div>
-                  <div style={{ fontSize: 12, color: "#8080a0", marginTop: 2 }}>{item.text}</div>
-                </div>
-              </div>
-            ))}
+        <div
+          style={{
+            transform: `translate(${px(-6)},${py(-3)})`,
+            transition: "transform .15s ease-out",
+            textAlign: "center",
+            marginBottom: 6,
+          }}
+        >
+          <div style={{ fontFamily: FONT_EXO, fontSize: "clamp(14px,1.5vw,20px)", fontWeight: 300, color: "#7abfff", letterSpacing: "0.18em", textTransform: "uppercase", textShadow: "0 0 16px rgba(122,191,255,0.5)" }}>
+            EMBRACE THE CHRONOSPHERE
           </div>
+        </div>
+
+        <div
+          style={{
+            transform: `translate(${px(-4)},${py(-2)})`,
+            transition: "transform .16s ease-out",
+            textAlign: "center",
+            marginBottom: 44,
+          }}
+        >
+          <div style={{ fontFamily: FONT_EXO, fontSize: "clamp(13px,1.3vw,18px)", fontWeight: 700, color: "#c9a84c", letterSpacing: "0.14em", textTransform: "uppercase", textShadow: "0 0 20px rgba(201,168,76,0.6)" }}>
+            YOUR TIME.&nbsp;&nbsp;YOUR EMPIRE.
+          </div>
+        </div>
+
+        {/* CTA row */}
+        <div
+          style={{
+            display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center",
+            transform: `translate(${px(-5)},${py(-2)})`,
+            transition: "transform .18s ease-out",
+          }}
+        >
+          <NeonButton onClick={() => navigate("/register")} primary color="#c9a84c">
+            ⚡&nbsp; Register Your Passport
+          </NeonButton>
+          <NeonButton onClick={() => navigate("/timeline")} color="#00d4ff">
+            🔭&nbsp; Explore Chronopedia
+          </NeonButton>
+          <NeonButton onClick={() => navigate("/")} color="#00ff88">
+            👑&nbsp; Enter the Dashboard
+          </NeonButton>
         </div>
       </div>
 
-      {/* ── Bottom scroll hint ── */}
+      {/* ── BOTTOM BAR — Clock left, Activity right ─────────────── */}
       <div
         style={{
-          position: "absolute",
-          bottom: 28,
-          left: "50%",
-          transform: "translateX(-50%)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 6,
-          opacity: 0.45,
+          position: "absolute", bottom: 32, left: 0, right: 0,
+          display: "flex", justifyContent: "space-between", alignItems: "flex-end",
+          padding: "0 52px", pointerEvents: "none",
         }}
       >
-        <div style={{ fontSize: 11, letterSpacing: "0.10em", color: "#8080a0", textTransform: "uppercase" }}>
-          Scroll to explore
+        {/* Neon clock */}
+        <div style={{ pointerEvents: "auto", transform: `translate(${px(6)},${py(4)})`, transition: "transform .2s ease-out" }}>
+          <NeonClock />
         </div>
-        <div style={{ width: 1, height: 28, background: "linear-gradient(to bottom, #8080a0, transparent)", animation: "tn-scroll-arrow 1.8s ease-in-out infinite" }} />
+
+        {/* Activity widget */}
+        <div style={{ pointerEvents: "auto", transform: `translate(${px(-6)},${py(4)})`, transition: "transform .2s ease-out" }}>
+          <ActivityWidget stats={stats} />
+        </div>
       </div>
 
-      {/* ── Global keyframes ── */}
+      {/* Global animation keyframes */}
       <style>{`
-        @keyframes tn-blink {
-          0%,100% { opacity:1; } 50% { opacity:.35; }
-        }
-        @keyframes tn-glow-ring {
-          0%,100% { transform:scale(1);   opacity:.7; }
-          50%      { transform:scale(1.08); opacity:1; }
-        }
-        @keyframes tn-spin-slow {
-          from { transform:rotate(0deg); }
-          to   { transform:rotate(360deg); }
-        }
-        @keyframes tn-scroll-arrow {
-          0%,100% { transform:scaleY(1) translateY(0); opacity:.45; }
-          50%      { transform:scaleY(1.3) translateY(4px); opacity:.8; }
+        @keyframes tn-blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+        @keyframes led-glow {
+          0%,100% { box-shadow:0 0 4px currentColor; }
+          50%      { box-shadow:0 0 10px currentColor, 0 0 20px currentColor; }
         }
       `}</style>
     </div>
   );
 }
 
-/* ─────────────────────── MOBILE HERO (compact) ─────────────────────── */
+/* ── tiny status pill ── */
+function StatusPill({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+      <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, boxShadow: `0 0 8px ${color}`, animation: "tn-blink 2s infinite", color }} />
+      <span style={{ color: "#8080a0", fontSize: 10, letterSpacing: "0.1em", fontFamily: FONT_EXO }}>{label}:&nbsp;</span>
+      <span style={{ color, fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textShadow: `0 0 8px ${color}` }}>{value}</span>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE HERO (compact — unchanged from before)
+═══════════════════════════════════════════════════════════════════ */
 function MobileHero() {
   const [, navigate] = useLocation();
   const { data: stats } = useGetStats();
@@ -573,21 +579,9 @@ function MobileHero() {
   }, []);
 
   const CARDS = [
-    {
-      icon: "🛑",
-      title: "Борьба с «цифровым мусором»",
-      body: "В твоём телефоне лежат тысячи случайных скриншотов и расфокусированных видео, которые умрут на жёстком диске. В TimeNation ты не сливаешь контент, а создаёшь цифровой капитал смыслов.\n\nЗафиксировать 1 минуту в Хронопедии — это как поставить несгораемую точку: «Вот здесь произошёл момент, который сформировал меня».",
-    },
-    {
-      icon: "🗺",
-      title: "Топография жизни (Время + Место + Значимое)",
-      body: "Обычные соцсети дают плоскую ленту: пролистал и забыл. Хронопедия даёт 3D-картину твоей судьбы.\n\nЧерез 5 или 10 лет ты увидишь не просто «какие-то фото за 2026 год», а точную карту вех: какие решения, эмоции и смыслы происходили с тобой и твоей семьёй в конкретных точках планеты.",
-    },
-    {
-      icon: "🌉",
-      title: "Межпоколенческий мост (Наследие)",
-      body: "Представь, если бы ты мог открыть Хронопедию и услышать живой голос, мысли и эмоции своего прадеда.\n\nTimeNation гарантирует, что твоя личная история не растворится в цифровом шуме, а останется живым наследием для будущих поколений.",
-    },
+    { icon: "🛑", title: "Борьба с «цифровым мусором»", body: "В твоём телефоне лежат тысячи случайных скриншотов и расфокусированных видео, которые умрут на жёстком диске. В TimeNation ты не сливаешь контент, а создаёшь цифровой капитал смыслов.\n\nЗафиксировать 1 минуту в Хронопедии — это как поставить несгораемую точку." },
+    { icon: "🗺", title: "Топография жизни", body: "Обычные соцсети дают плоскую ленту. Хронопедия даёт 3D-картину твоей судьбы.\n\nЧерез 5–10 лет ты увидишь точную карту вех: какие решения и смыслы происходили с тобой в конкретных точках планеты." },
+    { icon: "🌉", title: "Межпоколенческий мост", body: "TimeNation гарантирует, что твоя личная история не растворится в цифровом шуме, а останется живым наследием для будущих поколений." },
   ] as const;
 
   const QUICK_MOMENTS = [
@@ -597,144 +591,82 @@ function MobileHero() {
   ] as const;
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "linear-gradient(180deg,#0f0f1a 0%,#12102a 50%,#0f0f1a 100%)",
-        color: "#e8e8f4",
-        fontFamily: "'Space Grotesk','Segoe UI',sans-serif",
-        overflowX: "hidden",
-      }}
-    >
+    <div style={{ minHeight: "100vh", background: "linear-gradient(180deg,#0f0f1a 0%,#12102a 50%,#0f0f1a 100%)", color: "#e8e8f4", fontFamily: FONT_EXO, overflowX: "hidden" }}>
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 20px 60px" }}>
-        {/* Header */}
         <div style={{ textAlign: "center", paddingTop: 48, paddingBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 24 }}>
-            <span style={{ fontSize: 20, fontWeight: 800, color: "#c9a84c", letterSpacing: "0.03em" }}>TimeNation</span>
-            <span style={{ fontSize: 11, color: "#8080a0", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "2px 8px", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              Цифровое государство
-            </span>
+            <span style={{ fontSize: 20, fontWeight: 800, color: "#c9a84c", letterSpacing: "0.03em", fontFamily: FONT_ORBITRON }}>TimeNation</span>
+            <span style={{ fontSize: 11, color: "#8080a0", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "2px 8px", letterSpacing: "0.06em", textTransform: "uppercase" }}>Цифровое государство</span>
           </div>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-            <Emblem size={120} />
+            <div style={{ width: 110, height: 110, borderRadius: "50%", overflow: "hidden", boxShadow: "0 0 30px rgba(0,212,255,0.5),0 0 60px rgba(201,168,76,0.3)" }}>
+              <img src="/web/emblem.jpg" alt="TimeNation" style={{ width: "100%", height: "100%", objectFit: "cover" }} draggable={false} />
+            </div>
           </div>
-          <div style={{ fontSize: "clamp(36px,10vw,56px)", fontWeight: 700, letterSpacing: "0.1em", fontVariantNumeric: "tabular-nums", fontFamily: "'Space Mono','Courier New',monospace", color: "#c9a84c", textShadow: "0 0 40px rgba(201,168,76,.55)", lineHeight: 1 }}>
-            {clock}
-          </div>
-          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.14em", color: "#8080a0", marginTop: 10 }}>
-            Время — твой главный актив
-          </div>
+          <div style={{ fontSize: "clamp(36px,10vw,56px)", fontWeight: 700, letterSpacing: "0.1em", fontVariantNumeric: "tabular-nums", fontFamily: FONT_ORBITRON, color: "#00d4ff", textShadow: "0 0 30px rgba(0,212,255,.7)", lineHeight: 1 }}>{clock}</div>
+          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.14em", color: "#8080a0", marginTop: 10 }}>Время — твой главный актив</div>
         </div>
 
-        {/* Stats row */}
-        <div style={{ display: "flex", gap: 10, marginTop: 28, flexWrap: "wrap" }}>
-          <StatCard icon="👥" label="Граждан" value={stats?.activeCitizens ?? "—"} />
-          <StatCard icon="⏳" label="Дарминов" value={stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—"} />
-          <StatCard icon="⚡" label="Статус" value="LIVE" sub="● ONLINE" />
-        </div>
-
-        {/* Headline */}
-        <div style={{ textAlign: "center", padding: "36px 8px 8px" }}>
-          <h1 style={{ fontSize: "clamp(20px,5vw,32px)", fontWeight: 800, lineHeight: 1.2, margin: 0 }}>
-            Перестань сливать время{" "}
-            <span style={{ color: "#8080a0", textDecoration: "line-through", textDecorationColor: "rgba(239,68,68,0.5)" }}>в цифровой шум</span>.{" "}
-            <span style={{ color: "#c9a84c", textShadow: "0 0 30px rgba(201,168,76,0.4)" }}>Начни создавать Капитал Смыслов.</span>
-          </h1>
-        </div>
-
-        {/* Story cards */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 32 }}>
-          {CARDS.map((card, i) => (
-            <div
-              key={i}
-              onClick={() => setExpanded(p => p === i ? null : i)}
-              style={{
-                background: "#1a1a2e",
-                border: expanded === i ? "1px solid rgba(201,168,76,0.5)" : "1px solid rgba(255,255,255,0.07)",
-                borderRadius: 18,
-                padding: "18px 20px",
-                cursor: "pointer",
-                userSelect: "none",
-                transition: "border-color .2s,box-shadow .2s,transform .15s",
-                boxShadow: expanded === i ? "0 0 30px rgba(201,168,76,0.1)" : "none",
-                transform: expanded === i ? "scale(1.005)" : "scale(1)",
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
-              {expanded === i && (
-                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "linear-gradient(180deg,#c9a84c,transparent)", borderRadius: "18px 0 0 18px" }} />
-              )}
-              <div style={{ fontSize: 26, marginBottom: 8 }}>{card.icon}</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#c9a84c", marginBottom: 8 }}>{card.title}</div>
-              <div style={{ fontSize: 14, color: "#8080a0", lineHeight: 1.65, overflow: "hidden", maxHeight: expanded === i ? "500px" : "48px", transition: "max-height .35s ease", whiteSpace: "pre-line" }}>
-                {card.body}
-              </div>
-              <div style={{ fontSize: 12, color: "#6c63ff", marginTop: 8 }}>{expanded === i ? "Свернуть ↑" : "Читать далее ↓"}</div>
+        {/* Stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginTop: 24 }}>
+          {[
+            { icon: "👥", label: "Граждан",   value: stats?.activeCitizens ?? "—" },
+            { icon: "⏳", label: "Дарминов",  value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—" },
+            { icon: "⚡", label: "Статус",    value: "LIVE" },
+          ].map(s => (
+            <div key={s.label} style={{ background: "rgba(0,212,255,0.06)", border: "1px solid rgba(0,212,255,0.18)", borderRadius: 14, padding: "14px 12px", textAlign: "center" }}>
+              <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#00d4ff", fontFamily: FONT_ORBITRON }}>{s.value}</div>
+              <div style={{ fontSize: 10, color: "#8080a0", letterSpacing: "0.06em", textTransform: "uppercase", marginTop: 3 }}>{s.label}</div>
             </div>
           ))}
         </div>
 
-        {/* Quick moments */}
+        <div style={{ textAlign: "center", padding: "32px 8px 8px" }}>
+          <h1 style={{ fontSize: "clamp(20px,5vw,32px)", fontWeight: 900, lineHeight: 1.2, margin: 0, fontFamily: FONT_ORBITRON }}>
+            <span style={{ color: "#e8e8f4" }}>Создай </span>
+            <span style={{ color: "#00d4ff", textShadow: "0 0 20px rgba(0,212,255,0.5)" }}>Капитал Смыслов</span>
+          </h1>
+          <p style={{ color: "#7850ff", fontFamily: FONT_EXO, fontSize: 13, letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 8 }}>Your Time. Your Empire.</p>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 28 }}>
+          {CARDS.map((card, i) => (
+            <div key={i} onClick={() => setExpanded(p => p === i ? null : i)}
+              style={{ background: "#1a1a2e", border: expanded === i ? "1px solid rgba(0,212,255,0.4)" : "1px solid rgba(255,255,255,0.07)", borderRadius: 18, padding: "18px 20px", cursor: "pointer", userSelect: "none", transition: "border-color .2s", position: "relative", overflow: "hidden" }}>
+              {expanded === i && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "linear-gradient(180deg,#00d4ff,transparent)", borderRadius: "18px 0 0 18px" }} />}
+              <div style={{ fontSize: 26, marginBottom: 8 }}>{card.icon}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#00d4ff", marginBottom: 8 }}>{card.title}</div>
+              <div style={{ fontSize: 14, color: "#8080a0", lineHeight: 1.65, overflow: "hidden", maxHeight: expanded === i ? "400px" : "48px", transition: "max-height .35s ease", whiteSpace: "pre-line" }}>{card.body}</div>
+              <div style={{ fontSize: 12, color: "#7850ff", marginTop: 8 }}>{expanded === i ? "Свернуть ↑" : "Читать далее ↓"}</div>
+            </div>
+          ))}
+        </div>
+
         <div style={{ background: "#1a1a2e", border: "1px solid rgba(201,168,76,0.22)", borderRadius: 18, padding: 20, marginTop: 28 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#c9a84c", textAlign: "center", marginBottom: 14, letterSpacing: "0.02em" }}>
-            ✨ Зафиксируй момент прямо сейчас
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {QUICK_MOMENTS.map((label, i) => (
-              <button
-                key={i}
-                onClick={() => navigate("/register")}
-                onMouseEnter={() => setHoveredMoment(i)}
-                onMouseLeave={() => setHoveredMoment(null)}
-                style={{
-                  background: hoveredMoment === i ? "rgba(108,99,255,0.18)" : "rgba(108,99,255,0.08)",
-                  border: hoveredMoment === i ? "1px solid #6c63ff" : "1px solid rgba(108,99,255,0.18)",
-                  borderRadius: 12,
-                  padding: "11px 16px",
-                  fontSize: 13,
-                  color: "#e8e8f4",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "background .15s,border-color .15s",
-                  width: "100%",
-                  fontFamily: "inherit",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#c9a84c", textAlign: "center", marginBottom: 14 }}>✨ Зафиксируй момент прямо сейчас</div>
+          {QUICK_MOMENTS.map((label, i) => (
+            <button key={i} onClick={() => navigate("/register")}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,212,255,0.12)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,212,255,0.06)"; }}
+              style={{ background: "rgba(0,212,255,0.06)", border: "1px solid rgba(0,212,255,0.18)", borderRadius: 12, padding: "11px 16px", fontSize: 13, color: "#e8e8f4", cursor: "pointer", textAlign: "left", width: "100%", fontFamily: FONT_EXO, marginBottom: 8, display: "block" }}>
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* CTAs */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 32 }}>
-          <button
-            onClick={() => navigate("/register")}
-            style={{
-              width: "100%", padding: "16px 24px", borderRadius: 18, border: "none",
-              background: "linear-gradient(135deg,#c9a84c 0%,#e8c870 60%,#c9a84c 100%)",
-              color: "#0f0f1a", fontSize: 15, fontWeight: 700, cursor: "pointer",
-              fontFamily: "inherit", letterSpacing: "0.01em",
-              boxShadow: "0 4px 24px rgba(201,168,76,0.4),0 0 40px rgba(201,168,76,0.15)",
-            }}
-          >
-            ⏳ Оформить Паспорт Гражданина
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 28 }}>
+          <button onClick={() => navigate("/register")}
+            style={{ width: "100%", padding: "16px 24px", borderRadius: 14, border: "1px solid rgba(201,168,76,0.6)", background: "rgba(201,168,76,0.12)", color: "#c9a84c", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT_ORBITRON, letterSpacing: "0.08em", textTransform: "uppercase", boxShadow: "0 0 20px rgba(201,168,76,0.3)" }}>
+            ⚡ Оформить Паспорт
           </button>
-          <button
-            onClick={() => navigate("/timeline")}
-            style={{
-              width: "100%", padding: "14px 24px", borderRadius: 18,
-              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.11)",
-              color: "#e8e8f4", fontSize: 14, fontWeight: 500, cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            👁 Войти как Гость и исследовать Хронопедию
+          <button onClick={() => navigate("/")}
+            style={{ width: "100%", padding: "14px 24px", borderRadius: 14, background: "rgba(0,212,255,0.06)", border: "1px solid rgba(0,212,255,0.2)", color: "#00d4ff", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: FONT_EXO }}>
+            👑 Войти в Кабинет
           </button>
         </div>
 
-        <div style={{ textAlign: "center", marginTop: 40, fontSize: 12, color: "#8080a0", letterSpacing: "0.04em" }}>
+        <div style={{ textAlign: "center", marginTop: 40, fontSize: 11, color: "#8080a0", letterSpacing: "0.04em" }}>
           © {new Date().getFullYear()} TimeNation · Цифровое государство будущего
         </div>
       </div>
@@ -742,12 +674,14 @@ function MobileHero() {
   );
 }
 
-/* ─────────────────────── ROOT ─────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════
+   ROOT EXPORT
+═══════════════════════════════════════════════════════════════════ */
 export function Welcome() {
   const [isDesktop, setIsDesktop] = useState(false);
 
   useEffect(() => {
-    document.title = "TimeNation — Цифровое Государство";
+    document.title = "TimeNation — Chronosphere";
     const mq = window.matchMedia("(min-width: 1024px)");
     setIsDesktop(mq.matches);
     const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
@@ -758,16 +692,8 @@ export function Welcome() {
   if (!isDesktop) return <MobileHero />;
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "linear-gradient(160deg, #06081a 0%, #0e1030 40%, #0a0c22 70%, #060818 100%)",
-        color: "#e8e8f4",
-        fontFamily: "'Space Grotesk','Segoe UI',sans-serif",
-        overflowX: "hidden",
-      }}
-    >
-      <StarField />
+    <div style={{ minHeight: "100vh", background: "#02020f", color: "#e8e8f4", fontFamily: FONT_EXO, overflowX: "hidden" }}>
+      <HyperspaceCanvas />
       <DesktopHero />
     </div>
   );
