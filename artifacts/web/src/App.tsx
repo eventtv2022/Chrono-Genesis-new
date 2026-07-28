@@ -1,10 +1,11 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import { CitizenProvider } from "./context/CitizenContext";
+import { CitizenProvider, useCitizen } from "./context/CitizenContext";
 import { LanguageProvider } from "./context/LanguageContext";
+import { useEffect } from "react";
 
 import { Home } from "./pages/Home";
 import { Tv } from "./pages/Tv";
@@ -34,29 +35,106 @@ const queryClient = new QueryClient({
   },
 });
 
+// ── Telegram auto-login redirect guard ───────────────────────────────────────
+// Runs after CitizenContext resolves the TWA auth. Redirects to the correct
+// screen based on emission status so citizens with an active passport land
+// directly on the dashboard instead of the gate/welcome page.
+function TgGuard({ children }: { children: React.ReactNode }) {
+  const { twaStatus, twaLoading } = useCitizen();
+  const [location, navigate] = useLocation();
+
+  useEffect(() => {
+    if (twaLoading || twaStatus === null) return;
+
+    if (twaStatus === "IN_EMISSION" || twaStatus === "APPLICATION_REJECTED") {
+      // Citizen has started but not completed passport — show emission/register page
+      if (location !== "/register") navigate("/register");
+    } else if (twaStatus === "ACTIVE") {
+      // Citizen has active passport — skip gate/welcome, go to dashboard
+      if (location === "/welcome") navigate("/");
+    }
+  }, [twaStatus, twaLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Show splash screen while Telegram initData is being validated
+  if (twaLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "linear-gradient(180deg, #0f0f1a 0%, #12102a 100%)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 20,
+          fontFamily: "'Space Grotesk', sans-serif",
+          color: "#e8e8f4",
+        }}
+      >
+        {/* Logo */}
+        <div style={{ fontSize: 48, lineHeight: 1 }}>🏛️</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: "#c9a84c", letterSpacing: "0.04em" }}>
+          TimeNation
+        </div>
+        <div style={{ fontSize: 11, color: "#8080a0", textTransform: "uppercase", letterSpacing: "0.12em" }}>
+          Цифровое государство
+        </div>
+
+        {/* Animated dots */}
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          {[0, 1, 2].map(i => (
+            <div
+              key={i}
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "#c9a84c",
+                opacity: 0.3,
+                animation: `pulse 1.2s ease-in-out ${i * 0.4}s infinite`,
+              }}
+            />
+          ))}
+        </div>
+
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 0.2; transform: scale(0.8); }
+            50%       { opacity: 1;   transform: scale(1.1); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/tv" component={Tv} />
-      <Route path="/citizens" component={Citizens} />
-      <Route path="/timeline" component={Timeline} />
-      <Route path="/shop" component={Shop} />
-      <Route path="/register" component={Register} />
-      <Route path="/passport-lookup" component={PassportLookup} />
-      <Route path="/time" component={Time} />
-      <Route path="/clock" component={Clock} />
-      <Route path="/government/labor-dashboard" component={LaborDashboard} />
-      <Route path="/reset-password" component={ResetPassword} />
-      <Route path="/admin" component={Admin} />
-      <Route path="/admin/registry" component={AdminRegistry} />
-      <Route path="/gov/block-votes" component={GovBlockVotes} />
-      <Route path="/qr-login" component={QrLogin} />
-      <Route path="/privacy" component={Privacy} />
-      <Route path="/tos" component={Tos} />
-      <Route path="/welcome" component={Welcome} />
-      <Route component={NotFound} />
-    </Switch>
+    <TgGuard>
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/tv" component={Tv} />
+        <Route path="/citizens" component={Citizens} />
+        <Route path="/timeline" component={Timeline} />
+        <Route path="/shop" component={Shop} />
+        <Route path="/register" component={Register} />
+        <Route path="/passport-lookup" component={PassportLookup} />
+        <Route path="/time" component={Time} />
+        <Route path="/clock" component={Clock} />
+        <Route path="/government/labor-dashboard" component={LaborDashboard} />
+        <Route path="/reset-password" component={ResetPassword} />
+        <Route path="/admin" component={Admin} />
+        <Route path="/admin/registry" component={AdminRegistry} />
+        <Route path="/gov/block-votes" component={GovBlockVotes} />
+        <Route path="/qr-login" component={QrLogin} />
+        <Route path="/privacy" component={Privacy} />
+        <Route path="/tos" component={Tos} />
+        <Route path="/welcome" component={Welcome} />
+        <Route component={NotFound} />
+      </Switch>
+    </TgGuard>
   );
 }
 
@@ -64,14 +142,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
-      <CitizenProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </CitizenProvider>
+        <CitizenProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Router />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </CitizenProvider>
       </LanguageProvider>
     </QueryClientProvider>
   );

@@ -8,6 +8,7 @@ import { UserPlus, Clock, CheckCircle2, AlertCircle, Shield, Award, ExternalLink
 import { SignaturePad } from "@/components/SignaturePad";
 import { useLanguage } from "@/context/LanguageContext";
 import { LegalModal, type LegalDocType } from "@/components/LegalModal";
+import { useCitizen } from "@/context/CitizenContext";
 
 const BASE_WEB = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 const MANIFESTO_URL = "https://issuu.com/timenation2025/docs/_timenatio";
@@ -22,6 +23,7 @@ interface PendingData { citizenNumber: string; availableAt: string; citizenId: n
 
 export function Register() {
   const { t } = useLanguage();
+  const { citizen, twaStatus } = useCitizen();
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   const [givenNames, setGivenNames] = useState("");
@@ -68,6 +70,31 @@ export function Register() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { document.title = `${t.nav_become_citizen} | TimeNation`; }, [t]);
+
+  // ── Auto-jump to correct mode if citizen already exists (TWA flow) ──────────
+  useEffect(() => {
+    if (!citizen || mode !== "form") return;
+    if (citizen.registrationStatus === "issued") {
+      setMode("issued");
+      setPendingData({
+        citizenNumber: String(citizen.id).padStart(9, "0"),
+        availableAt:   citizen.availableAt ?? new Date().toISOString(),
+        citizenId:     citizen.id,
+        citizenName:   citizen.name,
+      });
+    } else if (
+      (citizen.registrationStatus === "pending" || twaStatus === "IN_EMISSION") &&
+      citizen.availableAt
+    ) {
+      setMode("pending");
+      setPendingData({
+        citizenNumber: String(citizen.id).padStart(9, "0"),
+        availableAt:   citizen.availableAt,
+        citizenId:     citizen.id,
+        citizenName:   citizen.name,
+      });
+    }
+  }, [citizen, twaStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (mode !== "pending" || !pendingData) return;
