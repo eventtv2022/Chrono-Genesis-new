@@ -810,7 +810,7 @@ function MobileHero() {
 
         {/* ── FLAG VIDEO ───────────────────────────────────────── */}
         <div style={{
-          display: "flex", justifyContent: "center", paddingTop: 24,
+          display: "flex", justifyContent: "center", paddingTop: 10,
           transform: `translate(${px(-5)},${py(-3)})`,
           transition: "transform .2s ease-out",
         }}>
@@ -964,22 +964,6 @@ function MobileHero() {
                 {card.body}
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* ── QUICK MOMENTS ────────────────────────────────────── */}
-        <div style={{
-          background: "rgba(201,168,76,0.06)",
-          border: "1px solid rgba(201,168,76,0.22)",
-          borderRadius: 16, padding: "16px 18px", marginTop: 18,
-          backdropFilter: "blur(12px)",
-          boxShadow: "0 0 20px rgba(201,168,76,0.08)",
-        }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#c9a84c", textAlign: "center", marginBottom: 12, letterSpacing: "0.12em", textTransform: "uppercase", textShadow: "0 0 12px rgba(201,168,76,0.5)" }}>
-            ✦ &nbsp;Зафиксируй момент прямо сейчас
-          </div>
-          {MOMENTS.map((label, i) => (
-            <MomentBtn key={i} label={label} onClick={() => navigate("/register")} />
           ))}
         </div>
 
