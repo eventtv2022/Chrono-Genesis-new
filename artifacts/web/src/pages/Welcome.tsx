@@ -808,13 +808,43 @@ function MobileHero() {
           </div>
         </div>
 
+        {/* ── FLAG VIDEO ───────────────────────────────────────── */}
+        <div style={{
+          display: "flex", justifyContent: "center", paddingTop: 24,
+          transform: `translate(${px(-5)},${py(-3)})`,
+          transition: "transform .2s ease-out",
+        }}>
+          <div style={{
+            position: "relative",
+            borderRadius: 16,
+            padding: 2,
+            background: "linear-gradient(135deg, rgba(43,168,216,0.55) 0%, rgba(201,168,76,0.45) 50%, rgba(120,80,255,0.45) 100%)",
+            boxShadow: "0 0 20px rgba(43,168,216,0.40), 0 0 44px rgba(43,168,216,0.14), 0 0 70px rgba(201,168,76,0.12)",
+            animation: "flag-border-pulse 3.2s ease-in-out infinite",
+            maxWidth: 320,
+            width: "100%",
+          }}>
+            <div style={{ borderRadius: 14, overflow: "hidden", background: "#02020f" }}>
+              <video
+                src="/web/timenation-flag.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="auto"
+                style={{ display: "block", width: "100%", height: "auto", objectFit: "cover" }}
+              />
+            </div>
+          </div>
+        </div>
+
         {/* ── EMBLEM ───────────────────────────────────────────── */}
         <div style={{
-          display: "flex", justifyContent: "center", paddingTop: 32,
+          display: "flex", justifyContent: "center", paddingTop: 20,
           transform: `translate(${px(-6)},${py(-4)})`,
           transition: "transform .2s ease-out",
         }}>
-          <Emblem size={150} />
+          <Emblem size={130} />
         </div>
 
         {/* ── CLOCK + TAGLINE ──────────────────────────────────── */}
@@ -1024,6 +1054,10 @@ function MobileHero() {
         @keyframes m-led   { 0%,100%{opacity:1;box-shadow:0 0 4px currentColor} 50%{opacity:.3;box-shadow:none} }
         @keyframes m-pulse-gold { 0%,100%{box-shadow:0 0 18px rgba(201,168,76,.45)} 50%{box-shadow:0 0 36px rgba(201,168,76,.85),0 0 60px rgba(201,168,76,.3)} }
         @keyframes m-pulse-blue { 0%,100%{box-shadow:0 0 14px rgba(0,212,255,.35)} 50%{box-shadow:0 0 30px rgba(0,212,255,.75),0 0 50px rgba(0,212,255,.25)} }
+        @keyframes flag-border-pulse {
+          0%,100% { box-shadow:0 0 20px rgba(43,168,216,.40),0 0 44px rgba(43,168,216,.14),0 0 70px rgba(201,168,76,.12); }
+          50%      { box-shadow:0 0 32px rgba(43,168,216,.70),0 0 60px rgba(43,168,216,.26),0 0 90px rgba(201,168,76,.24); }
+        }
       `}</style>
     </div>
   );
