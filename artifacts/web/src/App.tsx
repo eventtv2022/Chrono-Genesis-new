@@ -5,7 +5,21 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { CitizenProvider, useCitizen } from "./context/CitizenContext";
 import { LanguageProvider } from "./context/LanguageContext";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+
+// ── Detect whether app is running inside Telegram Mini App ───────────────────
+function isTelegramWebApp(): boolean {
+  try {
+    const tg = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram;
+    return !!tg?.WebApp?.initData;
+  } catch {
+    return false;
+  }
+}
+const IS_TELEGRAM = isTelegramWebApp();
+
+// ── sessionStorage key: has the desktop user already passed the landing page? ─
+const LANDING_SHOWN_KEY = "tn_landing_shown";
 
 import { Home } from "./pages/Home";
 import { Tv } from "./pages/Tv";
@@ -36,27 +50,46 @@ const queryClient = new QueryClient({
 });
 
 // ── Telegram auto-login redirect guard ───────────────────────────────────────
-// Runs after CitizenContext resolves the TWA auth. Redirects to the correct
-// screen based on emission status so citizens with an active passport land
-// directly on the dashboard instead of the gate/welcome page.
+// Desktop:  on first visit to "/" show the landing page (/welcome); afterwards
+//           let the user navigate freely — sessionStorage prevents re-redirect.
+// Telegram: auto-login flow — splash while validating, then redirect based on
+//           emission status.
 function TgGuard({ children }: { children: React.ReactNode }) {
   const { twaStatus, twaLoading } = useCitizen();
   const [location, navigate] = useLocation();
+  // Guard fires only once per mount
+  const desktopRedirectDone = useRef(false);
 
   useEffect(() => {
+    // ── DESKTOP branch ────────────────────────────────────────────────────────
+    if (!IS_TELEGRAM) {
+      if (desktopRedirectDone.current) return;
+      desktopRedirectDone.current = true;
+
+      // Only intercept the root path; all other paths open as-is
+      if (location === "/") {
+        const alreadyShown = sessionStorage.getItem(LANDING_SHOWN_KEY);
+        if (!alreadyShown) {
+          sessionStorage.setItem(LANDING_SHOWN_KEY, "1");
+          navigate("/welcome");
+        }
+      }
+      return;
+    }
+
+    // ── TELEGRAM Mini App branch ──────────────────────────────────────────────
     if (twaLoading || twaStatus === null) return;
 
     if (twaStatus === "IN_EMISSION" || twaStatus === "APPLICATION_REJECTED") {
-      // Citizen has started but not completed passport — show emission/register page
       if (location !== "/register") navigate("/register");
     } else if (twaStatus === "ACTIVE") {
-      // Citizen has active passport — skip gate/welcome, go to dashboard
-      if (location === "/welcome") navigate("/");
+      // Skip the landing page — go straight to dashboard
+      if (location === "/welcome" || location === "/") navigate("/");
     }
-  }, [twaStatus, twaLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [twaStatus, twaLoading, location]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Show splash screen while Telegram initData is being validated
-  if (twaLoading) {
+  // Splash screen — only shown inside Telegram while initData is being validated
+  if (IS_TELEGRAM && twaLoading) {
     return (
       <div
         style={{
@@ -71,7 +104,6 @@ function TgGuard({ children }: { children: React.ReactNode }) {
           color: "#e8e8f4",
         }}
       >
-        {/* Logo */}
         <div style={{ fontSize: 48, lineHeight: 1 }}>🏛️</div>
         <div style={{ fontSize: 22, fontWeight: 800, color: "#c9a84c", letterSpacing: "0.04em" }}>
           TimeNation
@@ -79,8 +111,6 @@ function TgGuard({ children }: { children: React.ReactNode }) {
         <div style={{ fontSize: 11, color: "#8080a0", textTransform: "uppercase", letterSpacing: "0.12em" }}>
           Цифровое государство
         </div>
-
-        {/* Animated dots */}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           {[0, 1, 2].map(i => (
             <div
@@ -96,7 +126,6 @@ function TgGuard({ children }: { children: React.ReactNode }) {
             />
           ))}
         </div>
-
         <style>{`
           @keyframes pulse {
             0%, 100% { opacity: 0.2; transform: scale(0.8); }
