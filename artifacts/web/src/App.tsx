@@ -23,6 +23,7 @@ import { GovBlockVotes } from "./pages/GovBlockVotes";
 import { QrLogin } from "./pages/QrLogin";
 import { Privacy } from "./pages/Privacy";
 import { Welcome } from "./pages/Welcome";
+import { Tos } from "./pages/Tos";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +53,7 @@ function Router() {
       <Route path="/gov/block-votes" component={GovBlockVotes} />
       <Route path="/qr-login" component={QrLogin} />
       <Route path="/privacy" component={Privacy} />
+      <Route path="/tos" component={Tos} />
       <Route path="/welcome" component={Welcome} />
       <Route component={NotFound} />
     </Switch>
