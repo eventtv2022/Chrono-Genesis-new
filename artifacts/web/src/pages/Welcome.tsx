@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useGetStats } from "@workspace/api-client-react";
-import { TimeNationFlag } from "../components/TimeNationFlag";
 
 /* ─────────────────────── helpers ─────────────────────── */
 function pad2(n: number) { return String(n).padStart(2, "0"); }
@@ -447,22 +446,52 @@ function DesktopHero() {
             ✦ &nbsp;OFFICIAL STANDARD &nbsp; ✦
           </div>
 
-          {/* Waving flag — responsive to viewport */}
+          {/* ── Video flag ──────────────────────────────────────── */}
           <div style={{ position: "relative" }}>
-            {/* Ambient glow behind the flag */}
+            {/* Ambient glow behind the video */}
             <div style={{
               position: "absolute",
-              inset: "-30px -40px",
-              background: "radial-gradient(ellipse at center, rgba(43,168,216,0.18) 0%, rgba(201,168,76,0.08) 50%, transparent 75%)",
+              inset: "-28px -36px",
+              background: "radial-gradient(ellipse at center, rgba(43,168,216,0.20) 0%, rgba(201,168,76,0.09) 50%, transparent 75%)",
               pointerEvents: "none",
               borderRadius: "50%",
               animation: "flag-glow-pulse 3.5s ease-in-out infinite",
             }} />
-            <TimeNationFlag
-              width={Math.min(440, Math.floor(window.innerWidth * 0.38))}
-              height={Math.min(293, Math.floor(window.innerWidth * 0.38 * (2 / 3)))}
-              showPole
-            />
+            {/* Neon frame wrapper */}
+            <div
+              style={{
+                position: "relative",
+                borderRadius: 18,
+                padding: 3,
+                background: "linear-gradient(135deg, rgba(43,168,216,0.55) 0%, rgba(201,168,76,0.45) 50%, rgba(120,80,255,0.45) 100%)",
+                boxShadow: [
+                  "0 0 24px rgba(43,168,216,0.45)",
+                  "0 0 50px rgba(43,168,216,0.18)",
+                  "0 0 80px rgba(201,168,76,0.14)",
+                  "inset 0 0 20px rgba(43,168,216,0.08)",
+                ].join(", "),
+                animation: "flag-border-pulse 3.2s ease-in-out infinite",
+              }}
+            >
+              {/* Inner dark mat */}
+              <div style={{ borderRadius: 15, overflow: "hidden", background: "#02020f" }}>
+                <video
+                  src="/web/timenation-flag.mp4"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    maxWidth: 460,
+                    height: "auto",
+                    objectFit: "cover",
+                    borderRadius: 14,
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Flag caption */}
@@ -604,6 +633,14 @@ function DesktopHero() {
         @keyframes flag-glow-pulse {
           0%,100% { opacity:.6; transform:scale(1); }
           50%      { opacity:1;  transform:scale(1.06); }
+        }
+        @keyframes flag-border-pulse {
+          0%,100% {
+            box-shadow:0 0 24px rgba(43,168,216,0.45),0 0 50px rgba(43,168,216,0.18),0 0 80px rgba(201,168,76,0.14),inset 0 0 20px rgba(43,168,216,0.08);
+          }
+          50% {
+            box-shadow:0 0 38px rgba(43,168,216,0.75),0 0 70px rgba(43,168,216,0.32),0 0 110px rgba(201,168,76,0.28),inset 0 0 28px rgba(43,168,216,0.14);
+          }
         }
       `}</style>
     </div>
