@@ -320,7 +320,11 @@ router.get("/admin/registry/users/:id/photo", async (req, res): Promise<void> =>
     return;
   }
 
-  const filePath = citizen.photoUrl;
+  // Resolve vault: prefix (photos saved as "vault:photos/filename.jpg")
+  let filePath = citizen.photoUrl;
+  if (filePath.startsWith("vault:")) {
+    filePath = path.join(process.cwd(), "secure_vault", filePath.slice("vault:".length));
+  }
   if (!fs.existsSync(filePath)) {
     res.status(404).json({ error: "Photo file not found on disk" });
     return;

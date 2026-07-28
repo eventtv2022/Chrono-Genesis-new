@@ -418,12 +418,51 @@ function ProfileModal({
               ))}
             </div>
 
-            {/* Canvas signature */}
-            {citizen.signatureBase64 && (
+            {/* Documents: photo + signature */}
+            {(citizen.hasPhoto || citizen.signatureBase64) && (
               <div>
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">✍️ Подпись под Конституцией</div>
-                <div className="bg-white rounded-xl overflow-hidden border border-border">
-                  <img src={citizen.signatureBase64} alt="Подпись" className="w-full" style={{ imageRendering: "pixelated", filter: "invert(0)" }} />
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">📂 Документы</div>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Passport photo */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Паспортное фото</div>
+                    {citizen.hasPhoto ? (
+                      <div className="rounded-xl overflow-hidden border border-border bg-muted aspect-[3/4] flex items-center justify-center">
+                        <img
+                          src={`/api/admin/registry/users/${citizen.id}/photo?token=${encodeURIComponent(registryToken)}`}
+                          alt="Фото"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-border bg-muted/20 aspect-[3/4] flex flex-col items-center justify-center gap-1 text-muted-foreground">
+                        <span className="text-2xl">📷</span>
+                        <span className="text-[10px]">нет фото</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Signature */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Подпись</div>
+                    {citizen.signatureBase64 ? (
+                      <div className="rounded-xl overflow-hidden border border-border bg-white flex items-center justify-center p-2">
+                        <img
+                          src={citizen.signatureBase64}
+                          alt="Подпись"
+                          className="w-full"
+                          style={{ imageRendering: "pixelated" }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-border bg-muted/20 flex flex-col items-center justify-center gap-1 text-muted-foreground" style={{ minHeight: "80px" }}>
+                        <span className="text-2xl">✍️</span>
+                        <span className="text-[10px]">нет подписи</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
