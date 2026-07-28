@@ -561,116 +561,439 @@ function StatusPill({ label, value, color }: { label: string; value: string; col
 /* ═══════════════════════════════════════════════════════════════════
    MOBILE HERO (compact — unchanged from before)
 ═══════════════════════════════════════════════════════════════════ */
-function MobileHero() {
-  const [, navigate] = useLocation();
-  const { data: stats } = useGetStats();
-  const [clock, setClock] = useState("00:00:00");
-  const [expanded, setExpanded] = useState<number | null>(null);
-  const [hoveredMoment, setHoveredMoment] = useState<number | null>(null);
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE HYPERSPACE — lightweight canvas for mobile performance
+═══════════════════════════════════════════════════════════════════ */
+function MobileCanvas() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    let W = 0, H = 0, cx = 0, cy = 0, raf = 0;
+    const COLORS = ["rgba(0,212,255,","rgba(120,80,255,","rgba(201,168,76,","rgba(0,255,136,"];
+    interface T { angle:number; speed:number; len:number; dist:number; color:string; }
+    let threads: T[] = [];
+    const mk = (): T => ({
+      angle: Math.random() * Math.PI * 2,
+      speed: 0.5 + Math.random() * 1.8,
+      len:   30 + Math.random() * 120,
+      dist:  Math.random() * 200,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    });
+    const resize = () => {
+      W = canvas.width  = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+      cx = W / 2; cy = H / 2;
+      threads = Array.from({ length: 100 }, mk);
+    };
+    const draw = () => {
+      ctx.fillStyle = "rgba(2,2,16,0.22)";
+      ctx.fillRect(0, 0, W, H);
+      for (const t of threads) {
+        t.dist += t.speed;
+        if (t.dist > Math.max(W, H) * 0.75) { Object.assign(t, mk()); t.dist = 2; }
+        const prog = t.dist / (Math.max(W, H) * 0.75);
+        const alpha = Math.min(1, prog * 2.5) * (1 - prog * 0.5);
+        const x1 = cx + Math.cos(t.angle) * t.dist;
+        const y1 = cy + Math.sin(t.angle) * t.dist;
+        const x2 = cx + Math.cos(t.angle) * (t.dist + t.len * prog);
+        const y2 = cy + Math.sin(t.angle) * (t.dist + t.len * prog);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+        ctx.strokeStyle = `${t.color}${(alpha * 0.85).toFixed(2)})`;
+        ctx.lineWidth = 0.6 + prog * 1.2;
+        ctx.stroke();
+      }
+      raf = requestAnimationFrame(draw);
+    };
+    resize(); draw();
+    window.addEventListener("resize", resize);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
+  }, []);
+  return (
+    <canvas
+      ref={ref}
+      style={{
+        position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none",
+        background: "linear-gradient(160deg,#02020f 0%,#060420 50%,#02020f 100%)",
+      }}
+    />
+  );
+}
 
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE HERO — AAA Sci-Fi redesign
+═══════════════════════════════════════════════════════════════════ */
+function MobileHero() {
+  const [, navigate]        = useLocation();
+  const { data: stats }     = useGetStats();
+  const [clock, setClock]   = useState({ h: "00", m: "00", s: "00" });
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [tilt, setTilt]     = useState({ x: 0, y: 0 });
+  const [clockTilt, setClockTilt] = useState(0);
+
+  // Live clock
   useEffect(() => {
     const tick = () => {
       const n = new Date();
-      setClock(`${pad2(n.getHours())}:${pad2(n.getMinutes())}:${pad2(n.getSeconds())}`);
+      setClock({ h: pad2(n.getHours()), m: pad2(n.getMinutes()), s: pad2(n.getSeconds()) });
+      setClockTilt(Math.sin(Date.now() / 3200) * 5);
     };
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
 
+  // Parallax — touch move
+  useEffect(() => {
+    const onTouch = (e: TouchEvent) => {
+      const t = e.touches[0];
+      const x = (t.clientX / window.innerWidth  - 0.5) * 2;
+      const y = (t.clientY / window.innerHeight - 0.5) * 2;
+      setTilt({ x, y });
+    };
+    // deviceorientation for real mobile parallax
+    const onOrient = (e: DeviceOrientationEvent) => {
+      const x = Math.min(1, Math.max(-1, (e.gamma ?? 0) / 20));
+      const y = Math.min(1, Math.max(-1, ((e.beta  ?? 0) - 45) / 30));
+      setTilt({ x, y });
+    };
+    window.addEventListener("touchmove", onTouch, { passive: true });
+    window.addEventListener("deviceorientation", onOrient);
+    return () => {
+      window.removeEventListener("touchmove", onTouch);
+      window.removeEventListener("deviceorientation", onOrient);
+    };
+  }, []);
+
+  const px = (f: number) => `${tilt.x * f}px`;
+  const py = (f: number) => `${tilt.y * f}px`;
+
   const CARDS = [
-    { icon: "🛑", title: "Борьба с «цифровым мусором»", body: "В твоём телефоне лежат тысячи случайных скриншотов и расфокусированных видео, которые умрут на жёстком диске. В TimeNation ты не сливаешь контент, а создаёшь цифровой капитал смыслов.\n\nЗафиксировать 1 минуту в Хронопедии — это как поставить несгораемую точку." },
-    { icon: "🗺", title: "Топография жизни", body: "Обычные соцсети дают плоскую ленту. Хронопедия даёт 3D-картину твоей судьбы.\n\nЧерез 5–10 лет ты увидишь точную карту вех: какие решения и смыслы происходили с тобой в конкретных точках планеты." },
-    { icon: "🌉", title: "Межпоколенческий мост", body: "TimeNation гарантирует, что твоя личная история не растворится в цифровом шуме, а останется живым наследием для будущих поколений." },
+    { icon: "🛑", title: "Борьба с «цифровым мусором»",  body: "В твоём телефоне лежат тысячи случайных скриншотов, которые умрут на жёстком диске. В TimeNation ты создаёшь цифровой капитал смыслов.\n\nЗафиксировать 1 минуту в Хронопедии — поставить несгораемую точку." },
+    { icon: "🗺", title: "Топография жизни",               body: "Хронопедия даёт 3D-картину твоей судьбы. Через 5–10 лет ты увидишь точную карту вех: какие решения и смыслы происходили с тобой в конкретных точках планеты." },
+    { icon: "🌉", title: "Межпоколенческий мост",          body: "TimeNation гарантирует, что твоя личная история не растворится в цифровом шуме, а останется живым наследием для будущих поколений." },
   ] as const;
 
-  const QUICK_MOMENTS = [
+  const MOMENTS = [
     "💡 Зафиксировать решение, которое изменило мой день",
     "⏳ Записать мысль или эмоцию себе в будущее",
     "✨ Запечатлеть знание этого момента",
   ] as const;
 
   return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(180deg,#0f0f1a 0%,#12102a 50%,#0f0f1a 100%)", color: "#e8e8f4", fontFamily: FONT_EXO, overflowX: "hidden" }}>
-      <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 20px 60px" }}>
-        <div style={{ textAlign: "center", paddingTop: 48, paddingBottom: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 24 }}>
-            <span style={{ fontSize: 20, fontWeight: 800, color: "#c9a84c", letterSpacing: "0.03em", fontFamily: FONT_ORBITRON }}>TimeNation</span>
-            <span style={{ fontSize: 11, color: "#8080a0", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "2px 8px", letterSpacing: "0.06em", textTransform: "uppercase" }}>Цифровое государство</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-            <div style={{ width: 110, height: 110, borderRadius: "50%", overflow: "hidden", boxShadow: "0 0 30px rgba(0,212,255,0.5),0 0 60px rgba(201,168,76,0.3)" }}>
-              <img src="/web/emblem.jpg" alt="TimeNation" style={{ width: "100%", height: "100%", objectFit: "cover" }} draggable={false} />
+    <div style={{ minHeight: "100vh", color: "#e8e8f4", fontFamily: FONT_EXO, overflowX: "hidden", background: "#02020f", position: "relative" }}>
+      <MobileCanvas />
+
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 500, margin: "0 auto", padding: "0 18px 80px" }}>
+
+        {/* ── TOP BAR ──────────────────────────────────────────── */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "16px 0 12px",
+          borderBottom: "1px solid rgba(0,212,255,0.10)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 26, height: 26, borderRadius: "50%", overflow: "hidden", boxShadow: "0 0 8px rgba(0,212,255,0.5)" }}>
+              <img src="/web/emblem.jpg" alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} draggable={false} />
             </div>
+            <span style={{ fontFamily: FONT_ORBITRON, fontSize: 13, fontWeight: 700, color: "#00d4ff", letterSpacing: "0.06em", textShadow: "0 0 10px rgba(0,212,255,0.55)" }}>
+              TIMENATION
+            </span>
           </div>
-          <div style={{ fontSize: "clamp(36px,10vw,56px)", fontWeight: 700, letterSpacing: "0.1em", fontVariantNumeric: "tabular-nums", fontFamily: FONT_ORBITRON, color: "#00d4ff", textShadow: "0 0 30px rgba(0,212,255,.7)", lineHeight: 1 }}>{clock}</div>
-          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.14em", color: "#8080a0", marginTop: 10 }}>Время — твой главный актив</div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <MiniStatusPill label="SERVER" value="ONLINE" color="#00ff88" />
+            <MiniStatusPill label="EMISSION" value="LIVE" color="#c9a84c" />
+          </div>
         </div>
 
-        {/* Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginTop: 24 }}>
+        {/* ── EMBLEM ───────────────────────────────────────────── */}
+        <div style={{
+          display: "flex", justifyContent: "center", paddingTop: 32,
+          transform: `translate(${px(-6)},${py(-4)})`,
+          transition: "transform .2s ease-out",
+        }}>
+          <Emblem size={150} />
+        </div>
+
+        {/* ── CLOCK + TAGLINE ──────────────────────────────────── */}
+        <div style={{
+          textAlign: "center", marginTop: 24,
+          transform: `translate(${px(-4)},${py(-3)})`,
+          transition: "transform .22s ease-out",
+        }}>
+          <div style={{
+            fontFamily: FONT_ORBITRON,
+            fontSize: "clamp(38px,11vw,54px)",
+            fontWeight: 700,
+            letterSpacing: "0.1em",
+            fontVariantNumeric: "tabular-nums",
+            lineHeight: 1,
+            background: "linear-gradient(90deg,#00d4ff,#a78bfa,#00d4ff)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            filter: "drop-shadow(0 0 16px rgba(0,212,255,0.6))",
+          }}>
+            {clock.h}<span style={{ opacity: 0.4, animation: "m-colon 1s step-end infinite" }}>:</span>
+            {clock.m}<span style={{ opacity: 0.4, animation: "m-colon 1s step-end infinite" }}>:</span>
+            {clock.s}
+          </div>
+          <div style={{
+            fontSize: 11, textTransform: "uppercase", letterSpacing: "0.18em",
+            color: "#7abfff", marginTop: 8,
+            textShadow: "0 0 12px rgba(122,191,255,0.5)",
+          }}>
+            Время — твой главный актив
+          </div>
+        </div>
+
+        {/* ── STATS GRID ───────────────────────────────────────── */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 22,
+          transform: `translate(${px(-3)},${py(-2)})`,
+          transition: "transform .25s ease-out",
+        }}>
           {[
-            { icon: "👥", label: "Граждан",   value: stats?.activeCitizens ?? "—" },
-            { icon: "⏳", label: "Дарминов",  value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—" },
-            { icon: "⚡", label: "Статус",    value: "LIVE" },
+            { icon: "👥", label: "Граждан",  value: stats?.activeCitizens ?? "—",  color: "0,212,255" },
+            { icon: "⏳", label: "Дарминов", value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—", color: "201,168,76" },
+            { icon: "⚡", label: "Статус",   value: "LIVE", color: "0,255,136"  },
           ].map(s => (
-            <div key={s.label} style={{ background: "rgba(0,212,255,0.06)", border: "1px solid rgba(0,212,255,0.18)", borderRadius: 14, padding: "14px 12px", textAlign: "center" }}>
-              <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#00d4ff", fontFamily: FONT_ORBITRON }}>{s.value}</div>
-              <div style={{ fontSize: 10, color: "#8080a0", letterSpacing: "0.06em", textTransform: "uppercase", marginTop: 3 }}>{s.label}</div>
+            <div key={s.label} style={{
+              background: `rgba(${s.color},0.07)`,
+              border: `1px solid rgba(${s.color},0.28)`,
+              borderRadius: 14, padding: "12px 8px", textAlign: "center",
+              backdropFilter: "blur(8px)",
+              boxShadow: `0 0 14px rgba(${s.color},0.12)`,
+            }}>
+              <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: `rgb(${s.color})`, fontFamily: FONT_ORBITRON, textShadow: `0 0 12px rgba(${s.color},0.7)` }}>{s.value}</div>
+              <div style={{ fontSize: 9, color: "#8080a0", letterSpacing: "0.06em", textTransform: "uppercase", marginTop: 3 }}>{s.label}</div>
             </div>
           ))}
         </div>
 
-        <div style={{ textAlign: "center", padding: "32px 8px 8px" }}>
-          <h1 style={{ fontSize: "clamp(20px,5vw,32px)", fontWeight: 900, lineHeight: 1.2, margin: 0, fontFamily: FONT_ORBITRON }}>
+        {/* ── HEADLINE ─────────────────────────────────────────── */}
+        <div style={{
+          textAlign: "center", padding: "28px 4px 4px",
+          transform: `translate(${px(-5)},${py(-3)})`,
+          transition: "transform .2s ease-out",
+        }}>
+          <h1 style={{ fontSize: "clamp(22px,6.5vw,34px)", fontWeight: 900, lineHeight: 1.18, margin: 0, fontFamily: FONT_ORBITRON }}>
             <span style={{ color: "#e8e8f4" }}>Создай </span>
-            <span style={{ color: "#00d4ff", textShadow: "0 0 20px rgba(0,212,255,0.5)" }}>Капитал Смыслов</span>
+            <span style={{
+              background: "linear-gradient(135deg,#00d4ff,#a78bfa)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              filter: "drop-shadow(0 0 12px rgba(0,212,255,0.5))",
+            }}>
+              Капитал Смыслов
+            </span>
           </h1>
-          <p style={{ color: "#7850ff", fontFamily: FONT_EXO, fontSize: 13, letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 8 }}>Your Time. Your Empire.</p>
+          <p style={{
+            color: "#c9a84c", fontFamily: FONT_EXO, fontSize: 12,
+            letterSpacing: "0.16em", textTransform: "uppercase", marginTop: 10,
+            textShadow: "0 0 14px rgba(201,168,76,0.5)",
+          }}>
+            ✦ &nbsp;Your Time. Your Empire.&nbsp; ✦
+          </p>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 28 }}>
+        {/* ── STORY CARDS (glassmorphism) ───────────────────────── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 24 }}>
           {CARDS.map((card, i) => (
-            <div key={i} onClick={() => setExpanded(p => p === i ? null : i)}
-              style={{ background: "#1a1a2e", border: expanded === i ? "1px solid rgba(0,212,255,0.4)" : "1px solid rgba(255,255,255,0.07)", borderRadius: 18, padding: "18px 20px", cursor: "pointer", userSelect: "none", transition: "border-color .2s", position: "relative", overflow: "hidden" }}>
-              {expanded === i && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "linear-gradient(180deg,#00d4ff,transparent)", borderRadius: "18px 0 0 18px" }} />}
-              <div style={{ fontSize: 26, marginBottom: 8 }}>{card.icon}</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#00d4ff", marginBottom: 8 }}>{card.title}</div>
-              <div style={{ fontSize: 14, color: "#8080a0", lineHeight: 1.65, overflow: "hidden", maxHeight: expanded === i ? "400px" : "48px", transition: "max-height .35s ease", whiteSpace: "pre-line" }}>{card.body}</div>
-              <div style={{ fontSize: 12, color: "#7850ff", marginTop: 8 }}>{expanded === i ? "Свернуть ↑" : "Читать далее ↓"}</div>
+            <div
+              key={i}
+              onClick={() => setExpanded(p => p === i ? null : i)}
+              style={{
+                background: expanded === i ? "rgba(0,212,255,0.09)" : "rgba(4,8,30,0.65)",
+                border: expanded === i ? "1px solid rgba(0,212,255,0.45)" : "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 16, padding: "16px 18px",
+                cursor: "pointer", userSelect: "none",
+                backdropFilter: "blur(16px)",
+                transition: "all .22s",
+                boxShadow: expanded === i ? "0 0 24px rgba(0,212,255,0.12),inset 0 0 16px rgba(0,212,255,0.04)" : "none",
+                position: "relative", overflow: "hidden",
+              }}
+            >
+              {expanded === i && (
+                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: "linear-gradient(180deg,#00d4ff,#7850ff,transparent)", borderRadius: "16px 0 0 16px" }} />
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: expanded === i ? 10 : 0 }}>
+                <span style={{ fontSize: 22 }}>{card.icon}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#00d4ff", textShadow: "0 0 10px rgba(0,212,255,0.4)", flex: 1 }}>{card.title}</span>
+                <span style={{ fontSize: 11, color: "#7850ff" }}>{expanded === i ? "↑" : "↓"}</span>
+              </div>
+              <div style={{
+                fontSize: 13, color: "#8080a0", lineHeight: 1.65,
+                overflow: "hidden",
+                maxHeight: expanded === i ? "300px" : "0px",
+                transition: "max-height .35s ease",
+                whiteSpace: "pre-line",
+              }}>
+                {card.body}
+              </div>
             </div>
           ))}
         </div>
 
-        <div style={{ background: "#1a1a2e", border: "1px solid rgba(201,168,76,0.22)", borderRadius: 18, padding: 20, marginTop: 28 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#c9a84c", textAlign: "center", marginBottom: 14 }}>✨ Зафиксируй момент прямо сейчас</div>
-          {QUICK_MOMENTS.map((label, i) => (
-            <button key={i} onClick={() => navigate("/register")}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,212,255,0.12)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,212,255,0.06)"; }}
-              style={{ background: "rgba(0,212,255,0.06)", border: "1px solid rgba(0,212,255,0.18)", borderRadius: 12, padding: "11px 16px", fontSize: 13, color: "#e8e8f4", cursor: "pointer", textAlign: "left", width: "100%", fontFamily: FONT_EXO, marginBottom: 8, display: "block" }}>
-              {label}
-            </button>
+        {/* ── QUICK MOMENTS ────────────────────────────────────── */}
+        <div style={{
+          background: "rgba(201,168,76,0.06)",
+          border: "1px solid rgba(201,168,76,0.22)",
+          borderRadius: 16, padding: "16px 18px", marginTop: 18,
+          backdropFilter: "blur(12px)",
+          boxShadow: "0 0 20px rgba(201,168,76,0.08)",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#c9a84c", textAlign: "center", marginBottom: 12, letterSpacing: "0.12em", textTransform: "uppercase", textShadow: "0 0 12px rgba(201,168,76,0.5)" }}>
+            ✦ &nbsp;Зафиксируй момент прямо сейчас
+          </div>
+          {MOMENTS.map((label, i) => (
+            <MomentBtn key={i} label={label} onClick={() => navigate("/register")} />
           ))}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 28 }}>
-          <button onClick={() => navigate("/register")}
-            style={{ width: "100%", padding: "16px 24px", borderRadius: 14, border: "1px solid rgba(201,168,76,0.6)", background: "rgba(201,168,76,0.12)", color: "#c9a84c", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT_ORBITRON, letterSpacing: "0.08em", textTransform: "uppercase", boxShadow: "0 0 20px rgba(201,168,76,0.3)" }}>
-            ⚡ Оформить Паспорт
-          </button>
-          <button onClick={() => navigate("/")}
-            style={{ width: "100%", padding: "14px 24px", borderRadius: 14, background: "rgba(0,212,255,0.06)", border: "1px solid rgba(0,212,255,0.2)", color: "#00d4ff", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: FONT_EXO }}>
-            👑 Войти в Кабинет
-          </button>
+        {/* ── CTA BUTTONS ──────────────────────────────────────── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 22 }}>
+          {/* Gold — passport */}
+          <GlassBtn
+            onClick={() => navigate("/register")}
+            borderColor="rgba(201,168,76,0.7)"
+            bgColor="rgba(201,168,76,0.10)"
+            textColor="#f5cc6a"
+            glow="rgba(201,168,76,0.45)"
+            hoverGlow="rgba(201,168,76,0.8)"
+          >
+            ⚡&nbsp; ОФОРМИТЬ ПАСПОРТ
+          </GlassBtn>
+
+          {/* Blue — dashboard */}
+          <GlassBtn
+            onClick={() => navigate("/")}
+            borderColor="rgba(0,212,255,0.5)"
+            bgColor="rgba(0,212,255,0.07)"
+            textColor="#00d4ff"
+            glow="rgba(0,212,255,0.3)"
+            hoverGlow="rgba(0,212,255,0.65)"
+          >
+            👑&nbsp; ВОЙТИ В КАБИНЕТ
+          </GlassBtn>
         </div>
 
-        <div style={{ textAlign: "center", marginTop: 40, fontSize: 11, color: "#8080a0", letterSpacing: "0.04em" }}>
+        {/* ── BOTTOM ROW: clock + activity ─────────────────────── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 32, gap: 12 }}>
+          {/* Floating neon clock */}
+          <div style={{ transform: `perspective(300px) rotateY(${clockTilt}deg) rotateX(${clockTilt * 0.3}deg)`, transition: "transform 1.2s ease-in-out" }}>
+            <div style={{ fontSize: 8, letterSpacing: "0.18em", color: "#00d4ff", fontFamily: FONT_ORBITRON, opacity: 0.7, textTransform: "uppercase", marginBottom: 4 }}>Chronosphere</div>
+            <div style={{ fontFamily: FONT_ORBITRON, fontSize: 22, fontWeight: 700, color: "#00d4ff", textShadow: "0 0 12px rgba(0,212,255,0.8),0 0 24px rgba(0,212,255,0.4)", letterSpacing: "0.1em", fontVariantNumeric: "tabular-nums" }}>
+              {clock.h}:{clock.m}:{clock.s}
+            </div>
+            <div style={{ fontSize: 8, color: "#8080a0", letterSpacing: "0.12em", marginTop: 2 }}>UTC+0 · Live</div>
+          </div>
+
+          {/* Mini activity widget */}
+          <div style={{
+            background: "rgba(4,8,30,0.78)",
+            border: "1px solid rgba(0,212,255,0.18)",
+            borderRadius: 14, padding: "12px 14px",
+            backdropFilter: "blur(16px)",
+            boxShadow: "0 0 20px rgba(0,212,255,0.06)",
+            minWidth: 150,
+          }}>
+            <div style={{ fontSize: 8, letterSpacing: "0.16em", color: "#00d4ff", fontFamily: FONT_ORBITRON, marginBottom: 8, textTransform: "uppercase", opacity: 0.8 }}>◉ Activity</div>
+            {[
+              { label: "Citizens",   value: stats?.activeCitizens ?? "—",                                             color: "#00ff88" },
+              { label: "Darmīn",    value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—",             color: "#c9a84c" },
+              { label: "Txns",      value: (stats as { totalTransactions?: number } | undefined)?.totalTransactions ?? "—", color: "#00d4ff" },
+            ].map(r => (
+              <div key={r.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                <span style={{ fontSize: 9, color: "#8080a0", fontFamily: FONT_EXO }}>{r.label}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: r.color, fontFamily: FONT_ORBITRON, textShadow: `0 0 8px ${r.color}80` }}>{String(r.value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ textAlign: "center", marginTop: 28, fontSize: 10, color: "#8080a0", letterSpacing: "0.06em" }}>
           © {new Date().getFullYear()} TimeNation · Цифровое государство будущего
         </div>
       </div>
+
+      <style>{`
+        @keyframes m-colon { 0%,49%{opacity:.4} 50%,100%{opacity:.08} }
+        @keyframes m-led   { 0%,100%{opacity:1;box-shadow:0 0 4px currentColor} 50%{opacity:.3;box-shadow:none} }
+        @keyframes m-pulse-gold { 0%,100%{box-shadow:0 0 18px rgba(201,168,76,.45)} 50%{box-shadow:0 0 36px rgba(201,168,76,.85),0 0 60px rgba(201,168,76,.3)} }
+        @keyframes m-pulse-blue { 0%,100%{box-shadow:0 0 14px rgba(0,212,255,.35)} 50%{box-shadow:0 0 30px rgba(0,212,255,.75),0 0 50px rgba(0,212,255,.25)} }
+      `}</style>
     </div>
+  );
+}
+
+/* ── tiny helpers used only in MobileHero ── */
+function MiniStatusPill({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+      <div style={{ width: 5, height: 5, borderRadius: "50%", background: color, color, animation: "m-led 2s infinite" }} />
+      <span style={{ fontSize: 9, color: "#8080a0", fontFamily: FONT_EXO, letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}:&nbsp;</span>
+      <span style={{ fontSize: 9, color, fontWeight: 700, letterSpacing: "0.08em", textShadow: `0 0 6px ${color}` }}>{value}</span>
+    </div>
+  );
+}
+
+function MomentBtn({ label, onClick }: { label: string; onClick: () => void }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      onTouchStart={() => setHov(true)} onTouchEnd={() => setHov(false)}
+      style={{
+        background: hov ? "rgba(0,212,255,0.12)" : "rgba(0,212,255,0.05)",
+        border: `1px solid rgba(0,212,255,${hov ? 0.45 : 0.18})`,
+        borderRadius: 10, padding: "10px 14px", fontSize: 12,
+        color: "#e8e8f4", cursor: "pointer", textAlign: "left",
+        width: "100%", fontFamily: FONT_EXO, display: "block",
+        marginBottom: 7, backdropFilter: "blur(8px)",
+        transition: "all .15s",
+        boxShadow: hov ? "0 0 12px rgba(0,212,255,0.2)" : "none",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function GlassBtn({
+  children, onClick, borderColor, bgColor, textColor, glow, hoverGlow,
+}: {
+  children: React.ReactNode; onClick: () => void;
+  borderColor: string; bgColor: string; textColor: string; glow: string; hoverGlow: string;
+}) {
+  const [hov, setHov] = useState(false);
+  const isGold = textColor === "#f5cc6a";
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      onTouchStart={() => setHov(true)} onTouchEnd={() => { setHov(false); onClick(); }}
+      style={{
+        width: "100%", padding: "15px 20px",
+        borderRadius: 14,
+        border: `1px solid ${borderColor}`,
+        background: hov ? (isGold ? "rgba(201,168,76,0.18)" : "rgba(0,212,255,0.13)") : bgColor,
+        color: textColor,
+        fontSize: 13, fontWeight: 700,
+        cursor: "pointer", fontFamily: FONT_ORBITRON,
+        letterSpacing: "0.10em", textTransform: "uppercase",
+        backdropFilter: "blur(12px)",
+        transition: "all .18s",
+        boxShadow: hov ? `0 0 30px ${hoverGlow},inset 0 0 20px rgba(255,255,255,0.03)` : `0 0 14px ${glow}`,
+        animation: isGold ? "m-pulse-gold 2.8s ease-in-out infinite" : "m-pulse-blue 2.8s ease-in-out infinite",
+        transform: hov ? "translateY(-1px)" : "none",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
