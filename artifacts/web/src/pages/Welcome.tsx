@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useGetStats } from "@workspace/api-client-react";
+import { TimeNationFlag } from "../components/TimeNationFlag";
 
 /* ─────────────────────── helpers ─────────────────────── */
 function pad2(n: number) { return String(n).padStart(2, "0"); }
@@ -349,7 +350,7 @@ function NeonButton({
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   DESKTOP AAA HERO
+   DESKTOP AAA HERO  — split layout: Flag ← | → Headline + CTAs
 ═══════════════════════════════════════════════════════════════════ */
 function DesktopHero() {
   const [, navigate] = useLocation();
@@ -409,110 +410,168 @@ function DesktopHero() {
         </div>
       </div>
 
-      {/* ── MAIN STAGE ──────────────────────────────────────────── */}
+      {/* ── MAIN STAGE — two-column split ───────────────────────── */}
       <div
         style={{
-          flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          padding: "0 60px 80px", gap: 0,
+          flex: 1,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          alignItems: "center",
+          padding: "0 64px 96px",
+          gap: 48,
           position: "relative",
         }}
       >
-        {/* Arched label above emblem */}
+        {/* ══════════════════════════════════════════════════
+            LEFT COLUMN — Waving flag + caption
+        ══════════════════════════════════════════════════ */}
         <div
           style={{
-            fontFamily: FONT_ORBITRON, fontSize: 11, fontWeight: 600,
-            color: "#c9a84c", letterSpacing: "0.22em", textTransform: "uppercase",
-            textShadow: "0 0 14px rgba(201,168,76,0.6)",
-            marginBottom: 28,
-            transform: `translate(${px(-6)},${py(-4)})`,
-            transition: "transform .14s ease-out",
-          }}
-        >
-          ✦ &nbsp;TIMENATION: THE CHRONOSPHERE IS ACTIVE&nbsp; ✦
-        </div>
-
-        {/* Emblem */}
-        <div
-          style={{
-            transform: `translate(${px(-5)},${py(-4)}) perspective(900px) rotateX(${mouse.y * 5}deg) rotateY(${mouse.x * 5}deg)`,
-            transition: "transform .16s ease-out",
-            marginBottom: 36,
-          }}
-        >
-          <Emblem size={220} />
-        </div>
-
-        {/* Main headline */}
-        <div
-          style={{
-            transform: `translate(${px(-8)},${py(-5)})`,
-            transition: "transform .13s ease-out",
-            textAlign: "center",
-            marginBottom: 12,
-          }}
-        >
-          <h1
-            style={{
-              margin: 0,
-              fontFamily: FONT_ORBITRON,
-              fontSize: "clamp(32px, 3.6vw, 58px)",
-              fontWeight: 900,
-              lineHeight: 1.1,
-              background: "linear-gradient(135deg,#ffffff 0%,#00d4ff 40%,#a0e8ff 70%,#ffffff 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              textShadow: "none",
-              filter: "drop-shadow(0 0 18px rgba(0,212,255,0.5))",
-              letterSpacing: "0.05em",
-            }}
-          >
-            WELCOME, TEMPORAL CITIZEN!
-          </h1>
-        </div>
-
-        <div
-          style={{
-            transform: `translate(${px(-6)},${py(-3)})`,
-            transition: "transform .15s ease-out",
-            textAlign: "center",
-            marginBottom: 6,
-          }}
-        >
-          <div style={{ fontFamily: FONT_EXO, fontSize: "clamp(14px,1.5vw,20px)", fontWeight: 300, color: "#7abfff", letterSpacing: "0.18em", textTransform: "uppercase", textShadow: "0 0 16px rgba(122,191,255,0.5)" }}>
-            EMBRACE THE CHRONOSPHERE
-          </div>
-        </div>
-
-        <div
-          style={{
-            transform: `translate(${px(-4)},${py(-2)})`,
-            transition: "transform .16s ease-out",
-            textAlign: "center",
-            marginBottom: 44,
-          }}
-        >
-          <div style={{ fontFamily: FONT_EXO, fontSize: "clamp(13px,1.3vw,18px)", fontWeight: 700, color: "#c9a84c", letterSpacing: "0.14em", textTransform: "uppercase", textShadow: "0 0 20px rgba(201,168,76,0.6)" }}>
-            YOUR TIME.&nbsp;&nbsp;YOUR EMPIRE.
-          </div>
-        </div>
-
-        {/* CTA row */}
-        <div
-          style={{
-            display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center",
-            transform: `translate(${px(-5)},${py(-2)})`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 24,
+            transform: `translate(${px(-10)},${py(-6)}) perspective(900px) rotateX(${mouse.y * 3}deg) rotateY(${mouse.x * 3}deg)`,
             transition: "transform .18s ease-out",
           }}
         >
-          <NeonButton onClick={() => navigate("/register")} primary color="#c9a84c">
-            ⚡&nbsp; Register Your Passport
-          </NeonButton>
-          <NeonButton onClick={() => navigate("/timeline")} color="#00d4ff">
-            🔭&nbsp; Explore Chronopedia
-          </NeonButton>
-          <NeonButton onClick={() => navigate("/")} color="#00ff88">
-            👑&nbsp; Enter the Dashboard
-          </NeonButton>
+          {/* Decorative arch label */}
+          <div
+            style={{
+              fontFamily: FONT_ORBITRON, fontSize: 9, fontWeight: 600,
+              color: "#c9a84c", letterSpacing: "0.22em", textTransform: "uppercase",
+              textShadow: "0 0 12px rgba(201,168,76,0.6)",
+              opacity: 0.85,
+            }}
+          >
+            ✦ &nbsp;OFFICIAL STANDARD &nbsp; ✦
+          </div>
+
+          {/* Waving flag — responsive to viewport */}
+          <div style={{ position: "relative" }}>
+            {/* Ambient glow behind the flag */}
+            <div style={{
+              position: "absolute",
+              inset: "-30px -40px",
+              background: "radial-gradient(ellipse at center, rgba(43,168,216,0.18) 0%, rgba(201,168,76,0.08) 50%, transparent 75%)",
+              pointerEvents: "none",
+              borderRadius: "50%",
+              animation: "flag-glow-pulse 3.5s ease-in-out infinite",
+            }} />
+            <TimeNationFlag
+              width={Math.min(440, Math.floor(window.innerWidth * 0.38))}
+              height={Math.min(293, Math.floor(window.innerWidth * 0.38 * (2 / 3)))}
+              showPole
+            />
+          </div>
+
+          {/* Flag caption */}
+          <div style={{
+            textAlign: "center",
+            fontFamily: FONT_EXO,
+            fontSize: 11,
+            color: "#8080a0",
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+          }}>
+            <span style={{ color: "#c9a84c", textShadow: "0 0 8px rgba(201,168,76,0.5)" }}>TimeNation</span>
+            &nbsp;·&nbsp; Государство Хронократии
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════════════
+            RIGHT COLUMN — Emblem + Headlines + CTAs
+        ══════════════════════════════════════════════════ */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            gap: 0,
+          }}
+        >
+          {/* Emblem */}
+          <div
+            style={{
+              transform: `translate(${px(-5)},${py(-4)}) perspective(900px) rotateX(${mouse.y * 4}deg) rotateY(${mouse.x * 4}deg)`,
+              transition: "transform .16s ease-out",
+              marginBottom: 28,
+            }}
+          >
+            <Emblem size={140} />
+          </div>
+
+          {/* Headline */}
+          <div
+            style={{
+              transform: `translate(${px(-8)},${py(-5)})`,
+              transition: "transform .13s ease-out",
+              marginBottom: 10,
+            }}
+          >
+            <h1
+              style={{
+                margin: 0,
+                fontFamily: FONT_ORBITRON,
+                fontSize: "clamp(26px, 2.8vw, 50px)",
+                fontWeight: 900,
+                lineHeight: 1.12,
+                background: "linear-gradient(135deg,#ffffff 0%,#00d4ff 40%,#a0e8ff 70%,#ffffff 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                filter: "drop-shadow(0 0 16px rgba(0,212,255,0.5))",
+                letterSpacing: "0.04em",
+              }}
+            >
+              WELCOME,<br />TEMPORAL CITIZEN!
+            </h1>
+          </div>
+
+          <div
+            style={{
+              transform: `translate(${px(-6)},${py(-3)})`,
+              transition: "transform .15s ease-out",
+              marginBottom: 6,
+            }}
+          >
+            <div style={{ fontFamily: FONT_EXO, fontSize: "clamp(12px,1.2vw,17px)", fontWeight: 300, color: "#7abfff", letterSpacing: "0.18em", textTransform: "uppercase", textShadow: "0 0 14px rgba(122,191,255,0.5)" }}>
+              EMBRACE THE CHRONOSPHERE
+            </div>
+          </div>
+
+          <div
+            style={{
+              transform: `translate(${px(-4)},${py(-2)})`,
+              transition: "transform .16s ease-out",
+              marginBottom: 36,
+            }}
+          >
+            <div style={{ fontFamily: FONT_EXO, fontSize: "clamp(11px,1.1vw,16px)", fontWeight: 700, color: "#c9a84c", letterSpacing: "0.14em", textTransform: "uppercase", textShadow: "0 0 18px rgba(201,168,76,0.6)" }}>
+              YOUR TIME.&nbsp;&nbsp;YOUR EMPIRE.
+            </div>
+          </div>
+
+          {/* CTA column */}
+          <div
+            style={{
+              display: "flex", flexDirection: "column", gap: 12,
+              transform: `translate(${px(-5)},${py(-2)})`,
+              transition: "transform .18s ease-out",
+              width: "100%", maxWidth: 360,
+            }}
+          >
+            <NeonButton onClick={() => navigate("/register")} primary color="#c9a84c">
+              ⚡&nbsp; Register Your Passport
+            </NeonButton>
+            <div style={{ display: "flex", gap: 10 }}>
+              <NeonButton onClick={() => navigate("/timeline")} color="#00d4ff">
+                🔭&nbsp; Chronopedia
+              </NeonButton>
+              <NeonButton onClick={() => navigate("/")} color="#00ff88">
+                👑&nbsp; Dashboard
+              </NeonButton>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -541,6 +600,10 @@ function DesktopHero() {
         @keyframes led-glow {
           0%,100% { box-shadow:0 0 4px currentColor; }
           50%      { box-shadow:0 0 10px currentColor, 0 0 20px currentColor; }
+        }
+        @keyframes flag-glow-pulse {
+          0%,100% { opacity:.6; transform:scale(1); }
+          50%      { opacity:1;  transform:scale(1.06); }
         }
       `}</style>
     </div>
