@@ -457,8 +457,8 @@ async function notifyBlockVoters(
 
   const domain = process.env["REPLIT_DEV_DOMAIN"] ?? "";
   const voteUrl = domain
-    ? `https://${domain}/gov/block-votes`
-    : "https://timenation.info/gov/block-votes";
+    ? `https://${domain}/web/gov/block-votes`
+    : "https://timenation.info/web/gov/block-votes";
 
   const endsStr = endsAt.toLocaleString("ru-RU", { timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 
