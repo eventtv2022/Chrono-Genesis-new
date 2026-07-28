@@ -46,6 +46,10 @@ app.use("/api/payments/webhook", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+// ── Legal document shortcuts — redirect bare paths to the web app ─────────────
+app.get("/tos",     (_req, res) => res.redirect(301, "/web/tos"));
+app.get("/privacy", (_req, res) => res.redirect(301, "/web/privacy"));
+
 // ── Telegram WebApp HTML page ─────────────────────────────────────────────────
 // Served at GET /twa — must come before /api router to avoid prefix conflicts.
 app.get("/twa", (_req, res) => {
