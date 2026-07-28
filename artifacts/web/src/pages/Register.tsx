@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { UserPlus, Clock, CheckCircle2, AlertCircle, Shield, Award, ExternalLink, Upload, Camera, Lock, BookOpen, PenLine } from "lucide-react";
 import { SignaturePad } from "@/components/SignaturePad";
 import { useLanguage } from "@/context/LanguageContext";
+import { LegalModal, type LegalDocType } from "@/components/LegalModal";
 
 const BASE_WEB = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 const MANIFESTO_URL = "https://issuu.com/timenation2025/docs/_timenatio";
@@ -34,6 +35,7 @@ export function Register() {
   const [manifestoAccepted, setManifestoAccepted] = useState(false);
   const [tosAccepted, setTosAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [legalDoc, setLegalDoc] = useState<LegalDocType | null>(null);
 
   // ── Communication channels (≥2 required) ────────────────────────────────
   const [chEmail,    setChEmail]    = useState(false);
@@ -248,6 +250,7 @@ export function Register() {
 
   /* ── Registration form ──────────────────────────────────────────────────── */
   return (
+    <>
     <Layout>
       <div className="max-w-lg space-y-6">
         <div>
@@ -454,7 +457,13 @@ export function Register() {
                 <div className="flex items-start gap-3">
                   <input type="checkbox" id="tos" checked={tosAccepted} onChange={e => setTosAccepted(e.target.checked)} className="mt-0.5 accent-primary" />
                   <label htmlFor="tos" className="text-xs text-muted-foreground font-mono leading-relaxed">
-                    <a href={`${BASE_WEB}/tos`} target="_blank" className="text-primary underline">{t.reg_check_tos_link}</a>
+                    <button
+                      type="button"
+                      onClick={e => { e.preventDefault(); setLegalDoc("tos"); }}
+                      className="text-primary underline hover:opacity-80 transition-opacity cursor-pointer"
+                    >
+                      {t.reg_check_tos_link}
+                    </button>
                     {". "}{t.reg_check_tos}
                   </label>
                 </div>
@@ -473,15 +482,13 @@ export function Register() {
                     />
                     <label htmlFor="privacy" className="text-xs text-muted-foreground font-mono leading-relaxed">
                       {t.reg_check_privacy}{" "}
-                      <a
-                        href="/privacy"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary underline hover:opacity-80 transition-opacity"
-                        onClick={e => e.stopPropagation()}
+                      <button
+                        type="button"
+                        onClick={e => { e.preventDefault(); e.stopPropagation(); setLegalDoc("privacy"); }}
+                        className="text-primary underline hover:opacity-80 transition-opacity cursor-pointer"
                       >
                         Политика конфиденциальности ↗
-                      </a>
+                      </button>
                     </label>
                   </div>
                 </div>
@@ -524,5 +531,10 @@ export function Register() {
         </form>
       </div>
     </Layout>
+
+    {legalDoc && (
+      <LegalModal doc={legalDoc} onClose={() => setLegalDoc(null)} />
+    )}
+    </>
   );
 }
