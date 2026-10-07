@@ -105,7 +105,7 @@ function formatCountdown(seconds: number): string {
   return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
 }
 
-export default function RegisterScreen() {
+export default function RegisterScreen({ initialMode }: { initialMode?: Mode } = {}) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { setCitizen, setAuthToken } = useCitizen();
@@ -116,7 +116,7 @@ export default function RegisterScreen() {
   const L = UI[loginLang];
   const t = (ru: string, en: string) => loginLang === "ru" ? ru : en;
 
-  const [mode, setMode] = useState<Mode>("choose");
+  const [mode, setMode] = useState<Mode>(initialMode ?? "choose");
 
   // Registration form
   const [name, setName] = useState("");

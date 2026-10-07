@@ -25,4 +25,5 @@ export interface Citizen {
   /** @nullable */
   lastActivity: string | null;
   createdAt: string;
+  onboardingCompleted?: boolean;
 }

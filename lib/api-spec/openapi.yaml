@@ -21,6 +21,82 @@ tags:
   - name: payments
     description: Fiat gateway — buy minutes
 paths:
+  /auth/login:
+    post:
+      operationId: loginCitizen
+      tags: [citizens]
+      summary: Log in with a phone number and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Authenticated citizen profile and bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "401":
+          description: Login failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /onboarding/status:
+    get:
+      operationId: getOnboardingStatus
+      tags: [citizens]
+      summary: Get the authenticated citizen's tutorial status
+      responses:
+        "200":
+          description: Tutorial status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnboardingStatus"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /onboarding/start:
+    post:
+      operationId: startOnboarding
+      tags: [citizens]
+      summary: Start the authenticated citizen's 60-minute tutorial
+      responses:
+        "200":
+          description: Tutorial status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnboardingStatus"
+
+  /onboarding/complete:
+    post:
+      operationId: completeOnboarding
+      tags: [citizens]
+      summary: Complete the tutorial after its server-verified duration
+      responses:
+        "200":
+          description: Tutorial status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnboardingStatus"
+        "409":
+          description: Tutorial is not complete yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /healthz:
     get:
       operationId: healthCheck
@@ -606,6 +682,24 @@ components:
       required:
         - error
 
+    OnboardingStatus:
+      type: object
+      properties:
+        completed:
+          type: boolean
+        startedAt:
+          type: ["string", "null"]
+          format: date-time
+        durationSeconds:
+          type: integer
+        secondsRemaining:
+          type: integer
+      required:
+        - completed
+        - startedAt
+        - durationSeconds
+        - secondsRemaining
+
     Citizen:
       type: object
       properties:
@@ -638,6 +732,8 @@ components:
           type: ["string", "null"]
         createdAt:
           type: string
+        onboardingCompleted:
+          type: boolean
       required:
         - id
         - name
@@ -653,6 +749,78 @@ components:
         - rank
         - lastActivity
         - createdAt
+
+    LoginInput:
+      type: object
+      properties:
+        phone:
+          type: string
+          minLength: 5
+        password:
+          type: string
+      required:
+        - phone
+
+    AuthSession:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        balanceMinutes:
+          type: number
+        totalGiven:
+          type: number
+        totalReceived:
+          type: number
+        status:
+          type: string
+        registrationStatus:
+          type: ["string", "null"]
+        availableAt:
+          type: ["string", "null"]
+          format: date-time
+        meritScore:
+          type: number
+        rank:
+          type: string
+        lastActivity:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        walletAddress:
+          type: ["string", "null"]
+        walletVerified:
+          type: integer
+        ageVerified:
+          type: integer
+        onboardingCompleted:
+          type: boolean
+        authToken:
+          type: string
+      required:
+        - id
+        - name
+        - phone
+        - balanceMinutes
+        - totalGiven
+        - totalReceived
+        - status
+        - registrationStatus
+        - availableAt
+        - meritScore
+        - rank
+        - lastActivity
+        - createdAt
+        - walletAddress
+        - walletVerified
+        - ageVerified
+        - onboardingCompleted
+        - authToken
 
     CitizenInput:
       type: object

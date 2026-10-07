@@ -121,6 +121,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       citizenNumber,
       registrationStatus: "pending",
       availableAt,
+      onboardingCompleted: false,
       tosAcceptedAt: tosAcceptedAt ? new Date(tosAcceptedAt) : undefined,
       privacyAgreementAccepted: privacyAgreementAccepted ? 1 : 0,
       privacyAgreementDate: privacyAgreementAccepted ? new Date() : null,

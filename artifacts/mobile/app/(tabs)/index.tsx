@@ -31,6 +31,7 @@ import { CitizenAvatar } from "@/components/CitizenAvatar";
 import { ContextualGuideModal } from "@/components/ContextualGuideModal";
 import { useContextualGuide } from "@/hooks/useContextualGuide";
 import { DiscussionModal } from "@/components/DiscussionModal";
+import { ResizeMode, Video } from "expo-av";
 
 const BASE_URL = getBaseUrl();
 
@@ -93,6 +94,79 @@ interface SessionResult {
   session: Session;
   transaction: { id: number; minutesTransferred: number; durationSeconds: number };
   sheetsLogged: boolean;
+}
+
+function MobileWelcome() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { lang } = useLanguage();
+  const isRu = lang !== "en";
+  const topInset = Platform.OS === "web" ? 67 : insets.top;
+  const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: topInset }}>
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 12, paddingBottom: bottomInset + 26, alignItems: "center" }}
+        showsVerticalScrollIndicator={false}
+      >
+        <Video
+          source={require("@/assets/videos/timenation-flag.mp4")}
+          usePoster
+          posterSource={require("@/assets/videos/timenation-flag-poster.jpg")}
+          style={{ width: "100%", maxWidth: 520, aspectRatio: 16 / 9, borderRadius: 16, backgroundColor: colors.card, overflow: "hidden" }}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay
+          isLooping
+          isMuted
+          useNativeControls={false}
+          testID="video-welcome-flag"
+        />
+        <View style={{ width: "100%", maxWidth: 520, alignItems: "center", marginTop: 25 }}>
+          <LogoBrand size={54} />
+          <Text style={{ color: colors.primary, fontFamily: "Inter_700Bold", fontSize: 12, letterSpacing: 3, marginTop: 14 }}>
+            TIMENATION
+          </Text>
+          <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 29, textAlign: "center", lineHeight: 36, marginTop: 12 }}>
+            {isRu ? "Ваше время. Ваше государство." : "Your time. Your nation."}
+          </Text>
+          <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 15, textAlign: "center", lineHeight: 23, marginTop: 12, maxWidth: 420 }}>
+            {isRu
+              ? "Познакомьтесь с кошельком DarMin, обменом временем и инструментами сообщества."
+              : "Explore the DarMin wallet, time exchange, and community tools."}
+          </Text>
+        </View>
+        <View style={{ width: "100%", maxWidth: 520, gap: 11, marginTop: 26 }}>
+          <TouchableOpacity
+            onPress={() => router.push("/register")}
+            activeOpacity={0.82}
+            testID="button-welcome-register"
+            style={{ minHeight: 54, borderRadius: 12, paddingHorizontal: 18, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}
+          >
+            <Feather name="user-plus" size={18} color={colors.primaryForeground} />
+            <Text style={{ color: colors.primaryForeground, fontFamily: "Inter_700Bold", fontSize: 15 }}>
+              {isRu ? "Оформить паспорт" : "Register for a passport"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push("/login")}
+            activeOpacity={0.82}
+            testID="button-welcome-login"
+            style={{ minHeight: 54, borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 18, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}
+          >
+            <Feather name="log-in" size={18} color={colors.foreground} />
+            <Text style={{ color: colors.foreground, fontFamily: "Inter_600SemiBold", fontSize: 15 }}>
+              {isRu ? "Войти в кабинет" : "Log in"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 11, textAlign: "center", marginTop: 18 }}>
+          {isRu ? "$1 DarMin = 1 минута" : "$1 DarMin = 1 minute"}
+        </Text>
+      </ScrollView>
+    </View>
+  );
 }
 
 function formatTime(seconds: number): string {
@@ -1116,7 +1190,7 @@ function escrowStyles(colors: ReturnType<typeof useColors>) {
 export default function TimerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { citizen, refreshCitizen, setCitizen } = useCitizen();
+  const { citizen, isLoading: citizenLoading, refreshCitizen, setCitizen } = useCitizen();
   const { t: ui, lang, setLang } = useLanguage();
   const loginLang: "ru" | "en" = lang === "ru" ? "ru" : "en";
   const loginUi = UI[loginLang];
@@ -1279,6 +1353,16 @@ export default function TimerScreen() {
   const others = citizens.filter((c) => c.id !== citizen?.id);
   const recipientCitizen = citizens.find((c) => c.id === activeSession?.toCitizenId);
   const styles = getStyles(colors);
+
+  if (citizenLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!citizen) return <MobileWelcome />;
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>

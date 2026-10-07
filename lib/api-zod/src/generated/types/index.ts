@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './authSession';
 export * from './citizen';
 export * from './citizenInput';
 export * from './citizenStatus';
@@ -22,7 +23,9 @@ export * from './healthStatus';
 export * from './heritageTransferInput';
 export * from './heritageTransferResult';
 export * from './listTransactionsParams';
+export * from './loginInput';
 export * from './minutePackage';
+export * from './onboardingStatus';
 export * from './paymentCheckoutInput';
 export * from './paymentCheckoutResult';
 export * from './session';

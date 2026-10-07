@@ -9,6 +9,73 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Log in with a phone number and password
+ */
+export const loginCitizenBodyPhoneMin = 5;
+
+
+
+export const LoginCitizenBody = zod.object({
+  "phone": zod.string().min(loginCitizenBodyPhoneMin),
+  "password": zod.string().optional()
+})
+
+export const LoginCitizenResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "phone": zod.string(),
+  "balanceMinutes": zod.number(),
+  "totalGiven": zod.number(),
+  "totalReceived": zod.number(),
+  "status": zod.string(),
+  "registrationStatus": zod.string().nullable(),
+  "availableAt": zod.coerce.date().nullable(),
+  "meritScore": zod.number(),
+  "rank": zod.string(),
+  "lastActivity": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "walletAddress": zod.string().nullable(),
+  "walletVerified": zod.number(),
+  "ageVerified": zod.number(),
+  "onboardingCompleted": zod.boolean(),
+  "authToken": zod.string()
+})
+
+
+/**
+ * @summary Get the authenticated citizen's tutorial status
+ */
+export const GetOnboardingStatusResponse = zod.object({
+  "completed": zod.boolean(),
+  "startedAt": zod.coerce.date().nullable(),
+  "durationSeconds": zod.number(),
+  "secondsRemaining": zod.number()
+})
+
+
+/**
+ * @summary Start the authenticated citizen's 60-minute tutorial
+ */
+export const StartOnboardingResponse = zod.object({
+  "completed": zod.boolean(),
+  "startedAt": zod.coerce.date().nullable(),
+  "durationSeconds": zod.number(),
+  "secondsRemaining": zod.number()
+})
+
+
+/**
+ * @summary Complete the tutorial after its server-verified duration
+ */
+export const CompleteOnboardingResponse = zod.object({
+  "completed": zod.boolean(),
+  "startedAt": zod.coerce.date().nullable(),
+  "durationSeconds": zod.number(),
+  "secondsRemaining": zod.number()
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */
@@ -34,7 +101,8 @@ export const ListCitizensResponseItem = zod.object({
   "meritScore": zod.number(),
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "onboardingCompleted": zod.boolean().optional()
 })
 export const ListCitizensResponse = zod.array(ListCitizensResponseItem)
 
@@ -74,7 +142,8 @@ export const GetCitizenResponse = zod.object({
   "meritScore": zod.number(),
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "onboardingCompleted": zod.boolean().optional()
 })
 
 
@@ -105,7 +174,8 @@ export const UpdateCitizenResponse = zod.object({
   "meritScore": zod.number(),
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "onboardingCompleted": zod.boolean().optional()
 })
 
 
@@ -130,7 +200,8 @@ export const GetCitizenByPhoneResponse = zod.object({
   "meritScore": zod.number(),
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "onboardingCompleted": zod.boolean().optional()
 })
 
 
@@ -264,7 +335,8 @@ export const LinkWalletResponse = zod.object({
   "meritScore": zod.number(),
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "onboardingCompleted": zod.boolean().optional()
 })
 
 
@@ -319,7 +391,8 @@ export const GetStatsResponse = zod.object({
   "meritScore": zod.number(),
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "onboardingCompleted": zod.boolean().optional()
 })),
   "topReceivers": zod.array(zod.object({
   "id": zod.number(),
@@ -335,7 +408,8 @@ export const GetStatsResponse = zod.object({
   "meritScore": zod.number(),
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "onboardingCompleted": zod.boolean().optional()
 })),
   "recentTransactions": zod.array(zod.object({
   "id": zod.number(),

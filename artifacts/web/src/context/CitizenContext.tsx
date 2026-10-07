@@ -16,6 +16,7 @@ export interface CitizenProfile {
   status: string;
   registrationStatus: string | null;
   availableAt: string | null;
+  onboardingCompleted?: boolean;
   meritScore: number;
   rank: string;
   lastActivity: string | null;

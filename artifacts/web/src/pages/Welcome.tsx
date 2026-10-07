@@ -404,8 +404,7 @@ function DesktopHero() {
 
         {/* Auth buttons */}
         <div style={{ display: "flex", gap: 12 }}>
-          <NeonButton onClick={() => navigate("/")} color="#00d4ff">Log In</NeonButton>
-          <NeonButton onClick={() => navigate("/register")} primary color="#c9a84c">Join DAO</NeonButton>
+          <NeonButton onClick={() => navigate("/login")} color="#00d4ff">Log In</NeonButton>
         </div>
       </div>
 
@@ -477,10 +476,12 @@ function DesktopHero() {
               <div style={{ borderRadius: 15, overflow: "hidden", background: "#02020f" }}>
                 <video
                   src="/web/timenation-flag.mp4"
+                  poster="/web/timenation-flag-poster.jpg"
                   autoPlay
                   loop
                   muted
                   playsInline
+                  preload="auto"
                   style={{
                     display: "block",
                     width: "100%",
@@ -596,8 +597,8 @@ function DesktopHero() {
               <NeonButton onClick={() => navigate("/timeline")} color="#00d4ff">
                 🔭&nbsp; Chronopedia
               </NeonButton>
-              <NeonButton onClick={() => navigate("/")} color="#00ff88">
-                👑&nbsp; Dashboard
+              <NeonButton onClick={() => navigate("/login")} color="#00ff88">
+                👑&nbsp; Log In
               </NeonButton>
             </div>
           </div>
@@ -827,6 +828,7 @@ function MobileHero() {
             <div style={{ borderRadius: 14, overflow: "hidden", background: "#02020f" }}>
               <video
                 src="/web/timenation-flag.mp4"
+                poster="/web/timenation-flag-poster.jpg"
                 autoPlay
                 loop
                 muted
@@ -983,7 +985,7 @@ function MobileHero() {
 
           {/* Blue — dashboard */}
           <GlassBtn
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/login")}
             borderColor="rgba(0,212,255,0.5)"
             bgColor="rgba(0,212,255,0.07)"
             textColor="#00d4ff"

@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { CitizenProvider, useCitizen } from "./context/CitizenContext";
 import { LanguageProvider } from "./context/LanguageContext";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 // ── Detect whether app is running inside Telegram Mini App ───────────────────
 function isTelegramWebApp(): boolean {
@@ -17,9 +17,6 @@ function isTelegramWebApp(): boolean {
   }
 }
 const IS_TELEGRAM = isTelegramWebApp();
-
-// ── sessionStorage key: has the desktop user already passed the landing page? ─
-const LANDING_SHOWN_KEY = "tn_landing_shown";
 
 import { Home } from "./pages/Home";
 import { Tv } from "./pages/Tv";
@@ -39,6 +36,8 @@ import { QrLogin } from "./pages/QrLogin";
 import { Privacy } from "./pages/Privacy";
 import { Welcome } from "./pages/Welcome";
 import { Tos } from "./pages/Tos";
+import { Login } from "./pages/Login";
+import { OnboardingGame } from "./pages/OnboardingGame";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,35 +49,35 @@ const queryClient = new QueryClient({
 });
 
 // ── Telegram auto-login redirect guard ───────────────────────────────────────
-// Desktop:  on first visit to "/" show the landing page (/welcome); afterwards
-//           let the user navigate freely — sessionStorage prevents re-redirect.
+// Desktop:  guests land on Welcome; authenticated new registrants complete the
+//           tutorial before opening any other app route.
 // Telegram: auto-login flow — splash while validating, then redirect based on
 //           emission status.
 function TgGuard({ children }: { children: React.ReactNode }) {
-  const { twaStatus, twaLoading } = useCitizen();
+  const { citizen, isLoading, twaStatus, twaLoading } = useCitizen();
   const [location, navigate] = useLocation();
-  // Guard fires only once per mount
-  const desktopRedirectDone = useRef(false);
 
   useEffect(() => {
     // ── DESKTOP branch ────────────────────────────────────────────────────────
     if (!IS_TELEGRAM) {
-      if (desktopRedirectDone.current) return;
-      desktopRedirectDone.current = true;
+      if (isLoading) return;
 
-      // Only intercept the root path; all other paths open as-is
-      if (location === "/") {
-        const alreadyShown = sessionStorage.getItem(LANDING_SHOWN_KEY);
-        if (!alreadyShown) {
-          sessionStorage.setItem(LANDING_SHOWN_KEY, "1");
-          navigate("/welcome");
-        }
+      if (citizen?.onboardingCompleted === false) {
+        if (location !== "/onboarding") navigate("/onboarding");
+        return;
       }
+
+      if (!citizen && location === "/") navigate("/welcome");
       return;
     }
 
     // ── TELEGRAM Mini App branch ──────────────────────────────────────────────
     if (twaLoading || twaStatus === null) return;
+
+    if (citizen?.onboardingCompleted === false) {
+      if (location !== "/onboarding") navigate("/onboarding");
+      return;
+    }
 
     if (twaStatus === "IN_EMISSION" || twaStatus === "APPLICATION_REJECTED") {
       if (location !== "/register") navigate("/register");
@@ -86,7 +85,7 @@ function TgGuard({ children }: { children: React.ReactNode }) {
       // Skip the landing page — go straight to dashboard
       if (location === "/welcome" || location === "/") navigate("/");
     }
-  }, [twaStatus, twaLoading, location]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [citizen, isLoading, twaStatus, twaLoading, location]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Splash screen — only shown inside Telegram while initData is being validated
   if (IS_TELEGRAM && twaLoading) {
@@ -149,6 +148,8 @@ function Router() {
         <Route path="/timeline" component={Timeline} />
         <Route path="/shop" component={Shop} />
         <Route path="/register" component={Register} />
+        <Route path="/login" component={Login} />
+        <Route path="/onboarding" component={OnboardingGame} />
         <Route path="/passport-lookup" component={PassportLookup} />
         <Route path="/time" component={Time} />
         <Route path="/clock" component={Clock} />

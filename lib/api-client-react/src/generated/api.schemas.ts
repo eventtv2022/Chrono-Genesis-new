@@ -13,6 +13,14 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface OnboardingStatus {
+  completed: boolean;
+  /** @nullable */
+  startedAt: string | null;
+  durationSeconds: number;
+  secondsRemaining: number;
+}
+
 export type CitizenStatus = typeof CitizenStatus[keyof typeof CitizenStatus];
 
 
@@ -40,6 +48,38 @@ export interface Citizen {
   /** @nullable */
   lastActivity: string | null;
   createdAt: string;
+  onboardingCompleted?: boolean;
+}
+
+export interface LoginInput {
+  /** @minLength 5 */
+  phone: string;
+  password?: string;
+}
+
+export interface AuthSession {
+  id: number;
+  name: string;
+  phone: string;
+  balanceMinutes: number;
+  totalGiven: number;
+  totalReceived: number;
+  status: string;
+  /** @nullable */
+  registrationStatus: string | null;
+  /** @nullable */
+  availableAt: string | null;
+  meritScore: number;
+  rank: string;
+  /** @nullable */
+  lastActivity: string | null;
+  createdAt: string;
+  /** @nullable */
+  walletAddress: string | null;
+  walletVerified: number;
+  ageVerified: number;
+  onboardingCompleted: boolean;
+  authToken: string;
 }
 
 export interface CitizenInput {

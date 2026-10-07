@@ -1,6 +1,6 @@
 import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
-import { Tabs } from "expo-router";
+import { Slot, Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
@@ -8,6 +8,8 @@ import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { MobileClockBar } from "@/components/MobileClockBar";
 import { useLanguage } from "@/context/LanguageContext";
+import { useCitizen } from "@/context/CitizenContext";
+import { ActivityIndicator } from "react-native";
 
 function NativeTabLayout() {
   const { t } = useLanguage();
@@ -151,6 +153,13 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
+  const { citizen, isLoading } = useCitizen();
+  const colors = useColors();
+  if (isLoading) {
+    return <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.primary} /></View>;
+  }
+  if (!citizen) return <Slot />;
+
   return (
     <View style={{ flex: 1 }}>
       <MobileClockBar />

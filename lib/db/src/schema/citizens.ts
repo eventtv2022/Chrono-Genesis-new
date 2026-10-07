@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, real } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, real, boolean } from "drizzle-orm/pg-core";
 // balance_minutes, total_given, total_received are `real` to support fractional Darmins (tax 2% = 0.02 Д on 1 Д)
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -32,6 +32,8 @@ export const citizensTable = pgTable("citizens", {
   // 'pending' → 'issued' | 'rejected'. NULL = legacy citizen (treated as issued)
   registrationStatus: text("registration_status"),
   availableAt: timestamp("available_at", { withTimezone: true }), // NOW + 1h
+  onboardingCompleted: boolean("onboarding_completed").notNull().default(true),
+  onboardingStartedAt: timestamp("onboarding_started_at", { withTimezone: true }),
 
   // ── Registration contact & compliance fields ───────────────────────────────
   email: text("email"),                          // contact email (optional)

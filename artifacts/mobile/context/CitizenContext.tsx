@@ -15,6 +15,7 @@ export interface CitizenProfile {
   totalGiven: number;
   totalReceived: number;
   status: string;
+  onboardingCompleted?: boolean;
   meritScore: number;
   rank: string;
   lastActivity: string | null;

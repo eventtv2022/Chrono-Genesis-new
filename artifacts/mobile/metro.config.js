@@ -1,3 +1,11 @@
 const { getDefaultConfig } = require("expo/metro-config");
 
-module.exports = getDefaultConfig(__dirname);
+const path = require("path");
+
+const config = getDefaultConfig(__dirname);
+const workspaceRoot = path.resolve(__dirname, "../..");
+
+// The tutorial content is shared with the web artifact from the workspace root.
+config.watchFolders = [workspaceRoot];
+
+module.exports = config;
