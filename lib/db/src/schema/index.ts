@@ -24,3 +24,4 @@ export * from "./dmMessages";
 export * from "./dmReactions";
 export * from "./groupChats";
 export * from "./blockVotes";
+export * from "./trc20Payments";

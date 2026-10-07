@@ -49,10 +49,9 @@ const queryClient = new QueryClient({
 });
 
 // ── Telegram auto-login redirect guard ───────────────────────────────────────
-// Desktop:  guests land on Welcome; authenticated new registrants complete the
-//           tutorial before opening any other app route.
+// Desktop:  applicants remain in the simulator until their passport is issued.
 // Telegram: auto-login flow — splash while validating, then redirect based on
-//           emission status.
+//           application status. New visitors complete the guide before TWA registration.
 function TgGuard({ children }: { children: React.ReactNode }) {
   const { citizen, isLoading, twaStatus, twaLoading } = useCitizen();
   const [location, navigate] = useLocation();
@@ -62,24 +61,37 @@ function TgGuard({ children }: { children: React.ReactNode }) {
     if (!IS_TELEGRAM) {
       if (isLoading) return;
 
-      if (citizen?.onboardingCompleted === false) {
+      if (citizen?.registrationStatus === "pending") {
         if (location !== "/onboarding") navigate("/onboarding");
         return;
       }
 
-      if (!citizen && location === "/") navigate("/welcome");
+      if (citizen?.registrationStatus === "rejected") {
+        if (location !== "/register") navigate("/register");
+        return;
+      }
+
+      if (!citizen) {
+        const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/reset-password", "/qr-login"];
+        if (!guestRoutes.includes(location)) navigate("/welcome");
+        else if (location === "/") navigate("/welcome");
+      }
       return;
     }
 
     // ── TELEGRAM Mini App branch ──────────────────────────────────────────────
-    if (twaLoading || twaStatus === null) return;
+    if (twaLoading) return;
 
-    if (citizen?.onboardingCompleted === false) {
+    if (!citizen) {
       if (location !== "/onboarding") navigate("/onboarding");
       return;
     }
 
-    if (twaStatus === "IN_EMISSION" || twaStatus === "APPLICATION_REJECTED") {
+    if (twaStatus === null) return;
+
+    if (citizen.registrationStatus === "pending" || twaStatus === "IN_EMISSION") {
+      if (location !== "/onboarding") navigate("/onboarding");
+    } else if (citizen.registrationStatus === "rejected" || twaStatus === "APPLICATION_REJECTED") {
       if (location !== "/register") navigate("/register");
     } else if (twaStatus === "ACTIVE") {
       // Skip the landing page — go straight to dashboard

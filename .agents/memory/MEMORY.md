@@ -4,4 +4,5 @@
 - [Social Alarm feature](social-alarm.md) — WS на /api/ws, citizenId-only auth (no token), mobile i18n отдельный файл lib/i18n.ts
 - [PK reassignment pattern](pk-reassign.md) — единственный надёжный способ сменить PK в PostgreSQL без deferrable constraints
 - [P2P Chat Phase 1](chat-phase1.md) — E2EE DM чат: tweetnacl box, dm_messages таблица, chat_public_key в citizens, 6 API эндпоинтов
-- [Tutorial-only onboarding](onboarding-only.md) — обучение никогда не выдаёт паспорт, не меняет гражданство и не корректирует DarMin
+- [Two-stage onboarding](two-stage-onboarding.md) — guide precedes application; finale is T−1m; issue and grant one ancestral minute at eligibility
+- [Drizzle schema preservation](postgres-drizzle-preservation.md) — keep legacy raw-SQL tables represented before pushing schema changes

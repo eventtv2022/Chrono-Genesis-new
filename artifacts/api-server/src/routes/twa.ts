@@ -19,6 +19,7 @@ import { citizensTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { encryptNullable } from "../services/encryptionService";
 import { sendDirectMessage } from "../services/telegramService";
+import { issueEligiblePassport } from "../services/passportIssuanceService";
 
 const router: IRouter = Router();
 
@@ -169,15 +170,17 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
     .limit(1);
 
   if (existing) {
-    const { status, secondsLeft } = emissionState(existing);
-    req.log.info({ citizenId: existing.id, telegramId, status }, "TWA auth: existing citizen");
+    const issuance = await issueEligiblePassport(existing.id);
+    const current = issuance?.citizen ?? existing;
+    const { status, secondsLeft } = emissionState(current);
+    req.log.info({ citizenId: current.id, telegramId, status }, "TWA auth: existing citizen");
     res.json({
       success: true,
       isNewUser: false,
-      authToken: existing.authToken,
-      citizenId: existing.id,
-      citizenNumber: existing.citizenNumber,
-      name: existing.name,
+      authToken: current.authToken,
+      citizenId: current.id,
+      citizenNumber: current.citizenNumber,
+      name: current.name,
       photoUrl: existing.photoUrl ? "vault:protected" : null,
       status,
       secondsLeft,
@@ -203,10 +206,12 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
       name,
       phone: syntheticPhone,
       authToken,
-      balanceMinutes: 1,
+      balanceMinutes: 0,
+      ancestralMinuteGranted: false,
       citizenNumber,
       registrationStatus: "pending",
       availableAt,
+      onboardingCompleted: false,
       telegramId,
       telegramUsername: tgUser.username ? `@${tgUser.username}` : null,
       privacyAgreementAccepted: 1,
@@ -372,45 +377,21 @@ router.get("/auth/telegram-webapp/status", async (req, res): Promise<void> => {
     return;
   }
 
-  const { status, secondsLeft } = emissionState(citizen);
-  let finalStatus = status;
-  let criteria: EmissionCriteria | null = null;
-
-  // ── Auto-validate when timer just expired ────────────────────────────────
-  if (status === "IN_EMISSION" && secondsLeft === 0) {
-    criteria = checkCriteria(citizen);
-    const newDbStatus = criteria.allPassed ? "issued" : "rejected";
-    await db
-      .update(citizensTable)
-      .set({ registrationStatus: newDbStatus })
-      .where(eq(citizensTable.id, citizen.id));
-    finalStatus = criteria.allPassed ? "ACTIVE" : "APPLICATION_REJECTED";
-
-    // Notify on rejection
-    if (!criteria.allPassed && citizen.telegramId) {
-      const missing: string[] = [];
-      if (!criteria.hasPhoto)     missing.push("📷 Фото профиля");
-      if (!criteria.hasSignature) missing.push("✍️ Подпись под Конституцией");
-      if (!criteria.contactsOk)   missing.push(`📬 Координаты связи (${criteria.verifiedCount}/2)`);
-
-      sendDirectMessage(
-        citizen.telegramId,
-        `❌ *Заявление на Гражданство отклонено*\n\nПо истечении 60 минут профиль не прошёл валидацию.\n\n` +
-        `Не выполнено:\n${missing.map(m => `• ${m}`).join("\n")}\n\n` +
-        `Откройте Mini App для повторной подачи заявки.`,
-      ).catch((err: unknown) => logger.warn({ err }, "TWA: rejection notification failed"));
-    }
-  } else if (status === "APPLICATION_REJECTED") {
-    criteria = checkCriteria(citizen);
-  }
+  const issuance = citizen.registrationStatus === "pending" && citizen.availableAt &&
+    citizen.availableAt.getTime() <= Date.now()
+    ? await issueEligiblePassport(citizen.id)
+    : null;
+  const finalCitizen = issuance?.citizen ?? citizen;
+  const { status: finalStatus, secondsLeft } = emissionState(finalCitizen);
+  const criteria = finalStatus === "APPLICATION_REJECTED" ? checkCriteria(citizen) : null;
 
   res.json({
-    citizenId:     citizen.id,
-    name:          citizen.name,
-    citizenNumber: citizen.citizenNumber,
-    rank:          citizen.rank,
-    photoUrl:      citizen.photoUrl ? "vault:protected" : null,
-    balanceMinutes: citizen.balanceMinutes,
+    citizenId:     finalCitizen.id,
+    name:          finalCitizen.name,
+    citizenNumber: finalCitizen.citizenNumber,
+    rank:          finalCitizen.rank,
+    photoUrl:      finalCitizen.photoUrl ? "vault:protected" : null,
+    balanceMinutes: finalCitizen.balanceMinutes,
     status:        finalStatus,
     secondsLeft,
     criteria,

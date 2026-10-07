@@ -694,11 +694,27 @@ components:
           type: integer
         secondsRemaining:
           type: integer
+        availableAt:
+          type: ["string", "null"]
+          format: date-time
+        secondsUntilEligibility:
+          type: integer
+        registrationStatus:
+          type: ["string", "null"]
+        citizenNumber:
+          type: ["string", "null"]
+        balanceMinutes:
+          type: number
       required:
         - completed
         - startedAt
         - durationSeconds
         - secondsRemaining
+        - availableAt
+        - secondsUntilEligibility
+        - registrationStatus
+        - citizenNumber
+        - balanceMinutes
 
     Citizen:
       type: object

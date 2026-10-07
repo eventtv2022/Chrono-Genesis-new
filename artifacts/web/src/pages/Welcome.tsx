@@ -973,7 +973,7 @@ function MobileHero() {
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 22 }}>
           {/* Gold — passport */}
           <GlassBtn
-            onClick={() => navigate("/register")}
+            onClick={() => navigate("/onboarding")}
             borderColor="rgba(201,168,76,0.7)"
             bgColor="rgba(201,168,76,0.10)"
             textColor="#f5cc6a"

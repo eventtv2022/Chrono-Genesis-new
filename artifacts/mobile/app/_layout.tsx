@@ -38,14 +38,24 @@ function RootLayoutNav() {
   useEffect(() => {
     if (isLoading) return;
     const route = segments[0];
-    if (citizen?.onboardingCompleted === false) {
+    if (citizen?.registrationStatus === "pending") {
       if (route !== "onboarding") router.replace("/onboarding");
       return;
     }
-    if (!citizen && route === "(tabs)" && segments.length > 1) {
+    if (citizen?.registrationStatus === "rejected") {
+      if (route !== "register") router.replace("/register");
+      return;
+    }
+    if (citizen?.registrationStatus === "issued" && route === "onboarding") {
+      router.replace("/");
+      return;
+    }
+    const guestRoutes = ["onboarding", "register", "login", "passport-lookup"];
+    const guestLanding = route === "(tabs)" && (segments.length === 1 || String(segments[1]) === "index");
+    if (!citizen && !guestRoutes.includes(route ?? "") && !guestLanding) {
       router.replace("/");
     }
-  }, [citizen?.id, citizen?.onboardingCompleted, isLoading, router, segments]);
+  }, [citizen?.id, citizen?.registrationStatus, isLoading, router, segments]);
 
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>

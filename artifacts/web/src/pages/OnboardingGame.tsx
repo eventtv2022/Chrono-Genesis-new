@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetOnboardingStatusQueryKey,
-  useCompleteOnboarding,
   useGetOnboardingStatus,
-  useStartOnboarding,
 } from "@workspace/api-client-react";
-import { ArrowRight, Check, Clock3, LockKeyhole, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, Clock3, ShieldCheck } from "lucide-react";
 import { useCitizen } from "@/context/CitizenContext";
 import { ONBOARDING_QUESTS } from "../../../../lib/onboarding-quests";
+import { PreApplicationGuide } from "./PreApplicationGuide";
 
 function formatClock(totalSeconds: number) {
   const seconds = Math.max(0, totalSeconds);
@@ -37,16 +36,10 @@ export function OnboardingGame() {
   );
   const authHeaders: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {};
   const status = useGetOnboardingStatus({
-    query: { enabled: !!citizen && !!authToken, queryKey, refetchInterval: 30_000 },
+    query: { enabled: !!citizen && !!authToken, queryKey, refetchInterval: 5_000 },
     request: { headers: authHeaders },
   });
-  const start = useStartOnboarding({ request: { headers: authHeaders } });
-  const complete = useCompleteOnboarding({ request: { headers: authHeaders } });
   const [now, setNow] = useState(Date.now());
-  const [completionError, setCompletionError] = useState<string | null>(null);
-  const [completionAttempt, setCompletionAttempt] = useState(0);
-  const [celebrating, setCelebrating] = useState(false);
-  const completing = useRef(false);
   const answerStorageKey = `timenation_onboarding_answers_${citizen?.id ?? "guest"}`;
   const [answers, setAnswers] = useState<Record<number, number>>(() => {
     try {
@@ -74,86 +67,50 @@ export function OnboardingGame() {
   }, [answerStorageKey, answers]);
 
   useEffect(() => {
-    if (!status.data || status.data.completed || status.data.startedAt || start.isPending || start.isSuccess) return;
-    start.mutate(undefined, {
-      onSuccess: (result) => {
-        queryClient.setQueryData(queryKey, result);
-      },
+    if (status.data?.registrationStatus !== "issued" || !citizen) return;
+    setCitizen({
+      ...citizen,
+      registrationStatus: "issued",
+      status: "active",
+      balanceMinutes: status.data.balanceMinutes,
+      onboardingCompleted: true,
     });
-  }, [status.data, start.isPending, start.isSuccess, start.mutate, queryClient, queryKey]);
-
-  useEffect(() => {
-    if (!status.data?.completed || celebrating) return;
-    if (citizen?.onboardingCompleted === false) {
-      setCitizen({ ...citizen, onboardingCompleted: true });
-    }
+    void queryClient.invalidateQueries({ queryKey: ["citizens"] });
     navigate("/");
-  }, [status.data?.completed, celebrating, citizen, setCitizen, navigate]);
+  }, [status.data?.registrationStatus, status.data?.balanceMinutes, citizen, setCitizen, queryClient, navigate]);
 
   const remainingSeconds = status.data
     ? Math.max(0, status.data.secondsRemaining - Math.floor((now - status.dataUpdatedAt) / 1000))
-    : 3600;
-  const elapsedSeconds = Math.max(0, 3600 - remainingSeconds);
-  const questIndex = Math.min(ONBOARDING_QUESTS.length - 1, Math.floor(elapsedSeconds / 60));
+    : 3540;
+  const durationSeconds = status.data?.durationSeconds ?? 3540;
+  const elapsedSeconds = Math.max(0, durationSeconds - remainingSeconds);
+  const stepDuration = durationSeconds / ONBOARDING_QUESTS.length;
+  const questIndex = Math.min(ONBOARDING_QUESTS.length - 1, Math.floor(elapsedSeconds / stepDuration));
   const quest = ONBOARDING_QUESTS[questIndex];
-  const progress = Math.min(100, (elapsedSeconds / 3600) * 100);
+  const progress = Math.min(100, (elapsedSeconds / durationSeconds) * 100);
   const choice = answers[questIndex];
-
-  useEffect(() => {
-    if (remainingSeconds !== 0 || completing.current || status.data?.completed || !citizen) return;
-    completing.current = true;
-    setCompletionError(null);
-    complete.mutate(undefined, {
-      onSuccess: () => {
-        setCelebrating(true);
-        setCitizen({ ...citizen, onboardingCompleted: true });
-        queryClient.setQueryData(queryKey, (previous: typeof status.data) =>
-          previous ? { ...previous, completed: true, secondsRemaining: 0 } : previous,
-        );
-        window.setTimeout(() => navigate("/"), 4200);
-      },
-      onError: () => {
-        completing.current = false;
-        setCompletionError("Не удалось подтвердить завершение. Проверьте соединение и повторите попытку.");
-      },
-    });
-  }, [remainingSeconds, status.data?.completed, completionAttempt, citizen, complete.mutate, queryClient, queryKey, setCitizen, navigate]);
+  const secondsUntilEligibility = status.data
+    ? Math.max(0, status.data.secondsUntilEligibility - Math.floor((now - status.dataUpdatedAt) / 1000))
+    : 0;
 
   function choose(index: number) {
     setAnswers((current) => ({ ...current, [questIndex]: index }));
   }
 
   if (!citizen) {
-    return (
-      <main className="min-h-screen bg-[#050713] text-white grid place-items-center px-6">
-        <div className="max-w-md text-center space-y-4">
-          <LockKeyhole className="mx-auto h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold">Войдите, чтобы продолжить обучение</h1>
-          <button className="rounded-md bg-primary px-5 py-3 font-semibold text-primary-foreground" onClick={() => navigate("/login")} data-testid="button-onboarding-login">
-            Перейти ко входу
-          </button>
-        </div>
-      </main>
-    );
+    return <PreApplicationGuide />;
   }
 
-  if (celebrating || status.data?.completed) {
+  if (status.data?.registrationStatus === "rejected") {
     return (
-      <main className="min-h-screen bg-[#050713] text-white grid place-items-center overflow-hidden px-6">
-        <section className="max-w-xl text-center space-y-6 animate-in fade-in zoom-in duration-700">
-          <div className="mx-auto grid h-24 w-24 place-items-center rounded-full border border-primary/50 bg-primary/10 shadow-[0_0_70px_rgba(201,168,76,.25)]">
-            <ShieldCheck className="h-12 w-12 text-primary" />
-          </div>
-          <p className="font-mono text-xs uppercase tracking-[0.28em] text-primary">TimeNation · обучение завершено</p>
-          <h1 className="text-3xl font-bold md:text-5xl">Вы прошли учебный этап</h1>
-          <p className="text-muted-foreground leading-7">
-            Это торжественный экран завершения симуляции, а не выдача паспорта. Паспортный статус и баланс DarMin не изменялись; оформление паспорта продолжает идти по существующему процессу.
-          </p>
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80">
-            <Check className="h-4 w-4 text-emerald-400" />
-            Учебный этап сохранён
-          </div>
-          <p className="text-xs text-muted-foreground">Переходим к приложению…</p>
+      <main className="min-h-screen bg-[#050713] text-white grid place-items-center px-6">
+        <section className="max-w-xl space-y-5 text-center">
+          <ShieldCheck className="mx-auto h-12 w-12 text-amber-400" />
+          <h1 className="text-3xl font-bold">Заявление требует исправлений</h1>
+          <p className="text-muted-foreground">Обратитесь к форме заявления, чтобы проверить данные и подать его повторно.</p>
+          <button className="rounded-md bg-primary px-5 py-3 font-semibold text-primary-foreground" onClick={() => navigate("/register")}>
+            Открыть заявление
+          </button>
         </section>
       </main>
     );
@@ -164,33 +121,55 @@ export function OnboardingGame() {
       <main className="min-h-screen bg-[#050713] text-white grid place-items-center px-6">
         <div className="flex items-center gap-3 text-muted-foreground" role="status" data-testid="status-onboarding-loading">
           <Clock3 className="h-5 w-5 animate-pulse text-primary" />
-          {start.isError || status.isError ? "Не удалось загрузить обучение. Обновите страницу или проверьте соединение." : "Подключаем учебный таймер…"}
+          {status.isError ? "Не удалось загрузить симуляцию. Проверьте соединение." : "Подключаем симуляцию…"}
         </div>
       </main>
     );
   }
 
-  const secondsToNextStep = 60 - (elapsedSeconds % 60);
+  if (status.data.completed && status.data.registrationStatus === "pending") {
+    return (
+      <main className="min-h-screen bg-[#050713] text-white grid place-items-center px-6">
+        <section className="max-w-xl space-y-5 text-center">
+          <div className="mx-auto grid h-24 w-24 place-items-center rounded-full border border-primary/50 bg-primary/10 shadow-[0_0_70px_rgba(201,168,76,.25)]">
+            <ShieldCheck className="h-12 w-12 text-primary" />
+          </div>
+          <p className="font-mono text-xs uppercase tracking-[0.28em] text-primary">TimeNation · финал симуляции</p>
+          <h1 className="text-3xl font-bold md:text-5xl">Симуляция завершена</h1>
+          <p className="text-muted-foreground leading-7">
+            Заявление остаётся на проверке до установленного срока. Паспорт и родовая минута будут выданы при наступлении этого срока.
+          </p>
+          <div className="rounded-xl border border-primary/25 bg-primary/5 p-5">
+            <p className="font-mono text-xs uppercase tracking-widest text-primary/80">До права на выдачу</p>
+            <p className="mt-2 font-mono text-3xl tabular-nums" data-testid="text-eligibility-countdown">{formatClock(secondsUntilEligibility)}</p>
+          </div>
+          <p className="text-xs text-muted-foreground">Статус проверяется автоматически. Эта страница обновится при выдаче паспорта.</p>
+        </section>
+      </main>
+    );
+  }
+
+  const secondsToNextStep = Math.ceil(stepDuration - (elapsedSeconds % stepDuration));
 
   return (
     <main className="min-h-screen bg-[#050713] px-4 py-8 text-white md:px-8">
       <div className="mx-auto max-w-5xl">
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="font-mono text-xs uppercase tracking-[0.24em] text-primary">TimeNation · интерактивное обучение</p>
-            <h1 className="mt-2 text-2xl font-bold md:text-3xl">60 минут до знакомства с приложением</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">60 коротких учебных выборов о реальных функциях. Выборы не создают сделки, не выдают паспорт и не меняют баланс.</p>
+            <p className="font-mono text-xs uppercase tracking-[0.24em] text-primary">TimeNation · симуляция заявления</p>
+            <h1 className="mt-2 text-2xl font-bold md:text-3xl">Симуляция до финала за минуту до выдачи</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Отсчёт привязан к сроку eligibility, записанному при подаче заявления.</p>
           </div>
           <div className="min-w-48 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-right">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-primary/80">Осталось</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-primary/80">До финала</p>
             <p className="mt-1 font-mono text-2xl tabular-nums" data-testid="text-onboarding-timer">{formatClock(remainingSeconds)}</p>
           </div>
         </header>
 
         <section className="mb-6 rounded-xl border border-white/10 bg-white/[0.035] p-5 md:p-6">
           <div className="mb-3 flex items-center justify-between gap-3 text-xs">
-            <span className="font-mono uppercase tracking-wider text-white/75">Учебный прогресс · {Math.floor(elapsedSeconds / 60)}/60 минут</span>
-            <span className="text-muted-foreground">Не является индикатором выдачи паспорта</span>
+            <span className="font-mono uppercase tracking-wider text-white/75">Симуляция · {Math.floor(progress)}%</span>
+            <span className="text-muted-foreground">Выдача — в срок из заявления</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={Math.floor(progress)} aria-valuemin={0} aria-valuemax={100} data-testid="progress-onboarding">
             <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-primary to-emerald-400 transition-[width] duration-700" style={{ width: `${progress}%` }} />
@@ -203,10 +182,10 @@ export function OnboardingGame() {
             <h2 className="mt-3 text-lg font-semibold">{sectionName(questIndex)}</h2>
             <div className="mt-5 flex items-start gap-3 text-sm leading-6 text-muted-foreground">
               <Clock3 className="mt-1 h-4 w-4 shrink-0 text-cyan-300" />
-              <p>Следующий учебный выбор откроется через {formatClock(secondsToNextStep)}. Если приложение закроется, таймер продолжится по серверному времени.</p>
+              <p>Следующий этап через {formatClock(secondsToNextStep)}. Если приложение закроется, отсчёт продолжится по сроку в базе.</p>
             </div>
             <div className="mt-5 rounded-lg border border-white/10 bg-black/20 p-4 text-xs leading-5 text-white/65">
-              $1 DarMin = 1 минута. Все действия на этом экране — только симуляция.
+              $1 DarMin = 1 минута. Выборы здесь не создают сделки и не меняют баланс.
             </div>
           </aside>
 
@@ -243,21 +222,6 @@ export function OnboardingGame() {
           </article>
         </section>
 
-        {completionError && (
-          <div className="mt-6 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive-foreground" role="alert" data-testid="status-onboarding-error">
-            {completionError}
-            <button
-              className="ml-3 underline underline-offset-4"
-              onClick={() => {
-                completing.current = false;
-                setCompletionAttempt((attempt) => attempt + 1);
-              }}
-              data-testid="button-onboarding-retry"
-            >
-              Повторить
-            </button>
-          </div>
-        )}
       </div>
     </main>
   );

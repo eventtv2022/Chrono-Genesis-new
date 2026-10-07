@@ -23,6 +23,7 @@ import { requireAuth, requireAdmin } from "../middleware/auth";
 import { sendDirectMessage, getBot } from "../services/telegramService";
 import { sendRegistryOtpEmail } from "../services/emailService";
 import { logger } from "../lib/logger";
+import { issueEligiblePassport } from "../services/passportIssuanceService";
 
 const router = Router();
 
@@ -385,10 +386,17 @@ router.post(
       res.json({ ok: true, message: `Эмиссия перезапущена для ${citizen.name}` });
 
     } else if (action === "activate") {
+      // Manual admin approval still uses the same atomic issuance path so the
+      // ancestral-minute grant and ledger entry cannot be skipped.
       await db
         .update(citizensTable)
-        .set({ registrationStatus: "issued", status: "active" })
+        .set({ registrationStatus: "pending", availableAt: new Date(), status: "active" })
         .where(eq(citizensTable.id, id));
+      const issued = await issueEligiblePassport(id);
+      if (!issued) {
+        res.status(409).json({ error: "Не удалось активировать паспорт" });
+        return;
+      }
       logger.info({ adminId, citizenId: id }, "Admin: manual activate");
       res.json({ ok: true, message: `${citizen.name} — паспорт активирован вручную` });
 

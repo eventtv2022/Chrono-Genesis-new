@@ -49,7 +49,12 @@ export const GetOnboardingStatusResponse = zod.object({
   "completed": zod.boolean(),
   "startedAt": zod.coerce.date().nullable(),
   "durationSeconds": zod.number(),
-  "secondsRemaining": zod.number()
+  "secondsRemaining": zod.number(),
+  "availableAt": zod.coerce.date().nullable(),
+  "secondsUntilEligibility": zod.number(),
+  "registrationStatus": zod.string().nullable(),
+  "citizenNumber": zod.string().nullable(),
+  "balanceMinutes": zod.number()
 })
 
 
@@ -60,7 +65,12 @@ export const StartOnboardingResponse = zod.object({
   "completed": zod.boolean(),
   "startedAt": zod.coerce.date().nullable(),
   "durationSeconds": zod.number(),
-  "secondsRemaining": zod.number()
+  "secondsRemaining": zod.number(),
+  "availableAt": zod.coerce.date().nullable(),
+  "secondsUntilEligibility": zod.number(),
+  "registrationStatus": zod.string().nullable(),
+  "citizenNumber": zod.string().nullable(),
+  "balanceMinutes": zod.number()
 })
 
 
@@ -71,7 +81,12 @@ export const CompleteOnboardingResponse = zod.object({
   "completed": zod.boolean(),
   "startedAt": zod.coerce.date().nullable(),
   "durationSeconds": zod.number(),
-  "secondsRemaining": zod.number()
+  "secondsRemaining": zod.number(),
+  "availableAt": zod.coerce.date().nullable(),
+  "secondsUntilEligibility": zod.number(),
+  "registrationStatus": zod.string().nullable(),
+  "citizenNumber": zod.string().nullable(),
+  "balanceMinutes": zod.number()
 })
 
 

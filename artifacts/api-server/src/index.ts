@@ -1,6 +1,7 @@
 import http from "http";
 import app from "./app";
 import { logger } from "./lib/logger";
+import { issueDuePassports } from "./services/passportIssuanceService";
 import { applyEntropy } from "./services/meritocracyService";
 import { drainEmissionQueue } from "./services/emissionService";
 import { airDueSlots } from "./services/tvService";
@@ -99,11 +100,32 @@ function scheduleMinuteTick() {
   logger.info({ msToNextMinute }, "Minute tick cron scheduled (TV slot airing + auction finalize)");
 }
 
+function schedulePassportIssuance() {
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const issued = await issueDuePassports();
+      if (issued > 0) logger.info({ issued }, "Eligible passports issued by scheduler");
+    } catch (err) {
+      logger.error({ err }, "Passport issuance scheduler failed");
+    } finally {
+      running = false;
+    }
+  };
+
+  void tick();
+  setInterval(() => void tick(), 15_000);
+  logger.info("Passport issuance scheduler scheduled (15-second interval)");
+}
+
 // ── Async bootstrap — rehydrate render queue BEFORE accepting connections ──────
 async function bootstrap(): Promise<void> {
   scheduleDailyEntropy();
   scheduleMidnightUTCEmissionDrain();
   scheduleMinuteTick();
+  schedulePassportIssuance();
   startNodeValidator();
 
   // ── Create HTTP server from Express app ───────────────────────────────────────

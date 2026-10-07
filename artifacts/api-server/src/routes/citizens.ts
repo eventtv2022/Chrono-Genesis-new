@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, sql, desc } from "drizzle-orm";
+import crypto from "crypto";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
@@ -17,10 +18,10 @@ import { generateIdCardSvg, loadPhotoAsDataUri } from "../services/idCardService
 import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
 import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
-import { logCitizenIssuedToSheets } from "../lib/googleSheets";
 import { requireAuth } from "../middleware/auth";
 import { sendPassportEmail, sendAdminTelegramNotify } from "../services/emailService";
-import { sendDirectMessage, notifyUserConditional } from "../services/telegramService";
+import { sendDirectMessage } from "../services/telegramService";
+import { issueEligiblePassport } from "../services/passportIssuanceService";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
 export const VAULT_DIR = path.join(process.cwd(), "secure_vault");
@@ -57,7 +58,7 @@ function formatCitizenRow(c: typeof citizensTable.$inferSelect) {
     givenNames: tryDecrypt(c.givenNames) ?? null,
     // Never expose the raw vault path as a web URL
     photoUrl: c.photoUrl ? "vault:protected" : null,
-    transferableBalance: c.balanceMinutes - 1,
+    transferableBalance: Math.max(0, c.balanceMinutes - 1),
     lastActivity: c.lastActivity?.toISOString() ?? null,
     createdAt: c.createdAt.toISOString(),
     availableAt: c.availableAt?.toISOString() ?? null,
@@ -422,6 +423,7 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
 
   const citizenNumber = await generateNextCitizenNumber();
   const availableAt = new Date(Date.now() + 60 * 60 * 1000); // +1 hour
+  const authToken = crypto.randomBytes(32).toString("hex");
 
   const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted, signatureBase64: rawSignature, whatsappPhone, preferredChannels } = parsed.data;
 
@@ -451,9 +453,12 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
       dateOfBirth: dateOfBirth || null,
       photoUrl: vaultPhotoRef,
       citizenNumber,
-      balanceMinutes: 1,
+      authToken,
+      balanceMinutes: 0,
+      ancestralMinuteGranted: false,
       registrationStatus: "pending",
       availableAt,
+      onboardingCompleted: false,
       tosAcceptedAt: tosAcceptedAt ? new Date(tosAcceptedAt) : undefined,
       telegramId: telegramId ?? undefined,
       email: encryptNullable(email || null),           // PII — encrypted
@@ -469,6 +474,7 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
 
   res.status(201).json({
     ...formatCitizenRow(citizen!),
+    authToken,
     citizenNumber,
     availableAt: availableAt.toISOString(),
     registrationStatus: "pending",
@@ -535,7 +541,7 @@ router.get("/citizens/by-phone/:phone", async (req, res): Promise<void> => {
 router.get("/citizens/number/:num/status", async (req, res): Promise<void> => {
   const num = req.params["num"] ?? "";
 
-  const [citizen] = await db
+  let [citizen] = await db
     .select()
     .from(citizensTable)
     .where(eq(citizensTable.citizenNumber, num))
@@ -546,10 +552,36 @@ router.get("/citizens/number/:num/status", async (req, res): Promise<void> => {
     return;
   }
 
+  if (
+    citizen.registrationStatus === "pending" &&
+    citizen.availableAt &&
+    citizen.availableAt.getTime() <= Date.now()
+  ) {
+    const issued = await issueEligiblePassport(citizen.id);
+    if (issued) {
+      citizen = issued.citizen;
+    } else {
+      [citizen] = await db
+        .select()
+        .from(citizensTable)
+        .where(eq(citizensTable.citizenNumber, num))
+        .limit(1);
+      if (!citizen) {
+        res.status(404).json({ error: "Гражданин не найден" });
+        return;
+      }
+    }
+  }
+
   // Legacy citizen (no registrationStatus) → treated as issued
   if (!citizen.registrationStatus || citizen.registrationStatus === "issued") {
-    const passportUrl = `/api/citizens/number/${num}/passport`;
-    res.json({ status: "issued", citizenNumber: num, idCardUrl: passportUrl });
+    res.json({
+      status: "issued",
+      citizenNumber: num,
+      idCardUrl: `/api/citizens/number/${num}/id-card`,
+      passportUrl: `/api/citizens/number/${num}/passport`,
+      balanceMinutes: citizen.balanceMinutes,
+    });
     return;
   }
 
@@ -558,47 +590,9 @@ router.get("/citizens/number/:num/status", async (req, res): Promise<void> => {
     return;
   }
 
-  // pending — check if 1 hour has elapsed
+  // Pending applicants retain the same registration-time eligibility deadline.
   const now = Date.now();
-  const due = citizen.availableAt ? citizen.availableAt.getTime() : now;
-
-  if (now >= due) {
-    // Auto-issue
-    const passportUrl = `/api/citizens/number/${num}/passport`;
-    await db
-      .update(citizensTable)
-      .set({ registrationStatus: "issued", idCardUrl: passportUrl })
-      .where(eq(citizensTable.citizenNumber, num));
-
-    req.log.info({ citizenNumber: num, citizenId: citizen.id }, "Passport auto-issued after 1-hour delay");
-
-    // Notify citizen in Telegram that their passport is ready
-    void notifyUserConditional(
-      citizen.id,
-      `🎉 *Ваш паспорт гражданина TimeNation готов!*\n\n` +
-      `👤 *${citizen.name}*\n` +
-      `🪪 Гражданин №${num}\n` +
-      `📜 Ранг: ${citizen.rank}\n\n` +
-      `Откройте приложение TimeNation, чтобы просмотреть удостоверение личности.`,
-      "state"
-    );
-
-    // Log newly-issued citizen to Google Sheets (fire-and-forget)
-    logCitizenIssuedToSheets({
-      citizenNumber: num,
-      citizenId: citizen.id,
-      name: citizen.name,
-      phone: citizen.phone,
-      rank: citizen.rank,
-      balanceMinutes: citizen.balanceMinutes,
-      meritScore: citizen.meritScore,
-      registrationStatus: "issued",
-      issuedAt: new Date().toISOString(),
-    }).catch((err) => req.log.warn({ err }, "Sheets citizen log failed (non-critical)"));
-
-    res.json({ status: "issued", citizenNumber: num, idCardUrl: passportUrl });
-    return;
-  }
+  const due = citizen.availableAt?.getTime() ?? now;
 
   const timeLeftSeconds = Math.ceil((due - now) / 1000);
   res.json({
@@ -606,6 +600,11 @@ router.get("/citizens/number/:num/status", async (req, res): Promise<void> => {
     citizenNumber: num,
     timeLeftSeconds,
     availableAt: citizen.availableAt?.toISOString(),
+    finaleAt: citizen.availableAt
+      ? new Date(citizen.availableAt.getTime() - 60_000).toISOString()
+      : null,
+    secondsUntilFinale: Math.max(0, Math.ceil((due - 60_000 - now) / 1000)),
+    balanceMinutes: citizen.balanceMinutes,
   });
 });
 
@@ -684,7 +683,7 @@ router.get("/citizens/number/:num/id-card", async (req, res): Promise<void> => {
 router.get("/citizens/lookup/:num", async (req, res): Promise<void> => {
   const num = (req.params["num"] ?? "").trim().replace(/\D/g, "").padStart(9, "0");
 
-  const [citizen] = await db
+  let [citizen] = await db
     .select()
     .from(citizensTable)
     .where(eq(citizensTable.citizenNumber, num))
@@ -695,40 +694,24 @@ router.get("/citizens/lookup/:num", async (req, res): Promise<void> => {
     return;
   }
 
-  // Auto-issue passport if available_at has elapsed (lazy promotion, same logic as /status)
-  if (citizen.registrationStatus === "pending" && citizen.availableAt) {
-    const now = Date.now();
-    const due = citizen.availableAt.getTime();
-    if (now >= due) {
-      const passportUrl = `/api/citizens/number/${num}/passport`;
-      await db
-        .update(citizensTable)
-        .set({ registrationStatus: "issued", idCardUrl: passportUrl })
-        .where(eq(citizensTable.citizenNumber, num));
-
-      req.log.info({ citizenNumber: num, citizenId: citizen.id }, "Passport auto-issued via /lookup");
-
-      logCitizenIssuedToSheets({
-        citizenNumber: num,
-        citizenId: citizen.id,
-        name: citizen.name,
-        phone: citizen.phone,
-        rank: citizen.rank,
-        balanceMinutes: citizen.balanceMinutes,
-        meritScore: citizen.meritScore,
-        registrationStatus: "issued",
-        issuedAt: new Date().toISOString(),
-      }).catch((err: unknown) => req.log.warn({ err }, "Sheets citizen log failed (non-critical)"));
-
-      res.json({
-        status: "issued",
-        citizenNumber: num,
-        name: citizen.name,
-        rank: citizen.rank,
-        idCardUrl: `/api/citizens/number/${num}/id-card`,
-        passportUrl,
-      });
-      return;
+  if (
+    citizen.registrationStatus === "pending" &&
+    citizen.availableAt &&
+    citizen.availableAt.getTime() <= Date.now()
+  ) {
+    const issued = await issueEligiblePassport(citizen.id);
+    if (issued) {
+      citizen = issued.citizen;
+    } else {
+      [citizen] = await db
+        .select()
+        .from(citizensTable)
+        .where(eq(citizensTable.citizenNumber, num))
+        .limit(1);
+      if (!citizen) {
+        res.status(404).json({ error: "Гражданин с таким номером не найден в реестре" });
+        return;
+      }
     }
   }
 
@@ -748,6 +731,7 @@ router.get("/citizens/lookup/:num", async (req, res): Promise<void> => {
     rank: citizen.rank,
     idCardUrl: `/api/citizens/number/${num}/id-card`,
     passportUrl: `/api/citizens/number/${num}/passport`,
+    balanceMinutes: citizen.balanceMinutes,
   });
 });
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,8 @@ import { UserPlus, Clock, CheckCircle2, AlertCircle, Shield, Award, ExternalLink
 import { SignaturePad } from "@/components/SignaturePad";
 import { useLanguage } from "@/context/LanguageContext";
 import { LegalModal, type LegalDocType } from "@/components/LegalModal";
-import { useCitizen } from "@/context/CitizenContext";
+import { useCitizen, type CitizenProfile } from "@/context/CitizenContext";
+import { isPreApplicationGuideComplete } from "./PreApplicationGuide";
 
 const BASE_WEB = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 const MANIFESTO_URL = "https://issuu.com/timenation2025/docs/_timenatio";
@@ -23,7 +25,8 @@ interface PendingData { citizenNumber: string; availableAt: string; citizenId: n
 
 export function Register() {
   const { t } = useLanguage();
-  const { citizen, twaStatus } = useCitizen();
+  const { citizen, twaStatus, setCitizen, setAuthToken } = useCitizen();
+  const [, navigate] = useLocation();
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   const [givenNames, setGivenNames] = useState("");
@@ -70,6 +73,10 @@ export function Register() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { document.title = `${t.nav_become_citizen} | TimeNation`; }, [t]);
+
+  useEffect(() => {
+    if (!citizen && !isPreApplicationGuideComplete()) navigate("/onboarding");
+  }, [citizen, navigate]);
 
   // ── Auto-jump to correct mode if citizen already exists (TWA flow) ──────────
   useEffect(() => {
@@ -153,11 +160,16 @@ export function Register() {
       formData.append("preferredChannels", JSON.stringify(preferredCh));
 
       const res = await fetch("/api/citizens", { method: "POST", body: formData });
-      const data = await res.json() as { id?: number; name?: string; citizenNumber?: string; availableAt?: string; error?: string; };
+      const data = await res.json() as { id?: number; name?: string; citizenNumber?: string; availableAt?: string; authToken?: string; error?: string; } & Record<string, unknown>;
       if (!res.ok) { setError(data.error ?? t.reg_error); return; }
       if (data.citizenNumber && data.availableAt) {
+        if (typeof data.authToken === "string" && typeof data.id === "number") {
+          const { authToken: _authToken, ...profile } = data;
+          setCitizen(profile as unknown as CitizenProfile);
+          setAuthToken(data.authToken);
+        }
         setPendingData({ citizenNumber: data.citizenNumber, availableAt: data.availableAt, citizenId: data.id!, citizenName: data.name! });
-        setMode("pending");
+        navigate("/onboarding");
       }
     } catch {
       setError(t.connection_error);

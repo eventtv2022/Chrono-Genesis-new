@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect } from "react";
 const STORAGE_KEY      = "timenation_citizen";
 const AUTH_TOKEN_KEY   = "timenation_auth_token";
 const TWA_STATUS_KEY   = "timenation_twa_status";
+const GUIDE_KEY        = "timenation_preapplication_guide_v1";
 
 export type TwaStatus = "ACTIVE" | "IN_EMISSION" | "APPLICATION_REJECTED" | null;
 
@@ -160,6 +161,14 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
       } finally {
         setIsLoading(false);
         setTwaLoading(false);
+      }
+
+      // A new Telegram visitor must finish the public guide before TWA
+      // auto-registration starts the application eligibility timer.
+      if (localStorage.getItem(GUIDE_KEY) !== "complete" && !storedCitizen) {
+        setIsLoading(false);
+        setTwaLoading(false);
+        return;
       }
     };
 

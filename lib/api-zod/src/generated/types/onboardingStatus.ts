@@ -12,4 +12,12 @@ export interface OnboardingStatus {
   startedAt: Date | null;
   durationSeconds: number;
   secondsRemaining: number;
+  /** @nullable */
+  availableAt: Date | null;
+  secondsUntilEligibility: number;
+  /** @nullable */
+  registrationStatus: string | null;
+  /** @nullable */
+  citizenNumber: string | null;
+  balanceMinutes: number;
 }

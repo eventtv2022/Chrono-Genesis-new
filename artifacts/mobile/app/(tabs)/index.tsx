@@ -139,7 +139,7 @@ function MobileWelcome() {
         </View>
         <View style={{ width: "100%", maxWidth: 520, gap: 11, marginTop: 26 }}>
           <TouchableOpacity
-            onPress={() => router.push("/register")}
+            onPress={() => router.push("/onboarding")}
             activeOpacity={0.82}
             testID="button-welcome-register"
             style={{ minHeight: 54, borderRadius: 12, paddingHorizontal: 18, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}

@@ -1,5 +1,6 @@
 import { getBaseUrl } from "@/lib/api";
 import React, { useState, useEffect, useRef } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
   Text,
@@ -108,7 +109,7 @@ function formatCountdown(seconds: number): string {
 export default function RegisterScreen({ initialMode }: { initialMode?: Mode } = {}) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { setCitizen, setAuthToken } = useCitizen();
+  const { citizen, setCitizen, setAuthToken } = useCitizen();
   const { lang, setLang } = useLanguage();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -189,6 +190,19 @@ export default function RegisterScreen({ initialMode }: { initialMode?: Mode } =
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const styles = getStyles(colors);
+
+  useEffect(() => {
+    if (citizen) return;
+    let active = true;
+    AsyncStorage.getItem("timenation_preapplication_guide_v1")
+      .then((value) => {
+        if (active && value !== "complete") router.replace("/onboarding");
+      })
+      .catch(() => {
+        if (active) router.replace("/onboarding");
+      });
+    return () => { active = false; };
+  }, [citizen, router]);
 
   // ── Countdown + auto-poll ─────────────────────────────────────────────────
   useEffect(() => {
@@ -375,6 +389,7 @@ export default function RegisterScreen({ initialMode }: { initialMode?: Mode } =
           citizenName: cd.name,
         });
         setMode("pending");
+        router.replace("/onboarding");
       } else {
         router.back();
       }

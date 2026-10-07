@@ -1,0 +1,136 @@
+import { and, eq, lte, sql } from "drizzle-orm";
+import { db, citizensTable, timeBankLedgerTable } from "@workspace/db";
+import { logger } from "../lib/logger";
+import { logCitizenIssuedToSheets } from "../lib/googleSheets";
+import { notifyUserConditional } from "./telegramService";
+
+export const PASSPORT_WAIT_MS = 60 * 60 * 1000;
+export const SIMULATOR_DURATION_MS = PASSPORT_WAIT_MS - 60 * 1000;
+
+export type PassportIssuanceResult = {
+  citizen: typeof citizensTable.$inferSelect;
+  ancestralMinuteGranted: boolean;
+};
+
+/**
+ * Atomically issue an eligible pending passport. The pending→issued transition
+ * is the idempotency gate, so concurrent pollers and scheduler instances can
+ * only grant one ancestral minute.
+ */
+export async function issueEligiblePassport(
+  citizenId: number,
+  now = new Date(),
+): Promise<PassportIssuanceResult | null> {
+  const result = await db.transaction(async (tx) => {
+    const [candidate] = await tx
+      .select({ citizenNumber: citizensTable.citizenNumber })
+      .from(citizensTable)
+      .where(eq(citizensTable.id, citizenId))
+      .limit(1);
+
+    if (!candidate) return null;
+
+    const [transitioned] = await tx
+      .update(citizensTable)
+      .set({
+        registrationStatus: "issued",
+        idCardUrl: candidate.citizenNumber
+          ? `/api/citizens/number/${candidate.citizenNumber}/id-card`
+          : null,
+        status: "active",
+        onboardingCompleted: true,
+      })
+      .where(
+        and(
+          eq(citizensTable.id, citizenId),
+          eq(citizensTable.registrationStatus, "pending"),
+          lte(citizensTable.availableAt, now),
+        ),
+      )
+      .returning();
+
+    if (!transitioned) return null;
+
+    if (!transitioned.ancestralMinuteGranted) {
+      const [credited] = await tx
+        .update(citizensTable)
+        .set({
+          balanceMinutes: sql`${citizensTable.balanceMinutes} + 1`,
+          ancestralMinuteGranted: true,
+        })
+        .where(eq(citizensTable.id, citizenId))
+        .returning();
+
+      await tx.insert(timeBankLedgerTable).values({
+        citizenId,
+        type: "ancestral_minute_granted",
+        amount: 1,
+        note: "Родовая минута начислена при выдаче паспорта",
+      });
+
+      return { citizen: credited!, ancestralMinuteGranted: true };
+    }
+
+    return { citizen: transitioned, ancestralMinuteGranted: false };
+  });
+
+  if (!result) return null;
+
+  const { citizen } = result;
+  logger.info(
+    {
+      citizenId: citizen.id,
+      citizenNumber: citizen.citizenNumber,
+      ancestralMinuteGranted: result.ancestralMinuteGranted,
+      balanceMinutes: citizen.balanceMinutes,
+    },
+    "Passport issued at eligibility",
+  );
+
+  void notifyUserConditional(
+    citizen.id,
+    `🎉 *Ваш паспорт гражданина TimeNation готов!*\n\n` +
+      `👤 *${citizen.name}*\n` +
+      `🪪 Гражданин №${citizen.citizenNumber ?? citizen.id}\n` +
+      `📜 Ранг: ${citizen.rank}\n` +
+      `${result.ancestralMinuteGranted ? "⏳ Родовая минута начислена: 1 Д\n\n" : "\n"}` +
+      "Откройте приложение TimeNation, чтобы просмотреть удостоверение личности.",
+    "state",
+  );
+
+  if (citizen.citizenNumber) {
+    void logCitizenIssuedToSheets({
+      citizenNumber: citizen.citizenNumber,
+      citizenId: citizen.id,
+      name: citizen.name,
+      phone: citizen.phone,
+      rank: citizen.rank,
+      balanceMinutes: citizen.balanceMinutes,
+      meritScore: citizen.meritScore,
+      registrationStatus: "issued",
+      issuedAt: now.toISOString(),
+    }).catch((err) => logger.warn({ err, citizenId }, "Sheets citizen log failed (non-critical)"));
+  }
+
+  return result;
+}
+
+/** Best-effort worker; request-driven issuance remains the fallback on wake-up. */
+export async function issueDuePassports(batchSize = 100): Promise<number> {
+  const dueCitizens = await db
+    .select({ id: citizensTable.id })
+    .from(citizensTable)
+    .where(
+      and(
+        eq(citizensTable.registrationStatus, "pending"),
+        lte(citizensTable.availableAt, new Date()),
+      ),
+    )
+    .limit(batchSize);
+
+  let issuedCount = 0;
+  for (const citizen of dueCitizens) {
+    if (await issueEligiblePassport(citizen.id)) issuedCount += 1;
+  }
+  return issuedCount;
+}

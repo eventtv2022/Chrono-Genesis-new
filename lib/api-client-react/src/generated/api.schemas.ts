@@ -19,6 +19,14 @@ export interface OnboardingStatus {
   startedAt: string | null;
   durationSeconds: number;
   secondsRemaining: number;
+  /** @nullable */
+  availableAt: string | null;
+  secondsUntilEligibility: number;
+  /** @nullable */
+  registrationStatus: string | null;
+  /** @nullable */
+  citizenNumber: string | null;
+  balanceMinutes: number;
 }
 
 export type CitizenStatus = typeof CitizenStatus[keyof typeof CitizenStatus];
