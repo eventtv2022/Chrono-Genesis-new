@@ -5,7 +5,11 @@ const path = require("path");
 const config = getDefaultConfig(__dirname);
 const workspaceRoot = path.resolve(__dirname, "../..");
 
-// Watch shared workspace libraries without including transient workspace folders.
-config.watchFolders = [path.join(workspaceRoot, "lib")];
+// Keep Expo's pnpm workspace folders and add shared source without watching
+// transient workspace folders such as .local tool downloads.
+config.watchFolders = [
+  ...config.watchFolders,
+  path.join(workspaceRoot, "lib"),
+];
 
 module.exports = config;
