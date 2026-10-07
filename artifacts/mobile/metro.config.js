@@ -5,7 +5,7 @@ const path = require("path");
 const config = getDefaultConfig(__dirname);
 const workspaceRoot = path.resolve(__dirname, "../..");
 
-// The tutorial content is shared with the web artifact from the workspace root.
-config.watchFolders = [workspaceRoot];
+// Watch shared workspace libraries without including transient workspace folders.
+config.watchFolders = [path.join(workspaceRoot, "lib")];
 
 module.exports = config;
