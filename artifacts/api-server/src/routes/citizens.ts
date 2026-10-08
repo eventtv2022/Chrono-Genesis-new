@@ -6,7 +6,7 @@ import fs from "fs";
 import multer from "multer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@workspace/db";
-import { citizensTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable } from "@workspace/db";
+import { citizensTable, onboardingProgressTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable } from "@workspace/db";
 import { auditCitizenRate } from "../services/rateAuditorService";
 import {
   UpdateCitizenBody,
@@ -401,6 +401,7 @@ const RegisterCitizenBody = z.object({
   signatureBase64: z.string().optional(),
   whatsappPhone: z.string().optional(),
   preferredChannels: z.string().optional(), // JSON: ['email','telegram','whatsapp','sms','phone'] — ≥2
+  preApplicationProgressToken: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
 router.post("/citizens", upload.single("passport_photo"), async (req, res): Promise<void> => {
@@ -425,7 +426,17 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
   const availableAt = new Date(Date.now() + 60 * 60 * 1000); // +1 hour
   const authToken = crypto.randomBytes(32).toString("hex");
 
-  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted, signatureBase64: rawSignature, whatsappPhone, preferredChannels } = parsed.data;
+  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted, signatureBase64: rawSignature, whatsappPhone, preferredChannels, preApplicationProgressToken } = parsed.data;
+
+  const [preflightProgress] = await db
+    .select()
+    .from(onboardingProgressTable)
+    .where(eq(onboardingProgressTable.progressToken, preApplicationProgressToken))
+    .limit(1);
+  if (!preflightProgress?.guideCompleted || preflightProgress.citizenId !== null) {
+    res.status(409).json({ error: "Сначала завершите 30 вопросов знакомства перед подачей заявления" });
+    return;
+  }
 
   // ── 1. Normalise passport photo (resize to 400×514 px JPEG) ─────────────────
   let vaultPhotoRef: string | null = null;
@@ -443,37 +454,57 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
 
   const privacyAccepted = privacyAgreementAccepted === "true";
 
-  const [citizen] = await db
-    .insert(citizensTable)
-    .values({
-      name,                                            // display name stays plaintext
-      phone,
-      surname:    encryptNullable(surname ?? null),    // PII — encrypted
-      givenNames: encryptNullable(givenNames ?? null), // PII — encrypted
-      dateOfBirth: dateOfBirth || null,
-      photoUrl: vaultPhotoRef,
-      citizenNumber,
-      authToken,
-      balanceMinutes: 0,
-      ancestralMinuteGranted: false,
-      registrationStatus: "pending",
-      availableAt,
-      onboardingCompleted: false,
-      tosAcceptedAt: tosAcceptedAt ? new Date(tosAcceptedAt) : undefined,
-      telegramId: telegramId ?? undefined,
-      email: encryptNullable(email || null),           // PII — encrypted
-      privacyAgreementAccepted: privacyAccepted ? 1 : 0,
-      privacyAgreementDate: privacyAccepted ? new Date() : null,
-      signatureBase64,
-      whatsappPhone: whatsappPhone || null,
-      preferredChannels: preferredChannels || null,
-    })
-    .returning();
+  const citizen = await db.transaction(async (tx) => {
+    const [lockedProgress] = await tx
+      .select()
+      .from(onboardingProgressTable)
+      .where(eq(onboardingProgressTable.progressToken, preApplicationProgressToken))
+      .for("update")
+      .limit(1);
+    if (!lockedProgress?.guideCompleted || lockedProgress.citizenId !== null) return null;
 
-  req.log.info({ citizenId: citizen!.id, citizenNumber }, "New citizen registered — pending verification");
+    const [created] = await tx
+      .insert(citizensTable)
+      .values({
+        name,                                            // display name stays plaintext
+        phone,
+        surname:    encryptNullable(surname ?? null),    // PII — encrypted
+        givenNames: encryptNullable(givenNames ?? null), // PII — encrypted
+        dateOfBirth: dateOfBirth || null,
+        photoUrl: vaultPhotoRef,
+        citizenNumber,
+        authToken,
+        balanceMinutes: 0,
+        ancestralMinuteGranted: false,
+        registrationStatus: "pending",
+        availableAt,
+        onboardingCompleted: false,
+        tosAcceptedAt: tosAcceptedAt ? new Date(tosAcceptedAt) : undefined,
+        telegramId: telegramId ?? undefined,
+        email: encryptNullable(email || null),           // PII — encrypted
+        privacyAgreementAccepted: privacyAccepted ? 1 : 0,
+        privacyAgreementDate: privacyAccepted ? new Date() : null,
+        signatureBase64,
+        whatsappPhone: whatsappPhone || null,
+        preferredChannels: preferredChannels || null,
+      })
+      .returning();
+    if (!created) throw new Error("Citizen insert returned no row");
+    await tx
+      .update(onboardingProgressTable)
+      .set({ citizenId: created.id, updatedAt: new Date() })
+      .where(eq(onboardingProgressTable.progressToken, preApplicationProgressToken));
+    return created;
+  });
+  if (!citizen) {
+    res.status(409).json({ error: "Знакомство уже использовано или не завершено" });
+    return;
+  }
+
+  req.log.info({ citizenId: citizen.id, citizenNumber }, "New citizen registered — pending verification");
 
   res.status(201).json({
-    ...formatCitizenRow(citizen!),
+    ...formatCitizenRow(citizen),
     authToken,
     citizenNumber,
     availableAt: availableAt.toISOString(),
@@ -481,24 +512,24 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
   });
 
   // ── Fire-and-forget: email to citizen + Telegram to admin ─────────────────
-  const decryptedEmail = tryDecrypt(citizen!.email) ?? null;
-  const createdAt = citizen!.createdAt ?? new Date();
+  const decryptedEmail = tryDecrypt(citizen.email) ?? null;
+  const createdAt = citizen.createdAt ?? new Date();
 
   // Email to citizen (skipped silently if SMTP not configured or no email)
   sendPassportEmail({
-    name: citizen!.name,
+    name: citizen.name,
     citizenNumber,
-    rank: citizen!.rank,
+    rank: citizen.rank,
     email: decryptedEmail,
   }).catch((err) => req.log.warn({ err }, "sendPassportEmail failed (non-critical)"));
 
   // Telegram to admin (skipped silently if ADMIN_TELEGRAM_ID not set)
   sendAdminTelegramNotify({
     sendDirectMessage,
-    name: citizen!.name,
+    name: citizen.name,
     email: decryptedEmail,
     citizenNumber,
-    citizenId: citizen!.id,
+    citizenId: citizen.id,
     createdAt,
   }).catch((err) => req.log.warn({ err }, "sendAdminTelegramNotify failed (non-critical)"));
 });

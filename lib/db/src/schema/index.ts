@@ -1,4 +1,5 @@
 export * from "./citizens";
+export * from "./onboardingProgress";
 export * from "./sessions";
 export * from "./transactions";
 export * from "./timelineAnchors";

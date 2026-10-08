@@ -10,7 +10,7 @@ import { SignaturePad } from "@/components/SignaturePad";
 import { useLanguage } from "@/context/LanguageContext";
 import { LegalModal, type LegalDocType } from "@/components/LegalModal";
 import { useCitizen, type CitizenProfile } from "@/context/CitizenContext";
-import { isPreApplicationGuideComplete } from "./PreApplicationGuide";
+import { getPreApplicationProgressToken, isPreApplicationGuideComplete } from "./PreApplicationGuide";
 
 const BASE_WEB = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 const MANIFESTO_URL = "https://issuu.com/timenation2025/docs/_timenatio";
@@ -147,6 +147,13 @@ export function Register() {
       if (dateOfBirth.match(/^\d{4}-\d{2}-\d{2}$/)) formData.append("dateOfBirth", dateOfBirth);
       if (email.trim()) formData.append("email", email.trim());
       formData.append("privacyAgreementAccepted", "true");
+      const preApplicationProgressToken = getPreApplicationProgressToken();
+      if (!preApplicationProgressToken) {
+        setError("Завершите 30 вопросов знакомства перед подачей заявления.");
+        navigate("/onboarding");
+        return;
+      }
+      formData.append("preApplicationProgressToken", preApplicationProgressToken);
       if (photo) formData.append("passport_photo", photo);
       if (signatureBase64) formData.append("signatureBase64", signatureBase64);
 

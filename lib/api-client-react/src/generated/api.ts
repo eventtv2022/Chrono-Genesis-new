@@ -23,6 +23,7 @@ import type {
   AuthSession,
   Citizen,
   CitizenInput,
+  CitizenRegistrationResult,
   CitizenUpdate,
   CitizenWalletLinkInput,
   EconomyStats,
@@ -37,13 +38,19 @@ import type {
   ListTransactionsParams,
   LoginInput,
   MinutePackage,
+  OnboardingProgress,
+  OnboardingProgressActionInput,
+  OnboardingProgressSession,
   OnboardingStatus,
+  PasswordCitizenRegistrationInput,
   PaymentCheckoutInput,
   PaymentCheckoutResult,
   Session,
   SessionInput,
   SessionResult,
   StripeWebhook200,
+  TelegramWebAppInput,
+  TelegramWebAppSession,
   TimelineAnchorInput,
   TimelineAnchorResult,
   TimelineOccupiedEntry,
@@ -134,6 +141,148 @@ export const useLoginCitizen = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getLoginCitizenMutationOptions(options));
+    }
+
+export const getRegisterCitizenWithPasswordUrl = () => {
+
+
+
+
+  return `/api/auth/register`
+}
+
+/**
+ * @summary Register a citizen after completing the pre-application guide
+ */
+export const registerCitizenWithPassword = async (passwordCitizenRegistrationInput: PasswordCitizenRegistrationInput, options?: RequestInit): Promise<CitizenRegistrationResult> => {
+
+  return customFetch<CitizenRegistrationResult>(getRegisterCitizenWithPasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      passwordCitizenRegistrationInput,)
+  }
+);}
+
+
+
+
+export const getRegisterCitizenWithPasswordMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerCitizenWithPassword>>, TError,{data: BodyType<PasswordCitizenRegistrationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerCitizenWithPassword>>, TError,{data: BodyType<PasswordCitizenRegistrationInput>}, TContext> => {
+
+const mutationKey = ['registerCitizenWithPassword'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerCitizenWithPassword>>, {data: BodyType<PasswordCitizenRegistrationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerCitizenWithPassword(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterCitizenWithPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof registerCitizenWithPassword>>>
+    export type RegisterCitizenWithPasswordMutationBody = BodyType<PasswordCitizenRegistrationInput>
+    export type RegisterCitizenWithPasswordMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Register a citizen after completing the pre-application guide
+ */
+export const useRegisterCitizenWithPassword = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerCitizenWithPassword>>, TError,{data: BodyType<PasswordCitizenRegistrationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerCitizenWithPassword>>,
+        TError,
+        {data: BodyType<PasswordCitizenRegistrationInput>},
+        TContext
+      > => {
+      return useMutation(getRegisterCitizenWithPasswordMutationOptions(options));
+    }
+
+export const getAuthenticateTelegramWebAppUrl = () => {
+
+
+
+
+  return `/api/auth/telegram-webapp`
+}
+
+/**
+ * @summary Authenticate or register a Telegram Mini App citizen
+ */
+export const authenticateTelegramWebApp = async (telegramWebAppInput: TelegramWebAppInput, options?: RequestInit): Promise<TelegramWebAppSession> => {
+
+  return customFetch<TelegramWebAppSession>(getAuthenticateTelegramWebAppUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      telegramWebAppInput,)
+  }
+);}
+
+
+
+
+export const getAuthenticateTelegramWebAppMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authenticateTelegramWebApp>>, TError,{data: BodyType<TelegramWebAppInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof authenticateTelegramWebApp>>, TError,{data: BodyType<TelegramWebAppInput>}, TContext> => {
+
+const mutationKey = ['authenticateTelegramWebApp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof authenticateTelegramWebApp>>, {data: BodyType<TelegramWebAppInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  authenticateTelegramWebApp(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AuthenticateTelegramWebAppMutationResult = NonNullable<Awaited<ReturnType<typeof authenticateTelegramWebApp>>>
+    export type AuthenticateTelegramWebAppMutationBody = BodyType<TelegramWebAppInput>
+    export type AuthenticateTelegramWebAppMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Authenticate or register a Telegram Mini App citizen
+ */
+export const useAuthenticateTelegramWebApp = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authenticateTelegramWebApp>>, TError,{data: BodyType<TelegramWebAppInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof authenticateTelegramWebApp>>,
+        TError,
+        {data: BodyType<TelegramWebAppInput>},
+        TContext
+      > => {
+      return useMutation(getAuthenticateTelegramWebAppMutationOptions(options));
     }
 
 export const getGetOnboardingStatusUrl = () => {
@@ -351,6 +500,373 @@ export const useCompleteOnboarding = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getCompleteOnboardingMutationOptions(options));
+    }
+
+export const getCreateOnboardingProgressSessionUrl = () => {
+
+
+
+
+  return `/api/onboarding/progress/sessions`
+}
+
+/**
+ * @summary Create an anonymous onboarding progress session
+ */
+export const createOnboardingProgressSession = async ( options?: RequestInit): Promise<OnboardingProgressSession> => {
+
+  return customFetch<OnboardingProgressSession>(getCreateOnboardingProgressSessionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCreateOnboardingProgressSessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOnboardingProgressSession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createOnboardingProgressSession>>, TError,void, TContext> => {
+
+const mutationKey = ['createOnboardingProgressSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOnboardingProgressSession>>, void> = () => {
+
+
+          return  createOnboardingProgressSession(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateOnboardingProgressSessionMutationResult = NonNullable<Awaited<ReturnType<typeof createOnboardingProgressSession>>>
+
+    export type CreateOnboardingProgressSessionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create an anonymous onboarding progress session
+ */
+export const useCreateOnboardingProgressSession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOnboardingProgressSession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createOnboardingProgressSession>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCreateOnboardingProgressSessionMutationOptions(options));
+    }
+
+export const getGetOnboardingProgressSessionUrl = (progressToken: string,) => {
+
+
+
+
+  return `/api/onboarding/progress/sessions/${progressToken}`
+}
+
+/**
+ * @summary Get anonymous onboarding progress
+ */
+export const getOnboardingProgressSession = async (progressToken: string, options?: RequestInit): Promise<OnboardingProgressSession> => {
+
+  return customFetch<OnboardingProgressSession>(getGetOnboardingProgressSessionUrl(progressToken),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOnboardingProgressSessionQueryKey = (progressToken: string,) => {
+    return [
+    `/api/onboarding/progress/sessions/${progressToken}`
+    ] as const;
+    }
+
+
+export const getGetOnboardingProgressSessionQueryOptions = <TData = Awaited<ReturnType<typeof getOnboardingProgressSession>>, TError = ErrorType<ErrorResponse>>(progressToken: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOnboardingProgressSession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOnboardingProgressSessionQueryKey(progressToken);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOnboardingProgressSession>>> = ({ signal }) => getOnboardingProgressSession(progressToken, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(progressToken), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOnboardingProgressSession>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetOnboardingProgressSessionQueryResult = NonNullable<Awaited<ReturnType<typeof getOnboardingProgressSession>>>
+export type GetOnboardingProgressSessionQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get anonymous onboarding progress
+ */
+
+export function useGetOnboardingProgressSession<TData = Awaited<ReturnType<typeof getOnboardingProgressSession>>, TError = ErrorType<ErrorResponse>>(
+ progressToken: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOnboardingProgressSession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetOnboardingProgressSessionQueryOptions(progressToken,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateOnboardingProgressSessionUrl = (progressToken: string,) => {
+
+
+
+
+  return `/api/onboarding/progress/sessions/${progressToken}`
+}
+
+/**
+ * @summary Reveal or advance a pre-application question
+ */
+export const updateOnboardingProgressSession = async (progressToken: string,
+    onboardingProgressActionInput: OnboardingProgressActionInput, options?: RequestInit): Promise<OnboardingProgressSession> => {
+
+  return customFetch<OnboardingProgressSession>(getUpdateOnboardingProgressSessionUrl(progressToken),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      onboardingProgressActionInput,)
+  }
+);}
+
+
+
+
+export const getUpdateOnboardingProgressSessionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOnboardingProgressSession>>, TError,{progressToken: string;data: BodyType<OnboardingProgressActionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateOnboardingProgressSession>>, TError,{progressToken: string;data: BodyType<OnboardingProgressActionInput>}, TContext> => {
+
+const mutationKey = ['updateOnboardingProgressSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateOnboardingProgressSession>>, {progressToken: string;data: BodyType<OnboardingProgressActionInput>}> = (props) => {
+          const {progressToken,data} = props ?? {};
+
+          return  updateOnboardingProgressSession(progressToken,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateOnboardingProgressSessionMutationResult = NonNullable<Awaited<ReturnType<typeof updateOnboardingProgressSession>>>
+    export type UpdateOnboardingProgressSessionMutationBody = BodyType<OnboardingProgressActionInput>
+    export type UpdateOnboardingProgressSessionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Reveal or advance a pre-application question
+ */
+export const useUpdateOnboardingProgressSession = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOnboardingProgressSession>>, TError,{progressToken: string;data: BodyType<OnboardingProgressActionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateOnboardingProgressSession>>,
+        TError,
+        {progressToken: string;data: BodyType<OnboardingProgressActionInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateOnboardingProgressSessionMutationOptions(options));
+    }
+
+export const getGetCitizenOnboardingProgressUrl = () => {
+
+
+
+
+  return `/api/onboarding/progress`
+}
+
+/**
+ * @summary Get the authenticated citizen's simulator progress
+ */
+export const getCitizenOnboardingProgress = async ( options?: RequestInit): Promise<OnboardingProgress> => {
+
+  return customFetch<OnboardingProgress>(getGetCitizenOnboardingProgressUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCitizenOnboardingProgressQueryKey = () => {
+    return [
+    `/api/onboarding/progress`
+    ] as const;
+    }
+
+
+export const getGetCitizenOnboardingProgressQueryOptions = <TData = Awaited<ReturnType<typeof getCitizenOnboardingProgress>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCitizenOnboardingProgress>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCitizenOnboardingProgressQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCitizenOnboardingProgress>>> = ({ signal }) => getCitizenOnboardingProgress({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCitizenOnboardingProgress>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCitizenOnboardingProgressQueryResult = NonNullable<Awaited<ReturnType<typeof getCitizenOnboardingProgress>>>
+export type GetCitizenOnboardingProgressQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the authenticated citizen's simulator progress
+ */
+
+export function useGetCitizenOnboardingProgress<TData = Awaited<ReturnType<typeof getCitizenOnboardingProgress>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCitizenOnboardingProgress>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCitizenOnboardingProgressQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateCitizenOnboardingProgressUrl = () => {
+
+
+
+
+  return `/api/onboarding/progress`
+}
+
+/**
+ * @summary Reveal or advance a passport simulator question
+ */
+export const updateCitizenOnboardingProgress = async (onboardingProgressActionInput: OnboardingProgressActionInput, options?: RequestInit): Promise<OnboardingProgress> => {
+
+  return customFetch<OnboardingProgress>(getUpdateCitizenOnboardingProgressUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      onboardingProgressActionInput,)
+  }
+);}
+
+
+
+
+export const getUpdateCitizenOnboardingProgressMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCitizenOnboardingProgress>>, TError,{data: BodyType<OnboardingProgressActionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCitizenOnboardingProgress>>, TError,{data: BodyType<OnboardingProgressActionInput>}, TContext> => {
+
+const mutationKey = ['updateCitizenOnboardingProgress'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCitizenOnboardingProgress>>, {data: BodyType<OnboardingProgressActionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateCitizenOnboardingProgress(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCitizenOnboardingProgressMutationResult = NonNullable<Awaited<ReturnType<typeof updateCitizenOnboardingProgress>>>
+    export type UpdateCitizenOnboardingProgressMutationBody = BodyType<OnboardingProgressActionInput>
+    export type UpdateCitizenOnboardingProgressMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Reveal or advance a passport simulator question
+ */
+export const useUpdateCitizenOnboardingProgress = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCitizenOnboardingProgress>>, TError,{data: BodyType<OnboardingProgressActionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCitizenOnboardingProgress>>,
+        TError,
+        {data: BodyType<OnboardingProgressActionInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateCitizenOnboardingProgressMutationOptions(options));
     }
 
 export const getHealthCheckUrl = () => {

@@ -5,8 +5,7 @@ import bcrypt from "bcryptjs";
 import fs from "fs";
 import path from "path";
 import { z } from "zod";
-import { db } from "@workspace/db";
-import { citizensTable } from "@workspace/db";
+import { db, citizensTable, onboardingProgressTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
 
@@ -53,6 +52,7 @@ const RegisterBody = z.object({
   photoBase64: z.string().optional(), // data:image/...;base64,... from mobile
   whatsappPhone: z.string().optional(),
   preferredChannels: z.string().optional(), // JSON: ['email','telegram','whatsapp','sms','phone'] — ≥2
+  preApplicationProgressToken: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
 router.post("/auth/register", async (req, res): Promise<void> => {
@@ -62,7 +62,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  const { name, phone, password, surname, givenNames, dateOfBirth, email, telegramId, tosAcceptedAt, privacyAgreementAccepted, photoBase64, whatsappPhone, preferredChannels } = parsed.data;
+  const { name, phone, password, surname, givenNames, dateOfBirth, email, telegramId, tosAcceptedAt, privacyAgreementAccepted, photoBase64, whatsappPhone, preferredChannels, preApplicationProgressToken } = parsed.data;
 
   const existing = await db
     .select({ id: citizensTable.id })
@@ -85,6 +85,16 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   const citizenNumber = String(countRow.length + 1).padStart(9, "0");
   const availableAt = new Date(Date.now() + 60 * 60 * 1000);
 
+  const [preflightProgress] = await db
+    .select()
+    .from(onboardingProgressTable)
+    .where(eq(onboardingProgressTable.progressToken, preApplicationProgressToken))
+    .limit(1);
+  if (!preflightProgress?.guideCompleted || preflightProgress.citizenId !== null) {
+    res.status(409).json({ error: "Сначала завершите 30 вопросов знакомства перед подачей заявления" });
+    return;
+  }
+
   // Save base64 photo to vault if provided
   let photoUrl: string | null = null;
   if (photoBase64) {
@@ -105,37 +115,58 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 
   const newAuthToken = crypto.randomBytes(32).toString("hex");
 
-  const [citizen] = await db
-    .insert(citizensTable)
-    .values({
-      name,
-      phone,
-      passwordHash,
-      authToken: newAuthToken,
-      balanceMinutes: 0,
-      ancestralMinuteGranted: false,
-      surname:    encryptNullable(surname ?? null),
-      givenNames: encryptNullable(givenNames ?? null),
-      dateOfBirth: dateOfBirth || null,
-      email:      encryptNullable(email || null),
-      telegramId: telegramId ?? undefined,
-      citizenNumber,
-      registrationStatus: "pending",
-      availableAt,
-      onboardingCompleted: false,
-      tosAcceptedAt: tosAcceptedAt ? new Date(tosAcceptedAt) : undefined,
-      privacyAgreementAccepted: privacyAgreementAccepted ? 1 : 0,
-      privacyAgreementDate: privacyAgreementAccepted ? new Date() : null,
-      photoUrl,
-      whatsappPhone: whatsappPhone || null,
-      preferredChannels: preferredChannels || null,
-    })
-    .returning();
+  const citizen = await db.transaction(async (tx) => {
+    const [lockedProgress] = await tx
+      .select()
+      .from(onboardingProgressTable)
+      .where(eq(onboardingProgressTable.progressToken, preApplicationProgressToken))
+      .for("update")
+      .limit(1);
+    if (!lockedProgress?.guideCompleted || lockedProgress.citizenId !== null) return null;
 
-  req.log.info({ citizenId: citizen!.id, citizenNumber }, "Citizen registered via /auth/register");
+    const [created] = await tx
+      .insert(citizensTable)
+      .values({
+        name,
+        phone,
+        passwordHash,
+        authToken: newAuthToken,
+        balanceMinutes: 0,
+        ancestralMinuteGranted: false,
+        surname:    encryptNullable(surname ?? null),
+        givenNames: encryptNullable(givenNames ?? null),
+        dateOfBirth: dateOfBirth || null,
+        email:      encryptNullable(email || null),
+        telegramId: telegramId ?? undefined,
+        citizenNumber,
+        registrationStatus: "pending",
+        availableAt,
+        onboardingCompleted: false,
+        tosAcceptedAt: tosAcceptedAt ? new Date(tosAcceptedAt) : undefined,
+        privacyAgreementAccepted: privacyAgreementAccepted ? 1 : 0,
+        privacyAgreementDate: privacyAgreementAccepted ? new Date() : null,
+        photoUrl,
+        whatsappPhone: whatsappPhone || null,
+        preferredChannels: preferredChannels || null,
+      })
+      .returning();
+    if (!created) throw new Error("Citizen insert returned no row");
+
+    await tx
+      .update(onboardingProgressTable)
+      .set({ citizenId: created.id, updatedAt: new Date() })
+      .where(eq(onboardingProgressTable.progressToken, preApplicationProgressToken));
+    return created;
+  });
+  if (!citizen) {
+    res.status(409).json({ error: "Знакомство уже использовано или не завершено" });
+    return;
+  }
+
+  req.log.info({ citizenId: citizen.id, citizenNumber }, "Citizen registered via /auth/register");
 
   res.status(201).json({
-    ...safeRow(citizen!),
+    ...safeRow(citizen),
     authToken: newAuthToken,
     citizenNumber,
     availableAt: availableAt.toISOString(),

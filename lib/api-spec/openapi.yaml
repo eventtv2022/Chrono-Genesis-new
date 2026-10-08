@@ -46,6 +46,56 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/register:
+    post:
+      operationId: registerCitizenWithPassword
+      tags: [citizens]
+      summary: Register a citizen after completing the pre-application guide
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordCitizenRegistrationInput"
+      responses:
+        "201":
+          description: Registered citizen with pending passport eligibility
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CitizenRegistrationResult"
+        "409":
+          description: Phone already registered or guide progress is incomplete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/telegram-webapp:
+    post:
+      operationId: authenticateTelegramWebApp
+      tags: [citizens]
+      summary: Authenticate or register a Telegram Mini App citizen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramWebAppInput"
+      responses:
+        "200":
+          description: Existing Telegram citizen session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramWebAppSession"
+        "201":
+          description: Newly registered Telegram citizen session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramWebAppSession"
+
   /onboarding/status:
     get:
       operationId: getOnboardingStatus
@@ -92,6 +142,104 @@ paths:
                 $ref: "#/components/schemas/OnboardingStatus"
         "409":
           description: Tutorial is not complete yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /onboarding/progress/sessions:
+    post:
+      operationId: createOnboardingProgressSession
+      tags: [citizens]
+      summary: Create an anonymous onboarding progress session
+      responses:
+        "201":
+          description: New progress session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnboardingProgressSession"
+  /onboarding/progress/sessions/{progressToken}:
+    parameters:
+      - name: progressToken
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 64
+          maxLength: 64
+    get:
+      operationId: getOnboardingProgressSession
+      tags: [citizens]
+      summary: Get anonymous onboarding progress
+      responses:
+        "200":
+          description: Onboarding progress session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnboardingProgressSession"
+        "404":
+          description: Progress session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateOnboardingProgressSession
+      tags: [citizens]
+      summary: Reveal or advance a pre-application question
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnboardingProgressActionInput"
+      responses:
+        "200":
+          description: Updated onboarding progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnboardingProgressSession"
+        "409":
+          description: Question order or stage is invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /onboarding/progress:
+    get:
+      operationId: getCitizenOnboardingProgress
+      tags: [citizens]
+      summary: Get the authenticated citizen's simulator progress
+      responses:
+        "200":
+          description: Onboarding progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnboardingProgress"
+    patch:
+      operationId: updateCitizenOnboardingProgress
+      tags: [citizens]
+      summary: Reveal or advance a passport simulator question
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnboardingProgressActionInput"
+      responses:
+        "200":
+          description: Updated onboarding progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnboardingProgress"
+        "409":
+          description: Question order or stage is invalid
           content:
             application/json:
               schema:
@@ -705,6 +853,14 @@ components:
           type: ["string", "null"]
         balanceMinutes:
           type: number
+        simulatorCurrentQuestionId:
+          type: integer
+        simulatorRevealedQuestionIds:
+          type: array
+          items:
+            type: integer
+        simulatorCompleted:
+          type: boolean
       required:
         - completed
         - startedAt
@@ -715,6 +871,58 @@ components:
         - registrationStatus
         - citizenNumber
         - balanceMinutes
+        - simulatorCurrentQuestionId
+        - simulatorRevealedQuestionIds
+        - simulatorCompleted
+
+    OnboardingProgress:
+      type: object
+      properties:
+        guideCurrentQuestionId:
+          type: integer
+        guideRevealedQuestionIds:
+          type: array
+          items:
+            type: integer
+        guideCompleted:
+          type: boolean
+        simulatorCurrentQuestionId:
+          type: integer
+        simulatorRevealedQuestionIds:
+          type: array
+          items:
+            type: integer
+        simulatorCompleted:
+          type: boolean
+      required:
+        - guideCurrentQuestionId
+        - guideRevealedQuestionIds
+        - guideCompleted
+        - simulatorCurrentQuestionId
+        - simulatorRevealedQuestionIds
+        - simulatorCompleted
+
+    OnboardingProgressSession:
+      allOf:
+        - $ref: "#/components/schemas/OnboardingProgress"
+        - type: object
+          properties:
+            progressToken:
+              type: string
+          required: [progressToken]
+
+    OnboardingProgressActionInput:
+      type: object
+      properties:
+        phase:
+          type: string
+          enum: [guide, simulator]
+        action:
+          type: string
+          enum: [reveal, continue, back]
+        questionId:
+          type: integer
+      required: [phase, action, questionId]
 
     Citizen:
       type: object
@@ -849,9 +1057,86 @@ components:
           minLength: 1
         telegramId:
           type: string
+        preApplicationProgressToken:
+          type: string
+          minLength: 64
+          maxLength: 64
       required:
         - name
         - phone
+        - preApplicationProgressToken
+
+    PasswordCitizenRegistrationInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        phone:
+          type: string
+          minLength: 5
+        password:
+          type: string
+          minLength: 6
+        preApplicationProgressToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required: [name, phone, password, preApplicationProgressToken]
+
+    CitizenRegistrationResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        citizenNumber:
+          type: string
+        availableAt:
+          type: string
+          format: date-time
+        registrationStatus:
+          type: string
+          enum: [pending]
+        authToken:
+          type: string
+      required: [id, name, citizenNumber, availableAt, registrationStatus, authToken]
+
+    TelegramWebAppInput:
+      type: object
+      properties:
+        initData:
+          type: string
+        preApplicationProgressToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required: [initData]
+
+    TelegramWebAppSession:
+      type: object
+      properties:
+        success:
+          type: boolean
+        isNewUser:
+          type: boolean
+        authToken:
+          type: string
+        citizenId:
+          type: integer
+        citizenNumber:
+          type: ["string", "null"]
+        name:
+          type: string
+        photoUrl:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [ACTIVE, IN_EMISSION, APPLICATION_REJECTED]
+        secondsLeft:
+          type: integer
+      required: [success, isNewUser, authToken, citizenId, name, status, secondsLeft]
 
     CitizenUpdate:
       type: object

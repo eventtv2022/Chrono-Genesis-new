@@ -1,27 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, BookOpen, Check, ShieldCheck } from "lucide-react";
-import { ONBOARDING_QUESTS } from "../../../../lib/onboarding-quests";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  getGetOnboardingProgressSessionQueryKey,
+  useCreateOnboardingProgressSession,
+  useGetOnboardingProgressSession,
+  useUpdateOnboardingProgressSession,
+} from "@workspace/api-client-react";
+import { ArrowLeft, ArrowRight, BookOpen, Check, Eye, ShieldCheck } from "lucide-react";
+import {
+  ONBOARDING_PROGRESS_TOKEN_KEY,
+  PRE_APPLICATION_GUIDE_COMPLETE_KEY,
+  PRE_APPLICATION_QUESTIONS,
+  onboardingBlockTitle,
+} from "../../../../lib/onboarding-questions";
 
-const GUIDE_KEY = "timenation_preapplication_guide_v1";
-const ANSWERS_KEY = `${GUIDE_KEY}_answers`;
 let completedInCurrentTab = false;
-
-function readAnswers(): Record<number, number> {
-  try {
-    return JSON.parse(localStorage.getItem(ANSWERS_KEY) ?? "{}") as Record<number, number>;
-  } catch {
-    return {};
-  }
-}
-
-function moduleName(index: number) {
-  if (index < 10) return "Профиль · Искеле / Фамагуста · кошелёк";
-  if (index < 25) return "P2P-переводы · QR-код";
-  if (index < 40) return "Доска времени · предложения и запросы";
-  if (index < 55) return "Эскроу · DarMin";
-  return "Голосование · Родовая минута · декларация";
-}
 
 function isTelegramWebApp() {
   try {
@@ -32,50 +26,98 @@ function isTelegramWebApp() {
   }
 }
 
+function errorText(error: unknown) {
+  return error instanceof Error ? error.message : "Не удалось сохранить прогресс. Проверьте соединение и повторите попытку.";
+}
+
 export function PreApplicationGuide() {
   const [, navigate] = useLocation();
-  const [index, setIndex] = useState(() => {
+  const queryClient = useQueryClient();
+  const [progressToken, setProgressToken] = useState(() => {
     try {
-      return Math.min(ONBOARDING_QUESTS.length - 1, Number(localStorage.getItem(`${GUIDE_KEY}_step`) ?? 0));
+      return localStorage.getItem(ONBOARDING_PROGRESS_TOKEN_KEY) ?? "";
     } catch {
-      return 0;
+      return "";
     }
   });
-  const [answers, setAnswers] = useState<Record<number, number>>(readAnswers);
   const [done, setDone] = useState(false);
-  const quest = ONBOARDING_QUESTS[index];
-  const selected = answers[index];
-  const progress = (Object.keys(answers).length / ONBOARDING_QUESTS.length) * 100;
+  const [error, setError] = useState("");
+  const createStarted = useRef(false);
+  const createSession = useCreateOnboardingProgressSession();
+  const progressQuery = useGetOnboardingProgressSession(progressToken, {
+    query: {
+      queryKey: getGetOnboardingProgressSessionQueryKey(progressToken),
+      enabled: !!progressToken,
+      retry: false,
+    },
+  });
+  const updateProgress = useUpdateOnboardingProgressSession();
+  const session = progressQuery.data;
+  const questionId = session?.guideCurrentQuestionId ?? 1;
+  const question = PRE_APPLICATION_QUESTIONS[questionId - 1]!;
+  const revealed = session?.guideRevealedQuestionIds.includes(questionId) ?? false;
+  const progressPercent = Math.floor(((session?.guideRevealedQuestionIds.length ?? 0) / 30) * 100);
+  const busy = updateProgress.isPending || createSession.isPending;
 
   useEffect(() => {
     document.title = "Знакомство с TimeNation";
   }, []);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(ANSWERS_KEY, JSON.stringify(answers));
-      localStorage.setItem(`${GUIDE_KEY}_step`, String(index));
-    } catch {
-      // The guide can still be completed for this visit if storage is unavailable.
-    }
-  }, [answers, index]);
+    if (progressToken || createStarted.current) return;
+    createStarted.current = true;
+    createSession.mutate(undefined, {
+      onSuccess: (created) => {
+        try {
+          localStorage.setItem(ONBOARDING_PROGRESS_TOKEN_KEY, created.progressToken);
+        } catch {
+          setError("Не удалось сохранить идентификатор прогресса в этом браузере.");
+          return;
+        }
+        setProgressToken(created.progressToken);
+      },
+      onError: (cause) => setError(errorText(cause)),
+    });
+  }, [progressToken, createSession]);
 
-  function finish() {
-    completedInCurrentTab = true;
+  useEffect(() => {
+    if (progressQuery.isError) setError(errorText(progressQuery.error));
+  }, [progressQuery.isError, progressQuery.error]);
+
+  async function performAction(action: "reveal" | "continue" | "back") {
+    if (!session || !progressToken || busy) return;
+    setError("");
     try {
-      localStorage.setItem(GUIDE_KEY, "complete");
-    } catch {
-      // Keep the next action available for this visit.
-    }
-    setDone(true);
-    if (isTelegramWebApp()) {
-      window.setTimeout(() => window.location.reload(), 900);
-    } else {
-      window.setTimeout(() => navigate("/register"), 900);
+      const updated = await updateProgress.mutateAsync({
+        progressToken,
+        data: { phase: "guide", action, questionId },
+      });
+      queryClient.setQueryData(
+        getGetOnboardingProgressSessionQueryKey(progressToken),
+        updated,
+      );
+      if (updated.guideCompleted) {
+        completedInCurrentTab = true;
+        try {
+          localStorage.setItem(PRE_APPLICATION_GUIDE_COMPLETE_KEY, "complete");
+        } catch {
+          setError("Прогресс сохранён на сервере, но браузер не смог сохранить отметку завершения.");
+          return;
+        }
+        setDone(true);
+        if (isTelegramWebApp()) {
+          window.setTimeout(() => window.location.reload(), 900);
+        } else {
+          window.setTimeout(() => navigate("/register"), 900);
+        }
+      }
+    } catch (cause) {
+      setError(errorText(cause));
+      await progressQuery.refetch();
     }
   }
 
-  if (done) {
+  if (done || session?.guideCompleted) {
     return (
       <main className="min-h-screen bg-[#050713] px-6 text-white grid place-items-center">
         <section className="max-w-lg space-y-5 text-center">
@@ -85,7 +127,39 @@ export function PreApplicationGuide() {
           <p className="leading-7 text-muted-foreground">
             После отправки заявления начнётся симуляция. Её финал наступит за минуту до срока выдачи паспорта.
           </p>
-          <p className="text-sm text-muted-foreground">Переходим к оформлению…</p>
+          {done ? (
+            <p className="text-sm text-muted-foreground">Переходим к оформлению…</p>
+          ) : (
+            <button
+              className="rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+              data-testid="button-guide-complete-continue"
+              onClick={() => {
+                if (isTelegramWebApp()) window.location.reload();
+                else navigate("/register");
+              }}
+            >
+              {isTelegramWebApp() ? "Продолжить в Telegram" : "Перейти к заявлению"}
+            </button>
+          )}
+        </section>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return (
+      <main className="min-h-screen bg-[#050713] px-6 text-white grid place-items-center">
+        <section className="max-w-lg space-y-4 text-center">
+          <BookOpen className="mx-auto h-10 w-10 text-primary" />
+          <h1 className="text-xl font-semibold">Подключаем знакомство</h1>
+          <p className="text-sm text-muted-foreground">
+            {error || (progressQuery.isError ? "Не удалось загрузить сохранённый прогресс." : "Сохраняем ответы в TimeNation…")}
+          </p>
+          {error && (
+            <button className="rounded-lg border border-white/15 px-4 py-2 text-sm" onClick={() => window.location.reload()}>
+              Повторить
+            </button>
+          )}
         </section>
       </main>
     );
@@ -101,73 +175,59 @@ export function PreApplicationGuide() {
           </div>
           <h1 className="mt-3 text-3xl font-bold md:text-4xl">Короткое интерактивное знакомство</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Изучите основные разделы приложения. После этого можно подать заявление; часовое ожидание начнётся только после отправки.
+            Прочитайте 30 вопросов и ответов. Часовое ожидание начнётся только после отправки заявления.
           </p>
         </header>
 
         <section className="mb-5 rounded-xl border border-white/10 bg-white/[0.035] p-5">
           <div className="mb-3 flex justify-between gap-3 text-xs">
-            <span className="font-mono uppercase tracking-wider text-white/75">Знакомство · {index + 1}/{ONBOARDING_QUESTS.length}</span>
-            <span className="text-muted-foreground">{Math.floor(progress)}% изучено</span>
+            <span className="font-mono uppercase tracking-wider text-white/75">Знакомство · {questionId}/30</span>
+            <span className="text-muted-foreground">{progressPercent}% изучено</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={Math.floor(progress)} aria-valuemin={0} aria-valuemax={100}>
-            <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-primary to-emerald-400 transition-[width] duration-500" style={{ width: `${progress}%` }} />
+          <div className="h-2 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100}>
+            <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-primary to-emerald-400 transition-[width] duration-500" style={{ width: `${progressPercent}%` }} />
           </div>
         </section>
 
         <article className="rounded-xl border border-cyan-300/20 bg-gradient-to-br from-cyan-400/[0.07] via-white/[0.025] to-primary/[0.06] p-5 shadow-[0_16px_70px_rgba(0,0,0,.22)] md:p-7">
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-cyan-200">{moduleName(index)}</p>
-          <h2 className="mt-3 text-2xl font-bold">{quest.title}</h2>
-          <p className="mt-3 text-base leading-7 text-white/75">{quest.prompt}</p>
-          <div className="mt-6 grid gap-3">
-            {quest.choices.map((option, choiceIndex) => (
-              <button
-                key={option}
-                onClick={() => setAnswers((current) => ({ ...current, [index]: choiceIndex }))}
-                aria-pressed={selected === choiceIndex}
-                data-testid={`button-guide-choice-${choiceIndex}`}
-                className={`group flex items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition ${
-                  selected === choiceIndex
-                    ? "border-primary/60 bg-primary/10 text-white"
-                    : "border-white/10 bg-black/20 text-white/75 hover:border-cyan-300/40 hover:bg-cyan-300/[0.06]"
-                }`}
-              >
-                <span>{option}</span>
-                <ArrowRight className={`ml-3 h-4 w-4 shrink-0 ${selected === choiceIndex ? "text-primary" : "text-white/35"}`} />
-              </button>
-            ))}
-          </div>
-          {selected !== undefined && (
-            <div className="mt-5 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.06] p-4 text-sm leading-6 text-emerald-50/85">
-              <span className="font-semibold text-emerald-200">Важно: </span>{quest.takeaway}
+          <p className="font-mono text-xs uppercase tracking-[0.18em] text-cyan-200">{onboardingBlockTitle(question.id)}</p>
+          <h2 className="mt-3 text-2xl font-bold">{question.question}</h2>
+          {revealed ? (
+            <div className="mt-5 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.06] p-4 text-sm leading-6 text-emerald-50/90" data-testid="text-guide-answer">
+              <span className="font-semibold text-emerald-200">Ответ: </span>{question.answer}
             </div>
+          ) : (
+            <p className="mt-3 text-sm leading-6 text-white/60">Ответ откроется по нажатию кнопки.</p>
           )}
+          {error && <p role="alert" className="mt-4 text-sm text-rose-300">{error}</p>}
           <div className="mt-6 flex justify-between gap-3">
             <button
-              disabled={index === 0}
-              onClick={() => setIndex((current) => Math.max(0, current - 1))}
+              disabled={questionId === 1 || busy}
+              onClick={() => void performAction("back")}
               data-testid="button-guide-back"
               className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-4 py-3 text-sm text-white/70 disabled:opacity-35"
             >
               <ArrowLeft className="h-4 w-4" /> Назад
             </button>
-            {index < ONBOARDING_QUESTS.length - 1 ? (
+            {!revealed ? (
               <button
-                disabled={selected === undefined}
-                onClick={() => setIndex((current) => Math.min(ONBOARDING_QUESTS.length - 1, current + 1))}
-                data-testid="button-guide-continue"
+                disabled={busy}
+                onClick={() => void performAction("reveal")}
+                data-testid="button-guide-reveal"
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-40"
               >
-                Продолжить <ArrowRight className="h-4 w-4" />
+                <Eye className="h-4 w-4" /> Показать ответ
               </button>
             ) : (
               <button
-                disabled={selected === undefined}
-                onClick={finish}
-                data-testid="button-guide-finish"
+                disabled={busy}
+                onClick={() => void performAction("continue")}
+                data-testid={questionId === 30 ? "button-guide-finish" : "button-guide-continue"}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-40"
               >
-                <Check className="h-4 w-4" /> Перейти к заявлению
+                {questionId === 30 ? <Check className="h-4 w-4" /> : null}
+                {questionId === 30 ? "Перейти к заявлению" : "Продолжить"}
+                {questionId < 30 ? <ArrowRight className="h-4 w-4" /> : null}
               </button>
             )}
           </div>
@@ -180,8 +240,19 @@ export function PreApplicationGuide() {
 export const isPreApplicationGuideComplete = () => {
   if (completedInCurrentTab) return true;
   try {
-    return localStorage.getItem(GUIDE_KEY) === "complete";
+    return (
+      localStorage.getItem(PRE_APPLICATION_GUIDE_COMPLETE_KEY) === "complete" &&
+      !!localStorage.getItem(ONBOARDING_PROGRESS_TOKEN_KEY)
+    );
   } catch {
     return false;
   }
 };
+
+export function getPreApplicationProgressToken(): string | null {
+  try {
+    return localStorage.getItem(ONBOARDING_PROGRESS_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}

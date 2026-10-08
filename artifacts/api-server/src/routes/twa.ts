@@ -14,8 +14,7 @@ import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { db } from "@workspace/db";
-import { citizensTable } from "@workspace/db";
+import { db, citizensTable, onboardingProgressTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { encryptNullable } from "../services/encryptionService";
 import { sendDirectMessage } from "../services/telegramService";
@@ -117,7 +116,10 @@ function resolvedBotToken(): string {
 // Validates initData, auto-registers or returns existing session.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
-  const { initData } = req.body as { initData?: string };
+  const { initData, preApplicationProgressToken } = req.body as {
+    initData?: string;
+    preApplicationProgressToken?: string;
+  };
 
   if (!initData) {
     res.status(400).json({ error: "initData is required" });
@@ -188,6 +190,20 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!preApplicationProgressToken || !/^[a-f0-9]{64}$/.test(preApplicationProgressToken)) {
+    res.status(400).json({ error: "Сначала завершите знакомство перед подачей заявления" });
+    return;
+  }
+  const [preflightProgress] = await db
+    .select()
+    .from(onboardingProgressTable)
+    .where(eq(onboardingProgressTable.progressToken, preApplicationProgressToken))
+    .limit(1);
+  if (!preflightProgress?.guideCompleted || preflightProgress.citizenId !== null) {
+    res.status(409).json({ error: "Сначала завершите 30 вопросов знакомства перед подачей заявления" });
+    return;
+  }
+
   // ── Auto-register new citizen ──────────────────────────────────────────────
   // Synthetic phone: tg_<telegramId> — guaranteed unique by telegramId.unique() constraint
   const syntheticPhone = `tg_${telegramId}`;
@@ -200,27 +216,47 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
   const allRows = await db.select({ id: citizensTable.id }).from(citizensTable);
   const citizenNumber = String(allRows.length + 1).padStart(9, "0");
 
-  const [citizen] = await db
-    .insert(citizensTable)
-    .values({
-      name,
-      phone: syntheticPhone,
-      authToken,
-      balanceMinutes: 0,
-      ancestralMinuteGranted: false,
-      citizenNumber,
-      registrationStatus: "pending",
-      availableAt,
-      onboardingCompleted: false,
-      telegramId,
-      telegramUsername: tgUser.username ? `@${tgUser.username}` : null,
-      privacyAgreementAccepted: 1,
-      privacyAgreementDate: new Date(),
-    })
-    .returning();
+  const citizen = await db.transaction(async (tx) => {
+    const [lockedProgress] = await tx
+      .select()
+      .from(onboardingProgressTable)
+      .where(eq(onboardingProgressTable.progressToken, preApplicationProgressToken))
+      .for("update")
+      .limit(1);
+    if (!lockedProgress?.guideCompleted || lockedProgress.citizenId !== null) return null;
+
+    const [created] = await tx
+      .insert(citizensTable)
+      .values({
+        name,
+        phone: syntheticPhone,
+        authToken,
+        balanceMinutes: 0,
+        ancestralMinuteGranted: false,
+        citizenNumber,
+        registrationStatus: "pending",
+        availableAt,
+        onboardingCompleted: false,
+        telegramId,
+        telegramUsername: tgUser.username ? `@${tgUser.username}` : null,
+        privacyAgreementAccepted: 1,
+        privacyAgreementDate: new Date(),
+      })
+      .returning();
+    if (!created) throw new Error("Citizen insert returned no row");
+    await tx
+      .update(onboardingProgressTable)
+      .set({ citizenId: created.id, updatedAt: new Date() })
+      .where(eq(onboardingProgressTable.progressToken, preApplicationProgressToken));
+    return created;
+  });
+  if (!citizen) {
+    res.status(409).json({ error: "Знакомство уже использовано или не завершено" });
+    return;
+  }
 
   req.log.info(
-    { citizenId: citizen!.id, telegramId, name },
+    { citizenId: citizen.id, telegramId, name },
     "TWA auth: citizen auto-registered",
   );
 
@@ -236,9 +272,9 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
     success: true,
     isNewUser: true,
     authToken,
-    citizenId: citizen!.id,
+    citizenId: citizen.id,
     citizenNumber,
-    name: citizen!.name,
+    name: citizen.name,
     photoUrl: null,
     status: "IN_EMISSION",
     secondsLeft: 3600,

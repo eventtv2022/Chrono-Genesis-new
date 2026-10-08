@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { authenticateTelegramWebApp } from "@workspace/api-client-react";
+import { ONBOARDING_PROGRESS_TOKEN_KEY } from "../../../../lib/onboarding-questions";
 
 const STORAGE_KEY      = "timenation_citizen";
 const AUTH_TOKEN_KEY   = "timenation_auth_token";
 const TWA_STATUS_KEY   = "timenation_twa_status";
-const GUIDE_KEY        = "timenation_preapplication_guide_v1";
 
 export type TwaStatus = "ACTIVE" | "IN_EMISSION" | "APPLICATION_REJECTED" | null;
 
@@ -98,25 +99,10 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
 
     const doTwaAuth = async () => {
       try {
-        const authRes = await fetch("/api/auth/telegram-webapp", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ initData }),
+        const authData = await authenticateTelegramWebApp({
+            initData,
+            preApplicationProgressToken: localStorage.getItem(ONBOARDING_PROGRESS_TOKEN_KEY) ?? undefined,
         });
-
-        if (!authRes.ok) {
-          setIsLoading(false);
-          setTwaLoading(false);
-          return;
-        }
-
-        const authData = (await authRes.json()) as {
-          authToken: string;
-          citizenId: number;
-          name: string;
-          status: "ACTIVE" | "IN_EMISSION" | "APPLICATION_REJECTED";
-          secondsLeft: number;
-        };
 
         // Persist token immediately
         setAuthTokenState(authData.authToken);
@@ -163,13 +149,6 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
         setTwaLoading(false);
       }
 
-      // A new Telegram visitor must finish the public guide before TWA
-      // auto-registration starts the application eligibility timer.
-      if (localStorage.getItem(GUIDE_KEY) !== "complete" && !storedCitizen) {
-        setIsLoading(false);
-        setTwaLoading(false);
-        return;
-      }
     };
 
     void doTwaAuth();

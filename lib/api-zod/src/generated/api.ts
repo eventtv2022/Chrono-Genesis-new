@@ -43,6 +43,53 @@ export const LoginCitizenResponse = zod.object({
 
 
 /**
+ * @summary Register a citizen after completing the pre-application guide
+ */
+
+export const registerCitizenWithPasswordBodyPhoneMin = 5;
+
+export const registerCitizenWithPasswordBodyPasswordMin = 6;
+
+export const registerCitizenWithPasswordBodyPreApplicationProgressTokenMin = 64;
+export const registerCitizenWithPasswordBodyPreApplicationProgressTokenMax = 64;
+
+
+
+export const RegisterCitizenWithPasswordBody = zod.object({
+  "name": zod.string().min(1),
+  "phone": zod.string().min(registerCitizenWithPasswordBodyPhoneMin),
+  "password": zod.string().min(registerCitizenWithPasswordBodyPasswordMin),
+  "preApplicationProgressToken": zod.string().min(registerCitizenWithPasswordBodyPreApplicationProgressTokenMin).max(registerCitizenWithPasswordBodyPreApplicationProgressTokenMax)
+})
+
+
+/**
+ * @summary Authenticate or register a Telegram Mini App citizen
+ */
+export const authenticateTelegramWebAppBodyPreApplicationProgressTokenMin = 64;
+export const authenticateTelegramWebAppBodyPreApplicationProgressTokenMax = 64;
+
+
+
+export const AuthenticateTelegramWebAppBody = zod.object({
+  "initData": zod.string(),
+  "preApplicationProgressToken": zod.string().min(authenticateTelegramWebAppBodyPreApplicationProgressTokenMin).max(authenticateTelegramWebAppBodyPreApplicationProgressTokenMax).optional()
+})
+
+export const AuthenticateTelegramWebAppResponse = zod.object({
+  "success": zod.boolean(),
+  "isNewUser": zod.boolean(),
+  "authToken": zod.string(),
+  "citizenId": zod.number(),
+  "citizenNumber": zod.string().nullish(),
+  "name": zod.string(),
+  "photoUrl": zod.string().nullish(),
+  "status": zod.enum(['ACTIVE', 'IN_EMISSION', 'APPLICATION_REJECTED']),
+  "secondsLeft": zod.number()
+})
+
+
+/**
  * @summary Get the authenticated citizen's tutorial status
  */
 export const GetOnboardingStatusResponse = zod.object({
@@ -54,7 +101,10 @@ export const GetOnboardingStatusResponse = zod.object({
   "secondsUntilEligibility": zod.number(),
   "registrationStatus": zod.string().nullable(),
   "citizenNumber": zod.string().nullable(),
-  "balanceMinutes": zod.number()
+  "balanceMinutes": zod.number(),
+  "simulatorCurrentQuestionId": zod.number(),
+  "simulatorRevealedQuestionIds": zod.array(zod.number()),
+  "simulatorCompleted": zod.boolean()
 })
 
 
@@ -70,7 +120,10 @@ export const StartOnboardingResponse = zod.object({
   "secondsUntilEligibility": zod.number(),
   "registrationStatus": zod.string().nullable(),
   "citizenNumber": zod.string().nullable(),
-  "balanceMinutes": zod.number()
+  "balanceMinutes": zod.number(),
+  "simulatorCurrentQuestionId": zod.number(),
+  "simulatorRevealedQuestionIds": zod.array(zod.number()),
+  "simulatorCompleted": zod.boolean()
 })
 
 
@@ -86,7 +139,96 @@ export const CompleteOnboardingResponse = zod.object({
   "secondsUntilEligibility": zod.number(),
   "registrationStatus": zod.string().nullable(),
   "citizenNumber": zod.string().nullable(),
-  "balanceMinutes": zod.number()
+  "balanceMinutes": zod.number(),
+  "simulatorCurrentQuestionId": zod.number(),
+  "simulatorRevealedQuestionIds": zod.array(zod.number()),
+  "simulatorCompleted": zod.boolean()
+})
+
+
+/**
+ * @summary Get anonymous onboarding progress
+ */
+export const getOnboardingProgressSessionPathProgressTokenMin = 64;
+export const getOnboardingProgressSessionPathProgressTokenMax = 64;
+
+
+
+export const GetOnboardingProgressSessionParams = zod.object({
+  "progressToken": zod.coerce.string().min(getOnboardingProgressSessionPathProgressTokenMin).max(getOnboardingProgressSessionPathProgressTokenMax)
+})
+
+export const GetOnboardingProgressSessionResponse = zod.object({
+  "guideCurrentQuestionId": zod.number(),
+  "guideRevealedQuestionIds": zod.array(zod.number()),
+  "guideCompleted": zod.boolean(),
+  "simulatorCurrentQuestionId": zod.number(),
+  "simulatorRevealedQuestionIds": zod.array(zod.number()),
+  "simulatorCompleted": zod.boolean()
+}).and(zod.object({
+  "progressToken": zod.string()
+}))
+
+
+/**
+ * @summary Reveal or advance a pre-application question
+ */
+export const updateOnboardingProgressSessionPathProgressTokenMin = 64;
+export const updateOnboardingProgressSessionPathProgressTokenMax = 64;
+
+
+
+export const UpdateOnboardingProgressSessionParams = zod.object({
+  "progressToken": zod.coerce.string().min(updateOnboardingProgressSessionPathProgressTokenMin).max(updateOnboardingProgressSessionPathProgressTokenMax)
+})
+
+export const UpdateOnboardingProgressSessionBody = zod.object({
+  "phase": zod.enum(['guide', 'simulator']),
+  "action": zod.enum(['reveal', 'continue', 'back']),
+  "questionId": zod.number()
+})
+
+export const UpdateOnboardingProgressSessionResponse = zod.object({
+  "guideCurrentQuestionId": zod.number(),
+  "guideRevealedQuestionIds": zod.array(zod.number()),
+  "guideCompleted": zod.boolean(),
+  "simulatorCurrentQuestionId": zod.number(),
+  "simulatorRevealedQuestionIds": zod.array(zod.number()),
+  "simulatorCompleted": zod.boolean()
+}).and(zod.object({
+  "progressToken": zod.string()
+}))
+
+
+/**
+ * @summary Get the authenticated citizen's simulator progress
+ */
+export const GetCitizenOnboardingProgressResponse = zod.object({
+  "guideCurrentQuestionId": zod.number(),
+  "guideRevealedQuestionIds": zod.array(zod.number()),
+  "guideCompleted": zod.boolean(),
+  "simulatorCurrentQuestionId": zod.number(),
+  "simulatorRevealedQuestionIds": zod.array(zod.number()),
+  "simulatorCompleted": zod.boolean()
+})
+
+
+/**
+ * @summary Reveal or advance a passport simulator question
+ */
+export const UpdateCitizenOnboardingProgressBody = zod.object({
+  "phase": zod.enum(['guide', 'simulator']),
+  "action": zod.enum(['reveal', 'continue', 'back']),
+  "questionId": zod.number()
+})
+
+export const UpdateCitizenOnboardingProgressResponse = zod.object({
+  "guideCurrentQuestionId": zod.number(),
+  "guideRevealedQuestionIds": zod.array(zod.number()),
+  "guideCompleted": zod.boolean(),
+  "simulatorCurrentQuestionId": zod.number(),
+  "simulatorRevealedQuestionIds": zod.array(zod.number()),
+  "simulatorCompleted": zod.boolean()
 })
 
 
@@ -127,12 +269,16 @@ export const ListCitizensResponse = zod.array(ListCitizensResponseItem)
  */
 
 
+export const createCitizenBodyPreApplicationProgressTokenMin = 64;
+export const createCitizenBodyPreApplicationProgressTokenMax = 64;
+
 
 
 export const CreateCitizenBody = zod.object({
   "name": zod.string().min(1),
   "phone": zod.string().min(1),
-  "telegramId": zod.string().optional()
+  "telegramId": zod.string().optional(),
+  "preApplicationProgressToken": zod.string().min(createCitizenBodyPreApplicationProgressTokenMin).max(createCitizenBodyPreApplicationProgressTokenMax)
 })
 
 

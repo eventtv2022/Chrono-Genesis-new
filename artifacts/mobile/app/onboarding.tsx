@@ -1,17 +1,34 @@
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { Feather } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  getGetOnboardingProgressSessionQueryKey,
   getGetOnboardingStatusQueryKey,
+  useCreateOnboardingProgressSession,
+  useGetOnboardingProgressSession,
   useGetOnboardingStatus,
+  useUpdateCitizenOnboardingProgress,
+  useUpdateOnboardingProgressSession,
 } from "@workspace/api-client-react";
+import {
+  ONBOARDING_PROGRESS_TOKEN_KEY,
+  PASSPORT_SIMULATOR_QUESTIONS,
+  PRE_APPLICATION_GUIDE_COMPLETE_KEY,
+  PRE_APPLICATION_QUESTIONS,
+  onboardingBlockTitle,
+} from "../../../lib/onboarding-questions";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
-import { ONBOARDING_QUESTS } from "../../../lib/onboarding-quests";
 
 function formatClock(totalSeconds: number) {
   const seconds = Math.max(0, totalSeconds);
@@ -21,353 +38,438 @@ function formatClock(totalSeconds: number) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
 }
 
-function moduleName(index: number) {
-  if (index < 10) return "Профиль · Искеле / Фамагуста · кошелёк";
-  if (index < 25) return "P2P-переводы · QR-код";
-  if (index < 40) return "Доска времени · предложения и запросы";
-  if (index < 55) return "Эскроу · DarMin";
-  return "Голосование · Родовая минута · декларация";
-}
-
-const GUIDE_KEY = "timenation_preapplication_guide_v1";
-
-function PreApplicationGuide() {
-  const colors = useColors();
+function ScreenFrame({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, number>>({});
-  const [loaded, setLoaded] = useState(false);
-  const quest = ONBOARDING_QUESTS[index];
-  const selected = answers[index];
-  const topInset = Platform.OS === "web" ? 67 : insets.top;
-  const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
-
-  useEffect(() => {
-    let active = true;
-    AsyncStorage.multiGet([`${GUIDE_KEY}_answers`, `${GUIDE_KEY}_step`])
-      .then((entries) => {
-        if (!active) return;
-        const savedAnswers = entries[0]?.[1];
-        const savedStep = entries[1]?.[1];
-        if (savedAnswers) {
-          try { setAnswers(JSON.parse(savedAnswers) as Record<number, number>); } catch {}
-        }
-        if (savedStep) {
-          const numericStep = Number(savedStep);
-          if (Number.isFinite(numericStep)) setIndex(Math.min(ONBOARDING_QUESTS.length - 1, Math.max(0, numericStep)));
-        }
-      })
-      .catch(() => {})
-      .finally(() => { if (active) setLoaded(true); });
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.multiSet([
-      [`${GUIDE_KEY}_answers`, JSON.stringify(answers)],
-      [`${GUIDE_KEY}_step`, String(index)],
-    ]).catch(() => {});
-  }, [answers, index, loaded]);
-
-  function finishGuide() {
-    AsyncStorage.setItem(GUIDE_KEY, "complete")
-      .then(() => router.replace("/register"))
-      .catch(() => Alert.alert(
-        "Не удалось сохранить прогресс",
-        "Включите хранилище приложения и повторите попытку.",
-      ));
-  }
-
-  if (!loaded) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
-  }
-
+  const colors = useColors();
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingTop: topInset + 12, paddingBottom: bottomInset + 28, paddingHorizontal: 20 }}
-      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{
+        flexGrow: 1,
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top + 18,
+        paddingBottom: Platform.OS === "web" ? Math.max(insets.bottom, 34) + 28 : insets.bottom + 28,
+      }}
+      keyboardShouldPersistTaps="handled"
     >
-      <View style={{ maxWidth: 620, width: "100%", alignSelf: "center" }}>
-        <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 11, letterSpacing: 2 }}>TIMENATION · ПЕРЕД ЗАЯВЛЕНИЕМ</Text>
-        <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 28, marginTop: 10 }}>Короткое интерактивное знакомство</Text>
-        <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 21, marginTop: 8 }}>
-          Изучите основные разделы приложения. Часовой срок начнётся только после отправки заявления.
-        </Text>
-
-        <View style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: 16, padding: 17, marginTop: 21 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10 }}>
-            <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_600SemiBold", fontSize: 11 }}>ЗНАКОМСТВО · {index + 1}/{ONBOARDING_QUESTS.length}</Text>
-            <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 11 }}>{Math.floor(Object.keys(answers).length / ONBOARDING_QUESTS.length * 100)}%</Text>
-          </View>
-          <View style={{ height: 6, backgroundColor: colors.surface, borderRadius: 6, overflow: "hidden", marginTop: 12 }}>
-            <View style={{ width: `${Object.keys(answers).length / ONBOARDING_QUESTS.length * 100}%`, height: 6, backgroundColor: colors.primary }} />
-          </View>
-        </View>
-
-        <View style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: 16, padding: 18, marginTop: 14 }}>
-          <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 11, letterSpacing: 1.1 }}>{moduleName(index).toUpperCase()}</Text>
-          <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 23, marginTop: 12 }}>{quest.title}</Text>
-          <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 15, lineHeight: 22, marginTop: 9 }}>{quest.prompt}</Text>
-          <View style={{ gap: 9, marginTop: 18 }}>
-            {quest.choices.map((option, choiceIndex) => (
-              <TouchableOpacity
-                key={option}
-                onPress={() => setAnswers((current) => ({ ...current, [index]: choiceIndex }))}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityState={{ selected: selected === choiceIndex }}
-                testID={`button-guide-choice-${choiceIndex}`}
-                style={{
-                  minHeight: 48, borderRadius: 11, borderWidth: 1,
-                  borderColor: selected === choiceIndex ? colors.primary : colors.border,
-                  backgroundColor: selected === choiceIndex ? colors.goldGlow : colors.surface,
-                  paddingHorizontal: 13, paddingVertical: 12,
-                  flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-                }}
-              >
-                <Text style={{ flex: 1, color: colors.foreground, fontFamily: "Inter_500Medium", fontSize: 13, lineHeight: 19 }}>{option}</Text>
-                {selected === choiceIndex && <Feather name="check" size={17} color={colors.primary} style={{ marginLeft: 9 }} />}
-              </TouchableOpacity>
-            ))}
-          </View>
-          {selected !== undefined && (
-            <View style={{ marginTop: 14, padding: 13, borderRadius: 10, backgroundColor: colors.success + "18" }}>
-              <Text style={{ color: colors.success, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>Важно</Text>
-              <Text style={{ color: colors.foreground, fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 20, marginTop: 4 }}>{quest.takeaway}</Text>
-            </View>
-          )}
-          <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10, marginTop: 19 }}>
-            <TouchableOpacity
-              disabled={index === 0}
-              onPress={() => setIndex((current) => Math.max(0, current - 1))}
-              style={{ minHeight: 46, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 13, opacity: index === 0 ? 0.35 : 1 }}
-            >
-              <Feather name="arrow-left" size={17} color={colors.foreground} />
-              <Text style={{ color: colors.foreground, fontFamily: "Inter_500Medium" }}>Назад</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              disabled={selected === undefined}
-              onPress={() => index < ONBOARDING_QUESTS.length - 1
-                ? setIndex((current) => current + 1)
-                : finishGuide()}
-              style={{ minHeight: 46, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 11, backgroundColor: colors.primary, paddingHorizontal: 16, opacity: selected === undefined ? 0.45 : 1 }}
-              testID="button-guide-continue"
-            >
-              <Text style={{ color: colors.primaryForeground, fontFamily: "Inter_700Bold", fontSize: 13 }}>
-                {index < ONBOARDING_QUESTS.length - 1 ? "Продолжить" : "Перейти к заявлению"}
-              </Text>
-              <Feather name="arrow-right" size={16} color={colors.primaryForeground} />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+      {children}
     </ScrollView>
   );
 }
 
-export default function OnboardingScreen() {
+function ActionButton({
+  title,
+  onPress,
+  disabled,
+  secondary,
+  testID,
+}: {
+  title: string;
+  onPress: () => void;
+  disabled?: boolean;
+  secondary?: boolean;
+  testID?: string;
+}) {
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      testID={testID}
+      style={{
+        minHeight: 50,
+        paddingHorizontal: 18,
+        borderRadius: 13,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: secondary ? "transparent" : colors.primary,
+        borderWidth: secondary ? 1 : 0,
+        borderColor: colors.border,
+        opacity: disabled ? 0.45 : 1,
+      }}
+    >
+      <Text style={{ color: secondary ? colors.foreground : colors.primaryForeground, fontWeight: "700", fontSize: 15 }}>
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function PreApplicationGuide() {
+  const queryClient = useQueryClient();
+  const colors = useColors();
+  const [progressToken, setProgressToken] = useState("");
+  const [storageReady, setStorageReady] = useState(false);
+  const [error, setError] = useState("");
+  const createStarted = useRef(false);
+  const createSession = useCreateOnboardingProgressSession();
+  const updateProgress = useUpdateOnboardingProgressSession();
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(ONBOARDING_PROGRESS_TOKEN_KEY)
+      .then((stored) => {
+        if (!active) return;
+        setProgressToken(stored ?? "");
+        setStorageReady(true);
+      })
+      .catch(() => {
+        if (active) {
+          setError("Не удалось открыть сохранённый прогресс.");
+          setStorageReady(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady || progressToken || error || createStarted.current) return;
+    createStarted.current = true;
+    createSession.mutate(undefined, {
+      onSuccess: async (created) => {
+        try {
+          await AsyncStorage.setItem(ONBOARDING_PROGRESS_TOKEN_KEY, created.progressToken);
+          setProgressToken(created.progressToken);
+        } catch {
+          setError("Не удалось сохранить идентификатор прогресса на устройстве.");
+        }
+      },
+      onError: () => setError("Не удалось создать знакомство. Проверьте соединение и повторите попытку."),
+    });
+  }, [storageReady, progressToken, error, createSession]);
+
+  const progressQuery = useGetOnboardingProgressSession(progressToken, {
+    query: {
+      queryKey: getGetOnboardingProgressSessionQueryKey(progressToken),
+      enabled: !!progressToken,
+      retry: false,
+    },
+  });
+  const session = progressQuery.data;
+  const questionId = session?.guideCurrentQuestionId ?? 1;
+  const question = PRE_APPLICATION_QUESTIONS[questionId - 1]!;
+  const revealed = session?.guideRevealedQuestionIds.includes(questionId) ?? false;
+  const percent = Math.floor(((session?.guideRevealedQuestionIds.length ?? 0) / 30) * 100);
+
+  useEffect(() => {
+    if (progressQuery.isError) setError("Не удалось загрузить сохранённый прогресс.");
+  }, [progressQuery.isError]);
+
+  async function act(action: "reveal" | "continue" | "back") {
+    if (!session || updateProgress.isPending) return;
+    setError("");
+    try {
+      const updated = await updateProgress.mutateAsync({
+        progressToken,
+        data: { phase: "guide", action, questionId },
+      });
+      queryClient.setQueryData(getGetOnboardingProgressSessionQueryKey(progressToken), updated);
+      if (updated.guideCompleted) {
+        await AsyncStorage.setItem(PRE_APPLICATION_GUIDE_COMPLETE_KEY, "complete");
+        routerReplaceToRegister();
+      }
+    } catch {
+      setError("Не удалось сохранить прогресс. Проверьте соединение и повторите попытку.");
+      await progressQuery.refetch();
+    }
+  }
+
+  function routerReplaceToRegister() {
+    // The enclosing Expo router is available from the module-level hook below.
+    router.replace("/register");
+  }
+
+  const router = useRouter();
+  if (session?.guideCompleted) {
+    return (
+      <ScreenFrame>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 16 }}>
+          <Text style={{ color: colors.success, fontSize: 12, fontWeight: "700", letterSpacing: 1.4 }}>
+            ЗНАКОМСТВО ЗАВЕРШЕНО
+          </Text>
+          <Text style={{ color: colors.foreground, fontSize: 27, fontWeight: "800", textAlign: "center" }}>
+            Теперь можно подать заявление
+          </Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 15, lineHeight: 23, textAlign: "center" }}>
+            Часовой срок начнётся после отправки заявления. Финал симуляции будет за минуту до выдачи паспорта.
+          </Text>
+          <ActionButton
+            testID="button-guide-complete-continue"
+            title="Перейти к заявлению"
+            onPress={() => router.replace("/register")}
+          />
+        </View>
+      </ScreenFrame>
+    );
+  }
+  if (!session) {
+    return (
+      <ScreenFrame>
+        <View style={{ flex: 1, justifyContent: "center", gap: 14 }}>
+          <Text style={{ color: colors.foreground, fontSize: 23, fontWeight: "700", textAlign: "center" }}>
+            Подключаем знакомство
+          </Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 15, lineHeight: 23, textAlign: "center" }}>
+            {error || "Сохраняем ответы в TimeNation…"}
+          </Text>
+          {error ? <ActionButton title="Повторить" onPress={() => router.replace("/onboarding")} secondary /> : null}
+        </View>
+      </ScreenFrame>
+    );
+  }
+
+  return (
+    <ScreenFrame>
+      <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700", letterSpacing: 1.5 }}>
+        TIMENATION · ПЕРЕД ПОДАЧЕЙ ЗАЯВЛЕНИЯ
+      </Text>
+      <Text style={{ color: colors.foreground, fontSize: 29, fontWeight: "800", marginTop: 12 }}>
+        Знакомство с TimeNation
+      </Text>
+      <Text style={{ color: colors.mutedForeground, fontSize: 15, lineHeight: 23, marginTop: 10, marginBottom: 22 }}>
+        Прочитайте 30 вопросов и ответов. Часовое ожидание начнётся только после отправки заявления.
+      </Text>
+
+      <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: colors.radius, padding: 16, marginBottom: 14 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 11 }}>
+          <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: "700" }}>ВОПРОС {questionId} / 30</Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>{percent}%</Text>
+        </View>
+        <View style={{ height: 7, backgroundColor: colors.muted, borderRadius: 8, overflow: "hidden" }}>
+          <View style={{ width: `${percent}%`, height: "100%", backgroundColor: colors.primary }} />
+        </View>
+      </View>
+
+      <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: colors.radius, padding: 20 }}>
+        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "700", letterSpacing: 1.2 }}>
+          {onboardingBlockTitle(question.id).toUpperCase()}
+        </Text>
+        <Text style={{ color: colors.foreground, fontSize: 22, fontWeight: "700", lineHeight: 30, marginTop: 11 }}>
+          {question.question}
+        </Text>
+        {revealed ? (
+          <View style={{ borderColor: colors.success, borderWidth: 1, backgroundColor: colors.card, borderRadius: colors.radius, padding: 15, marginTop: 18 }}>
+            <Text style={{ color: colors.success, fontSize: 14, fontWeight: "700", marginBottom: 5 }}>ОТВЕТ</Text>
+            <Text style={{ color: colors.cardForeground, fontSize: 15, lineHeight: 23 }}>{question.answer}</Text>
+          </View>
+        ) : (
+          <Text style={{ color: colors.mutedForeground, fontSize: 14, marginTop: 14 }}>Нажмите, чтобы открыть ответ.</Text>
+        )}
+        {error ? <Text accessibilityRole="alert" style={{ color: colors.destructive, fontSize: 13, lineHeight: 20, marginTop: 13 }}>{error}</Text> : null}
+        <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10, marginTop: 22 }}>
+          <View style={{ flex: 1 }}>
+            <ActionButton testID="button-guide-back" title="Назад" secondary disabled={questionId === 1 || updateProgress.isPending} onPress={() => void act("back")} />
+          </View>
+          <View style={{ flex: 1.5 }}>
+            <ActionButton
+              title={revealed ? (questionId === 30 ? "Перейти к заявлению" : "Продолжить") : "Показать ответ"}
+              testID={revealed ? (questionId === 30 ? "button-guide-finish" : "button-guide-continue") : "button-guide-reveal"}
+              disabled={updateProgress.isPending}
+              onPress={() => void act(revealed ? "continue" : "reveal")}
+            />
+          </View>
+        </View>
+      </View>
+    </ScreenFrame>
+  );
+}
+
+function OnboardingScreen() {
+  const { citizen, authToken, setCitizen } = useCitizen();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { citizen, authToken, setCitizen } = useCitizen();
+  const colors = useColors();
+  const [remaining, setRemaining] = useState(3540);
+  const [progressError, setProgressError] = useState("");
+  const didNavigateToTabs = useRef(false);
   const authHeaders: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {};
   const queryKey = useMemo(
     () => [...getGetOnboardingStatusQueryKey(), citizen?.id],
     [citizen?.id],
   );
   const status = useGetOnboardingStatus({
-    query: { enabled: !!citizen && !!authToken, queryKey, refetchInterval: 5_000 },
+    request: { headers: authHeaders },
+    query: {
+      queryKey,
+      enabled: !!citizen,
+      refetchInterval: 5000,
+      refetchIntervalInBackground: true,
+    },
+  });
+  const updateProgress = useUpdateCitizenOnboardingProgress({
     request: { headers: authHeaders },
   });
-  const [now, setNow] = useState(Date.now());
-  const [answers, setAnswers] = useState<Record<number, number>>({});
-  const [answersLoaded, setAnswersLoaded] = useState(false);
-  const storageKey = `timenation_onboarding_answers_${citizen?.id ?? "guest"}`;
+  const questionId = status.data?.simulatorCurrentQuestionId ?? 31;
+  const question = PASSPORT_SIMULATOR_QUESTIONS[questionId - 31]!;
+  const revealed = status.data?.simulatorRevealedQuestionIds.includes(questionId) ?? false;
 
   useEffect(() => {
-    let active = true;
-    AsyncStorage.getItem(storageKey)
-      .then((value) => {
-        if (active && value) setAnswers(JSON.parse(value) as Record<number, number>);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (active) setAnswersLoaded(true);
-      });
-    return () => { active = false; };
-  }, [storageKey]);
+    if (status.data?.registrationStatus === "issued" && !didNavigateToTabs.current) {
+      didNavigateToTabs.current = true;
+      if (citizen) setCitizen({ ...citizen, registrationStatus: "issued" });
+      router.replace("/(tabs)");
+      return;
+    }
+    const next = status.data?.secondsRemaining;
+    if (typeof next === "number") setRemaining(next);
+  }, [citizen?.id, router, status.data?.registrationStatus, status.data?.secondsRemaining]);
 
   useEffect(() => {
-    if (answersLoaded) AsyncStorage.setItem(storageKey, JSON.stringify(answers)).catch(() => {});
-  }, [answersLoaded, answers, storageKey]);
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const timer = setInterval(() => setRemaining((current) => Math.max(0, current - 1)), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    if (status.data?.registrationStatus !== "issued" || !citizen) return;
-    setCitizen({
-      ...citizen,
-      registrationStatus: "issued",
-      status: "active",
-      balanceMinutes: status.data.balanceMinutes,
-      onboardingCompleted: true,
-    });
-    void queryClient.invalidateQueries({ queryKey: ["citizens"] });
-    router.replace("/");
-  }, [status.data?.registrationStatus, status.data?.balanceMinutes, citizen, setCitizen, queryClient, router]);
-
-  const remainingSeconds = status.data
-    ? Math.max(0, status.data.secondsRemaining - Math.floor((now - status.dataUpdatedAt) / 1000))
-    : 3540;
-  const durationSeconds = status.data?.durationSeconds ?? 3540;
-  const elapsedSeconds = Math.max(0, durationSeconds - remainingSeconds);
-  const stepDuration = durationSeconds / ONBOARDING_QUESTS.length;
-  const questIndex = Math.min(ONBOARDING_QUESTS.length - 1, Math.floor(elapsedSeconds / stepDuration));
-  const quest = ONBOARDING_QUESTS[questIndex];
-  const progress = Math.min(100, (elapsedSeconds / durationSeconds) * 100);
-  const selected = answers[questIndex];
-  const secondsUntilEligibility = status.data
-    ? Math.max(0, status.data.secondsUntilEligibility - Math.floor((now - status.dataUpdatedAt) / 1000))
-    : 0;
-  const topInset = Platform.OS === "web" ? 67 : insets.top;
-  const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
-
-  if (!citizen) {
-    return <PreApplicationGuide />;
+  async function act(action: "reveal" | "continue" | "back") {
+    if (!status.data || updateProgress.isPending) return;
+    setProgressError("");
+    try {
+      const updated = await updateProgress.mutateAsync({
+        data: { phase: "simulator", action, questionId },
+      });
+      queryClient.setQueryData(queryKey, (current: typeof status.data | undefined) =>
+        current ? {
+          ...current,
+          simulatorCurrentQuestionId: updated.simulatorCurrentQuestionId,
+          simulatorRevealedQuestionIds: updated.simulatorRevealedQuestionIds,
+          simulatorCompleted: updated.simulatorCompleted,
+        } : current,
+      );
+    } catch {
+      setProgressError("Не удалось сохранить прогресс. Проверьте соединение и повторите попытку.");
+      await status.refetch();
+    }
   }
+
+  if (!citizen) return <PreApplicationGuide />;
 
   if (status.data?.registrationStatus === "rejected") {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: 28 }}>
-        <Feather name="alert-circle" size={34} color={colors.destructive} />
-        <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 26, textAlign: "center", marginTop: 18 }}>Заявление требует исправлений</Text>
-        <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 21, textAlign: "center", marginTop: 10 }}>Проверьте данные и подайте заявление повторно.</Text>
-        <TouchableOpacity onPress={() => router.replace("/register")} style={{ marginTop: 22, backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 14 }}>
-          <Text style={{ color: colors.primaryForeground, fontFamily: "Inter_700Bold" }}>Открыть заявление</Text>
-        </TouchableOpacity>
-      </View>
+      <ScreenFrame>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 15 }}>
+          <Text style={{ color: colors.foreground, fontSize: 28, fontWeight: "800", textAlign: "center" }}>Заявление отклонено</Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 15, lineHeight: 23, textAlign: "center" }}>
+            Проверьте данные заявления или обратитесь в поддержку TimeNation.
+          </Text>
+        </View>
+      </ScreenFrame>
     );
   }
 
-  if (status.data?.completed && status.data.registrationStatus === "pending") {
+  if (status.isLoading || !status.data) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", paddingHorizontal: 28, paddingTop: topInset, paddingBottom: bottomInset }}>
-        <View style={{ width: 88, height: 88, borderRadius: 44, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.goldGlow, alignItems: "center", justifyContent: "center" }}>
-          <Feather name="check" size={40} color={colors.primary} />
-        </View>
-        <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 12, letterSpacing: 2, marginTop: 25 }}>TIMENATION · ФИНАЛ СИМУЛЯЦИИ</Text>
-        <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 29, textAlign: "center", marginTop: 13 }}>Симуляция завершена</Text>
-        <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 15, lineHeight: 23, textAlign: "center", marginTop: 13 }}>
-          Заявление ожидает установленного срока. Паспорт и родовая минута будут выданы, когда наступит eligibility.
-        </Text>
-        <View style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: 16, padding: 18, alignItems: "center", marginTop: 22 }}>
-          <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_600SemiBold", fontSize: 11 }}>ДО ПРАВА НА ВЫДАЧУ</Text>
-          <Text testID="text-eligibility-countdown" style={{ color: colors.primary, fontFamily: "Inter_700Bold", fontSize: 30, marginTop: 8, fontVariant: ["tabular-nums"] }}>{formatClock(secondsUntilEligibility)}</Text>
-        </View>
-        <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12, textAlign: "center", marginTop: 15 }}>Статус проверяется автоматически. Эта страница обновится при выдаче паспорта.</Text>
-      </View>
-    );
-  }
-
-  if (status.isLoading || !status.data || !status.data.startedAt) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: 28 }}>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
         <ActivityIndicator color={colors.primary} />
-        <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 14, textAlign: "center" }}>
-          {status.isError ? "Не удалось загрузить симуляцию. Проверьте соединение." : "Подключаем симуляцию…"}
-        </Text>
+        <Text style={{ color: colors.mutedForeground, marginTop: 12 }}>Загружаем симуляцию паспорта…</Text>
       </View>
     );
   }
 
-  const secondsToNextStep = Math.ceil(stepDuration - (elapsedSeconds % stepDuration));
+  if (status.data.completed && status.data.registrationStatus === "pending") {
+    return (
+      <ScreenFrame>
+        <View style={{ flex: 1, justifyContent: "center", gap: 18 }}>
+          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700", letterSpacing: 1.4, textAlign: "center" }}>
+            TIMENATION · ФИНАЛЬНАЯ МИНУТА
+          </Text>
+          <Text style={{ color: colors.foreground, fontSize: 30, fontWeight: "800", textAlign: "center" }}>
+            Симуляция завершена
+          </Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 15, lineHeight: 24, textAlign: "center" }}>
+            Вы завершили знакомство с системой. Паспорт будет выдан по серверному сроку, установленному при подаче заявления.
+          </Text>
+          <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: colors.radius, padding: 20, alignItems: "center" }}>
+            <Text style={{ color: colors.mutedForeground, fontSize: 12, letterSpacing: 1 }}>ДО ВЫДАЧИ ПАСПОРТА</Text>
+            <Text style={{ color: colors.primary, fontSize: 38, fontVariant: ["tabular-nums"], fontWeight: "700", marginTop: 8 }}>
+              {formatClock(status.data.secondsUntilEligibility)}
+            </Text>
+          </View>
+        </View>
+      </ScreenFrame>
+    );
+  }
 
+  if (status.data.simulatorCompleted) {
+    return (
+      <ScreenFrame>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 17 }}>
+          <Text style={{ color: colors.success, fontSize: 12, fontWeight: "700", letterSpacing: 1.4 }}>ВОПРОСЫ ЗАВЕРШЕНЫ</Text>
+          <Text style={{ color: colors.foreground, fontSize: 29, fontWeight: "800", textAlign: "center" }}>Симуляция продолжается</Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 15, lineHeight: 23, textAlign: "center" }}>
+            Все ответы сохранены. Финал наступит за минуту до срока выдачи паспорта.
+          </Text>
+          <Text style={{ color: colors.primary, fontSize: 35, fontVariant: ["tabular-nums"], fontWeight: "700" }}>
+            {formatClock(remaining)}
+          </Text>
+        </View>
+      </ScreenFrame>
+    );
+  }
+
+  const percent = Math.min(100, Math.floor(((3540 - remaining) / 3540) * 100));
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingTop: topInset + 12, paddingBottom: bottomInset + 28, paddingHorizontal: 20 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={{ maxWidth: 620, width: "100%", alignSelf: "center" }}>
-        <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 11, letterSpacing: 2 }}>TIMENATION · СИМУЛЯЦИЯ ЗАЯВЛЕНИЯ</Text>
-        <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 27, marginTop: 7 }}>Финал за минуту до выдачи паспорта</Text>
-        <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 21, marginTop: 8 }}>
-          Отсчёт привязан к сроку eligibility, записанному при подаче заявления.
+    <ScreenFrame>
+      <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700", letterSpacing: 1.4 }}>
+        TIMENATION · СИМУЛЯЦИЯ ПАСПОРТА
+      </Text>
+      <Text style={{ color: colors.foreground, fontSize: 28, fontWeight: "800", marginTop: 12 }}>Ваш путь к гражданству</Text>
+      <Text style={{ color: colors.mutedForeground, fontSize: 15, lineHeight: 23, marginTop: 9, marginBottom: 18 }}>
+        Отвечайте в удобном темпе. Прогресс и срок подачи заявления сохраняются на сервере.
+      </Text>
+
+      <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: colors.radius, padding: 17, marginBottom: 15 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Text style={{ color: colors.mutedForeground, fontSize: 12, fontWeight: "700", letterSpacing: 1 }}>ДО ФИНАЛА</Text>
+          <Text style={{ color: colors.primary, fontSize: 17, fontVariant: ["tabular-nums"], fontWeight: "700" }}>{formatClock(remaining)}</Text>
+        </View>
+        <View style={{ height: 6, backgroundColor: colors.muted, borderRadius: 8, overflow: "hidden", marginTop: 12 }}>
+          <View style={{ width: `${percent}%`, height: "100%", backgroundColor: colors.primary }} />
+        </View>
+        <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 10 }}>
+          Срок выдачи: {status.data.availableAt ? new Date(status.data.availableAt).toLocaleString() : "ожидается"}
         </Text>
-
-        <View style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: 16, padding: 17, marginTop: 21 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_600SemiBold", fontSize: 11 }}>ДО ФИНАЛА</Text>
-            <Text style={{ color: colors.primary, fontFamily: "Inter_700Bold", fontSize: 25, fontVariant: ["tabular-nums"] }}>{formatClock(remainingSeconds)}</Text>
-          </View>
-          <View style={{ height: 6, backgroundColor: colors.surface, borderRadius: 6, overflow: "hidden", marginTop: 14 }}>
-            <View style={{ width: `${progress}%`, height: 6, backgroundColor: colors.primary, borderRadius: 6 }} />
-          </View>
-          <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 9 }}>
-            Симуляция · {Math.floor(progress)}% · выдача в срок из заявления
-          </Text>
-        </View>
-
-        <View style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: 16, padding: 18, marginTop: 14 }}>
-          <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 11, letterSpacing: 1.1 }}>КВЕСТ {questIndex + 1} / 60</Text>
-          <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 14, marginTop: 11 }}>{moduleName(questIndex)}</Text>
-          <Text style={{ color: colors.foreground, fontFamily: "Inter_700Bold", fontSize: 21, marginTop: 17 }}>{quest.title}</Text>
-          <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 15, lineHeight: 22, marginTop: 8 }}>{quest.prompt}</Text>
-
-          <View style={{ gap: 9, marginTop: 18 }}>
-            {quest.choices.map((option, index) => (
-              <TouchableOpacity
-                key={option}
-                onPress={() => setAnswers((current) => ({ ...current, [questIndex]: index }))}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityState={{ selected: selected === index }}
-                testID={`button-onboarding-choice-${index}`}
-                style={{
-                  minHeight: 48,
-                  borderRadius: 11,
-                  borderWidth: 1,
-                  borderColor: selected === index ? colors.primary : colors.border,
-                  backgroundColor: selected === index ? colors.goldGlow : colors.surface,
-                  paddingHorizontal: 13,
-                  paddingVertical: 12,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Text style={{ flex: 1, color: colors.foreground, fontFamily: "Inter_500Medium", fontSize: 13, lineHeight: 19 }}>{option}</Text>
-                {selected === index && <Feather name="check" size={17} color={colors.primary} style={{ marginLeft: 9 }} />}
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {selected !== undefined && (
-            <View style={{ marginTop: 14, padding: 13, borderRadius: 10, backgroundColor: colors.success + "18" }}>
-              <Text style={{ color: colors.success, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>Что запомнить</Text>
-              <Text style={{ color: colors.foreground, fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 20, marginTop: 4 }}>{quest.takeaway}</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, marginTop: 14 }}>
-          <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 18 }}>
-            $1 DarMin = 1 минута. Следующий этап через {formatClock(secondsToNextStep)}. Отсчёт продолжится, даже если закрыть приложение.
-          </Text>
-        </View>
-
       </View>
-    </ScrollView>
+
+      <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: colors.radius, padding: 20 }}>
+        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "700", letterSpacing: 1.1 }}>
+          {onboardingBlockTitle(question.id).toUpperCase()}
+        </Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700", marginTop: 12 }}>ВОПРОС {questionId} / 60</Text>
+        <Text style={{ color: colors.foreground, fontSize: 22, fontWeight: "700", lineHeight: 30, marginTop: 8 }}>
+          {question.question}
+        </Text>
+        {revealed ? (
+          <View style={{ borderColor: colors.success, borderWidth: 1, backgroundColor: colors.card, borderRadius: colors.radius, padding: 15, marginTop: 18 }}>
+            <Text style={{ color: colors.success, fontSize: 14, fontWeight: "700", marginBottom: 5 }}>ОТВЕТ</Text>
+            <Text style={{ color: colors.cardForeground, fontSize: 15, lineHeight: 23 }}>{question.answer}</Text>
+          </View>
+        ) : (
+          <Text style={{ color: colors.mutedForeground, fontSize: 14, marginTop: 14 }}>Нажмите, чтобы открыть ответ.</Text>
+        )}
+        {progressError ? <Text accessibilityRole="alert" style={{ color: colors.destructive, fontSize: 13, lineHeight: 20, marginTop: 13 }}>{progressError}</Text> : null}
+        <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10, marginTop: 22 }}>
+          <View style={{ flex: 1 }}>
+            <ActionButton testID="button-onboarding-back" title="Назад" secondary disabled={questionId === 31 || updateProgress.isPending} onPress={() => void act("back")} />
+          </View>
+          <View style={{ flex: 1.5 }}>
+            <ActionButton
+              title={revealed ? "Продолжить" : "Показать ответ"}
+              testID={revealed ? "button-onboarding-continue" : "button-onboarding-reveal"}
+              disabled={updateProgress.isPending}
+              onPress={() => void act(revealed ? "continue" : "reveal")}
+            />
+          </View>
+        </View>
+      </View>
+      <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 16 }}>
+        Ответы на вопросы не создают сделки и не изменяют баланс.
+      </Text>
+    </ScreenFrame>
   );
+}
+
+export default function Onboarding() {
+  return <OnboardingScreen />;
 }

@@ -26,6 +26,10 @@ import { useLanguage } from "@/context/LanguageContext";
 import { UI } from "@/lib/i18n";
 import { useColors } from "@/hooks/useColors";
 import { LogoBrand } from "@/components/LogoBrand";
+import {
+  ONBOARDING_PROGRESS_TOKEN_KEY,
+  PRE_APPLICATION_GUIDE_COMPLETE_KEY,
+} from "../../../lib/onboarding-questions";
 
 // ── Web-only canvas signature pad ────────────────────────────────────────────
 function WebSignaturePad({
@@ -194,7 +198,7 @@ export default function RegisterScreen({ initialMode }: { initialMode?: Mode } =
   useEffect(() => {
     if (citizen) return;
     let active = true;
-    AsyncStorage.getItem("timenation_preapplication_guide_v1")
+    AsyncStorage.getItem(PRE_APPLICATION_GUIDE_COMPLETE_KEY)
       .then((value) => {
         if (active && value !== "complete") router.replace("/onboarding");
       })
@@ -338,6 +342,13 @@ export default function RegisterScreen({ initialMode }: { initialMode?: Mode } =
         privacyAgreementAccepted: true,
         tosAcceptedAt: new Date().toISOString(),
       };
+      const preApplicationProgressToken = await AsyncStorage.getItem(ONBOARDING_PROGRESS_TOKEN_KEY);
+      if (!preApplicationProgressToken) {
+        Alert.alert("Знакомство не завершено", "Ответьте на все 30 вопросов перед подачей заявления.");
+        router.replace("/onboarding");
+        return;
+      }
+      body["preApplicationProgressToken"] = preApplicationProgressToken;
       if (surname.trim()) body["surname"] = surname.trim();
       if (givenNames.trim()) body["givenNames"] = givenNames.trim();
       if (dateOfBirth.trim().match(/^\d{4}-\d{2}-\d{2}$/)) body["dateOfBirth"] = dateOfBirth.trim();

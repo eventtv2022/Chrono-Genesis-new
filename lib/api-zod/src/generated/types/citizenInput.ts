@@ -12,4 +12,9 @@ export interface CitizenInput {
   /** @minLength 1 */
   phone: string;
   telegramId?: string;
+  /**
+     * @minLength 64
+     * @maxLength 64
+     */
+  preApplicationProgressToken: string;
 }

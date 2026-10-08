@@ -20,4 +20,7 @@ export interface OnboardingStatus {
   /** @nullable */
   citizenNumber: string | null;
   balanceMinutes: number;
+  simulatorCurrentQuestionId: number;
+  simulatorRevealedQuestionIds: number[];
+  simulatorCompleted: boolean;
 }

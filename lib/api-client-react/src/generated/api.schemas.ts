@@ -27,6 +27,45 @@ export interface OnboardingStatus {
   /** @nullable */
   citizenNumber: string | null;
   balanceMinutes: number;
+  simulatorCurrentQuestionId: number;
+  simulatorRevealedQuestionIds: number[];
+  simulatorCompleted: boolean;
+}
+
+export interface OnboardingProgress {
+  guideCurrentQuestionId: number;
+  guideRevealedQuestionIds: number[];
+  guideCompleted: boolean;
+  simulatorCurrentQuestionId: number;
+  simulatorRevealedQuestionIds: number[];
+  simulatorCompleted: boolean;
+}
+
+export type OnboardingProgressSession = OnboardingProgress & {
+  progressToken: string;
+};
+
+export type OnboardingProgressActionInputPhase = typeof OnboardingProgressActionInputPhase[keyof typeof OnboardingProgressActionInputPhase];
+
+
+export const OnboardingProgressActionInputPhase = {
+  guide: 'guide',
+  simulator: 'simulator',
+} as const;
+
+export type OnboardingProgressActionInputAction = typeof OnboardingProgressActionInputAction[keyof typeof OnboardingProgressActionInputAction];
+
+
+export const OnboardingProgressActionInputAction = {
+  reveal: 'reveal',
+  continue: 'continue',
+  back: 'back',
+} as const;
+
+export interface OnboardingProgressActionInput {
+  phase: OnboardingProgressActionInputPhase;
+  action: OnboardingProgressActionInputAction;
+  questionId: number;
 }
 
 export type CitizenStatus = typeof CitizenStatus[keyof typeof CitizenStatus];
@@ -96,6 +135,73 @@ export interface CitizenInput {
   /** @minLength 1 */
   phone: string;
   telegramId?: string;
+  /**
+     * @minLength 64
+     * @maxLength 64
+     */
+  preApplicationProgressToken: string;
+}
+
+export interface PasswordCitizenRegistrationInput {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 5 */
+  phone: string;
+  /** @minLength 6 */
+  password: string;
+  /**
+     * @minLength 64
+     * @maxLength 64
+     */
+  preApplicationProgressToken: string;
+}
+
+export type CitizenRegistrationResultRegistrationStatus = typeof CitizenRegistrationResultRegistrationStatus[keyof typeof CitizenRegistrationResultRegistrationStatus];
+
+
+export const CitizenRegistrationResultRegistrationStatus = {
+  pending: 'pending',
+} as const;
+
+export interface CitizenRegistrationResult {
+  id: number;
+  name: string;
+  citizenNumber: string;
+  availableAt: string;
+  registrationStatus: CitizenRegistrationResultRegistrationStatus;
+  authToken: string;
+}
+
+export interface TelegramWebAppInput {
+  initData: string;
+  /**
+     * @minLength 64
+     * @maxLength 64
+     */
+  preApplicationProgressToken?: string;
+}
+
+export type TelegramWebAppSessionStatus = typeof TelegramWebAppSessionStatus[keyof typeof TelegramWebAppSessionStatus];
+
+
+export const TelegramWebAppSessionStatus = {
+  ACTIVE: 'ACTIVE',
+  IN_EMISSION: 'IN_EMISSION',
+  APPLICATION_REJECTED: 'APPLICATION_REJECTED',
+} as const;
+
+export interface TelegramWebAppSession {
+  success: boolean;
+  isNewUser: boolean;
+  authToken: string;
+  citizenId: number;
+  /** @nullable */
+  citizenNumber?: string | null;
+  name: string;
+  /** @nullable */
+  photoUrl?: string | null;
+  status: TelegramWebAppSessionStatus;
+  secondsLeft: number;
 }
 
 export type CitizenUpdateStatus = typeof CitizenUpdateStatus[keyof typeof CitizenUpdateStatus];
