@@ -31,6 +31,7 @@ import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { FOCUS_PROMPTS_I18N } from "@/lib/i18n";
+import { MEDIA_DURATION_WARNING } from "@/lib/mediaDurationWarning";
 import { LogoBrand } from "@/components/LogoBrand";
 
 // ── Century boundary guard (client-side mirror of backend centuryGuard.ts) ─────
@@ -614,6 +615,7 @@ export default function TimelineScreen() {
     type: "image" | "audio" | "video" | "document";
     name: string;
     mimeType?: string; // actual MIME from picker
+    durationUnverified?: boolean;
   } | null>(null);
   const [capsuleMediaUploading, setCapsuleMediaUploading] = useState(false);
   const [isPickingMedia, setIsPickingMedia] = useState(false);
@@ -642,7 +644,7 @@ export default function TimelineScreen() {
           ? new window.Audio()
           : document.createElement("video");
         el.preload = "metadata";
-        el.onloadedmetadata = () => resolve(isFinite(el.duration) ? el.duration : null);
+        el.onloadedmetadata = () => resolve(Number.isFinite(el.duration) && el.duration > 0 ? el.duration : null);
         el.onerror = () => resolve(null);
         el.src = uri;
       });
@@ -657,7 +659,7 @@ export default function TimelineScreen() {
           { shouldPlay: false }
         );
         await sound.unloadAsync();
-        if (status.isLoaded && status.durationMillis) {
+        if (status.isLoaded && typeof status.durationMillis === "number" && Number.isFinite(status.durationMillis) && status.durationMillis > 0) {
           return status.durationMillis / 1000;
         }
         return null;
@@ -693,9 +695,11 @@ export default function TimelineScreen() {
 
         // Duration guard for audio/video (≤60 s)
         let durationOver = false;
+        let durationUnverified = false;
         if (mediaType === "audio" || mediaType === "video") {
           const dur = await getMediaDurationSeconds(asset.uri, mediaType);
           console.log("[Picker Duration]:", dur);
+          durationUnverified = dur === null;
           if (dur !== null && dur > 60) durationOver = true;
         }
 
@@ -709,7 +713,7 @@ export default function TimelineScreen() {
           return;
         }
 
-        setCapsuleMedia({ uri: asset.uri, relPath: null, type: mediaType, name: asset.name, mimeType: mime });
+        setCapsuleMedia({ uri: asset.uri, relPath: null, type: mediaType, name: asset.name, mimeType: mime, durationUnverified });
       } else {
         console.log("[Picker] Canceled or no asset returned");
       }
@@ -1494,6 +1498,14 @@ export default function TimelineScreen() {
                         {capsuleMedia.type === "audio" ? t.tl_media_audio : capsuleMedia.type === "video" ? t.tl_media_video : t.tl_media_doc} · {t.tl_media_attached}
                       </Text>
                     </View>
+                  </View>
+                )}
+                {capsuleMedia.durationUnverified && (
+                  <View accessibilityRole="alert" style={{ padding: 12, backgroundColor: colors.card, flexDirection: "row", gap: 8 }}>
+                    <Feather name="alert-triangle" size={18} color={colors.foreground} />
+                    <Text style={{ flex: 1, fontSize: 13, lineHeight: 19, color: colors.foreground }}>
+                      {MEDIA_DURATION_WARNING[lang]}
+                    </Text>
                   </View>
                 )}
                 <Pressable

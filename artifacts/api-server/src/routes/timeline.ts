@@ -18,10 +18,10 @@ async function getFileDurationSeconds(filePath: string): Promise<number | null> 
       "-print_format", "json",
       "-show_format",
       filePath,
-    ]);
+    ], { timeout: 10_000 });
     const data = JSON.parse(stdout) as { format?: { duration?: string } };
     const duration = parseFloat(data?.format?.duration ?? "");
-    return isNaN(duration) ? null : duration;
+    return Number.isFinite(duration) && duration > 0 ? duration : null;
   } catch {
     return null;
   }
@@ -326,7 +326,15 @@ router.post(
     // ── Duration guard for audio/video ────────────────────────────────────────
     if (mediaType === "audio" || mediaType === "video") {
       const duration = await getFileDurationSeconds(req.file.path);
-      if (duration !== null && duration > MAX_MEDIA_DURATION_SEC) {
+      if (duration === null) {
+        fs.unlinkSync(req.file.path); // remove unverifiable file
+        res.status(400).json({
+          code: "MEDIA_DURATION_UNDETECTABLE",
+          error: "Не удалось проверить длительность файла. Загрузка отклонена — выберите аудио или видео в другом формате (не длиннее 60 секунд).",
+        });
+        return;
+      }
+      if (duration > MAX_MEDIA_DURATION_SEC) {
         fs.unlinkSync(req.file.path); // remove oversized file
         res.status(400).json({
           error: `Файл слишком длинный — максимальная продолжительность ${MAX_MEDIA_DURATION_SEC} секунд`,
