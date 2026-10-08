@@ -1529,10 +1529,10 @@ export default function TimelineScreen() {
           </View>
 
           <Pressable
-            style={({ pressed }) => [styles.capSaveBtn, { backgroundColor: capsuleText.trim() ? "#7c3aed" : colors.border, opacity: (capsuleSaving || capsuleMediaUploading || !capsuleText.trim()) ? 0.6 : pressed ? 0.8 : 1, cursor: "pointer" as never }]}
-            disabled={!capsuleText.trim() || capsuleSaving || capsuleMediaUploading}
+            style={({ pressed }) => [styles.capSaveBtn, { backgroundColor: capsuleText.trim() ? "#7c3aed" : colors.border, opacity: (capsuleSaving || capsuleMediaUploading || isPickingMedia || !capsuleText.trim()) ? 0.6 : pressed ? 0.8 : 1, cursor: "pointer" as never }]}
+            disabled={!capsuleText.trim() || capsuleSaving || capsuleMediaUploading || isPickingMedia}
             onPress={async () => {
-              if (!citizen || !selectedAnchor || !capsuleText.trim()) return;
+              if (!citizen || !selectedAnchor || !capsuleText.trim() || isPickingMedia) return;
               setCapsuleSaving(true);
               try {
                 let finalMediaUrl: string | null = null;
