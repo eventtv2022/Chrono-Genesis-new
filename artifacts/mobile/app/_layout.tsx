@@ -12,6 +12,7 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Platform } from "react-native";
 import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -77,7 +78,8 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
+  const isWeb = Platform.OS === "web";
+  const [fontsLoaded, fontError] = useFonts(isWeb ? {} : {
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
@@ -85,12 +87,12 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if (isWeb || fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [isWeb, fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!isWeb && !fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>
