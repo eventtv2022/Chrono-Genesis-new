@@ -8,3 +8,11 @@ The development PostgreSQL database can contain active raw-SQL tables that are m
 **Why:** a development schema push attempted to delete the active `trc20_payments` table, which held payment records, until its existing schema was represented in Drizzle.
 
 **How to apply:** Check live columns, types, defaults, nullability, constraints, indexes, and row counts when a push reports data loss. Choose only non-destructive changes after verifying current rows satisfy the new constraints.
+
+## Unique constraints during non-interactive pushes
+
+Do not accept a suggested table truncation just because Drizzle prompts for it while adding a unique constraint. The prompt can appear for a populated table even when the values are already unique, and non-TTY pushes cannot answer it. Check for duplicate keys first; if none exist, preserve the rows and apply only the needed constraint change.
+
+**Why:** a development push stopped on a truncate prompt for a two-row ballot table even though neither development nor production had duplicate ballot keys.
+
+**How to apply:** Run an aggregate duplicate check in both environments before changing a unique constraint. Avoid `--force` or truncation unless the user explicitly approves data loss; after a safe, development-only constraint update, rerun the regular schema push and inspect the production diff.

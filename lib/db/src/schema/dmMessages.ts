@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, real } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, real, index } from "drizzle-orm/pg-core";
 
 export const dmMessagesTable = pgTable("dm_messages", {
   id: serial("id").primaryKey(),
@@ -17,7 +17,10 @@ export const dmMessagesTable = pgTable("dm_messages", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   readAt: timestamp("read_at", { withTimezone: true }),
-});
+}, (t) => [
+  index("dm_from_idx").on(t.fromCitizenId),
+  index("dm_to_idx").on(t.toCitizenId),
+]);
 
 export type DmMessage = typeof dmMessagesTable.$inferSelect;
 export type InsertDmMessage = typeof dmMessagesTable.$inferInsert;

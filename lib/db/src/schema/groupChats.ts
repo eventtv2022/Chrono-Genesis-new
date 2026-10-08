@@ -1,4 +1,5 @@
-import { pgTable, serial, integer, text, varchar, boolean, timestamp, primaryKey, real } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, varchar, boolean, timestamp, primaryKey, real, foreignKey } from "drizzle-orm/pg-core";
+import { citizensTable } from "./citizens";
 
 export const groupChatsTable = pgTable("group_chats", {
   id: serial("id").primaryKey(),
@@ -6,7 +7,13 @@ export const groupChatsTable = pgTable("group_chats", {
   description: text("description"),
   createdBy: integer("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  foreignKey({
+    name: "group_chats_created_by_fkey",
+    columns: [t.createdBy],
+    foreignColumns: [citizensTable.id],
+  }),
+]);
 
 export const groupMembersTable = pgTable("group_members", {
   groupId: integer("group_id").notNull(),
@@ -14,7 +21,17 @@ export const groupMembersTable = pgTable("group_members", {
   isAdmin: boolean("is_admin").default(false).notNull(),
   joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
-  primaryKey({ columns: [t.groupId, t.citizenId] }),
+  primaryKey({ name: "group_members_pkey", columns: [t.groupId, t.citizenId] }),
+  foreignKey({
+    name: "group_members_group_id_fkey",
+    columns: [t.groupId],
+    foreignColumns: [groupChatsTable.id],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "group_members_citizen_id_fkey",
+    columns: [t.citizenId],
+    foreignColumns: [citizensTable.id],
+  }),
 ]);
 
 export const groupMessagesTable = pgTable("group_messages", {
@@ -33,14 +50,30 @@ export const groupMessagesTable = pgTable("group_messages", {
   replyContent: text("reply_content"),
   attachments: text("attachments"),  // JSON-stringified AttachmentMeta[]
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  foreignKey({
+    name: "group_messages_group_id_fkey",
+    columns: [t.groupId],
+    foreignColumns: [groupChatsTable.id],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "group_messages_from_citizen_id_fkey",
+    columns: [t.fromCitizenId],
+    foreignColumns: [citizensTable.id],
+  }),
+]);
 
 export const groupMessageReadsTable = pgTable("group_message_reads", {
   groupId: integer("group_id").notNull(),
   citizenId: integer("citizen_id").notNull(),
   lastReadAt: timestamp("last_read_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
-  primaryKey({ columns: [t.groupId, t.citizenId] }),
+  primaryKey({ name: "group_message_reads_pkey", columns: [t.groupId, t.citizenId] }),
+  foreignKey({
+    name: "group_message_reads_citizen_id_fkey",
+    columns: [t.citizenId],
+    foreignColumns: [citizensTable.id],
+  }),
 ]);
 
 /**
@@ -55,7 +88,7 @@ export const groupKeysTable = pgTable("group_keys", {
   encryptedKey: text("encrypted_key").notNull(),       // nacl.box(groupKey, nonce, memberPub, creatorSec)
   encNonce: text("enc_nonce").notNull(),               // nonce for the box above
 }, (t) => [
-  primaryKey({ columns: [t.groupId, t.citizenId] }),
+  primaryKey({ name: "group_keys_pkey", columns: [t.groupId, t.citizenId] }),
 ]);
 
 export type GroupChat = typeof groupChatsTable.$inferSelect;

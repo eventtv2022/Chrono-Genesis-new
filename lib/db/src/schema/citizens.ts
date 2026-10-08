@@ -50,7 +50,7 @@ export const citizensTable = pgTable("citizens", {
   resetPasswordExpires: timestamp("reset_password_expires", { withTimezone: true }), // token TTL
 
   // ── Session auth token ─────────────────────────────────────────────────────
-  authToken: text("auth_token").unique(), // random hex 32-byte token; generated on login
+  authToken: text("auth_token").unique("citizens_auth_token_key"), // random hex 32-byte token; generated on login
 
   // ── Government role ────────────────────────────────────────────────────────
   govRole: text("gov_role").notNull().default("citizen"),

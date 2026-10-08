@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 // ── Block vote requests ───────────────────────────────────────────────────────
 // Created when an admin initiates a block. The citizen is NOT immediately
@@ -24,4 +24,6 @@ export const blockVoteBallotsTable = pgTable("block_vote_ballots", {
   voterName: text("voter_name").notNull(),
   vote:      text("vote").notNull(), // "yes" | "no"
   votedAt:   timestamp("voted_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  unique("block_vote_ballots_request_id_voter_id_key").on(t.requestId, t.voterId),
+]);
