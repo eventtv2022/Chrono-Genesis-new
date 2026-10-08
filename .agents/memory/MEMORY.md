@@ -6,3 +6,4 @@
 - [P2P Chat Phase 1](chat-phase1.md) — E2EE DM чат: tweetnacl box, dm_messages таблица, chat_public_key в citizens, 6 API эндпоинтов
 - [Two-stage onboarding](two-stage-onboarding.md) — guide precedes application; finale is T−1m; issue and grant one ancestral minute at eligibility
 - [Drizzle schema preservation](postgres-drizzle-preservation.md) — keep legacy raw-SQL tables represented before pushing schema changes
+- [Expo video web rendering](expo-video-web-rendering.md) — use an HTML video with explicit fit sizing on web; keep Expo AV for native playback

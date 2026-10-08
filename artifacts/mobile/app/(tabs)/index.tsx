@@ -4,6 +4,8 @@ import {
   View,
   Text,
   StyleSheet,
+  Image,
+  type ImageProps,
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
@@ -32,8 +34,44 @@ import { ContextualGuideModal } from "@/components/ContextualGuideModal";
 import { useContextualGuide } from "@/hooks/useContextualGuide";
 import { DiscussionModal } from "@/components/DiscussionModal";
 import { ResizeMode, Video } from "expo-av";
+import { Asset } from "expo-asset";
 
 const BASE_URL = getBaseUrl();
+const WELCOME_FLAG_VIDEO = require("@/assets/videos/timenation-flag.mp4");
+const WELCOME_FLAG_POSTER = require("@/assets/videos/timenation-flag-poster.jpg");
+
+function WelcomeFlagPoster({ source }: Pick<ImageProps, "source">) {
+  return (
+    <Image
+      source={source}
+      style={StyleSheet.absoluteFillObject}
+      resizeMode="contain"
+      accessibilityLabel="Флаг TimeNation"
+    />
+  );
+}
+
+function WelcomeFlagWebVideo() {
+  const video = Asset.fromModule(WELCOME_FLAG_VIDEO);
+  const poster = Asset.fromModule(WELCOME_FLAG_POSTER);
+
+  return React.createElement("video", {
+    src: video.uri,
+    poster: poster.uri,
+    autoPlay: true,
+    loop: true,
+    muted: true,
+    playsInline: true,
+    preload: "auto",
+    "aria-label": "Видео флага TimeNation",
+    style: {
+      display: "block",
+      width: "100%",
+      height: "100%",
+      objectFit: "contain",
+    },
+  });
+}
 
 interface Citizen {
   id: number;
@@ -111,18 +149,36 @@ function MobileWelcome() {
         contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 12, paddingBottom: bottomInset + 26, alignItems: "center" }}
         showsVerticalScrollIndicator={false}
       >
-        <Video
-          source={require("@/assets/videos/timenation-flag.mp4")}
-          usePoster
-          posterSource={require("@/assets/videos/timenation-flag-poster.jpg")}
-          style={{ width: "100%", maxWidth: 520, aspectRatio: 16 / 9, borderRadius: 16, backgroundColor: colors.card, overflow: "hidden" }}
-          resizeMode={ResizeMode.CONTAIN}
-          shouldPlay
-          isLooping
-          isMuted
-          useNativeControls={false}
-          testID="video-welcome-flag"
-        />
+        {Platform.OS === "web" ? (
+          <View
+            testID="video-welcome-flag"
+            style={{
+              width: "100%",
+              maxWidth: 520,
+              aspectRatio: 16 / 9,
+              borderRadius: 16,
+              backgroundColor: colors.card,
+              overflow: "hidden",
+            }}
+          >
+            <WelcomeFlagWebVideo />
+          </View>
+        ) : (
+          <Video
+            source={WELCOME_FLAG_VIDEO}
+            usePoster
+            posterSource={WELCOME_FLAG_POSTER}
+            PosterComponent={WelcomeFlagPoster}
+            videoStyle={{ width: "100%", height: "100%" }}
+            style={{ width: "100%", maxWidth: 520, aspectRatio: 16 / 9, borderRadius: 16, backgroundColor: colors.card, overflow: "hidden" }}
+            resizeMode={ResizeMode.CONTAIN}
+            shouldPlay
+            isLooping
+            isMuted
+            useNativeControls={false}
+            testID="video-welcome-flag"
+          />
+        )}
         <View style={{ width: "100%", maxWidth: 520, alignItems: "center", marginTop: 25 }}>
           <LogoBrand size={54} />
           <Text style={{ color: colors.primary, fontFamily: "Inter_700Bold", fontSize: 12, letterSpacing: 3, marginTop: 14 }}>
