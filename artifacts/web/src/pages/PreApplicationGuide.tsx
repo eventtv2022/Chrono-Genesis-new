@@ -123,9 +123,9 @@ export function PreApplicationGuide() {
         <section className="max-w-lg space-y-5 text-center">
           <ShieldCheck className="mx-auto h-14 w-14 text-primary" />
           <p className="font-mono text-xs uppercase tracking-[0.24em] text-primary">TimeNation · знакомство завершено</p>
-          <h1 className="text-3xl font-bold">Теперь можно подать заявление</h1>
+          <h1 className="text-3xl font-bold">Подача заявления на гражданство TimeNation</h1>
           <p className="leading-7 text-muted-foreground">
-            После отправки заявления начнётся симуляция. Её финал наступит за минуту до срока выдачи паспорта.
+            После отправки заявления начнется обратный отсчёт времени до вступления в гражданство. Ваш Паспорт гражданина TimeNation будет официально выдан ровно через 60 минут.
           </p>
           {done ? (
             <p className="text-sm text-muted-foreground">Переходим к оформлению…</p>
@@ -138,7 +138,7 @@ export function PreApplicationGuide() {
                 else navigate("/register");
               }}
             >
-              {isTelegramWebApp() ? "Продолжить в Telegram" : "Перейти к заявлению"}
+              {isTelegramWebApp() ? "Продолжить в Telegram" : "Подать заявление на гражданство"}
             </button>
           )}
         </section>

@@ -191,14 +191,14 @@ function PreApplicationGuide() {
             ЗНАКОМСТВО ЗАВЕРШЕНО
           </Text>
           <Text style={{ color: colors.foreground, fontSize: 27, fontWeight: "800", textAlign: "center" }}>
-            Теперь можно подать заявление
+            Подача заявления на гражданство TimeNation
           </Text>
           <Text style={{ color: colors.mutedForeground, fontSize: 15, lineHeight: 23, textAlign: "center" }}>
-            Часовой срок начнётся после отправки заявления. Финал симуляции будет за минуту до выдачи паспорта.
+            После отправки заявления начнется обратный отсчёт времени до вступления в гражданство. Ваш Паспорт гражданина TimeNation будет официально выдан ровно через 60 минут.
           </Text>
           <ActionButton
             testID="button-guide-complete-continue"
-            title="Перейти к заявлению"
+            title="Подать заявление на гражданство"
             onPress={() => router.replace("/register")}
           />
         </View>
