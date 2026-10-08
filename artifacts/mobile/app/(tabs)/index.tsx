@@ -116,7 +116,7 @@ function MobileWelcome() {
           usePoster
           posterSource={require("@/assets/videos/timenation-flag-poster.jpg")}
           style={{ width: "100%", maxWidth: 520, aspectRatio: 16 / 9, borderRadius: 16, backgroundColor: colors.card, overflow: "hidden" }}
-          resizeMode={ResizeMode.COVER}
+          resizeMode={ResizeMode.CONTAIN}
           shouldPlay
           isLooping
           isMuted
