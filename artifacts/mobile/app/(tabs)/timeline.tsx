@@ -892,13 +892,14 @@ export default function TimelineScreen() {
   const jumpToDate = useCallback(() => {
     const y = parseInt(jumpYear, 10);
     const m = parseInt(jumpMonth || "1", 10);
+    const hasDay = jumpDay.trim().length > 0;
     const d = parseInt(jumpDay || "1", 10);
     if (!y || y < 1 || y > 9999) { setAnchorResult({ ok: false, msg: "1–9999" }); return; }
     setSelectedCentury(Math.ceil(y / 100));
     setSelectedYear(y);
     setSelectedMonth(Math.min(Math.max(m, 1), 12));
     setSelectedDay(Math.min(Math.max(d, 1), daysInMonth(y, m)));
-    setZoom(4);
+    setZoom(hasDay ? 4 : 3);
   }, [jumpYear, jumpMonth, jumpDay]);
 
   const styles = getStyles(colors);
@@ -937,10 +938,10 @@ export default function TimelineScreen() {
           )}
         </View>
         <View style={styles.jumpRow}>
-          <TextInput style={styles.jumpInput} placeholder={t.tl_year_ph} placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpYear} onChangeText={setJumpYear} maxLength={4} />
-          <TextInput style={styles.jumpInput} placeholder={t.tl_month_ph} placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpMonth} onChangeText={setJumpMonth} maxLength={2} />
-          <TextInput style={styles.jumpInput} placeholder={t.tl_day_ph} placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpDay} onChangeText={setJumpDay} maxLength={2} />
-          <TouchableOpacity style={styles.jumpBtn} onPress={jumpToDate}>
+          <TextInput testID="input-timeline-jump-year" style={styles.jumpInput} placeholder={t.tl_year_ph} placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpYear} onChangeText={setJumpYear} maxLength={4} />
+          <TextInput testID="input-timeline-jump-month" style={styles.jumpInput} placeholder={t.tl_month_ph} placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpMonth} onChangeText={setJumpMonth} maxLength={2} />
+          <TextInput testID="input-timeline-jump-day" style={styles.jumpInput} placeholder={t.tl_day_ph} placeholderTextColor={colors.mutedForeground} keyboardType="numeric" value={jumpDay} onChangeText={setJumpDay} maxLength={2} />
+          <TouchableOpacity testID="button-timeline-jump" style={styles.jumpBtn} onPress={jumpToDate}>
             <Feather name="navigation" size={14} color={colors.background} />
             <Text style={styles.jumpBtnText}>{t.tl_jump}</Text>
           </TouchableOpacity>
@@ -1814,16 +1815,16 @@ export default function TimelineScreen() {
 function getStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+    header: { width: "100%", paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
     headerRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8 },
     backBtn: { padding: 4 },
     headerTitle: { fontSize: 18, fontWeight: "700", color: colors.primary },
     breadcrumb: { fontSize: 13, color: colors.mutedForeground, marginLeft: "auto" },
     myAnchorsBtn: { borderWidth: 1, borderRadius: 16, padding: 6, flexDirection: "row", alignItems: "center", gap: 4 },
     myAnchorsBadge: { fontSize: 12, fontWeight: "700" },
-    jumpRow: { flexDirection: "row", gap: 6, paddingBottom: 6 },
-    jumpInput: { flex: 1, height: 34, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, color: colors.foreground, paddingHorizontal: 8, fontSize: 13, textAlign: "center" },
-    jumpBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.primary, paddingHorizontal: 10, borderRadius: 8, height: 34 },
+    jumpRow: { width: "100%", flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, paddingBottom: 6 },
+    jumpInput: { flexGrow: 1, flexShrink: 1, flexBasis: 70, minWidth: 70, height: 34, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, color: colors.foreground, paddingHorizontal: 8, fontSize: 13, textAlign: "center" },
+    jumpBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, flexShrink: 0, minWidth: 74, backgroundColor: colors.primary, paddingHorizontal: 10, borderRadius: 8, height: 34 },
     jumpBtnText: { color: colors.background, fontSize: 12, fontWeight: "600" },
     loadingBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 6 },
     loadingText: { color: colors.mutedForeground, fontSize: 12 },
