@@ -9,3 +9,4 @@
 - [Expo video web rendering](expo-video-web-rendering.md) — use an HTML video with explicit fit sizing on web; keep Expo AV for native playback
 - [Expo web font loading](expo-web-font-loading.md) — avoid FontFaceObserver timeouts in browser previews while keeping bundled fonts on native
 - [Replit config edits](replit-config-edits.md) — `.replit` changes require the schema-validated replacement callback; direct patches are rejected
+- [Telegraf and esbuild](timenation-telegraf-bundling.md) — keep Telegraf external; bundling renames its AbortSignal shim and breaks node-fetch v2 polling

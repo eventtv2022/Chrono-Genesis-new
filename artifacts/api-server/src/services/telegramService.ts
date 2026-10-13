@@ -385,12 +385,10 @@ export function initBot(token: string): Telegraf {
     );
   });
 
-  bot.launch().then(async () => {
-    try {
-      const me = await bot!.telegram.getMe();
-      _botUsername = me.username ?? "";
-      logger.info({ username: _botUsername }, "Telegram bot username resolved");
-    } catch (_) { /* non-fatal */ }
+  const launchedBot = bot;
+  bot.launch({}, () => {
+    _botUsername = launchedBot.botInfo?.username ?? "";
+    logger.info({ username: _botUsername }, "Telegram bot identity resolved");
   }).catch((err) => {
     logger.error({ err }, "Telegram bot launch failed");
   });
@@ -398,7 +396,6 @@ export function initBot(token: string): Telegraf {
   process.once("SIGINT", () => bot?.stop("SIGINT"));
   process.once("SIGTERM", () => bot?.stop("SIGTERM"));
 
-  logger.info("Telegram bot started");
   return bot;
 }
 

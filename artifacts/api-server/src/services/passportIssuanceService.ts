@@ -96,6 +96,8 @@ export async function issueEligiblePassport(
       `${result.ancestralMinuteGranted ? "⏳ Родовая минута начислена: 1 Д\n\n" : "\n"}` +
       "Откройте приложение TimeNation, чтобы просмотреть удостоверение личности.",
     "state",
+  ).catch((err) =>
+    logger.warn({ err, citizenId }, "Passport issued, but Telegram notification failed"),
   );
 
   if (citizen.citizenNumber) {
