@@ -25,7 +25,7 @@ interface PendingData { citizenNumber: string; availableAt: string; citizenId: n
 
 export function Register() {
   const { t } = useLanguage();
-  const { citizen, twaStatus, setCitizen, setAuthToken } = useCitizen();
+  const { citizen, authToken, twaStatus, setCitizen, setAuthToken } = useCitizen();
   const [, navigate] = useLocation();
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
@@ -66,6 +66,8 @@ export function Register() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [signatureSaving, setSignatureSaving] = useState(false);
+  const [signatureError, setSignatureError] = useState<string | null>(null);
 
   const [mode, setMode] = useState<Mode>("form");
   const [pendingData, setPendingData] = useState<PendingData | null>(null);
@@ -185,6 +187,30 @@ export function Register() {
     }
   }
 
+  async function saveExistingCitizenSignature() {
+    if (!signatureBase64 || !authToken || !citizen || signatureSaving) return;
+    setSignatureSaving(true);
+    setSignatureError(null);
+    try {
+      const response = await fetch("/api/citizens/me/signature", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ signatureBase64 }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Не удалось сохранить подпись");
+      setCitizen({ ...citizen, hasSignature: true });
+      setSignatureBase64(null);
+    } catch (err) {
+      setSignatureError(err instanceof Error ? err.message : "Не удалось сохранить подпись");
+    } finally {
+      setSignatureSaving(false);
+    }
+  }
+
   /* ── Pending screen ─────────────────────────────────────────────────────── */
   if (mode === "pending" && pendingData) {
     return (
@@ -289,6 +315,28 @@ export function Register() {
               </a>
             </CardContent>
           </Card>
+          {!citizen?.hasSignature && authToken && (
+            <Card className="bg-card border-amber-500/30">
+              <CardContent className="p-6 space-y-4">
+                <div>
+                  <p className="font-semibold">Добавьте подпись в паспорт</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Этот паспорт был выдан до проверки подписи. Сохраните её, чтобы завершить данные паспорта.
+                  </p>
+                </div>
+                <SignaturePad onChange={setSignatureBase64} />
+                {signatureError && <p role="alert" className="text-sm text-destructive">{signatureError}</p>}
+                <Button
+                  type="button"
+                  className="w-full"
+                  disabled={!signatureBase64 || signatureSaving}
+                  onClick={() => void saveExistingCitizenSignature()}
+                >
+                  {signatureSaving ? "Сохраняем…" : "Сохранить подпись"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </Layout>
     );

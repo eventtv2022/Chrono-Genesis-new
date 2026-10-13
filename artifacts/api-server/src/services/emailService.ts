@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { ReplitConnectors } from "@replit/connectors-sdk";
 import { logger } from "../lib/logger";
 
 // ── SMTP configuration ────────────────────────────────────────────────────────
@@ -155,41 +156,100 @@ export interface NewCitizenNotifyParams {
   email: string | null;
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[char]!);
+}
+
+function wrapBase64(value: string): string {
+  return value.match(/.{1,76}/g)?.join("\r\n") ?? "";
+}
+
 export async function sendPassportEmail(params: NewCitizenNotifyParams): Promise<void> {
   if (!params.email) return;
-
-  const transport = createTransport();
-  if (!transport) {
-    logger.warn("SMTP not configured — skipping passport email (set SMTP_HOST, SMTP_USER, SMTP_PASS)");
+  if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(params.email)) {
+    logger.warn({ citizenNumber: params.citizenNumber }, "Invalid citizen email; passport email not sent");
     return;
   }
 
   const appDomain = getAppDomain();
   const idCardUrl = `${appDomain}/api/citizens/number/${params.citizenNumber}/id-card`;
+  const subject = `🏛️ Ваш паспорт гражданина TimeNation #${params.citizenNumber}`;
+  const safeName = escapeHtml(params.name);
+  const safeRank = escapeHtml(params.rank);
+  const safeCitizenNumber = escapeHtml(params.citizenNumber);
 
   const html = buildPassportHtml({
-    name: params.name,
-    citizenNumber: params.citizenNumber,
-    rank: params.rank,
+    name: safeName,
+    citizenNumber: safeCitizenNumber,
+    rank: safeRank,
     idCardUrl,
     appDomain,
   });
+  const text =
+    `Поздравляем, ${params.name}!\n\n` +
+    `Вы стали гражданином TimeNation.\n` +
+    `Номер паспорта: ${params.citizenNumber}\n` +
+    `Ранг: ${params.rank}\n\n` +
+    `Открыть паспорт: ${idCardUrl}\n\n` +
+    `TimeNation — цифровое государство, где время является валютой.`;
 
   try {
-    await transport.sendMail({
-      from: FROM,
-      to: params.email,
-      subject: `🏛️ Ваш паспорт гражданина TimeNation #${params.citizenNumber}`,
-      html,
-      text:
-        `Поздравляем, ${params.name}!\n\n` +
-        `Вы стали гражданином TimeNation.\n` +
-        `Номер паспорта: ${params.citizenNumber}\n` +
-        `Ранг: ${params.rank}\n\n` +
-        `Открыть паспорт: ${idCardUrl}\n\n` +
-        `TimeNation — цифровое государство, где время является валютой.`,
-    });
-    logger.info({ citizenNumber: params.citizenNumber }, "Passport email sent");
+    const connectors = new ReplitConnectors();
+    const profileResponse = await connectors.proxy(
+      "google-mail",
+      "/gmail/v1/users/me/profile",
+      { method: "GET" },
+    );
+    if (!profileResponse.ok) {
+      throw new Error(`Gmail profile request failed (${profileResponse.status})`);
+    }
+    const profile = await profileResponse.json() as { emailAddress?: string };
+    if (!profile.emailAddress || /[\r\n<>]/.test(profile.emailAddress)) {
+      throw new Error("Gmail profile did not return a usable sender address");
+    }
+
+    const boundary = `timenation-${params.citizenNumber}-${Date.now()}`;
+    const mime = [
+      `From: TimeNation <${profile.emailAddress}>`,
+      `To: ${params.email}`,
+      `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`,
+      "MIME-Version: 1.0",
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      "",
+      `--${boundary}`,
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      wrapBase64(Buffer.from(text, "utf8").toString("base64")),
+      `--${boundary}`,
+      "Content-Type: text/html; charset=UTF-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      wrapBase64(Buffer.from(html, "utf8").toString("base64")),
+      `--${boundary}--`,
+      "",
+    ].join("\r\n");
+
+    const sendResponse = await connectors.proxy(
+      "google-mail",
+      "/gmail/v1/users/me/messages/send",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raw: Buffer.from(mime, "utf8").toString("base64url") }),
+      },
+    );
+    if (!sendResponse.ok) {
+      throw new Error(`Gmail send request failed (${sendResponse.status})`);
+    }
+    await sendResponse.json();
+    logger.info({ citizenNumber: params.citizenNumber }, "Passport email sent through Gmail");
   } catch (err) {
     logger.error({ err, citizenNumber: params.citizenNumber }, "Failed to send passport email");
   }
