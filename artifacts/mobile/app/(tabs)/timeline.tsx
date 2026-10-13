@@ -581,6 +581,7 @@ function getMonthNames(lang: string): string[] {
 export default function TimelineScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const { citizen, authHeaders } = useCitizen();
   const { t, lang } = useLanguage();
   const qc = useQueryClient();
@@ -593,6 +594,9 @@ export default function TimelineScreen() {
   const [selectedMonth, setSelectedMonth] = useState<number>(1);
   const [selectedDay, setSelectedDay] = useState<number>(1);
   const [selectedHour, setSelectedHour] = useState<number>(0);
+  const [stoppedTimeCoord, setStoppedTimeCoord] = useState<string | null>(null);
+  const [stopTimeNotice, setStopTimeNotice] = useState("");
+  const minuteScrollRef = useRef<ScrollView>(null);
   const [occupied, setOccupied] = useState<OccupiedEntry[]>([]);
   const [loadingOccupied, setLoadingOccupied] = useState(false);
   const [anchoring, setAnchoring] = useState<string | null>(null);
@@ -863,6 +867,24 @@ export default function TimelineScreen() {
     if (zoom === 5) fetchOccupied(selectedYear, selectedMonth, selectedDay);
   }, [zoom, selectedYear, selectedMonth, selectedDay, fetchOccupied]);
 
+  useEffect(() => {
+    if (!stopTimeNotice) return;
+    const timeout = setTimeout(() => setStopTimeNotice(""), 3000);
+    return () => clearTimeout(timeout);
+  }, [stopTimeNotice]);
+
+  useEffect(() => {
+    if (zoom !== 5 || !stoppedTimeCoord) return;
+    const minute = Number(stoppedTimeCoord.slice(10, 12));
+    const row = Math.floor(minute / 7);
+    const cellSize = Math.max(40, (screenWidth - 24) / 7);
+    const scrollY = Math.max(0, (row - 1) * cellSize);
+    const frame = requestAnimationFrame(() => {
+      minuteScrollRef.current?.scrollTo({ y: scrollY, animated: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [zoom, stoppedTimeCoord, screenWidth]);
+
   const doAnchor = useCallback(async (coord: string) => {
     if (!citizen) { setAnchorResult({ ok: false, msg: t.citizen_not_found }); return; }
     setConfirmCoord(null);
@@ -901,6 +923,34 @@ export default function TimelineScreen() {
     setSelectedDay(Math.min(Math.max(d, 1), daysInMonth(y, m)));
     setZoom(hasDay ? 4 : 3);
   }, [jumpYear, jumpMonth, jumpDay]);
+
+  const selectTimelineTimestamp = useCallback((timestamp: Date) => {
+    const minuteTimestamp = new Date(
+      timestamp.getFullYear(),
+      timestamp.getMonth(),
+      timestamp.getDate(),
+      timestamp.getHours(),
+      timestamp.getMinutes(),
+    );
+    const coord = makeCoord(
+      minuteTimestamp.getFullYear(),
+      minuteTimestamp.getMonth() + 1,
+      minuteTimestamp.getDate(),
+      minuteTimestamp.getHours(),
+      minuteTimestamp.getMinutes(),
+    );
+    setSelectedCentury(Math.ceil(minuteTimestamp.getFullYear() / 100));
+    setSelectedYear(minuteTimestamp.getFullYear());
+    setSelectedMonth(minuteTimestamp.getMonth() + 1);
+    setSelectedDay(minuteTimestamp.getDate());
+    setSelectedHour(minuteTimestamp.getHours());
+    setStoppedTimeCoord(coord);
+    setConfirmCoord(null);
+    setAnchorResult(null);
+    setZoom(5);
+    const formatted = `${pad2(minuteTimestamp.getDate())}.${pad2(minuteTimestamp.getMonth() + 1)}.${minuteTimestamp.getFullYear()} ${pad2(minuteTimestamp.getHours())}:${pad2(minuteTimestamp.getMinutes())}`;
+    setStopTimeNotice(lang === "ru" ? `Мгновение зафиксировано: ${formatted}` : `Time selected: ${formatted}`);
+  }, [lang]);
 
   const styles = getStyles(colors);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -945,6 +995,19 @@ export default function TimelineScreen() {
             <Feather name="navigation" size={14} color={colors.background} />
             <Text style={styles.jumpBtnText}>{t.tl_jump}</Text>
           </TouchableOpacity>
+        </View>
+        <View style={styles.timelineActionsRow}>
+          <TouchableOpacity
+            testID="button-timeline-stop-time"
+            accessibilityRole="button"
+            accessibilityLabel={lang === "ru" ? "Остановись мгновение" : "Stop Time"}
+            style={styles.stopTimeButton}
+            onPress={() => selectTimelineTimestamp(new Date())}
+          >
+            <Feather name="clock" size={15} color={colors.background} />
+            <Text style={styles.stopTimeButtonText}>{lang === "ru" ? "Остановись мгновение" : "Stop Time"}</Text>
+          </TouchableOpacity>
+          {stopTimeNotice ? <Text accessibilityRole="alert" style={styles.stopTimeNotice}>{stopTimeNotice}</Text> : null}
         </View>
       </View>
 
@@ -1029,7 +1092,7 @@ export default function TimelineScreen() {
         </ScrollView>
       )}
       {zoom === 5 && (
-        <ScrollView contentContainerStyle={styles.minuteContainer}>
+        <ScrollView ref={minuteScrollRef} contentContainerStyle={styles.minuteContainer}>
           <Text style={styles.minuteTitle}>
             {pad2(selectedDay)}.{pad2(selectedMonth)}.{selectedYear} {pad2(selectedHour)}:00 — {pad2(selectedHour)}:59 — {t.tl_choose_minute}
           </Text>
@@ -1041,6 +1104,7 @@ export default function TimelineScreen() {
               const isOccupied = !!ownerId && !isMine;
               const isAnchoring = anchoring === coord;
               const isPending = confirmCoord === coord;
+              const isStoppedTime = stoppedTimeCoord === coord;
               return (
                 <Pressable
                   key={min}
@@ -1049,6 +1113,7 @@ export default function TimelineScreen() {
                     isMine && { backgroundColor: colors.primary, borderColor: colors.primary },
                     isOccupied && { backgroundColor: "#e63946", borderColor: "#e63946" },
                     isPending && { backgroundColor: colors.primary + "66", borderColor: colors.primary },
+                    isStoppedTime && { borderColor: colors.primary, borderWidth: 3 },
                     pressed && !ownerId && { opacity: 0.6 },
                   ]}
                   onPress={() => {
@@ -1826,6 +1891,10 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     jumpInput: { flexGrow: 1, flexShrink: 1, flexBasis: 70, minWidth: 70, height: 34, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, color: colors.foreground, paddingHorizontal: 8, fontSize: 13, textAlign: "center" },
     jumpBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, flexShrink: 0, minWidth: 74, backgroundColor: colors.primary, paddingHorizontal: 10, borderRadius: 8, height: 34 },
     jumpBtnText: { color: colors.background, fontSize: 12, fontWeight: "600" },
+    timelineActionsRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingTop: 2 },
+    stopTimeButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: colors.primary, borderRadius: 8, minHeight: 36, paddingHorizontal: 12 },
+    stopTimeButtonText: { color: colors.background, fontSize: 12, fontWeight: "700" },
+    stopTimeNotice: { color: colors.primary, fontSize: 11, flexShrink: 1 },
     loadingBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 6 },
     loadingText: { color: colors.mutedForeground, fontSize: 12 },
     gridContainer: { padding: 12, gap: 6 },

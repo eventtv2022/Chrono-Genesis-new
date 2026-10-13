@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Layout } from "@/components/Layout";
 import {
   useGetTimelineOccupied,
@@ -26,7 +26,7 @@ function padYear(n: number) { return String(n).padStart(4, "0"); }
 
 export function Timeline() {
   const { citizen, refreshCitizen } = useCitizen();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const queryClient = useQueryClient();
 
   const [year, setYear]   = useState(currentYear);
@@ -38,6 +38,9 @@ export function Timeline() {
   const [confirmCoord, setConfirmCoord] = useState<string | null>(null);
   const [anchoring,    setAnchoring]    = useState(false);
   const [anchorResult, setAnchorResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [stoppedCoord, setStoppedCoord] = useState<string | null>(null);
+  const [stopTimeNotice, setStopTimeNotice] = useState("");
+  const stoppedPanelRef = useRef<HTMLDivElement>(null);
 
   const yearStr  = String(year);
   const monthStr = String(month);
@@ -89,6 +92,40 @@ export function Timeline() {
   const ownerOf = useCallback((coord: string) => {
     return (dayOccupied ?? []).find((e) => e.timelineCoord === coord);
   }, [dayOccupied]);
+
+  const selectTimelineTimestamp = useCallback((timestamp: Date) => {
+    const minuteTimestamp = new Date(
+      timestamp.getFullYear(),
+      timestamp.getMonth(),
+      timestamp.getDate(),
+      timestamp.getHours(),
+      timestamp.getMinutes(),
+    );
+    const coord = `${padYear(minuteTimestamp.getFullYear())}${pad2(minuteTimestamp.getMonth() + 1)}${pad2(minuteTimestamp.getDate())}${pad2(minuteTimestamp.getHours())}${pad2(minuteTimestamp.getMinutes())}`;
+    setYear(minuteTimestamp.getFullYear());
+    setMonth(minuteTimestamp.getMonth() + 1);
+    setSelectedDay(minuteTimestamp.getDate());
+    setSelectedHour(minuteTimestamp.getHours());
+    setStoppedCoord(coord);
+    setConfirmCoord(null);
+    setAnchorResult(null);
+    const formatted = `${pad2(minuteTimestamp.getDate())}.${pad2(minuteTimestamp.getMonth() + 1)}.${minuteTimestamp.getFullYear()} ${pad2(minuteTimestamp.getHours())}:${pad2(minuteTimestamp.getMinutes())}`;
+    setStopTimeNotice(lang === "ru" ? `Мгновение зафиксировано: ${formatted}` : `Time selected: ${formatted}`);
+  }, [lang]);
+
+  useEffect(() => {
+    if (!stopTimeNotice) return;
+    const timeout = window.setTimeout(() => setStopTimeNotice(""), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [stopTimeNotice]);
+
+  useEffect(() => {
+    if (!stoppedCoord) return;
+    const frame = window.requestAnimationFrame(() => {
+      stoppedPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [stoppedCoord]);
 
   const doAnchor = async (coord: string) => {
     if (!citizen) return;
@@ -146,8 +183,23 @@ export function Timeline() {
           <Button variant="outline" size="sm" onClick={() => { setYear((y) => y + 1); closePanel(); }} className="font-mono text-xs">
             {year + 1}
           </Button>
+          <Button
+            size="sm"
+            onClick={() => selectTimelineTimestamp(new Date())}
+            className="gap-2 shadow-sm"
+            data-testid="button-timeline-stop-time"
+          >
+            <Clock className="w-4 h-4" />
+            {lang === "ru" ? "Остановись мгновение" : "Stop Time"}
+          </Button>
           <span className="text-xs text-muted-foreground font-mono ml-2">{coords.length} точек</span>
         </div>
+        {stopTimeNotice && (
+          <p role="status" className="mt-3 inline-flex items-center gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs text-primary">
+            <CheckCircle className="h-4 w-4 shrink-0" />
+            {stopTimeNotice}
+          </p>
+        )}
 
         {/* Calendar grid */}
         <div className="grid grid-cols-7 gap-1 text-xs font-mono">
@@ -191,6 +243,7 @@ export function Timeline() {
 
         {/* Day booking panel */}
         {selectedDay !== null && (
+          <div ref={stoppedPanelRef}>
           <Card className="bg-card border-primary/30">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -252,6 +305,7 @@ export function Timeline() {
                       const isMine = citizen && (owner as { citizenId?: number } | undefined)?.citizenId === citizen.id;
                       const isOcc = !!owner && !isMine;
                       const isPending = confirmCoord === coord;
+                      const isStoppedTime = stoppedCoord === coord;
                       return (
                         <button
                           key={min}
@@ -271,8 +325,8 @@ export function Timeline() {
                               : !citizen
                               ? "bg-secondary/20 border-border/20 text-muted-foreground/40 cursor-not-allowed"
                               : "bg-secondary/30 border-border/30 text-muted-foreground hover:border-primary hover:text-foreground"
-                          }`}
-                          title={isMine ? t.tl_mine_coord : isOcc ? t.tl_occupied_coord : coord}
+                          } ${isStoppedTime ? "ring-2 ring-cyan-300 border-cyan-300" : ""}`}
+                          title={isStoppedTime ? (lang === "ru" ? "Выбранная текущая минута" : "Selected current minute") : isMine ? t.tl_mine_coord : isOcc ? t.tl_occupied_coord : coord}
                         >
                           {pad2(min)}
                         </button>
@@ -327,6 +381,7 @@ export function Timeline() {
               )}
             </CardContent>
           </Card>
+          </div>
         )}
 
         {/* Coordinate list */}
