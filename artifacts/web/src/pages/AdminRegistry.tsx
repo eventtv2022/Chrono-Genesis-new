@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Layout } from "@/components/Layout";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLocation } from "wouter";
+import { RefreshCw } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -642,6 +643,17 @@ export function AdminRegistry() {
     return () => clearTimeout(t);
   }, [search, statusFilter, registryToken, phase, fetchCitizens]);
 
+  // Keep an open registry current when new passport applications arrive.
+  useEffect(() => {
+    if (!registryToken || phase !== "table" || activeTab !== "citizens") return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void fetchCitizens(registryToken, search, statusFilter);
+      }
+    }, 15_000);
+    return () => window.clearInterval(interval);
+  }, [activeTab, phase, registryToken, search, statusFilter, fetchCitizens]);
+
   const fetchBlockVotes = useCallback(async (token: string) => {
     setVotesLoading(true);
     try {
@@ -776,6 +788,20 @@ export function AdminRegistry() {
                     {f.label}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  data-testid="button-refresh-citizen-registry"
+                  onClick={() => {
+                    if (registryToken) void fetchCitizens(registryToken, search, statusFilter);
+                  }}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                  aria-label="Обновить список заявок"
+                  title="Обновить список заявок"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                  Обновить
+                </button>
               </div>
             </div>
 
