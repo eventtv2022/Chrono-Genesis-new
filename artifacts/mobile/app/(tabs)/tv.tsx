@@ -129,9 +129,10 @@ interface StylePreviewImageProps {
   seed: string;
   fallbackColor: string;
   tileStyle: object;
+  errorLabel?: string;
 }
 
-function StylePreviewImage({ styleValue, seed, fallbackColor, tileStyle }: StylePreviewImageProps) {
+function StylePreviewImage({ styleValue, seed, fallbackColor, tileStyle, errorLabel }: StylePreviewImageProps) {
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
 
@@ -139,12 +140,10 @@ function StylePreviewImage({ styleValue, seed, fallbackColor, tileStyle }: Style
     `${BASE_URL}/api/tv/styles/preview` +
     `?style=${styleValue}&seed=${encodeURIComponent(seed.slice(0, 100))}`;
 
-  // Reset load state when the URI changes (seed or style changed)
-  const prevUri = useRef(uri);
-  if (prevUri.current !== uri) {
-    prevUri.current = uri;
-    // Synchronously reset so the new image starts fresh
-  }
+  useEffect(() => {
+    setLoaded(false);
+    setErrored(false);
+  }, [uri]);
 
   return (
     <View style={[tileStyle, { overflow: "hidden", backgroundColor: fallbackColor }]}>
@@ -161,6 +160,12 @@ function StylePreviewImage({ styleValue, seed, fallbackColor, tileStyle }: Style
       {!loaded && !errored && (
         <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]}>
           <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
+        </View>
+      )}
+      {errored && errorLabel && (
+        <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", padding: 16 }]}>
+          <Feather name="image" size={24} color="rgba(255,255,255,0.6)" />
+          <Text style={{ color: "rgba(255,255,255,0.8)", textAlign: "center", marginTop: 8 }}>{errorLabel}</Text>
         </View>
       )}
     </View>
@@ -485,6 +490,8 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
   const [hasSovereignLink, setHasSovereignLink] = useState(false);
   const [visualStyle, setVisualStyle] = useState<VisualStyle>("space");
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
+  const [renderConfirmation, setRenderConfirmation] = useState<{ style: VisualStyle; seed: string } | null>(null);
+  const renderSubmissionRef = useRef(false);
   const [legalConsent, setLegalConsent] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -727,11 +734,39 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
   };
 
   const handleRender = () => {
+    if (isRendering || isSaving || !legalConsent || renderSubmissionRef.current) return;
     if (!citizenAgeVerified) {
       onNeedAgeVerify();
       return;
     }
-    renderMutation.mutate();
+    setRenderConfirmation({ style: visualStyle, seed: debouncedSeed });
+  };
+
+  const confirmRender = async () => {
+    if (!renderConfirmation || isRendering || isSaving || !legalConsent || renderSubmissionRef.current) return;
+    if (!citizenAgeVerified) {
+      setRenderConfirmation(null);
+      onNeedAgeVerify();
+      return;
+    }
+    renderSubmissionRef.current = true;
+    setRenderConfirmation(null);
+    try {
+      // The render endpoint uses the saved capsule, not the local style picker.
+      if (capsule && (
+        visualStyle !== capsule.visualStyle ||
+        seedText.trim() !== (capsule.seedText ?? "").trim() ||
+        broadcastPolicy !== capsule.broadcastPolicy ||
+        hasSovereignLink !== capsule.hasSovereignLink
+      )) {
+        await updateMutation.mutateAsync();
+      }
+      await renderMutation.mutateAsync();
+    } catch {
+      // Each mutation already reports its error; never render after a failed save.
+    } finally {
+      renderSubmissionRef.current = false;
+    }
   };
 
   const openVideo = () => {
@@ -929,9 +964,9 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.renderBtn, { borderColor: colors.primary, opacity: (isRendering || !legalConsent) ? 0.4 : 1 }]}
+                    style={[styles.renderBtn, { borderColor: colors.primary, opacity: (isRendering || isSaving || !legalConsent) ? 0.4 : 1 }]}
                     onPress={handleRender}
-                    disabled={isRendering || !legalConsent}
+                    disabled={isRendering || isSaving || !legalConsent}
                   >
                     {renderMutation.isPending ? (
                       <View style={styles.renderBtnInner}>
@@ -1109,10 +1144,78 @@ function CapsuleModal({ slot, onClose, colors, citizenAgeVerified, onNeedAgeVeri
             </>
           )}
         </ScrollView>
+        {renderConfirmation && (
+          <Modal
+            visible
+            transparent
+            animationType="fade"
+            onRequestClose={() => setRenderConfirmation(null)}
+          >
+            <View style={renderConfirmStyles.overlay}>
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={() => setRenderConfirmation(null)}
+                accessibilityRole="button"
+                accessibilityLabel={t.cancel}
+              />
+              <View
+                style={[renderConfirmStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+                accessibilityViewIsModal
+              >
+                <ScrollView bounces={false} contentContainerStyle={renderConfirmStyles.content}>
+                  <Text style={[renderConfirmStyles.title, { color: colors.foreground }]}>{t.confirm}</Text>
+                  <Text style={[renderConfirmStyles.label, { color: colors.primary }]}>
+                    {t.tv_style_label}: {visualStyles.find(s => s.value === renderConfirmation.style)?.label}
+                  </Text>
+                  <StylePreviewImage
+                    key={`${renderConfirmation.style}:${renderConfirmation.seed}`}
+                    styleValue={renderConfirmation.style}
+                    seed={renderConfirmation.seed}
+                    fallbackColor={visualStyles.find(s => s.value === renderConfirmation.style)!.preview}
+                    tileStyle={renderConfirmStyles.preview}
+                    errorLabel={`${t.tv_ai_preview}: ${t.error}`}
+                  />
+                  <Text style={[renderConfirmStyles.description, { color: colors.mutedForeground }]}>
+                    {visualStyles.find(s => s.value === renderConfirmation.style)?.desc}
+                  </Text>
+                  <View style={renderConfirmStyles.actions}>
+                    <TouchableOpacity
+                      style={[renderConfirmStyles.button, { borderColor: colors.border }]}
+                      onPress={() => setRenderConfirmation(null)}
+                      accessibilityRole="button"
+                    >
+                      <Text style={{ color: colors.foreground, fontWeight: "600" }}>{t.cancel}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[renderConfirmStyles.button, { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                      onPress={confirmRender}
+                      disabled={isRendering || isSaving || !legalConsent}
+                      accessibilityRole="button"
+                    >
+                      <Text style={{ color: colors.primaryForeground, fontWeight: "600" }}>{t.confirm}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+        )}
       </View>
     </Modal>
   );
 }
+
+const renderConfirmStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "center", alignItems: "center", padding: 24 },
+  card: { width: "100%", maxWidth: 480, maxHeight: "90%", borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  content: { padding: 20, gap: 12 },
+  title: { fontSize: 20, fontWeight: "700" },
+  label: { fontSize: 16, fontWeight: "600" },
+  preview: { width: "100%", aspectRatio: 16 / 9, borderRadius: 8 },
+  description: { fontSize: 14, lineHeight: 20 },
+  actions: { flexDirection: "row", gap: 12, marginTop: 4 },
+  button: { flex: 1, minHeight: 44, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center", padding: 12 },
+});
 
 // ── BookSlotModal ─────────────────────────────────────────────────────────────
 
