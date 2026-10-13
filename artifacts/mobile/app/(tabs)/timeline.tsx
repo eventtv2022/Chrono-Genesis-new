@@ -153,6 +153,11 @@ function TimeAnchorAuctionModal({ anchor, visible, onClose, onSubmit, submitting
 
 const BASE_URL = getBaseUrl();
 
+function formatMediaDuration(seconds: number): string {
+  const totalSeconds = Math.round(seconds);
+  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
+}
+
 // ── MyOwnedSlot interface (chronopedia slots owned by citizen) ─────────────────
 interface MyOwnedSlot {
   id: number;
@@ -619,6 +624,7 @@ export default function TimelineScreen() {
     type: "image" | "audio" | "video" | "document";
     name: string;
     mimeType?: string; // actual MIME from picker
+    durationSeconds?: number | null;
     durationUnverified?: boolean;
   } | null>(null);
   const [capsuleMediaUploading, setCapsuleMediaUploading] = useState(false);
@@ -700,8 +706,10 @@ export default function TimelineScreen() {
         // Duration guard for audio/video (≤60 s)
         let durationOver = false;
         let durationUnverified = false;
+        let durationSeconds: number | null = null;
         if (mediaType === "audio" || mediaType === "video") {
           const dur = await getMediaDurationSeconds(asset.uri, mediaType);
+          durationSeconds = dur;
           console.log("[Picker Duration]:", dur);
           durationUnverified = dur === null;
           if (dur !== null && dur > 60) durationOver = true;
@@ -717,7 +725,7 @@ export default function TimelineScreen() {
           return;
         }
 
-        setCapsuleMedia({ uri: asset.uri, relPath: null, type: mediaType, name: asset.name, mimeType: mime, durationUnverified });
+        setCapsuleMedia({ uri: asset.uri, relPath: null, type: mediaType, name: asset.name, mimeType: mime, durationSeconds, durationUnverified });
       } else {
         console.log("[Picker] Canceled or no asset returned");
       }
@@ -1559,7 +1567,14 @@ export default function TimelineScreen() {
                       {capsuleMedia.type === "audio" ? "🎤" : capsuleMedia.type === "video" ? "🎬" : "📄"}
                     </Text>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }} numberOfLines={1}>{capsuleMedia.name}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: colors.foreground }} numberOfLines={1}>{capsuleMedia.name}</Text>
+                        {(capsuleMedia.type === "audio" || capsuleMedia.type === "video") && capsuleMedia.durationSeconds != null && (
+                          <Text style={{ flexShrink: 0, fontSize: 13, color: colors.mutedForeground }}>
+                            {formatMediaDuration(capsuleMedia.durationSeconds)}
+                          </Text>
+                        )}
+                      </View>
                       <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
                         {capsuleMedia.type === "audio" ? t.tl_media_audio : capsuleMedia.type === "video" ? t.tl_media_video : t.tl_media_doc} · {t.tl_media_attached}
                       </Text>
