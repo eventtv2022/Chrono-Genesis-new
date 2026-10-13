@@ -19,6 +19,7 @@ import { logger } from "../lib/logger";
 import { encryptNullable } from "../services/encryptionService";
 import { sendDirectMessage } from "../services/telegramService";
 import { issueEligiblePassport } from "../services/passportIssuanceService";
+import { cropSignature } from "../services/imageService";
 
 const router: IRouter = Router();
 
@@ -67,9 +68,8 @@ function emissionState(citizen: { registrationStatus: string | null; availableAt
   const now = Date.now();
   const ready = citizen.availableAt?.getTime() ?? now;
   const secondsLeft = Math.max(0, Math.floor((ready - now) / 1000));
-  // If timer still running → IN_EMISSION regardless of DB status
   const status: "IN_EMISSION" | "ACTIVE" =
-    secondsLeft > 0 && citizen.registrationStatus === "pending" ? "IN_EMISSION" : "ACTIVE";
+    citizen.registrationStatus === "pending" ? "IN_EMISSION" : "ACTIVE";
   return { status, secondsLeft };
 }
 
@@ -186,6 +186,7 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
       photoUrl: existing.photoUrl ? "vault:protected" : null,
       status,
       secondsLeft,
+      hasSignature: !!current.signatureBase64?.trim(),
     });
     return;
   }
@@ -354,8 +355,21 @@ router.post("/auth/telegram-webapp/draft", async (req, res): Promise<void> => {
   }
 
   // Canvas signature (Constitution pledge)
-  if (signatureBase64?.startsWith("data:image/")) {
-    updates.signatureBase64 = signatureBase64;
+  if (signatureBase64 !== undefined) {
+    if (
+      typeof signatureBase64 !== "string" ||
+      !/^data:image\/(?:png|jpeg);base64,/i.test(signatureBase64) ||
+      signatureBase64.length > 1_500_000
+    ) {
+      res.status(400).json({ error: "Подпись должна быть изображением PNG или JPEG" });
+      return;
+    }
+    const croppedSignature = await cropSignature(signatureBase64);
+    if (!croppedSignature) {
+      res.status(400).json({ error: "Добавьте непустую подпись" });
+      return;
+    }
+    updates.signatureBase64 = croppedSignature;
   }
 
   // Privacy
@@ -430,6 +444,8 @@ router.get("/auth/telegram-webapp/status", async (req, res): Promise<void> => {
     balanceMinutes: finalCitizen.balanceMinutes,
     status:        finalStatus,
     secondsLeft,
+    hasSignature: !!finalCitizen.signatureBase64?.trim(),
+    signatureRequired: finalStatus === "IN_EMISSION" && !finalCitizen.signatureBase64?.trim(),
     criteria,
   });
 });

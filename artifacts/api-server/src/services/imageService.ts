@@ -17,7 +17,7 @@ import { logger } from "../lib/logger";
  * of non-transparent pixels, crops to it (with a 4 px padding), and returns a
  * new data-URI. Falls back to the original if the canvas is blank or on error.
  */
-export async function cropSignature(dataUri: string): Promise<string> {
+export async function cropSignature(dataUri: string): Promise<string | null> {
   try {
     const base64 = dataUri.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64, "base64");
@@ -45,7 +45,7 @@ export async function cropSignature(dataUri: string): Promise<string> {
       }
     }
 
-    if (!found || right <= left || bottom <= top) return dataUri;
+    if (!found || right <= left || bottom <= top) return null;
 
     const PAD = 4;
     const exLeft   = Math.max(0, left   - PAD);
@@ -65,8 +65,8 @@ export async function cropSignature(dataUri: string): Promise<string> {
 
     return `data:image/png;base64,${cropped.toString("base64")}`;
   } catch (err) {
-    logger.warn({ err }, "cropSignature failed — using original");
-    return dataUri;
+    logger.warn({ err }, "cropSignature failed — rejecting invalid signature");
+    return null;
   }
 }
 

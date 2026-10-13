@@ -8,6 +8,7 @@ import {
 } from "@workspace/api-client-react";
 import { ArrowRight, Check, Clock3, Eye, ShieldCheck } from "lucide-react";
 import { useCitizen } from "@/context/CitizenContext";
+import { SignaturePad } from "@/components/SignaturePad";
 import { PASSPORT_SIMULATOR_QUESTIONS, onboardingBlockTitle } from "../../../../lib/onboarding-questions";
 import { PreApplicationGuide } from "./PreApplicationGuide";
 
@@ -20,7 +21,7 @@ function formatClock(totalSeconds: number) {
 }
 
 export function OnboardingGame() {
-  const { citizen, authToken, setCitizen } = useCitizen();
+  const { citizen, authToken, setCitizen, refreshCitizen } = useCitizen();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const queryKey = useMemo(
@@ -30,6 +31,9 @@ export function OnboardingGame() {
   const authHeaders: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {};
   const updateProgress = useUpdateCitizenOnboardingProgress({ request: { headers: authHeaders } });
   const [progressError, setProgressError] = useState("");
+  const [signatureBase64, setSignatureBase64] = useState<string | null>(null);
+  const [signatureSaving, setSignatureSaving] = useState(false);
+  const [signatureError, setSignatureError] = useState("");
   const status = useGetOnboardingStatus({
     query: { enabled: !!citizen && !!authToken, queryKey, refetchInterval: 5_000 },
     request: { headers: authHeaders },
@@ -93,6 +97,29 @@ export function OnboardingGame() {
     }
   }
 
+  async function saveSignature() {
+    if (!signatureBase64 || !authToken || signatureSaving) return;
+    setSignatureSaving(true);
+    setSignatureError("");
+    try {
+      const response = await fetch("/api/citizens/me/signature", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ signatureBase64 }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Не удалось сохранить подпись");
+      setCitizen({ ...citizen!, hasSignature: true });
+      setSignatureBase64(null);
+      await refreshCitizen();
+      await status.refetch();
+    } catch (error) {
+      setSignatureError(error instanceof Error ? error.message : "Не удалось сохранить подпись");
+    } finally {
+      setSignatureSaving(false);
+    }
+  }
+
   if (!citizen) {
     return <PreApplicationGuide />;
   }
@@ -106,6 +133,31 @@ export function OnboardingGame() {
           <p className="text-muted-foreground">Обратитесь к форме заявления, чтобы проверить данные и подать его повторно.</p>
           <button className="rounded-md bg-primary px-5 py-3 font-semibold text-primary-foreground" onClick={() => navigate("/register")}>
             Открыть заявление
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (citizen && citizen.registrationStatus === "pending" && !citizen.hasSignature) {
+    return (
+      <main className="min-h-screen bg-[#050713] text-white grid place-items-center px-4 py-8">
+        <section className="w-full max-w-xl space-y-5 rounded-2xl border border-white/10 bg-white/[0.035] p-6">
+          <ShieldCheck className="h-10 w-10 text-primary" />
+          <h1 className="text-2xl font-bold">Добавьте подпись для выдачи паспорта</h1>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Паспорт останется в эмиссии, пока подпись не сохранена. После этого выдача продолжится автоматически по установленному сроку.
+          </p>
+          <SignaturePad onChange={setSignatureBase64} />
+          {signatureError && <p role="alert" className="text-sm text-rose-300">{signatureError}</p>}
+          <button
+            type="button"
+            disabled={!signatureBase64 || signatureSaving}
+            onClick={() => void saveSignature()}
+            className="w-full rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+            data-testid="button-save-passport-signature"
+          >
+            {signatureSaving ? "Сохраняем…" : "Сохранить подпись"}
           </button>
         </section>
       </main>

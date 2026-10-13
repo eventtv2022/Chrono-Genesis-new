@@ -28,6 +28,7 @@ export interface CitizenProfile {
   ageVerified: number;
   isAdmin?: number;
   govRole?: string | null;
+  hasSignature?: boolean;
 }
 
 interface CitizenContextType {

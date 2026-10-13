@@ -3,6 +3,8 @@ import { db, citizensTable, timeBankLedgerTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { logCitizenIssuedToSheets } from "../lib/googleSheets";
 import { notifyUserConditional } from "./telegramService";
+import { decrypt } from "./encryptionService";
+import { sendPassportEmail } from "./emailService";
 
 export const PASSPORT_WAIT_MS = 60 * 60 * 1000;
 export const SIMULATOR_DURATION_MS = PASSPORT_WAIT_MS - 60 * 1000;
@@ -45,6 +47,7 @@ export async function issueEligiblePassport(
           eq(citizensTable.id, citizenId),
           eq(citizensTable.registrationStatus, "pending"),
           lte(citizensTable.availableAt, now),
+          sql`btrim(${citizensTable.signatureBase64}) <> ''`,
         ),
       )
       .returning();
@@ -98,6 +101,18 @@ export async function issueEligiblePassport(
     "state",
   ).catch((err) =>
     logger.warn({ err, citizenId }, "Passport issued, but Telegram notification failed"),
+  );
+
+  const email = citizen.email?.startsWith("v1:")
+    ? decrypt(citizen.email)
+    : citizen.email;
+  void sendPassportEmail({
+    name: citizen.name,
+    citizenNumber: citizen.citizenNumber ?? String(citizen.id),
+    rank: citizen.rank,
+    email: email ?? null,
+  }).catch((err) =>
+    logger.warn({ citizenId }, "Passport issued, but email notification failed"),
   );
 
   if (citizen.citizenNumber) {

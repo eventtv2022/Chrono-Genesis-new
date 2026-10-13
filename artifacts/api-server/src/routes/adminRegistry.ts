@@ -367,7 +367,12 @@ router.post(
     }
 
     const [citizen] = await db
-      .select({ id: citizensTable.id, name: citizensTable.name, registrationStatus: citizensTable.registrationStatus })
+      .select({
+        id: citizensTable.id,
+        name: citizensTable.name,
+        registrationStatus: citizensTable.registrationStatus,
+        signatureBase64: citizensTable.signatureBase64,
+      })
       .from(citizensTable)
       .where(eq(citizensTable.id, id))
       .limit(1);
@@ -386,6 +391,10 @@ router.post(
       res.json({ ok: true, message: `Эмиссия перезапущена для ${citizen.name}` });
 
     } else if (action === "activate") {
+      if (!citizen.signatureBase64?.trim()) {
+        res.status(409).json({ error: "Перед активацией добавьте подпись гражданина" });
+        return;
+      }
       // Manual admin approval still uses the same atomic issuance path so the
       // ancestral-minute grant and ledger entry cannot be skipped.
       await db

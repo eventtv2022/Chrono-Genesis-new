@@ -19,7 +19,7 @@ import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionServ
 import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
 import { requireAuth } from "../middleware/auth";
-import { sendPassportEmail, sendAdminTelegramNotify } from "../services/emailService";
+import { sendAdminTelegramNotify } from "../services/emailService";
 import { sendDirectMessage } from "../services/telegramService";
 import { issueEligiblePassport } from "../services/passportIssuanceService";
 
@@ -49,7 +49,14 @@ const router: IRouter = Router();
 
 function formatCitizenRow(c: typeof citizensTable.$inferSelect) {
   // Explicitly exclude sensitive auth fields — never expose to clients
-  const { passwordHash: _ph, resetPasswordToken: _rt, resetPasswordExpires: _re, authToken: _at, ...safe } = c;
+  const {
+    passwordHash: _ph,
+    resetPasswordToken: _rt,
+    resetPasswordExpires: _re,
+    authToken: _at,
+    signatureBase64: _signature,
+    ...safe
+  } = c;
   return {
     ...safe,
     // Decrypt PII fields before returning — encrypted values stored as v1:... in DB
@@ -58,6 +65,7 @@ function formatCitizenRow(c: typeof citizensTable.$inferSelect) {
     givenNames: tryDecrypt(c.givenNames) ?? null,
     // Never expose the raw vault path as a web URL
     photoUrl: c.photoUrl ? "vault:protected" : null,
+    hasSignature: !!c.signatureBase64?.trim(),
     transferableBalance: Math.max(0, c.balanceMinutes - 1),
     lastActivity: c.lastActivity?.toISOString() ?? null,
     createdAt: c.createdAt.toISOString(),
@@ -384,6 +392,34 @@ router.post("/citizens/me/photo", requireAuth, photoUpload.single("photo"), asyn
   res.json({ success: true });
 });
 
+router.post("/citizens/me/signature", requireAuth, async (req, res): Promise<void> => {
+  const parsed = z.object({
+    signatureBase64: z.string()
+      .min(1)
+      .max(1_500_000)
+      .regex(/^data:image\/(?:png|jpeg);base64,/i),
+  }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Загрузите подпись в формате PNG или JPEG" });
+    return;
+  }
+
+  const citizen = req.citizen!;
+  const signatureBase64 = await cropSignature(parsed.data.signatureBase64);
+  await db.update(citizensTable)
+    .set({ signatureBase64 })
+    .where(eq(citizensTable.id, citizen.id));
+
+  const issuance = citizen.registrationStatus === "pending"
+    ? await issueEligiblePassport(citizen.id)
+    : null;
+  res.json({
+    success: true,
+    hasSignature: true,
+    registrationStatus: issuance?.citizen.registrationStatus ?? citizen.registrationStatus,
+  });
+});
+
 // ── POST /citizens ────────────────────────────────────────────────────────────
 // Extended registration: generates 9-digit citizenNumber, sets 1-hour pending delay.
 // Accepts both multipart/form-data (with photo) and application/json.
@@ -398,7 +434,10 @@ const RegisterCitizenBody = z.object({
   telegramId: z.string().optional(),
   email: z.string().email("Неверный формат email").optional().or(z.literal("")).optional(),
   privacyAgreementAccepted: z.string().optional(), // "true" from FormData
-  signatureBase64: z.string().optional(),
+  signatureBase64: z.string()
+    .min(1)
+    .max(1_500_000)
+    .regex(/^data:image\/(?:png|jpeg);base64,/i),
   whatsappPhone: z.string().optional(),
   preferredChannels: z.string().optional(), // JSON: ['email','telegram','whatsapp','sms','phone'] — ≥2
   preApplicationProgressToken: z.string().regex(/^[a-f0-9]{64}$/),
@@ -448,9 +487,11 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
   }
 
   // ── 2. Crop signature to bounding box ────────────────────────────────────────
-  const signatureBase64 = rawSignature
-    ? await cropSignature(rawSignature)
-    : null;
+  const signatureBase64 = await cropSignature(rawSignature);
+  if (!signatureBase64) {
+    res.status(400).json({ error: "Добавьте непустую подпись" });
+    return;
+  }
 
   const privacyAccepted = privacyAgreementAccepted === "true";
 
@@ -516,13 +557,6 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
   const createdAt = citizen.createdAt ?? new Date();
 
   // Email to citizen (skipped silently if SMTP not configured or no email)
-  sendPassportEmail({
-    name: citizen.name,
-    citizenNumber,
-    rank: citizen.rank,
-    email: decryptedEmail,
-  }).catch((err) => req.log.warn({ err }, "sendPassportEmail failed (non-critical)"));
-
   // Telegram to admin (skipped silently if ADMIN_TELEGRAM_ID not set)
   sendAdminTelegramNotify({
     sendDirectMessage,
