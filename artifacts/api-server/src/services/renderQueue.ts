@@ -218,12 +218,20 @@ export function enqueueRender(job: RenderJob): string {
       } catch (err) {
         clearTimeout(deadlineTimer);
 
-        if (err instanceof RenderTimeoutError) {
-          // ── Timeout path: solid-color immediate fallback ──────────────────
-          const elapsed = err.elapsed;
+        const isAbortError =
+          err !== null && typeof err === "object" &&
+          "name" in err && err.name === "AbortError";
+        if (err instanceof RenderTimeoutError || isAbortError) {
+          // Aborting the renderer can win the race against the deadline rejection.
+          // Both outcomes must fill the slot with the same solid-color fallback.
+          const elapsed = err instanceof RenderTimeoutError
+            ? err.elapsed
+            : Date.now() - startTime;
           renderLog.warn(
             { slotId, jobId, elapsed, timeoutMs: effectiveTimeoutMs },
-            "Render job exceeded wall-clock timeout — falling back to solid-color render"
+            isAbortError
+              ? "Render deadline race won by AbortError — falling back to solid-color render"
+              : "Render job exceeded wall-clock timeout — falling back to solid-color render"
           );
 
           try {
