@@ -5,25 +5,57 @@ import path from "path";
 import fs from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { fileTypeFromFile } from "file-type";
 
 const execFileAsync = promisify(execFile);
 
 const MAX_MEDIA_DURATION_SEC = 60;
 
-/** Returns the duration of an audio/video file in seconds, or null if undetectable. */
-async function getFileDurationSeconds(filePath: string): Promise<number | null> {
+type CapsuleMediaType = "image" | "audio" | "video" | "document";
+
+/** Inspect bytes and streams; never let the client's MIME exempt timed media. */
+async function getFileMediaInfo(
+  filePath: string,
+  clientMime: string,
+): Promise<{ mediaType: CapsuleMediaType; duration: number | null }> {
+  const detected = await fileTypeFromFile(filePath);
+  const mime = detected?.mime ?? "";
+  // ffprobe reports still images as video streams. Only a byte-detected image
+  // may skip the duration guard, not a client-declared image.
+  if (mime.startsWith("image/")) return { mediaType: "image", duration: null };
+
+  let mediaType: CapsuleMediaType = mime.startsWith("audio/") ? "audio"
+    : mime.startsWith("video/") ? "video" : "document";
+  // Preserve fail-closed handling for unsupported client-declared timed media,
+  // without misclassifying byte-detected documents as audio/video.
+  if (!detected) {
+    if (clientMime.startsWith("audio/")) mediaType = "audio";
+    else if (clientMime.startsWith("video/")) mediaType = "video";
+  }
   try {
     const { stdout } = await execFileAsync("ffprobe", [
       "-v", "quiet",
+      "-protocol_whitelist", "file,pipe",
       "-print_format", "json",
       "-show_format",
+      "-show_streams",
       filePath,
-    ], { timeout: 10_000 });
-    const data = JSON.parse(stdout) as { format?: { duration?: string } };
-    const duration = parseFloat(data?.format?.duration ?? "");
-    return Number.isFinite(duration) && duration > 0 ? duration : null;
+    ], { timeout: 10_000, maxBuffer: 1024 * 1024 });
+    const data = JSON.parse(stdout) as {
+      format?: { duration?: string };
+      streams?: { codec_type?: string; disposition?: { attached_pic?: number } }[];
+    };
+    // Ignore embedded album artwork when categorizing audio files.
+    if (data.streams?.some((stream) => stream.codec_type === "video" && !stream.disposition?.attached_pic)) {
+      mediaType = "video";
+    } else if (data.streams?.some((stream) => stream.codec_type === "audio")) {
+      mediaType = "audio";
+    }
+    const duration = Number(data.format?.duration);
+    return { mediaType, duration: Number.isFinite(duration) && duration > 0 ? duration : null };
   } catch {
-    return null;
+    // Recognizable audio/video remains timed media even if probing fails.
+    return { mediaType, duration: null };
   }
 }
 import { db } from "@workspace/db";
@@ -50,7 +82,7 @@ const capsuleUpload = multer({
   }),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
   fileFilter: (_req, _file, cb) => {
-    // Accept any MIME type — server derives mediaType from mimetype after upload
+    // Accept any MIME type — server inspects file content after upload.
     cb(null, true);
   },
 });
@@ -318,14 +350,21 @@ router.post(
       return;
     }
 
-    let mediaType: "image" | "audio" | "video" | "document" = "document";
-    if (req.file.mimetype.startsWith("image/")) mediaType = "image";
-    else if (req.file.mimetype.startsWith("audio/")) mediaType = "audio";
-    else if (req.file.mimetype.startsWith("video/")) mediaType = "video";
+    let mediaInfo: Awaited<ReturnType<typeof getFileMediaInfo>>;
+    try {
+      mediaInfo = await getFileMediaInfo(req.file.path, req.file.mimetype);
+    } catch {
+      fs.unlinkSync(req.file.path);
+      res.status(400).json({
+        code: "MEDIA_TYPE_UNDETECTABLE",
+        error: "Не удалось проверить тип файла. Попробуйте загрузить файл в другом формате.",
+      });
+      return;
+    }
+    const { mediaType, duration } = mediaInfo;
 
     // ── Duration guard for audio/video ────────────────────────────────────────
     if (mediaType === "audio" || mediaType === "video") {
-      const duration = await getFileDurationSeconds(req.file.path);
       if (duration === null) {
         fs.unlinkSync(req.file.path); // remove unverifiable file
         res.status(400).json({
