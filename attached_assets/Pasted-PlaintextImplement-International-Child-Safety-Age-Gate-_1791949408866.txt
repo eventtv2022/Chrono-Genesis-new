@@ -1,0 +1,38 @@
+PlaintextImplement International Child Safety, Age-Gate, and Educational Sandbox Mode for TimeNation.
+
+Objective:
+Comply with global privacy regulations (COPPA, GDPR-K) while preserving a rich educational, philosophical, and gamified experience for teenagers (ages 13-17) around the concept of "Time as Currency" and historical timelines.
+
+Requirements & Age Tiers:
+
+1. Age-Gate Onboarding Flow:
+   - During signup/registration, prompt the user for their Date of Birth (DOB).
+   - Automatically assign the user profile to one of three age tiers:
+     a) Under 13 (Strict Block / COPPA compliance)
+     b) 13 to 17 (Teen / Educational Sandbox Mode)
+     c) 18+ (Full Access / Adult & Web3)
+
+2. Feature Access Logic & Philosophy per Tier:
+
+   [Tier A: Under 13 Years Old]
+   - Block account creation or require Verifiable Parental Consent (VPC). Do not collect precise personal data or device tracking IDs.
+
+   [Tier B: 13 – 17 Years Old (Educational Sandbox & Philosophy Mode)]
+   - PHILOSOPHY: Empower the new generation to understand the value of time, history, and strategic resource allocation through safe gamification.
+   - ALLOW: 
+     * Full exploration of the history timeline and interactive educational cards.
+     * Participation in an internal non-financial sandbox economy (earning and spending internal "Time Credits" or educational points through learning activities and historical quests).
+     * Simulating resource management and time-investment strategies without real financial risk.
+   - RESTRICT / DISABLE:
+     * Real-world financial transactions, fiat payment gateways (Freedom Bank APIs), and subscription checkouts.
+     * Web3 wallet integrations, token/NFT purchases, and DAO voting weight.
+     * Unmoderated public user-generated content (UGC) publishing.
+   - UI / UX Banner: Display an inspiring indicator: "TimeNation Sandbox: Explore time, history, and value. Real-world financial features unlock at 18."
+
+   [Tier C: 18+ Years Old (Full Access)]
+   - Unlock full ecosystem: Web3, DAO governance, Freedom Bank e-Residency integration, real estate SPV modules, and real-world asset tokenization upon KYC completion.
+
+3. Backend & Database Enforcement:
+   - Store user age tier on the User model (ageTier: 'UNDER_13' | 'TEEN' | 'ADULT').
+   - Secure all financial and Web3 API endpoints with server-side middleware, returning a 403 Forbidden for any non-ADULT requests trying to access real transactions.
+Такой подход защищает проект юридически, но при этом сохраняет глубокую миссию проекта — обучать молодое поколение новому мышлению через игру с историей и временем.
