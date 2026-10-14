@@ -695,7 +695,7 @@ export default function TimelineScreen() {
         const mime = asset.mimeType ?? "application/octet-stream";
         console.log("[Picker Success]:", asset.name, mime, asset.size);
 
-        const sizeOver = !!(asset.size && asset.size > 12 * 1024 * 1024);
+        const sizeOver = !!(asset.size && asset.size > 10 * 1024 * 1024);
 
         // Detect media category from MIME
         let mediaType: "image" | "audio" | "video" | "document" = "document";

@@ -41,7 +41,8 @@ const chatUploadStorage = multer.diskStorage({
 });
 const chatUpload = multer({
   storage: chatUploadStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  // Busboy rejects at >= fileSize; permit exactly 10 MB, but no larger file.
+  limits: { fileSize: 10 * 1024 * 1024 + 1 },
 });
 
 export type AttachmentMeta = { url: string; type: "image" | "video" | "audio" | "document"; name: string; size: number };

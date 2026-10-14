@@ -80,7 +80,9 @@ const capsuleUpload = multer({
       cb(null, `${Date.now()}${ext}`);
     },
   }),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  // Busboy rejects at >= fileSize. Add one byte so exactly 10 MB is allowed,
+  // while any larger file is still rejected, matching the client.
+  limits: { fileSize: 10 * 1024 * 1024 + 1 },
   fileFilter: (_req, _file, cb) => {
     // Accept any MIME type — server inspects file content after upload.
     cb(null, true);
@@ -124,7 +126,7 @@ function formatCoordHuman(coord: string): string {
 }
 
 router.post("/timeline/anchor", async (req, res): Promise<void> => {
-  const parsed = AnchorBody.safeParse(req.body);
+  const parsed = CapsuleBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -254,12 +256,8 @@ router.get("/timeline/occupied", async (req, res): Promise<void> => {
   const anchors = await db
     .select()
     .from(timelineAnchorsTable)
-    .where(
-      and(
-        gte(timelineAnchorsTable.timelineCoord, coordMin),
-        lte(timelineAnchorsTable.timelineCoord, coordMax)
-      )
-    );
+    .where(eq(timelineAnchorsTable.citizenId, citizenId))
+    .orderBy(timelineAnchorsTable.timelineCoord);
 
   res.json(
     anchors.map((a) => ({
@@ -336,13 +334,13 @@ router.post(
     }
 
     // Verify the authenticated citizen owns this anchor
-    const citizenId = req.citizen!.id;
-    const anchor = await db
-      .select({ id: timelineAnchorsTable.id })
-      .from(timelineAnchorsTable)
-      .where(and(eq(timelineAnchorsTable.citizenId, citizenId), eq(timelineAnchorsTable.timelineCoord, timelineCoord)))
-      .limit(1)
-      .then((r) => r[0]);
+  const citizenId = req.citizen!.id;
+  const anchor = await db
+    .select({ id: timelineAnchorsTable.id })
+    .from(timelineAnchorsTable)
+    .where(and(eq(timelineAnchorsTable.citizenId, citizenId), eq(timelineAnchorsTable.timelineCoord, timelineCoord)))
+    .limit(1)
+    .then((r) => r[0]);
 
     if (!anchor) {
       fs.unlinkSync(req.file.path); // remove orphan

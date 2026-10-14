@@ -920,7 +920,7 @@ export default function ConversationScreen() {
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
       const sizeBytes = asset.size ?? 0;
-      if (sizeBytes > 12 * 1024 * 1024) {
+      if (sizeBytes > 10 * 1024 * 1024) {
         Alert.alert(t.file_limit_title, t.file_limit_size);
         return;
       }
