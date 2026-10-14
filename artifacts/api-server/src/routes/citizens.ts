@@ -18,10 +18,11 @@ import { generateIdCardSvg, loadPhotoAsDataUri } from "../services/idCardService
 import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
 import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
-import { requireAuth } from "../middleware/auth";
+import { requireAdultKyc, requireAuth } from "../middleware/auth";
 import { sendAdminTelegramNotify } from "../services/emailService";
 import { sendDirectMessage } from "../services/telegramService";
 import { issueEligiblePassport } from "../services/passportIssuanceService";
+import { deriveAgeTier } from "../services/ageGateService";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
 export const VAULT_DIR = path.join(process.cwd(), "secure_vault");
@@ -55,6 +56,9 @@ function formatCitizenRow(c: typeof citizensTable.$inferSelect) {
     resetPasswordExpires: _re,
     authToken: _at,
     signatureBase64: _signature,
+    dateOfBirth: _dob,
+    ageTier: _ageTier,
+    kycVerified: _kycVerified,
     ...safe
   } = c;
   return {
@@ -428,7 +432,7 @@ const RegisterCitizenBody = z.object({
   phone: z.string().min(5, "Телефон обязателен"),
   surname: z.string().optional(),
   givenNames: z.string().optional(),
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")).optional(),
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   photoUrl: z.string().optional(),
   tosAcceptedAt: z.string().optional(),
   telegramId: z.string().optional(),
@@ -466,6 +470,15 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
   const authToken = crypto.randomBytes(32).toString("hex");
 
   const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted, signatureBase64: rawSignature, whatsappPhone, preferredChannels, preApplicationProgressToken } = parsed.data;
+  const ageTier = deriveAgeTier(dateOfBirth);
+  if (!ageTier) {
+    res.status(400).json({ error: "Укажите корректную дату рождения" });
+    return;
+  }
+  if (ageTier === "UNDER_13") {
+    res.status(403).json({ error: "Регистрация доступна с 13 лет", code: "MINIMUM_AGE_NOT_MET" });
+    return;
+  }
 
   const [preflightProgress] = await db
     .select()
@@ -512,6 +525,7 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
         surname:    encryptNullable(surname ?? null),    // PII — encrypted
         givenNames: encryptNullable(givenNames ?? null), // PII — encrypted
         dateOfBirth: dateOfBirth || null,
+        ageTier,
         photoUrl: vaultPhotoRef,
         citizenNumber,
         authToken,
@@ -921,11 +935,15 @@ const WalletLinkBody = z.object({
     .regex(/^0x[a-fA-F0-9]{40}$/, "walletAddress must be a valid EVM address"),
 });
 
-router.post("/citizens/:id/wallet-link", async (req, res): Promise<void> => {
+router.post("/citizens/:id/wallet-link", requireAuth, requireAdultKyc, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw ?? "", 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid citizen ID" });
+    return;
+  }
+  if (req.citizen!.id !== id) {
+    res.status(403).json({ error: "Нельзя привязать кошелёк к другому гражданину" });
     return;
   }
 
@@ -963,30 +981,8 @@ router.post("/citizens/:id/wallet-link", async (req, res): Promise<void> => {
 });
 
 // ── POST /citizens/:id/age-verify ────────────────────────────────────────────
-router.post("/citizens/:id/age-verify", async (req, res): Promise<void> => {
-  const id = parseInt(req.params["id"] ?? "", 10);
-  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-
-  const [citizen] = await db
-    .select({ id: citizensTable.id, ageVerified: citizensTable.ageVerified })
-    .from(citizensTable)
-    .where(eq(citizensTable.id, id))
-    .limit(1);
-
-  if (!citizen) { res.status(404).json({ error: "Гражданин не найден" }); return; }
-
-  if (citizen.ageVerified) {
-    res.json({ ok: true, ageVerified: true, alreadyVerified: true });
-    return;
-  }
-
-  await db
-    .update(citizensTable)
-    .set({ ageVerified: 1 })
-    .where(eq(citizensTable.id, id));
-
-  req.log.info({ citizenId: id }, "Age verified (18+ — COPPA/DSA)");
-  res.json({ ok: true, ageVerified: true });
+router.post("/citizens/:id/age-verify", (_req, res): void => {
+  res.status(410).json({ error: "Самостоятельная age-verify отключена; возраст определяется по дате рождения." });
 });
 
 // ── POST /citizens/audit-rate — расчёт коэффициента Kq через ИИ ───────────────

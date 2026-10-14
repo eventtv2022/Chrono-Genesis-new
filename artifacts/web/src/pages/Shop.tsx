@@ -65,7 +65,7 @@ interface SupplyData {
 }
 
 export function Shop() {
-  const { citizen } = useCitizen();
+  const { citizen, authToken } = useCitizen();
   const { toast } = useToast();
   const [amountStr, setAmountStr] = useState("100");
   const [loading, setLoading] = useState(false);
@@ -95,7 +95,7 @@ export function Shop() {
       const base = window.location.origin + "/web/shop";
       const res = await fetch("/api/payments/checkout-custom", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
         body: JSON.stringify({
           citizenId:  citizen.id,
           amount,
@@ -138,7 +138,7 @@ export function Shop() {
     try {
       const res = await fetch("/api/payments/trc20/request", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
         body: JSON.stringify({ citizenId: citizen.id, darmins: amount, purpose: "darmins" }),
       });
       const data = await res.json() as { requestId?: number; totalUsdt?: number; error?: string };
@@ -159,7 +159,7 @@ export function Shop() {
     try {
       const res = await fetch("/api/payments/trc20/confirm", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
         body: JSON.stringify({
           requestId:  trc20ReqId,
           citizenId:  citizen.id,

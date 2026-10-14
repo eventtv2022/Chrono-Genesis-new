@@ -65,7 +65,7 @@ import { logTimelineAnchorToSheets } from "../lib/googleSheets";
 import { sendTransactionNotification } from "../services/telegramService";
 import { isCenturyBoundaryMinute, CENTURY_STATE_PROPERTY_CODE, CENTURY_STATE_PROPERTY_MSG } from "../lib/centuryGuard";
 import { isStateHeritageCoord, HERITAGE_LOCK_CODE, HERITAGE_LOCK_TITLE, HERITAGE_LOCK_MSG } from "../lib/heritageGuard";
-import { requireAuth } from "../middleware/auth";
+import { requireAdult, requireAuth } from "../middleware/auth";
 
 // ── Capsule media upload directory ────────────────────────────────────────────
 // Computed inline (no UPLOADS_DIR import) to avoid circular-import issues at module init time
@@ -399,7 +399,7 @@ const CapsuleBody = z.object({
   mediaType: z.enum(["image", "audio", "video", "document"]).nullable().optional(),
 });
 
-router.post("/timeline/capsule", requireAuth, async (req, res): Promise<void> => {
+router.post("/timeline/capsule", requireAuth, requireAdult, async (req, res): Promise<void> => {
   const parsed = CapsuleBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Неверные данные" });

@@ -6,6 +6,7 @@ import { ethers } from "ethers";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import crypto from "node:crypto";
+import { requireAdultKyc, requireAuth } from "../middleware/auth";
 
 const router: IRouter = Router();
 
@@ -22,7 +23,7 @@ function buildSignMessage(citizenId: number, walletAddress: string, nonce: strin
   ].join("\n");
 }
 
-router.get("/auth/wallet-nonce", async (req, res): Promise<void> => {
+router.get("/auth/wallet-nonce", requireAuth, requireAdultKyc, async (req, res): Promise<void> => {
   const parsed = z.object({
     walletAddress: z.string().min(10),
     citizenId: z.coerce.number().int().positive(),
@@ -34,6 +35,14 @@ router.get("/auth/wallet-nonce", async (req, res): Promise<void> => {
   }
 
   const { walletAddress, citizenId } = parsed.data;
+  if (req.citizen!.id !== citizenId) {
+    res.status(403).json({ error: "Нельзя подключить кошелёк другого гражданина" });
+    return;
+  }
+  if (req.citizen!.id !== citizenId) {
+    res.status(403).json({ error: "Нельзя подключить кошелёк другого гражданина" });
+    return;
+  }
 
   const citizen = await db
     .select()
@@ -82,7 +91,7 @@ const VerifyBody = z.object({
   signature: z.string().min(10),
 });
 
-router.post("/auth/wallet-verify", async (req, res): Promise<void> => {
+router.post("/auth/wallet-verify", requireAuth, requireAdultKyc, async (req, res): Promise<void> => {
   const parsed = VerifyBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -90,6 +99,14 @@ router.post("/auth/wallet-verify", async (req, res): Promise<void> => {
   }
 
   const { citizenId, walletAddress, signature } = parsed.data;
+  if (req.citizen!.id !== citizenId) {
+    res.status(403).json({ error: "Нельзя подтвердить кошелёк другого гражданина" });
+    return;
+  }
+  if (req.citizen!.id !== citizenId) {
+    res.status(403).json({ error: "Нельзя подтвердить кошелёк другого гражданина" });
+    return;
+  }
 
   const [citizen] = await db
     .select()
@@ -157,10 +174,18 @@ router.post("/auth/wallet-verify", async (req, res): Promise<void> => {
   });
 });
 
-router.delete("/auth/wallet-unlink", async (req, res): Promise<void> => {
+router.delete("/auth/wallet-unlink", requireAuth, requireAdultKyc, async (req, res): Promise<void> => {
   const parsed = z.object({ citizenId: z.coerce.number().int().positive() }).safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "citizenId is required" });
+    return;
+  }
+  if (req.citizen!.id !== parsed.data.citizenId) {
+    res.status(403).json({ error: "Нельзя отключить кошелёк другого гражданина" });
+    return;
+  }
+  if (req.citizen!.id !== parsed.data.citizenId) {
+    res.status(403).json({ error: "Нельзя отключить кошелёк другого гражданина" });
     return;
   }
 

@@ -8,6 +8,7 @@ import { z } from "zod";
 import { db, citizensTable, onboardingProgressTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
+import { deriveAgeTier } from "../services/ageGateService";
 
 const VAULT_PHOTOS_DIR = path.join(process.cwd(), "secure_vault", "photos");
 fs.mkdirSync(VAULT_PHOTOS_DIR, { recursive: true });
@@ -20,7 +21,10 @@ const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 // ── Safe citizen shape (never exposes password fields) ────────────────────────
 function safeRow(c: typeof citizensTable.$inferSelect) {
   // Never expose password fields or the auth token in regular profile responses
-  const { passwordHash: _ph, resetPasswordToken: _rt, resetPasswordExpires: _re, authToken: _at, ...rest } = c;
+  const {
+    passwordHash: _ph, resetPasswordToken: _rt, resetPasswordExpires: _re, authToken: _at,
+    dateOfBirth: _dob, ageTier: _ageTier, kycVerified: _kycVerified, ...rest
+  } = c;
   return {
     ...rest,
     email:      tryDecrypt(c.email)      ?? null,
@@ -44,7 +48,7 @@ const RegisterBody = z.object({
   password: z.string().min(6, "Пароль минимум 6 символов"),
   surname:    z.string().optional(),
   givenNames: z.string().optional(),
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")).optional(),
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   email: z.string().email("Неверный email").optional().or(z.literal("")).optional(),
   telegramId: z.string().optional(),
   tosAcceptedAt: z.string().optional(),
@@ -63,6 +67,15 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   }
 
   const { name, phone, password, surname, givenNames, dateOfBirth, email, telegramId, tosAcceptedAt, privacyAgreementAccepted, photoBase64, whatsappPhone, preferredChannels, preApplicationProgressToken } = parsed.data;
+  const ageTier = deriveAgeTier(dateOfBirth);
+  if (!ageTier) {
+    res.status(400).json({ error: "Укажите корректную дату рождения" });
+    return;
+  }
+  if (ageTier === "UNDER_13") {
+    res.status(403).json({ error: "Регистрация доступна с 13 лет", code: "MINIMUM_AGE_NOT_MET" });
+    return;
+  }
 
   const existing = await db
     .select({ id: citizensTable.id })
@@ -136,6 +149,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
         surname:    encryptNullable(surname ?? null),
         givenNames: encryptNullable(givenNames ?? null),
         dateOfBirth: dateOfBirth || null,
+        ageTier,
         email:      encryptNullable(email || null),
         telegramId: telegramId ?? undefined,
         citizenNumber,
@@ -218,6 +232,16 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   } else {
     // ── Legacy phone-only account (no password set) ───────────────────────────
     req.log.info({ citizenId: citizen.id }, "Login via legacy phone-only (no password set)");
+  }
+
+  const ageTier = deriveAgeTier(citizen.dateOfBirth ?? "");
+  if (ageTier === "UNDER_13") {
+    res.status(403).json({ error: "Доступ к аккаунту недоступен до 13 лет", code: "MINIMUM_AGE_NOT_MET" });
+    return;
+  }
+  if (ageTier && citizen.ageTier !== ageTier) {
+    await db.update(citizensTable).set({ ageTier }).where(eq(citizensTable.id, citizen.id));
+    citizen.ageTier = ageTier;
   }
 
   // Issue or reuse authToken

@@ -31,7 +31,7 @@ function truncate(addr: string) {
 export default function WalletScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { citizen, refreshCitizen } = useCitizen();
+  const { citizen, refreshCitizen, authHeaders } = useCitizen();
   const router = useRouter();
 
   const [step, setStep] = useState<Step>(
@@ -55,7 +55,8 @@ export default function WalletScreen() {
     setLoading(true);
     try {
       const res = await fetch(
-        `${BASE_URL}/api/auth/wallet-nonce?walletAddress=${encodeURIComponent(addr)}&citizenId=${citizen.id}`
+        `${BASE_URL}/api/auth/wallet-nonce?walletAddress=${encodeURIComponent(addr)}&citizenId=${citizen.id}`,
+        { headers: authHeaders }
       );
       const data = await res.json() as { nonce?: string; message?: string; error?: string };
       if (!res.ok) {
@@ -87,7 +88,7 @@ export default function WalletScreen() {
     try {
       const res = await fetch(`${BASE_URL}/api/auth/wallet-verify`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           citizenId: citizen.id,
           walletAddress: walletAddress.trim(),

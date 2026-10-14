@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { citizensTable } from "@workspace/db";
 import { z } from "zod";
 import { logger } from "../lib/logger";
+import { requireAdultKyc, requireAuth } from "../middleware/auth";
 
 const router: IRouter = Router();
 
@@ -57,7 +58,7 @@ const CustomCheckoutBody = z.object({
   cancelUrl:  z.string().url(),
 });
 
-router.post("/payments/checkout-custom", async (req, res): Promise<void> => {
+router.post("/payments/checkout-custom", requireAuth, requireAdultKyc, async (req, res): Promise<void> => {
   if (!STRIPE_SECRET_KEY) {
     res.status(503).json({ error: "Фиатный шлюз не настроен. Установите STRIPE_SECRET_KEY." });
     return;
@@ -70,6 +71,10 @@ router.post("/payments/checkout-custom", async (req, res): Promise<void> => {
   }
 
   const { citizenId, amount, successUrl, cancelUrl } = parsed.data;
+  if (req.citizen!.id !== citizenId) {
+    res.status(403).json({ error: "Нельзя оплатить от имени другого гражданина" });
+    return;
+  }
 
   const [citizen] = await db
     .select()
@@ -140,7 +145,7 @@ const CheckoutBody = z.object({
   cancelUrl:  z.string(),
 });
 
-router.post("/payments/checkout", async (req, res): Promise<void> => {
+router.post("/payments/checkout", requireAuth, requireAdultKyc, async (req, res): Promise<void> => {
   if (!STRIPE_SECRET_KEY) {
     res.status(503).json({ error: "Фиатный шлюз не настроен. Установите STRIPE_SECRET_KEY." });
     return;
@@ -153,6 +158,10 @@ router.post("/payments/checkout", async (req, res): Promise<void> => {
   }
 
   const { citizenId, packageId, successUrl, cancelUrl } = parsed.data;
+  if (req.citizen!.id !== citizenId) {
+    res.status(403).json({ error: "Нельзя оплатить от имени другого гражданина" });
+    return;
+  }
 
   const pack = MINUTE_PACKAGES.find((p) => p.id === packageId);
   if (!pack) {

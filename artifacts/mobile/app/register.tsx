@@ -315,6 +315,10 @@ export default function RegisterScreen({ initialMode }: { initialMode?: Mode } =
       Alert.alert("Пароль слишком короткий", "Минимум 6 символов.");
       return;
     }
+    if (!dateOfBirth.trim().match(/^\d{4}-\d{2}-\d{2}$/)) {
+      Alert.alert("Дата рождения обязательна", "Регистрация доступна с 13 лет. Введите дату в формате ГГГГ-ММ-ДД.");
+      return;
+    }
     if (password !== confirmPassword) {
       Alert.alert("Пароли не совпадают", "Проверь введённый пароль.");
       return;
@@ -351,7 +355,7 @@ export default function RegisterScreen({ initialMode }: { initialMode?: Mode } =
       body["preApplicationProgressToken"] = preApplicationProgressToken;
       if (surname.trim()) body["surname"] = surname.trim();
       if (givenNames.trim()) body["givenNames"] = givenNames.trim();
-      if (dateOfBirth.trim().match(/^\d{4}-\d{2}-\d{2}$/)) body["dateOfBirth"] = dateOfBirth.trim();
+      body["dateOfBirth"] = dateOfBirth.trim();
       if (email.trim()) body["email"] = email.trim();
       if (photoBase64) body["photoBase64"] = photoBase64;
 
@@ -565,7 +569,7 @@ export default function RegisterScreen({ initialMode }: { initialMode?: Mode } =
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ДАТА РОЖДЕНИЯ", "DATE OF BIRTH")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
             value={dateOfBirth} onChangeText={setDateOfBirth} placeholder={t("ГГГГ-ММ-ДД", "YYYY-MM-DD")} placeholderTextColor={colors.mutedForeground} />
-          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: -8, marginBottom: 8 }}>{t("Формат: 2000-12-31", "Format: 2000-12-31")}</Text>
+          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: -8, marginBottom: 8 }}>{t("Обязательно. Регистрация доступна с 13 лет; формат: 2000-12-31", "Required. Registration is available from age 13; format: 2000-12-31")}</Text>
 
           <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{t("ТЕЛЕФОН *", "PHONE *")}</Text>
           <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}

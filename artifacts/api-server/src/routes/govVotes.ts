@@ -12,7 +12,7 @@ import { Router, type Request, type Response, type NextFunction } from "express"
 import { db } from "@workspace/db";
 import { citizensTable, blockVoteRequestsTable, blockVoteBallotsTable } from "@workspace/db";
 import { eq, and, ne, lt } from "drizzle-orm";
-import { requireAuth } from "../middleware/auth";
+import { requireAdultKyc, requireAuth } from "../middleware/auth";
 import { logger } from "../lib/logger";
 import { getBot } from "../services/telegramService";
 
@@ -109,7 +109,7 @@ async function notifyVoteResult(requestId: number, approved: boolean, yes: numbe
 }
 
 // ── GET /gov/block-votes ──────────────────────────────────────────────────────
-router.get("/gov/block-votes", requireAuth, requireGovMember, async (req, res): Promise<void> => {
+router.get("/gov/block-votes", requireAuth, requireAdultKyc, requireGovMember, async (req, res): Promise<void> => {
   await finalizeExpiredVotes();
 
   const votes = await db
@@ -138,7 +138,7 @@ router.get("/gov/block-votes", requireAuth, requireGovMember, async (req, res): 
 });
 
 // ── POST /gov/block-votes/:id/cast ────────────────────────────────────────────
-router.post("/gov/block-votes/:id/cast", requireAuth, requireGovMember, async (req, res): Promise<void> => {
+router.post("/gov/block-votes/:id/cast", requireAuth, requireAdultKyc, requireGovMember, async (req, res): Promise<void> => {
   await finalizeExpiredVotes();
 
   const requestId = parseInt(String(req.params["id"] ?? ""), 10);

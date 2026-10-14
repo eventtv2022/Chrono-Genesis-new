@@ -15,6 +15,7 @@ import { citizensTable } from "@workspace/db";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { notifyAdminTrc20Payment } from "../services/telegramService";
+import { requireAdultKyc, requireAuth } from "../middleware/auth";
 
 const router: IRouter = Router();
 
@@ -58,7 +59,7 @@ const RequestBody = z.object({
   referenceId: z.number().int().optional(),
 });
 
-router.post("/payments/trc20/request", async (req, res): Promise<void> => {
+router.post("/payments/trc20/request", requireAuth, requireAdultKyc, async (req, res): Promise<void> => {
   const parsed = RequestBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -66,6 +67,10 @@ router.post("/payments/trc20/request", async (req, res): Promise<void> => {
   }
 
   const { citizenId, darmins, purpose, referenceId } = parsed.data;
+  if (req.citizen!.id !== citizenId) {
+    res.status(403).json({ error: "Нельзя создать оплату от имени другого гражданина" });
+    return;
+  }
 
   const [citizen] = await db
     .select({ id: citizensTable.id, name: citizensTable.name })
@@ -119,7 +124,7 @@ const ConfirmBody = z.object({
   purpose:    z.string().default("darmins"),
 });
 
-router.post("/payments/trc20/confirm", async (req, res): Promise<void> => {
+router.post("/payments/trc20/confirm", requireAuth, requireAdultKyc, async (req, res): Promise<void> => {
   const parsed = ConfirmBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -127,6 +132,10 @@ router.post("/payments/trc20/confirm", async (req, res): Promise<void> => {
   }
 
   const { requestId, citizenId, txId, amountUsdt, darmins, purpose } = parsed.data;
+  if (req.citizen!.id !== citizenId) {
+    res.status(403).json({ error: "Нельзя подтвердить оплату от имени другого гражданина" });
+    return;
+  }
 
   const [citizen] = await db
     .select({ id: citizensTable.id, name: citizensTable.name })

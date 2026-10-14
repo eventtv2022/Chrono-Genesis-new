@@ -4,7 +4,8 @@ import { tvSlotsTable, tvCapsulesTable, citizensTable, transactionsTable } from 
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
-import { requireAuth } from "../middleware/auth";
+import { requireAdultKyc, requireAuth } from "../middleware/auth";
+import { deriveAgeTier } from "../services/ageGateService";
 import {
   ensureSlotsForDate,
   getFingerprint,
@@ -246,7 +247,7 @@ router.get("/tv/slots/:id", async (req, res): Promise<void> => {
 // ─── POST /api/tv/slots/book ──────────────────────────────────────────────────
 // paymentType=fiat   → Stripe EUR checkout session
 // paymentType=timeltr → instant hard burn from citizen balance
-router.post("/tv/slots/book", requireAuth, async (req, res): Promise<void> => {
+router.post("/tv/slots/book", requireAuth, requireAdultKyc, async (req, res): Promise<void> => {
   const parsed = BookSlotBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
@@ -465,7 +466,7 @@ const BookCryptoBody = z.object({
   successUrl: z.string().optional(),
 });
 
-router.post("/tv/slots/book-crypto", sanctionsMiddleware, async (req, res): Promise<void> => {
+router.post("/tv/slots/book-crypto", requireAuth, requireAdultKyc, sanctionsMiddleware, async (req, res): Promise<void> => {
   if (!isCryptomusConfigured()) {
     res.status(503).json({
       error: "Крипто-шлюз не настроен. Установите CRYPTOMUS_MERCHANT_ID и CRYPTOMUS_API_KEY.",
@@ -479,6 +480,10 @@ router.post("/tv/slots/book-crypto", sanctionsMiddleware, async (req, res): Prom
     return;
   }
   const { slotId, citizenId, successUrl } = parsed.data;
+  if (req.citizen!.id !== citizenId) {
+    res.status(403).json({ error: "Нельзя бронировать слот от имени другого гражданина" });
+    return;
+  }
 
   const [slot] = await db
     .select()
@@ -875,7 +880,7 @@ router.post("/tv/capsule/:slotId/render", async (req, res): Promise<void> => {
 
   // ── Age verification (COPPA / EU DSA) ──────────────────────────────────────
   const [citizenRecord] = await db
-    .select({ ageVerified: citizensTable.ageVerified })
+    .select({ ageTier: citizensTable.ageTier, dateOfBirth: citizensTable.dateOfBirth, kycVerified: citizensTable.kycVerified })
     .from(citizensTable)
     .where(eq(citizensTable.id, citizenId.data))
     .limit(1);
@@ -884,10 +889,10 @@ router.post("/tv/capsule/:slotId/render", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Гражданин не найден" });
     return;
   }
-  if (!citizenRecord.ageVerified) {
+  if (deriveAgeTier(citizenRecord.dateOfBirth ?? "") !== "ADULT" || !citizenRecord.kycVerified) {
     res.status(403).json({
-      error: "Для генерации AI-контента необходимо подтвердить возраст 18+.",
-      code: "AGE_VERIFICATION_REQUIRED",
+      error: "Для генерации AI-контента необходимы совершеннолетие и подтверждение KYC.",
+      code: "ADULT_KYC_REQUIRED",
     });
     return;
   }

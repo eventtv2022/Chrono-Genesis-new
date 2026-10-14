@@ -22,6 +22,8 @@ export const citizensTable = pgTable("citizens", {
   lastActivity: timestamp("last_activity", { withTimezone: true }),
   tosAcceptedAt: timestamp("tos_accepted_at", { withTimezone: true }),
   ageVerified: integer("age_verified").notNull().default(0),
+  ageTier: text("age_tier"), // UNDER_13 is never persisted; TEEN/ADULT only after DOB check
+  kycVerified: boolean("kyc_verified").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 
   // ── ICAO Doc 9303 Passport fields ──────────────────────────────────────────

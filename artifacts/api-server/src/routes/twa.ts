@@ -20,6 +20,8 @@ import { encryptNullable } from "../services/encryptionService";
 import { sendDirectMessage } from "../services/telegramService";
 import { issueEligiblePassport } from "../services/passportIssuanceService";
 import { cropSignature } from "../services/imageService";
+import { deriveAgeTier } from "../services/ageGateService";
+import { requireAdultKyc, requireAuth } from "../middleware/auth";
 
 const router: IRouter = Router();
 
@@ -116,9 +118,10 @@ function resolvedBotToken(): string {
 // Validates initData, auto-registers or returns existing session.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
-  const { initData, preApplicationProgressToken } = req.body as {
+  const { initData, preApplicationProgressToken, dateOfBirth } = req.body as {
     initData?: string;
     preApplicationProgressToken?: string;
+    dateOfBirth?: string;
   };
 
   if (!initData) {
@@ -172,6 +175,21 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
     .limit(1);
 
   if (existing) {
+    // Existing DOB is authoritative; a later client request must not be able to
+    // replace a minor's birth date with an adult one.
+    const suppliedDob = existing.dateOfBirth ?? dateOfBirth ?? "";
+    const ageTier = deriveAgeTier(suppliedDob);
+    if (!ageTier) {
+      res.status(428).json({ error: "Необходимо указать дату рождения", code: "DATE_OF_BIRTH_REQUIRED" });
+      return;
+    }
+    if (ageTier === "UNDER_13") {
+      res.status(403).json({ error: "Регистрация доступна с 13 лет", code: "MINIMUM_AGE_NOT_MET" });
+      return;
+    }
+    if (!existing.dateOfBirth || existing.ageTier !== ageTier) {
+      await db.update(citizensTable).set({ dateOfBirth: suppliedDob, ageTier }).where(eq(citizensTable.id, existing.id));
+    }
     const issuance = await issueEligiblePassport(existing.id);
     const current = issuance?.citizen ?? existing;
     const { status, secondsLeft } = emissionState(current);
@@ -188,6 +206,16 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
       secondsLeft,
       hasSignature: !!current.signatureBase64?.trim(),
     });
+    return;
+  }
+
+  const ageTier = deriveAgeTier(dateOfBirth ?? "");
+  if (!ageTier) {
+    res.status(428).json({ error: "Необходимо указать дату рождения", code: "DATE_OF_BIRTH_REQUIRED" });
+    return;
+  }
+  if (ageTier === "UNDER_13") {
+    res.status(403).json({ error: "Регистрация доступна с 13 лет", code: "MINIMUM_AGE_NOT_MET" });
     return;
   }
 
@@ -239,6 +267,8 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
         availableAt,
         onboardingCompleted: false,
         telegramId,
+        dateOfBirth,
+        ageTier,
         telegramUsername: tgUser.username ? `@${tgUser.username}` : null,
         privacyAgreementAccepted: 1,
         privacyAgreementDate: new Date(),
@@ -611,7 +641,7 @@ router.post("/channel/post", async (req, res): Promise<void> => {
 // Save TON wallet address (from TON Connect) linked to authenticated citizen.
 // Body: { tonWalletAddress: string }
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/auth/telegram-webapp/ton-wallet", async (req, res): Promise<void> => {
+router.post("/auth/telegram-webapp/ton-wallet", requireAuth, requireAdultKyc, async (req, res): Promise<void> => {
   const authHeader = req.headers.authorization ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 

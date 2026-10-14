@@ -574,7 +574,7 @@ export function Tv() {
       if (paymentType === "crypto") {
         const res = await fetch("/api/tv/slots/book-crypto", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify({ slotId: selectedSlot.id, citizenId: citizen.id, successUrl: `${origin}/tv?booked=1` }),
         });
         const data = (await res.json()) as { paymentUrl?: string; error?: string };
@@ -595,7 +595,7 @@ export function Tv() {
           try {
             const r = await fetch("/api/payments/trc20/request", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...authHeaders },
               body: JSON.stringify({ citizenId: citizen.id, darmins: Math.round(slotUsdtPrice * 100), purpose: "tv_slot", referenceId: selectedSlot.id }),
             });
             const d = await r.json() as { requestId?: number };
@@ -605,7 +605,7 @@ export function Tv() {
 
         const confirmRes = await fetch("/api/payments/trc20/confirm", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify({
             requestId:  reqId,
             citizenId:  citizen.id,

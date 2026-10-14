@@ -10,3 +10,4 @@
 - [Expo web font loading](expo-web-font-loading.md) — avoid FontFaceObserver timeouts in browser previews while keeping bundled fonts on native
 - [Replit config edits](replit-config-edits.md) — `.replit` changes require the schema-validated replacement callback; direct patches are rejected
 - [Telegraf and esbuild](timenation-telegraf-bundling.md) — keep Telegraf external; bundling renames its AbortSignal shim and breaks node-fetch v2 polling
+- [TimeNation age gate](timenation-age-gate.md) — block under-13 signup; keep KYC-required adult features fail-closed until a real verification flow exists

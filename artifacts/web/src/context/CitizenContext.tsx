@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import { authenticateTelegramWebApp } from "@workspace/api-client-react";
 import { ONBOARDING_PROGRESS_TOKEN_KEY } from "../../../../lib/onboarding-questions";
 
 const STORAGE_KEY      = "timenation_citizen";
@@ -71,6 +70,10 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading]      = useState(true);
   const [twaStatus, setTwaStatus]      = useState<TwaStatus>(null);
   const [twaLoading, setTwaLoading]    = useState(false);
+  const [twaAgeGateRequired, setTwaAgeGateRequired] = useState(false);
+  const [ageGateDob, setAgeGateDob] = useState("");
+  const [ageGateError, setAgeGateError] = useState("");
+  const [ageGateSubmitting, setAgeGateSubmitting] = useState(false);
 
   useEffect(() => {
     // ── 1. Restore from localStorage ──────────────────────────────────────────
@@ -100,49 +103,7 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
 
     const doTwaAuth = async () => {
       try {
-        const authData = await authenticateTelegramWebApp({
-            initData,
-            preApplicationProgressToken: localStorage.getItem(ONBOARDING_PROGRESS_TOKEN_KEY) ?? undefined,
-        });
-
-        // Persist token immediately
-        setAuthTokenState(authData.authToken);
-        localStorage.setItem(AUTH_TOKEN_KEY, authData.authToken);
-        localStorage.setItem(TWA_STATUS_KEY, authData.status);
-        setTwaStatus(authData.status);
-
-        // Fetch full citizen profile
-        const profileRes = await fetch(`/api/citizens/${authData.citizenId}`, {
-          headers: { Authorization: `Bearer ${authData.authToken}` },
-        });
-
-        if (profileRes.ok) {
-          const profile = (await profileRes.json()) as CitizenProfile;
-          setCitizenState(profile);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-        } else {
-          // Store minimal profile so sidebar shows citizen name
-          const minimal: CitizenProfile = {
-            id: authData.citizenId,
-            name: authData.name,
-            phone: "",
-            balanceMinutes: 0,
-            totalGiven: 0,
-            totalReceived: 0,
-            status: "active",
-            registrationStatus: authData.status === "IN_EMISSION" ? "pending" : "issued",
-            availableAt: null,
-            meritScore: 0,
-            rank: "",
-            lastActivity: null,
-            createdAt: new Date().toISOString(),
-            walletAddress: null,
-            walletVerified: 0,
-            ageVerified: 0,
-          };
-          setCitizenState(minimal);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(minimal));
-        }
+        await authenticateTwa(initData);
       } catch {
         /* network error — fall through with whatever was in localStorage */
       } finally {
@@ -154,6 +115,66 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
 
     void doTwaAuth();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function authenticateTwa(initData: string, dateOfBirth?: string) {
+    const response = await fetch("/api/auth/telegram-webapp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        initData,
+        dateOfBirth,
+        preApplicationProgressToken: localStorage.getItem(ONBOARDING_PROGRESS_TOKEN_KEY) ?? undefined,
+      }),
+    });
+    const data = await response.json() as {
+      authToken?: string; citizenId?: number; name?: string; status?: TwaStatus;
+      error?: string; code?: string;
+    };
+    if (!response.ok) {
+      if (data.code === "DATE_OF_BIRTH_REQUIRED") setTwaAgeGateRequired(true);
+      setAgeGateError(data.code === "MINIMUM_AGE_NOT_MET"
+        ? "Registration is only available from age 13. No account was created."
+        : data.error ?? "Could not verify age. Please try again.");
+      return;
+    }
+    if (!data.authToken || !data.citizenId || !data.status || !data.name) {
+      setAgeGateError("The server returned an incomplete sign-in response.");
+      return;
+    }
+    setTwaAgeGateRequired(false);
+    setAgeGateError("");
+    setAuthTokenState(data.authToken);
+    localStorage.setItem(AUTH_TOKEN_KEY, data.authToken);
+    localStorage.setItem(TWA_STATUS_KEY, data.status);
+    setTwaStatus(data.status);
+    const profileRes = await fetch(`/api/citizens/${data.citizenId}`, {
+      headers: { Authorization: `Bearer ${data.authToken}` },
+    });
+    if (profileRes.ok) {
+      const profile = await profileRes.json() as CitizenProfile;
+      setCitizenState(profile);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    }
+  }
+
+  async function submitTwaAgeGate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ageGateDob)) {
+      setAgeGateError("Enter a valid date of birth.");
+      return;
+    }
+    const initData = getTgInitData();
+    if (!initData) return;
+    setAgeGateSubmitting(true);
+    setAgeGateError("");
+    try {
+      await authenticateTwa(initData, ageGateDob);
+    } catch {
+      setAgeGateError("Network error. Please try again.");
+    } finally {
+      setAgeGateSubmitting(false);
+    }
+  }
 
   async function refreshCitizen() {
     if (!citizen) return;
@@ -197,6 +218,7 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
     : {};
 
   return (
+    <>
     <CitizenContext.Provider value={{
       citizen, setCitizen,
       authToken, setAuthToken,
@@ -207,6 +229,21 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
     }}>
       {children}
     </CitizenContext.Provider>
+    {twaAgeGateRequired && (
+      <div role="dialog" aria-modal="true" aria-labelledby="twa-age-title" className="fixed inset-0 z-[10000] grid place-items-center bg-black/70 p-4">
+        <form onSubmit={submitTwaAgeGate} className="w-full max-w-md space-y-4 rounded-xl bg-background p-6 text-foreground shadow-xl">
+          <h2 id="twa-age-title" className="text-lg font-semibold">Age check / Проверка возраста</h2>
+          <p className="text-sm text-muted-foreground">Date of birth is required. Registration is available from age 13. Your date is not saved if you are under 13.</p>
+          <label className="block text-sm" htmlFor="twa-date-of-birth">Date of birth / Дата рождения</label>
+          <input id="twa-date-of-birth" type="date" required value={ageGateDob} onChange={e => setAgeGateDob(e.target.value)} className="w-full rounded-md border bg-background p-2" />
+          {ageGateError && <p role="alert" className="text-sm text-red-600">{ageGateError}</p>}
+          <button type="submit" disabled={ageGateSubmitting} className="w-full rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50">
+            {ageGateSubmitting ? "Checking…" : "Continue"}
+          </button>
+        </form>
+      </div>
+    )}
+    </>
   );
 }
 

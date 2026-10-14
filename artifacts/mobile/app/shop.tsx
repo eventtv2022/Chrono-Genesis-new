@@ -62,7 +62,7 @@ function getTiers(t: UIStrings) {
 export default function ShopScreen() {
   const colors  = useColors();
   const insets  = useSafeAreaInsets();
-  const { citizen, refreshCitizen } = useCitizen();
+  const { citizen, refreshCitizen, authHeaders } = useCitizen();
   const router  = useRouter();
   const { t }   = useLanguage();
 
@@ -102,7 +102,7 @@ export default function ShopScreen() {
 
       const res = await fetch(`${BASE_URL}/api/payments/checkout-custom`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ citizenId: citizen.id, amount, successUrl, cancelUrl }),
       });
 

@@ -141,12 +141,16 @@ export function Register() {
     setLoading(true);
     try {
       const n = name.trim() || `${surname.trim()} ${givenNames.trim()}`.trim();
+      if (!dateOfBirth.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        setError("Укажите дату рождения в формате ГГГГ-ММ-ДД. Регистрация доступна с 13 лет.");
+        return;
+      }
       const formData = new FormData();
       formData.append("name", n);
       formData.append("phone", phone.trim());
       if (surname.trim()) formData.append("surname", surname.trim());
       if (givenNames.trim()) formData.append("givenNames", givenNames.trim());
-      if (dateOfBirth.match(/^\d{4}-\d{2}-\d{2}$/)) formData.append("dateOfBirth", dateOfBirth);
+      formData.append("dateOfBirth", dateOfBirth);
       if (email.trim()) formData.append("email", email.trim());
       formData.append("privacyAgreementAccepted", "true");
       const preApplicationProgressToken = getPreApplicationProgressToken();
@@ -407,7 +411,8 @@ export function Register() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">{t.reg_dob}</Label>
-                <Input value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} placeholder={t.reg_dob_ph} className="bg-secondary border-border font-mono" />
+                <Input type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} required className="bg-secondary border-border font-mono" />
+                <p className="text-xs text-muted-foreground">Date of birth is required. Registration is available from age 13.</p>
               </div>
 
               <div className="space-y-1.5">
