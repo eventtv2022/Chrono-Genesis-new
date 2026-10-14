@@ -126,7 +126,7 @@ function formatCoordHuman(coord: string): string {
 }
 
 router.post("/timeline/anchor", async (req, res): Promise<void> => {
-  const parsed = CapsuleBody.safeParse(req.body);
+  const parsed = AnchorBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -256,7 +256,10 @@ router.get("/timeline/occupied", async (req, res): Promise<void> => {
   const anchors = await db
     .select()
     .from(timelineAnchorsTable)
-    .where(eq(timelineAnchorsTable.citizenId, citizenId))
+    .where(and(
+      gte(timelineAnchorsTable.timelineCoord, coordMin),
+      lte(timelineAnchorsTable.timelineCoord, coordMax),
+    ))
     .orderBy(timelineAnchorsTable.timelineCoord);
 
   res.json(

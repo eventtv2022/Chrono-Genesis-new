@@ -28,6 +28,8 @@ export interface CitizenProfile {
   isAdmin?: number;
   govRole?: string | null;
   hasSignature?: boolean;
+  ageProfileRequired?: boolean;
+  authToken?: string;
 }
 
 interface CitizenContextType {
@@ -74,6 +76,10 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
   const [ageGateDob, setAgeGateDob] = useState("");
   const [ageGateError, setAgeGateError] = useState("");
   const [ageGateSubmitting, setAgeGateSubmitting] = useState(false);
+  const [legacyAgeGateRequired, setLegacyAgeGateRequired] = useState(false);
+  const [legacyDob, setLegacyDob] = useState("");
+  const [legacyAgeError, setLegacyAgeError] = useState("");
+  const [legacyAgeSubmitting, setLegacyAgeSubmitting] = useState(false);
 
   useEffect(() => {
     // ── 1. Restore from localStorage ──────────────────────────────────────────
@@ -176,6 +182,35 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function submitLegacyAgeGate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(legacyDob)) {
+      setLegacyAgeError("Enter a valid date of birth.");
+      return;
+    }
+    setLegacyAgeSubmitting(true);
+    setLegacyAgeError("");
+    try {
+      const response = await fetch("/api/auth/complete-age", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ dateOfBirth: legacyDob }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) {
+        setLegacyAgeError(data.error ?? "Could not save date of birth.");
+        return;
+      }
+      setLegacyAgeGateRequired(false);
+      setLegacyDob("");
+      await refreshCitizen();
+    } catch {
+      setLegacyAgeError("Network error. Please try again.");
+    } finally {
+      setLegacyAgeSubmitting(false);
+    }
+  }
+
   async function refreshCitizen() {
     if (!citizen) return;
     try {
@@ -192,9 +227,18 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
   }
 
   function setCitizen(c: CitizenProfile | null) {
-    setCitizenState(c);
-    if (c) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(c));
+    const loginData = c as (CitizenProfile & { ageProfileRequired?: boolean }) | null;
+    setLegacyAgeGateRequired(!!loginData?.ageProfileRequired);
+    setLegacyAgeError("");
+    const profile = loginData
+      ? (({ ageProfileRequired: _required, authToken: token, ...rest }) => {
+          if (token) setAuthToken(token);
+          return rest;
+        })(loginData)
+      : null;
+    setCitizenState(profile as CitizenProfile | null);
+    if (profile) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
     } else {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(AUTH_TOKEN_KEY);
@@ -239,6 +283,20 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
           {ageGateError && <p role="alert" className="text-sm text-red-600">{ageGateError}</p>}
           <button type="submit" disabled={ageGateSubmitting} className="w-full rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50">
             {ageGateSubmitting ? "Checking…" : "Continue"}
+          </button>
+        </form>
+      </div>
+    )}
+    {legacyAgeGateRequired && (
+      <div role="dialog" aria-modal="true" aria-labelledby="legacy-age-title" className="fixed inset-0 z-[10001] grid place-items-center bg-black/70 p-4">
+        <form onSubmit={submitLegacyAgeGate} className="w-full max-w-md space-y-4 rounded-xl bg-background p-6 text-foreground shadow-xl">
+          <h2 id="legacy-age-title" className="text-lg font-semibold">Complete your age profile / Укажите дату рождения</h2>
+          <p className="text-sm text-muted-foreground">Your account needs a date of birth before age-restricted features can be checked. If you are under 13, the date will not be saved.</p>
+          <label className="block text-sm" htmlFor="legacy-date-of-birth">Date of birth / Дата рождения</label>
+          <input id="legacy-date-of-birth" type="date" required value={legacyDob} onChange={e => setLegacyDob(e.target.value)} className="w-full rounded-md border bg-background p-2" />
+          {legacyAgeError && <p role="alert" className="text-sm text-red-600">{legacyAgeError}</p>}
+          <button type="submit" disabled={legacyAgeSubmitting} className="w-full rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50">
+            {legacyAgeSubmitting ? "Saving…" : "Continue"}
           </button>
         </form>
       </div>

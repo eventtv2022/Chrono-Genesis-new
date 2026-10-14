@@ -1,5 +1,17 @@
 export type AgeTier = "UNDER_13" | "TEEN" | "ADULT";
 
+export function canUseAdultKycFeature(
+  dateOfBirth: string | null | undefined,
+  kycVerified: boolean,
+  now = new Date(),
+): boolean {
+  return deriveAgeTier(dateOfBirth ?? "", now) === "ADULT" && kycVerified;
+}
+
+export function canPublishUnmoderatedContent(dateOfBirth: string | null | undefined, now = new Date()): boolean {
+  return deriveAgeTier(dateOfBirth ?? "", now) === "ADULT";
+}
+
 export function deriveAgeTier(dateOfBirth: string, today = new Date()): AgeTier | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) return null;
   const [year, month, day] = dateOfBirth.split("-").map(Number);

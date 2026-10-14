@@ -9,6 +9,7 @@ import { db, citizensTable, onboardingProgressTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
 import { deriveAgeTier } from "../services/ageGateService";
+import { requireAuth } from "../middleware/auth";
 
 const VAULT_PHOTOS_DIR = path.join(process.cwd(), "secure_vault", "photos");
 fs.mkdirSync(VAULT_PHOTOS_DIR, { recursive: true });
@@ -252,7 +253,45 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   }
 
   req.log.info({ citizenId: citizen.id }, "Citizen logged in");
-  res.json({ ...safeRow(citizen), authToken: token });
+  res.json({ ...safeRow(citizen), authToken: token, ageProfileRequired: ageTier === null });
+});
+
+const CompleteAgeBody = z.object({
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+router.post("/auth/complete-age", requireAuth, async (req, res): Promise<void> => {
+  const parsed = CompleteAgeBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Укажите корректную дату рождения" });
+    return;
+  }
+
+  const citizen = req.citizen!;
+  const currentTier = deriveAgeTier(citizen.dateOfBirth ?? "");
+  if (currentTier) {
+    res.status(currentTier === "UNDER_13" ? 403 : 409).json({
+      error: currentTier === "UNDER_13"
+        ? "Доступ к аккаунту недоступен до 13 лет"
+        : "Дата рождения уже подтверждена для этого аккаунта",
+      ...(currentTier === "UNDER_13" ? { code: "MINIMUM_AGE_NOT_MET" } : {}),
+    });
+    return;
+  }
+  const ageTier = deriveAgeTier(parsed.data.dateOfBirth);
+  if (!ageTier) {
+    res.status(400).json({ error: "Укажите корректную дату рождения" });
+    return;
+  }
+  if (ageTier === "UNDER_13") {
+    res.status(403).json({ error: "Доступ к аккаунту недоступен до 13 лет", code: "MINIMUM_AGE_NOT_MET" });
+    return;
+  }
+
+  await db.update(citizensTable)
+    .set({ dateOfBirth: parsed.data.dateOfBirth, ageTier })
+    .where(eq(citizensTable.id, citizen.id));
+  res.json({ ok: true, ageTier });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

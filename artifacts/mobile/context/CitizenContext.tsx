@@ -3,6 +3,7 @@ import { getStoredToken, getStoredAuthHeaders, setStoredToken, deleteStoredToken
 import { getOrCreateKeyPair } from "@/lib/e2ee";
 import React, { createContext, useContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Modal, Pressable, Text, TextInput, View } from "react-native";
 
 const BASE_URL = getBaseUrl();
 const STORAGE_KEY = "@timenation/citizen"; // non-sensitive profile, AsyncStorage ok
@@ -31,6 +32,8 @@ export interface CitizenProfile {
   skillsAuditedAt?: string | null;
   reviewScoreCount?: number;
   photoUrl?: string | null;
+  ageProfileRequired?: boolean;
+  authToken?: string;
 }
 
 interface CitizenContextType {
@@ -57,6 +60,10 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
   const [citizen, setCitizenState] = useState<CitizenProfile | null>(null);
   const [authToken, setAuthTokenState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [ageGateVisible, setAgeGateVisible] = useState(false);
+  const [ageGateDob, setAgeGateDob] = useState("");
+  const [ageGateError, setAgeGateError] = useState("");
+  const [ageGateSaving, setAgeGateSaving] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -120,13 +127,53 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
   }
 
   function setCitizen(c: CitizenProfile | null) {
-    setCitizenState(c);
     if (c) {
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(c));
+      const { authToken: token, ageProfileRequired, ...profile } = c;
+      setCitizenState(profile);
+      setAgeGateVisible(!!ageProfileRequired);
+      setAgeGateError("");
+      if (token) setAuthToken(token);
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
     } else {
+      setCitizenState(null);
+      setAgeGateVisible(false);
+      setAgeGateDob("");
+      setAgeGateError("");
       AsyncStorage.removeItem(STORAGE_KEY);
       deleteStoredToken().catch(() => {});
       setAuthTokenState(null);
+    }
+  }
+
+  async function submitLegacyAge() {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ageGateDob)) {
+      setAgeGateError("Введите дату в формате ГГГГ-ММ-ДД.");
+      return;
+    }
+    if (!authToken) {
+      setAgeGateError("Сессия не найдена. Войдите снова.");
+      return;
+    }
+    setAgeGateSaving(true);
+    setAgeGateError("");
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/complete-age`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ dateOfBirth: ageGateDob }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) {
+        setAgeGateError(data.error ?? "Не удалось сохранить дату рождения.");
+        return;
+      }
+      setAgeGateVisible(false);
+      setAgeGateDob("");
+      await refreshCitizen();
+    } catch {
+      setAgeGateError("Ошибка соединения. Попробуйте ещё раз.");
+    } finally {
+      setAgeGateSaving(false);
     }
   }
 
@@ -144,9 +191,32 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
     : {};
 
   return (
+    <>
     <CitizenContext.Provider value={{ citizen, setCitizen, authToken, setAuthToken, authHeaders, refreshCitizen, isLoading }}>
       {children}
     </CitizenContext.Provider>
+    <Modal visible={ageGateVisible} transparent animationType="fade" onRequestClose={() => {}}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.72)", justifyContent: "center", padding: 24 }}>
+        <View style={{ borderRadius: 16, padding: 22, backgroundColor: "#111827", gap: 14 }}>
+          <Text style={{ color: "#fff", fontSize: 19, fontWeight: "700" }}>Укажите дату рождения</Text>
+          <Text style={{ color: "#cbd5e1", fontSize: 14 }}>Она нужна для возрастных ограничений. Если вам меньше 13 лет, дата не будет сохранена.</Text>
+          <TextInput
+            value={ageGateDob}
+            onChangeText={setAgeGateDob}
+            placeholder="ГГГГ-ММ-ДД"
+            placeholderTextColor="#94a3b8"
+            keyboardType="numbers-and-punctuation"
+            accessibilityLabel="Дата рождения в формате ГГГГ-ММ-ДД"
+            style={{ color: "#fff", borderColor: "#475569", borderWidth: 1, borderRadius: 8, padding: 12 }}
+          />
+          {!!ageGateError && <Text accessibilityRole="alert" style={{ color: "#f87171" }}>{ageGateError}</Text>}
+          <Pressable disabled={ageGateSaving} onPress={() => void submitLegacyAge()} style={{ borderRadius: 8, padding: 13, backgroundColor: "#eab308", alignItems: "center", opacity: ageGateSaving ? 0.6 : 1 }}>
+            <Text style={{ color: "#111827", fontWeight: "700" }}>{ageGateSaving ? "Сохранение…" : "Продолжить"}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
 

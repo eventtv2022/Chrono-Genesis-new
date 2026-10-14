@@ -347,6 +347,7 @@ test("passport issuance waits until availableAt and credits a new applicant exac
     rank: "Citizen",
     meritScore: 0,
     phone: null,
+    signatureBase64: "test-signature",
   });
   const serviceSource =
     sourceBetween(
@@ -391,6 +392,7 @@ test("passport issuance does not credit or ledger an ancestral minute twice for 
     rank: "Citizen",
     meritScore: 0,
     phone: null,
+    signatureBase64: "test-signature",
   });
   const issue = evaluate(
     sourceBetween(issuanceService, "export async function issueEligiblePassport(", "export async function issueDuePassports(")
@@ -415,12 +417,14 @@ function makeIssuanceDb(initialCitizen) {
   };
   const state = { ...initialCitizen };
   const ledger = [];
+  let transactionQueue = Promise.resolve();
 
   function matches(condition) {
     if (!condition) return true;
     if (condition.type === "and") return condition.conditions.every(matches);
     if (condition.type === "eq") return state[condition.column] === condition.value;
     if (condition.type === "lte") return state[condition.column] <= condition.value;
+    if (condition.type === "sql") return Boolean(state.signatureBase64?.trim());
     return false;
   }
 
@@ -432,7 +436,8 @@ function makeIssuanceDb(initialCitizen) {
         }),
       }),
     }),
-    transaction: async (callback) => callback({
+    transaction: (callback) => {
+      const result = transactionQueue.then(() => callback({
       select: () => ({
         from: () => ({
           where: (condition) => ({
@@ -458,7 +463,10 @@ function makeIssuanceDb(initialCitizen) {
       insert: () => ({
         values: async (entry) => { ledger.push(entry); },
       }),
-    }),
+      }));
+      transactionQueue = result.catch(() => {});
+      return result;
+    },
   };
 
   return {
@@ -471,10 +479,11 @@ function makeIssuanceDb(initialCitizen) {
       and: (...conditions) => ({ type: "and", conditions }),
       eq: (column, value) => ({ type: "eq", column, value }),
       lte: (column, value) => ({ type: "lte", column, value }),
-      sql: () => ({ increment: 1 }),
+      sql: () => ({ type: "sql", increment: 1 }),
       logger: { info() {}, warn() {} },
       notifyUserConditional: async () => {},
       logCitizenIssuedToSheets: async () => {},
+      sendPassportEmail: async () => {},
     },
   };
 }

@@ -2,7 +2,7 @@ import { type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
 import { citizensTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { deriveAgeTier } from "../services/ageGateService";
+import { canPublishUnmoderatedContent, canUseAdultKycFeature, deriveAgeTier } from "../services/ageGateService";
 
 declare global {
   namespace Express {
@@ -68,7 +68,7 @@ export function requireAdultKyc(req: Request, res: Response, next: NextFunction)
     res.status(401).json({ error: "Требуется авторизация" });
     return;
   }
-  if (deriveAgeTier(citizen.dateOfBirth ?? "") !== "ADULT" || !citizen.kycVerified) {
+  if (!canUseAdultKycFeature(citizen.dateOfBirth, citizen.kycVerified)) {
     res.status(403).json({
       error: "Функция доступна только совершеннолетним гражданам после подтверждения KYC",
       code: "ADULT_KYC_REQUIRED",
@@ -84,7 +84,7 @@ export function requireAdult(req: Request, res: Response, next: NextFunction): v
     res.status(401).json({ error: "Требуется авторизация" });
     return;
   }
-  if (deriveAgeTier(citizen.dateOfBirth ?? "") !== "ADULT") {
+  if (!canPublishUnmoderatedContent(citizen.dateOfBirth)) {
     res.status(403).json({
       error: "Публикация доступна только совершеннолетним гражданам",
       code: "ADULT_REQUIRED",
