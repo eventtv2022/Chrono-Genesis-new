@@ -17,7 +17,7 @@ import path from "path";
 import { db, citizensTable, onboardingProgressTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { encryptNullable } from "../services/encryptionService";
-import { sendDirectMessage } from "../services/telegramService";
+import { notifyPassportEmissionStarted } from "../services/telegramService";
 import { issueEligiblePassport } from "../services/passportIssuanceService";
 import { cropSignature } from "../services/imageService";
 import { deriveAgeTier } from "../services/ageGateService";
@@ -291,13 +291,13 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
     "TWA auth: citizen auto-registered",
   );
 
-  // Notification (non-blocking)
-  sendDirectMessage(
-    telegramId,
-    "⏳ *Профиль создан!*\n\n" +
-      "Запущен 60-минутный процесс эмиссии вашего Цифрового Паспорта TimeNation.\n\n" +
-      "Заполните данные в открывшемся окне — это ускорит активацию.",
-  ).catch((err: unknown) => logger.warn({ err, telegramId }, "TWA: registration notification failed"));
+  // Citizen and admin receive a passport lifecycle notice from the same bot.
+  void notifyPassportEmissionStarted({
+    citizenId: citizen.id,
+    citizenName: citizen.name,
+    citizenNumber: citizen.citizenNumber,
+    availableAt,
+  });
 
   res.status(201).json({
     success: true,
@@ -549,7 +549,8 @@ router.post("/auth/telegram-webapp/resubmit", async (req, res): Promise<void> =>
   const [citizen] = await db
     .select({
       id:                 citizensTable.id,
-      telegramId:         citizensTable.telegramId,
+      name:               citizensTable.name,
+      citizenNumber:      citizensTable.citizenNumber,
       registrationStatus: citizensTable.registrationStatus,
     })
     .from(citizensTable)
@@ -570,6 +571,12 @@ router.post("/auth/telegram-webapp/resubmit", async (req, res): Promise<void> =>
     .where(eq(citizensTable.id, citizen.id));
 
   req.log.info({ citizenId: citizen.id }, "TWA: application resubmitted");
+  void notifyPassportEmissionStarted({
+    citizenId: citizen.id,
+    citizenName: citizen.name,
+    citizenNumber: citizen.citizenNumber,
+    availableAt: newAvailableAt,
+  });
   res.json({ ok: true, status: "IN_EMISSION", secondsLeft: 3600 });
 });
 

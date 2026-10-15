@@ -508,6 +508,58 @@ export async function sendDirectMessage(
   }
 }
 
+export type PassportLifecycleEvent = "emission_started" | "passport_issued";
+
+interface PassportLifecycleNotice {
+  event: PassportLifecycleEvent;
+  citizenId: number;
+  citizenName: string;
+  citizenNumber: string | null;
+  availableAt?: Date | null;
+  ancestralMinuteGranted?: boolean;
+}
+
+export async function notifyAdminPassportLifecycle(notice: PassportLifecycleNotice): Promise<void> {
+  const adminId = process.env.ADMIN_TELEGRAM_ID ?? "";
+  if (!bot || !adminId) return;
+
+  const eventText = notice.event === "emission_started"
+    ? "⏳ Началась эмиссия паспорта"
+    : "🎉 Паспорт выпущен";
+  const expectedLine = notice.event === "emission_started" && notice.availableAt
+    ? `\nОжидаемая выдача (UTC): ${notice.availableAt.toISOString()}`
+    : "";
+  const ancestralLine = notice.event === "passport_issued" && notice.ancestralMinuteGranted
+    ? "\nНачислена родовая минута: 1 Д"
+    : "";
+  const text =
+    `${eventText} TimeNation\n\n` +
+    `Гражданин: ${notice.citizenName}\n` +
+    `Номер: ${notice.citizenNumber ?? "—"}\n` +
+    `ID: ${notice.citizenId}` +
+    `${expectedLine}${ancestralLine}`;
+
+  try {
+    await bot.telegram.sendMessage(adminId, text);
+  } catch (err) {
+    logger.warn({ err, citizenId: notice.citizenId, event: notice.event }, "Passport lifecycle admin notification failed");
+  }
+}
+
+export async function notifyPassportEmissionStarted(
+  notice: Omit<PassportLifecycleNotice, "event">,
+): Promise<void> {
+  const userText =
+    `⏳ Началась эмиссия паспорта TimeNation.\n` +
+    `Номер гражданина: ${notice.citizenNumber ?? "—"}\n` +
+    (notice.availableAt ? `Ожидаемая выдача (UTC): ${notice.availableAt.toISOString()}` : "");
+  const deliveries: Promise<unknown>[] = [
+    notifyAdminPassportLifecycle({ ...notice, event: "emission_started" }),
+    notifyUserConditional(notice.citizenId, userText, "state"),
+  ];
+  await Promise.allSettled(deliveries);
+}
+
 // ─── Admin TRC20 payment notification ────────────────────────────────────────
 export async function notifyAdminTrc20Payment({
   citizenId, citizenName, amountUsdt, darmins, purpose, txId, requestId,

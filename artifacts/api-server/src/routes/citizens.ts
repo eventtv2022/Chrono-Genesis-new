@@ -20,7 +20,7 @@ import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
 import { requireAdultKyc, requireAuth } from "../middleware/auth";
 import { sendAdminTelegramNotify } from "../services/emailService";
-import { sendDirectMessage } from "../services/telegramService";
+import { notifyPassportEmissionStarted, sendDirectMessage } from "../services/telegramService";
 import { issueEligiblePassport } from "../services/passportIssuanceService";
 import { deriveAgeTier } from "../services/ageGateService";
 
@@ -564,6 +564,13 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
     citizenNumber,
     availableAt: availableAt.toISOString(),
     registrationStatus: "pending",
+  });
+
+  void notifyPassportEmissionStarted({
+    citizenId: citizen.id,
+    citizenName: citizen.name,
+    citizenNumber: citizen.citizenNumber,
+    availableAt,
   });
 
   // ── Fire-and-forget: email to citizen + Telegram to admin ─────────────────

@@ -10,6 +10,7 @@ import { logger } from "../lib/logger";
 import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
 import { deriveAgeTier } from "../services/ageGateService";
 import { requireAuth } from "../middleware/auth";
+import { notifyPassportEmissionStarted } from "../services/telegramService";
 
 const VAULT_PHOTOS_DIR = path.join(process.cwd(), "secure_vault", "photos");
 fs.mkdirSync(VAULT_PHOTOS_DIR, { recursive: true });
@@ -179,6 +180,12 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   }
 
   req.log.info({ citizenId: citizen.id, citizenNumber }, "Citizen registered via /auth/register");
+  void notifyPassportEmissionStarted({
+    citizenId: citizen.id,
+    citizenName: citizen.name,
+    citizenNumber: citizen.citizenNumber,
+    availableAt,
+  });
 
   res.status(201).json({
     ...safeRow(citizen),

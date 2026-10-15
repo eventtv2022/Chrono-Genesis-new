@@ -2,7 +2,7 @@ import { and, eq, lte, sql } from "drizzle-orm";
 import { db, citizensTable, timeBankLedgerTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { logCitizenIssuedToSheets } from "../lib/googleSheets";
-import { notifyUserConditional } from "./telegramService";
+import { notifyAdminPassportLifecycle, notifyUserConditional } from "./telegramService";
 import { decrypt } from "./encryptionService";
 import { sendPassportEmail } from "./emailService";
 
@@ -102,6 +102,13 @@ export async function issueEligiblePassport(
   ).catch((err) =>
     logger.warn({ err, citizenId }, "Passport issued, but Telegram notification failed"),
   );
+  void notifyAdminPassportLifecycle({
+    event: "passport_issued",
+    citizenId: citizen.id,
+    citizenName: citizen.name,
+    citizenNumber: citizen.citizenNumber,
+    ancestralMinuteGranted: result.ancestralMinuteGranted,
+  });
 
   const email = citizen.email?.startsWith("v1:")
     ? decrypt(citizen.email)

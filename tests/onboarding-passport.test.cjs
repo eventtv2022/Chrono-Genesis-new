@@ -482,6 +482,7 @@ function makeIssuanceDb(initialCitizen) {
       sql: () => ({ type: "sql", increment: 1 }),
       logger: { info() {}, warn() {} },
       notifyUserConditional: async () => {},
+      notifyAdminPassportLifecycle: async () => {},
       logCitizenIssuedToSheets: async () => {},
       sendPassportEmail: async () => {},
     },

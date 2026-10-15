@@ -24,6 +24,7 @@ import { sendDirectMessage, getBot } from "../services/telegramService";
 import { sendRegistryOtpEmail } from "../services/emailService";
 import { logger } from "../lib/logger";
 import { issueEligiblePassport } from "../services/passportIssuanceService";
+import { notifyPassportEmissionStarted } from "../services/telegramService";
 
 const router = Router();
 
@@ -370,6 +371,7 @@ router.post(
       .select({
         id: citizensTable.id,
         name: citizensTable.name,
+        citizenNumber: citizensTable.citizenNumber,
         registrationStatus: citizensTable.registrationStatus,
         signatureBase64: citizensTable.signatureBase64,
       })
@@ -387,6 +389,12 @@ router.post(
         .update(citizensTable)
         .set({ registrationStatus: "pending", availableAt: newAvailableAt, status: "active" })
         .where(eq(citizensTable.id, id));
+      void notifyPassportEmissionStarted({
+        citizenId: citizen.id,
+        citizenName: citizen.name,
+        citizenNumber: citizen.citizenNumber,
+        availableAt: newAvailableAt,
+      });
       logger.info({ adminId, citizenId: id }, "Admin: restart_emission");
       res.json({ ok: true, message: `Эмиссия перезапущена для ${citizen.name}` });
 
