@@ -154,7 +154,14 @@ export async function issueDuePassports(batchSize = 100): Promise<number> {
 
   let issuedCount = 0;
   for (const citizen of dueCitizens) {
-    if (await issueEligiblePassport(citizen.id)) issuedCount += 1;
+    try {
+      if (await issueEligiblePassport(citizen.id)) issuedCount += 1;
+    } catch (err) {
+      logger.error(
+        { err, citizenId: citizen.id },
+        "Passport issuance failed; continuing with remaining eligible citizens",
+      );
+    }
   }
   return issuedCount;
 }

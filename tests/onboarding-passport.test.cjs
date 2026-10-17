@@ -378,6 +378,53 @@ test("passport issuance waits until availableAt and credits a new applicant exac
   assert.equal(fake.ledger[0].amount, 1);
 });
 
+test("one passport issuance failure does not stop the batch and remains eligible for retry", async () => {
+  const dueCitizens = [{ id: 31 }, { id: 32 }, { id: 33 }];
+  const attempts = [];
+  const errors = [];
+  let shouldFailFirstAttempt = true;
+  const issueDuePassports = evaluate(
+    issuanceService
+      .slice(issuanceService.indexOf("export async function issueDuePassports("))
+      .replace("export async function", "async function"),
+    "issueDuePassports",
+    {
+      db: {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => dueCitizens,
+            }),
+          }),
+        }),
+      },
+      citizensTable: { id: "id", registrationStatus: "registrationStatus", availableAt: "availableAt" },
+      and: (...conditions) => conditions,
+      eq: (...values) => values,
+      lte: (...values) => values,
+      issueEligiblePassport: async (citizenId) => {
+        attempts.push(citizenId);
+        if (citizenId === 31 && shouldFailFirstAttempt) {
+          shouldFailFirstAttempt = false;
+          throw new Error("temporary issuance failure");
+        }
+        return { citizen: { id: citizenId } };
+      },
+      logger: { error: (...values) => errors.push(values) },
+    },
+  );
+
+  assert.equal(await issueDuePassports(), 2);
+  assert.deepEqual(attempts, [31, 32, 33]);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0][0].citizenId, 31);
+  assert.match(errors[0][1], /continuing with remaining eligible citizens/);
+
+  // The still-pending record is selected and successfully retried by the next run.
+  assert.equal(await issueDuePassports(), 3);
+  assert.deepEqual(attempts, [31, 32, 33, 31, 32, 33]);
+});
+
 test("passport issuance does not credit or ledger an ancestral minute twice for an existing grant", async () => {
   const fake = makeIssuanceDb({
     id: 22,
@@ -414,8 +461,9 @@ function makeIssuanceDb(initialCitizen) {
     citizenNumber: "citizenNumber",
     registrationStatus: "registrationStatus",
     availableAt: "availableAt",
+    signatureBase64: "signatureBase64",
   };
-  const state = { ...initialCitizen };
+  const state = { signatureBase64: "signed-signature", ...initialCitizen };
   const ledger = [];
   let transactionQueue = Promise.resolve();
 
@@ -479,7 +527,10 @@ function makeIssuanceDb(initialCitizen) {
       and: (...conditions) => ({ type: "and", conditions }),
       eq: (column, value) => ({ type: "eq", column, value }),
       lte: (column, value) => ({ type: "lte", column, value }),
-      sql: () => ({ type: "sql", increment: 1 }),
+      sql: (strings) =>
+        strings.join("?").includes("btrim")
+          ? { type: "sql" }
+          : { type: "sql", increment: 1 },
       logger: { info() {}, warn() {} },
       notifyUserConditional: async () => {},
       notifyAdminPassportLifecycle: async () => {},
