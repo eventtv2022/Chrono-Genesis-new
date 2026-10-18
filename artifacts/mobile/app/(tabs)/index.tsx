@@ -1681,16 +1681,6 @@ export default function TimerScreen() {
                 <Text style={styles.timerLabel}>→ {recipientCitizen?.name ?? "..."}</Text>
                 <Text style={styles.timerDisplay}>{formatTime(elapsed)}</Text>
                 <Text style={styles.timerSub}>~{Math.max(1, Math.ceil(elapsed / 60))} Д</Text>
-                <TouchableOpacity style={styles.stopBtn} onPress={handleStop} disabled={sessionLoading} activeOpacity={0.75}>
-                  {sessionLoading ? (
-                    <ActivityIndicator color={colors.destructiveForeground} />
-                  ) : (
-                    <>
-                      <Feather name="square" size={20} color={colors.destructiveForeground} />
-                      <Text style={styles.stopBtnText}>{ui.timer_stop}</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
               </>
             ) : (
               <>
@@ -1748,6 +1738,29 @@ export default function TimerScreen() {
             <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 14, marginTop: 8 }}>
               {ui.timer_get_citizenship} →
             </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {citizen && activeSession && mode === "transfer" && (
+        <View style={[styles.stopActionDock, { bottom: Platform.OS === "web" ? botPad + 96 : insets.bottom + 88 }]}>
+          <TouchableOpacity
+            style={styles.stopBtn}
+            onPress={handleStop}
+            disabled={sessionLoading}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={ui.timer_stop}
+            testID="timer-stop-button"
+          >
+            {sessionLoading ? (
+              <ActivityIndicator color={colors.destructiveForeground} />
+            ) : (
+              <>
+                <Feather name="square" size={20} color={colors.destructiveForeground} />
+                <Text style={styles.stopBtnText}>{ui.timer_stop}</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -1949,6 +1962,7 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     startBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.primaryForeground, letterSpacing: 2 },
     stopBtn: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.destructive, paddingHorizontal: 40, paddingVertical: 14, borderRadius: 40 },
     stopBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.destructiveForeground, letterSpacing: 2 },
+    stopActionDock: { position: "absolute", left: 0, right: 0, alignItems: "center", zIndex: 20, elevation: 20 },
     recipientPickerTrigger: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 4, marginBottom: 20, paddingHorizontal: 12, paddingVertical: 7 },
     // Passport card
     passportCard: { flexDirection: "column", alignItems: "stretch", marginHorizontal: 20, marginBottom: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary + "55", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, gap: 0 },
