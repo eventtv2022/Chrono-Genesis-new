@@ -699,3 +699,91 @@ export const GetTvScheduleResponse = zod.object({
 })
 
 
+/**
+ * @summary List active polls available to the authenticated citizen
+ */
+export const ListActiveGovernmentPollsResponseItem = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "eligibleRoles": zod.array(zod.string()),
+  "createdBy": zod.number(),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date(),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
+  "createdAt": zod.coerce.date(),
+  "yesCount": zod.number(),
+  "noCount": zod.number()
+}).and(zod.object({
+  "myVote": zod.union([zod.literal('yes'),zod.literal('no'),zod.literal(null)]).nullable(),
+  "ballots": zod.array(zod.object({
+  "voterName": zod.string(),
+  "vote": zod.enum(['yes', 'no'])
+}))
+}))
+export const ListActiveGovernmentPollsResponse = zod.array(ListActiveGovernmentPollsResponseItem)
+
+
+/**
+ * @summary Cast or change a vote on an active poll
+ */
+export const CastGovernmentPollVoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CastGovernmentPollVoteBody = zod.object({
+  "vote": zod.enum(['yes', 'no'])
+})
+
+export const CastGovernmentPollVoteResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary List all general polls for the administrator
+ */
+export const ListAdminGovernmentPollsHeader = zod.object({
+  "X-Registry-Token": zod.string()
+})
+
+export const ListAdminGovernmentPollsResponseItem = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "eligibleRoles": zod.array(zod.string()),
+  "createdBy": zod.number(),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date(),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
+  "createdAt": zod.coerce.date(),
+  "yesCount": zod.number(),
+  "noCount": zod.number()
+})
+export const ListAdminGovernmentPollsResponse = zod.array(ListAdminGovernmentPollsResponseItem)
+
+
+/**
+ * @summary Create a scheduled general poll
+ */
+export const CreateAdminGovernmentPollHeader = zod.object({
+  "X-Registry-Token": zod.string()
+})
+
+export const createAdminGovernmentPollBodyTitleMin = 3;
+export const createAdminGovernmentPollBodyTitleMax = 160;
+
+export const createAdminGovernmentPollBodyDescriptionMax = 2000;
+
+
+
+
+export const CreateAdminGovernmentPollBody = zod.object({
+  "title": zod.string().min(createAdminGovernmentPollBodyTitleMin).max(createAdminGovernmentPollBodyTitleMax),
+  "description": zod.string().max(createAdminGovernmentPollBodyDescriptionMax).optional(),
+  "eligibleRoles": zod.array(zod.enum(['citizen', 'labor_officer', 'gov_admin', 'system_admin'])).min(1),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date()
+})
+
+

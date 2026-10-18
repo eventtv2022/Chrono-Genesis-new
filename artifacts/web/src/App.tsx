@@ -32,6 +32,7 @@ import { ResetPassword } from "./pages/ResetPassword";
 import { Admin } from "./pages/Admin";
 import { AdminRegistry } from "./pages/AdminRegistry";
 import { GovBlockVotes } from "./pages/GovBlockVotes";
+import { GovPolls } from "./pages/GovPolls";
 import { QrLogin } from "./pages/QrLogin";
 import { Privacy } from "./pages/Privacy";
 import { Welcome } from "./pages/Welcome";
@@ -170,6 +171,7 @@ function Router() {
         <Route path="/admin" component={Admin} />
         <Route path="/admin/registry" component={AdminRegistry} />
         <Route path="/gov/block-votes" component={GovBlockVotes} />
+        <Route path="/gov/polls" component={GovPolls} />
         <Route path="/qr-login" component={QrLogin} />
         <Route path="/privacy" component={Privacy} />
         <Route path="/tos" component={Tos} />

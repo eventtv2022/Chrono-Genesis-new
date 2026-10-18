@@ -10,6 +10,7 @@ import { rehydrateRenderQueue } from "./services/renderQueue";
 import { startNodeValidator } from "./services/nodeValidatorService";
 import { finalizeExpiredAuctions } from "./routes/auctions";
 import { attachSocialAlarmWs } from "./services/socialAlarmWs";
+import { processGovernmentPollSchedule } from "./services/governmentPollService";
 
 const rawPort = process.env["PORT"];
 
@@ -120,12 +121,32 @@ function schedulePassportIssuance() {
   logger.info("Passport issuance scheduler scheduled (15-second interval)");
 }
 
+function scheduleGovernmentPolls() {
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      await processGovernmentPollSchedule();
+    } catch (err) {
+      logger.error({ err }, "Government poll scheduler failed");
+    } finally {
+      running = false;
+    }
+  };
+
+  void tick();
+  setInterval(() => void tick(), 15_000);
+  logger.info("Government poll scheduler scheduled (15-second interval)");
+}
+
 // ── Async bootstrap — rehydrate render queue BEFORE accepting connections ──────
 async function bootstrap(): Promise<void> {
   scheduleDailyEntropy();
   scheduleMidnightUTCEmissionDrain();
   scheduleMinuteTick();
   schedulePassportIssuance();
+  scheduleGovernmentPolls();
   startNodeValidator();
 
   // ── Create HTTP server from Express app ───────────────────────────────────────

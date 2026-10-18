@@ -422,6 +422,96 @@ export interface TvScheduleResponse {
   schedule: TvScheduleEntry[];
 }
 
+export type GovernmentPollInputEligibleRolesItem = typeof GovernmentPollInputEligibleRolesItem[keyof typeof GovernmentPollInputEligibleRolesItem];
+
+
+export const GovernmentPollInputEligibleRolesItem = {
+  citizen: 'citizen',
+  labor_officer: 'labor_officer',
+  gov_admin: 'gov_admin',
+  system_admin: 'system_admin',
+} as const;
+
+export interface GovernmentPollInput {
+  /**
+     * @minLength 3
+     * @maxLength 160
+     */
+  title: string;
+  /** @maxLength 2000 */
+  description?: string;
+  /** @minItems 1 */
+  eligibleRoles: GovernmentPollInputEligibleRolesItem[];
+  startsAt: string;
+  endsAt: string;
+}
+
+export type GovernmentPollVoteVote = typeof GovernmentPollVoteVote[keyof typeof GovernmentPollVoteVote];
+
+
+export const GovernmentPollVoteVote = {
+  yes: 'yes',
+  no: 'no',
+} as const;
+
+export interface GovernmentPollVote {
+  vote: GovernmentPollVoteVote;
+}
+
+/**
+ * @nullable
+ */
+export type GovernmentPollWithBallotsMyVote = typeof GovernmentPollWithBallotsMyVote[keyof typeof GovernmentPollWithBallotsMyVote] | null;
+
+
+export const GovernmentPollWithBallotsMyVote = {
+  yes: 'yes',
+  no: 'no',
+} as const;
+
+export type GovernmentPollWithBallotsBallotsItemVote = typeof GovernmentPollWithBallotsBallotsItemVote[keyof typeof GovernmentPollWithBallotsBallotsItemVote];
+
+
+export const GovernmentPollWithBallotsBallotsItemVote = {
+  yes: 'yes',
+  no: 'no',
+} as const;
+
+export type GovernmentPollWithBallotsBallotsItem = {
+  voterName: string;
+  vote: GovernmentPollWithBallotsBallotsItemVote;
+};
+
+export type AdminGovernmentPollStatus = typeof AdminGovernmentPollStatus[keyof typeof AdminGovernmentPollStatus];
+
+
+export const AdminGovernmentPollStatus = {
+  scheduled: 'scheduled',
+  active: 'active',
+  completed: 'completed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface AdminGovernmentPoll {
+  id: number;
+  title: string;
+  description: string;
+  eligibleRoles: string[];
+  createdBy: number;
+  startsAt: string;
+  endsAt: string;
+  status: AdminGovernmentPollStatus;
+  createdAt: string;
+  yesCount: number;
+  noCount: number;
+}
+
+export type GovernmentPollWithBallots = AdminGovernmentPoll & {
+  /** @nullable */
+  myVote: GovernmentPollWithBallotsMyVote;
+  ballots: GovernmentPollWithBallotsBallotsItem[];
+};
+
 export type ListTransactionsParams = {
 citizenId?: number;
 limit?: number;
@@ -462,5 +552,9 @@ export type GetTvScheduleParams = {
  * YYYY-MM-DD
  */
 date: string;
+};
+
+export type CastGovernmentPollVote200 = {
+  ok: boolean;
 };
 

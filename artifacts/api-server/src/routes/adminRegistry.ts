@@ -17,8 +17,9 @@ import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import { db } from "@workspace/db";
-import { citizensTable, blockVoteRequestsTable } from "@workspace/db";
+import { citizensTable, blockVoteRequestsTable, governmentPollsTable, governmentPollBallotsTable } from "@workspace/db";
 import { eq, or, ilike, sql, ne } from "drizzle-orm";
+import { z } from "zod";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { sendDirectMessage, getBot } from "../services/telegramService";
 import { sendRegistryOtpEmail } from "../services/emailService";
@@ -539,6 +540,68 @@ router.get("/admin/registry/block-votes", requireRegistrySession, async (req, re
   }));
 
   res.json(withCounts);
+});
+
+const PollRole = z.enum(["citizen", "labor_officer", "gov_admin", "system_admin"]);
+const CreateGovernmentPollBody = z.object({
+  title: z.string().trim().min(3).max(160),
+  description: z.string().trim().max(2000).default(""),
+  eligibleRoles: z.array(PollRole).min(1).max(4),
+  startsAt: z.string().datetime({ offset: true }),
+  endsAt: z.string().datetime({ offset: true }),
+});
+
+router.get("/admin/registry/general-votes", requireRegistrySession, async (_req, res): Promise<void> => {
+  const polls = await db
+    .select()
+    .from(governmentPollsTable)
+    .orderBy(governmentPollsTable.startsAt);
+
+  const withCounts = await Promise.all(polls.map(async (poll) => {
+    const ballots = await db
+      .select({ vote: governmentPollBallotsTable.vote })
+      .from(governmentPollBallotsTable)
+      .where(eq(governmentPollBallotsTable.pollId, poll.id));
+    return {
+      ...poll,
+      yesCount: ballots.filter((ballot) => ballot.vote === "yes").length,
+      noCount: ballots.filter((ballot) => ballot.vote === "no").length,
+    };
+  }));
+  res.json(withCounts);
+});
+
+router.post("/admin/registry/general-votes", requireRegistrySession, async (req, res): Promise<void> => {
+  const parsed = CreateGovernmentPollBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Проверьте параметры голосования" });
+    return;
+  }
+
+  const startsAt = new Date(parsed.data.startsAt);
+  const endsAt = new Date(parsed.data.endsAt);
+  if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || startsAt >= endsAt) {
+    res.status(400).json({ error: "Время окончания должно быть позже времени начала" });
+    return;
+  }
+
+  const roles = [...new Set(parsed.data.eligibleRoles)];
+  const registryAdminId = (req as typeof req & { registryAdminId?: number }).registryAdminId ?? 0;
+  const [poll] = await db.insert(governmentPollsTable).values({
+    title: parsed.data.title,
+    description: parsed.data.description,
+    eligibleRoles: roles,
+    createdBy: registryAdminId,
+    startsAt,
+    endsAt,
+    status: "scheduled",
+  }).returning();
+
+  if (!poll) {
+    res.status(500).json({ error: "Не удалось создать голосование" });
+    return;
+  }
+  res.status(201).json({ ...poll, yesCount: 0, noCount: 0 });
 });
 
 export default router;

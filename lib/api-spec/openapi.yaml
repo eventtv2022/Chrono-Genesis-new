@@ -812,7 +812,151 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /gov/polls:
+    get:
+      operationId: listActiveGovernmentPolls
+      tags: [citizens]
+      summary: List active polls available to the authenticated citizen
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Polls open now and available to the citizen's role
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GovernmentPollWithBallots"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Adult KYC verification required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /gov/polls/{id}/cast:
+    post:
+      operationId: castGovernmentPollVote
+      tags: [citizens]
+      summary: Cast or change a vote on an active poll
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GovernmentPollVote"
+      responses:
+        "200":
+          description: Vote recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+        "400":
+          description: Invalid vote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Citizen role is not eligible
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Poll is not currently available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/registry/general-votes:
+    get:
+      operationId: listAdminGovernmentPolls
+      tags: [citizens]
+      summary: List all general polls for the administrator
+      parameters:
+        - name: X-Registry-Token
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: All scheduled, active, and completed polls
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminGovernmentPoll"
+        "403":
+          description: Registry session is missing or expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createAdminGovernmentPoll
+      tags: [citizens]
+      summary: Create a scheduled general poll
+      parameters:
+        - name: X-Registry-Token
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GovernmentPollInput"
+      responses:
+        "201":
+          description: Poll created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminGovernmentPoll"
+        "400":
+          description: Invalid poll settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Registry session is missing or expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
   schemas:
     HealthStatus:
       type: object
@@ -1547,3 +1691,89 @@ components:
         - bookedSlots
         - freeSlots
         - schedule
+
+    GovernmentPollInput:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 160
+        description:
+          type: string
+          maxLength: 2000
+        eligibleRoles:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [citizen, labor_officer, gov_admin, system_admin]
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+      required: [title, eligibleRoles, startsAt, endsAt]
+
+    GovernmentPollVote:
+      type: object
+      properties:
+        vote:
+          type: string
+          enum: [yes, no]
+      required: [vote]
+
+    GovernmentPollWithBallots:
+      allOf:
+        - $ref: "#/components/schemas/AdminGovernmentPoll"
+        - type: object
+          properties:
+            myVote:
+              type: ["string", "null"]
+              enum: [yes, no, null]
+            ballots:
+              type: array
+              items:
+                type: object
+                properties:
+                  voterName:
+                    type: string
+                  vote:
+                    type: string
+                    enum: [yes, no]
+                required: [voterName, vote]
+          required: [myVote, ballots]
+
+    AdminGovernmentPoll:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        eligibleRoles:
+          type: array
+          items:
+            type: string
+        createdBy:
+          type: integer
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [scheduled, active, completed, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+        yesCount:
+          type: integer
+        noCount:
+          type: integer
+      required: [id, title, description, eligibleRoles, createdBy, startsAt, endsAt, status, createdAt, yesCount, noCount]

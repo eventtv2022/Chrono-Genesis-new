@@ -6,7 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adminGovernmentPoll';
+export * from './adminGovernmentPollStatus';
 export * from './authSession';
+export * from './castGovernmentPollVote200';
 export * from './citizen';
 export * from './citizenInput';
 export * from './citizenRegistrationResult';
@@ -21,6 +24,14 @@ export * from './getTimelineOccupiedParams';
 export * from './getTvLiveSlotParams';
 export * from './getTvScheduleParams';
 export * from './getTvSlotsParams';
+export * from './governmentPollInput';
+export * from './governmentPollInputEligibleRolesItem';
+export * from './governmentPollVote';
+export * from './governmentPollVoteVote';
+export * from './governmentPollWithBallots';
+export * from './governmentPollWithBallotsBallotsItem';
+export * from './governmentPollWithBallotsBallotsItemVote';
+export * from './governmentPollWithBallotsMyVote';
 export * from './healthStatus';
 export * from './heritageTransferInput';
 export * from './heritageTransferResult';

@@ -37,7 +37,7 @@ interface CitizenDetail extends CitizenRow {
 
 type Phase = "gate_password" | "gate_otp" | "table";
 type StatusFilter = "all" | "active" | "rejected" | "pending" | "banned";
-type RegistryTab = "citizens" | "votes";
+type RegistryTab = "citizens" | "votes" | "general";
 
 interface BlockVoteEntry {
   id: number;
@@ -50,6 +50,34 @@ interface BlockVoteEntry {
   yesCount: number;
   noCount: number;
   ballots: { voterName: string; vote: string }[];
+}
+
+interface GeneralPollEntry {
+  id: number;
+  title: string;
+  description: string;
+  eligibleRoles: string[];
+  startsAt: string;
+  endsAt: string;
+  status: "scheduled" | "active" | "completed" | "cancelled";
+  yesCount: number;
+  noCount: number;
+}
+
+const POLL_ROLES = [
+  { value: "citizen", label: "Граждане" },
+  { value: "labor_officer", label: "Должностные лица" },
+  { value: "gov_admin", label: "Администраторы правительства" },
+  { value: "system_admin", label: "Системные администраторы" },
+] as const;
+
+function toLocalDateTimeInput(date: Date): string {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function pollRoleLabel(role: string): string {
+  return POLL_ROLES.find((option) => option.value === role)?.label ?? role;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -602,6 +630,18 @@ export function AdminRegistry() {
   const [actionToast, setActionToast] = useState<string | null>(null);
   const [blockVotes, setBlockVotes] = useState<BlockVoteEntry[]>([]);
   const [votesLoading, setVotesLoading] = useState(false);
+  const [generalPolls, setGeneralPolls] = useState<GeneralPollEntry[]>([]);
+  const [generalPollsLoading, setGeneralPollsLoading] = useState(false);
+  const [pollSubmitting, setPollSubmitting] = useState(false);
+  const [pollFormError, setPollFormError] = useState<string | null>(null);
+  const [pollTitle, setPollTitle] = useState("");
+  const [pollDescription, setPollDescription] = useState("");
+  const [pollRoles, setPollRoles] = useState<string[]>([]);
+  const [pollSchedule, setPollSchedule] = useState(() => {
+    const start = new Date(Date.now() + 5 * 60_000);
+    const end = new Date(start.getTime() + 60 * 60_000);
+    return { start: toLocalDateTimeInput(start), end: toLocalDateTimeInput(end) };
+  });
 
   // Redirect non-admins
   useEffect(() => {
@@ -665,10 +705,88 @@ export function AdminRegistry() {
     setVotesLoading(false);
   }, []);
 
+  const fetchGeneralPolls = useCallback(async (token: string) => {
+    setGeneralPollsLoading(true);
+    try {
+      const res = await fetch("/api/admin/registry/general-votes", {
+        headers: { "X-Registry-Token": token },
+      });
+      if (res.status === 403) {
+        setRegistryToken(null);
+        setPhase("gate_password");
+        setError("Сессия истекла. Войдите снова.");
+        return;
+      }
+      if (res.ok) setGeneralPolls(await res.json() as GeneralPollEntry[]);
+    } catch {
+      setPollFormError("Не удалось загрузить общие голосования");
+    } finally {
+      setGeneralPollsLoading(false);
+    }
+  }, []);
+
   // Load votes when switching to the votes tab
   useEffect(() => {
     if (activeTab === "votes" && registryToken) void fetchBlockVotes(registryToken);
   }, [activeTab, registryToken, fetchBlockVotes]);
+
+  useEffect(() => {
+    if (activeTab === "general" && registryToken) void fetchGeneralPolls(registryToken);
+  }, [activeTab, registryToken, fetchGeneralPolls]);
+
+  useEffect(() => {
+    if (activeTab !== "general" || !registryToken || phase !== "table") return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void fetchGeneralPolls(registryToken);
+    }, 15_000);
+    return () => window.clearInterval(interval);
+  }, [activeTab, phase, registryToken, fetchGeneralPolls]);
+
+  async function createGeneralPoll(event: React.FormEvent) {
+    event.preventDefault();
+    setPollFormError(null);
+    if (!registryToken) return;
+    if (!pollRoles.length) {
+      setPollFormError("Выберите хотя бы одну допущенную роль.");
+      return;
+    }
+    const startsAt = new Date(pollSchedule.start);
+    const endsAt = new Date(pollSchedule.end);
+    if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || startsAt >= endsAt) {
+      setPollFormError("Дата окончания должна быть позже даты начала.");
+      return;
+    }
+
+    setPollSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/registry/general-votes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Registry-Token": registryToken },
+        body: JSON.stringify({
+          title: pollTitle,
+          description: pollDescription,
+          eligibleRoles: pollRoles,
+          startsAt: startsAt.toISOString(),
+          endsAt: endsAt.toISOString(),
+        }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) {
+        setPollFormError(data.error ?? "Не удалось создать голосование.");
+        return;
+      }
+      setActionToast("Голосование запланировано. Оно появится у участников в заданное время.");
+      setTimeout(() => setActionToast(null), 6000);
+      setPollTitle("");
+      setPollDescription("");
+      setPollRoles([]);
+      await fetchGeneralPolls(registryToken);
+    } catch {
+      setPollFormError("Ошибка сети при создании голосования.");
+    } finally {
+      setPollSubmitting(false);
+    }
+  }
 
   async function handleAction(id: number, action: string, extra?: { reason?: string }): Promise<{ message?: string; error?: string }> {
     if (!registryToken) return {};
@@ -749,6 +867,7 @@ export function AdminRegistry() {
               {([
                 { key: "citizens", label: "👥 Граждане" },
                 { key: "votes",    label: `🗳 Голосования${blockVotes.filter(v => v.status === "pending").length > 0 ? ` (${blockVotes.filter(v => v.status === "pending").length})` : ""}` },
+                { key: "general",  label: "📋 Общие голосования" },
               ] as { key: RegistryTab; label: string }[]).map(t => (
                 <button
                   key={t.key}
@@ -983,6 +1102,120 @@ export function AdminRegistry() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {activeTab === "general" && (
+              <div className="space-y-6 max-w-3xl">
+                <form onSubmit={(event) => void createGeneralPoll(event)} className="bg-card border border-border rounded-2xl p-4 sm:p-5 space-y-4">
+                  <div>
+                    <h2 className="font-bold text-foreground">Создать общее голосование</h2>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Голосование и кнопки выбора появятся у участников только между временем начала и окончания.
+                    </p>
+                  </div>
+                  <label className="block">
+                    <span className="block text-xs font-semibold text-muted-foreground mb-1">Тема / цель голосования</span>
+                    <input
+                      value={pollTitle}
+                      onChange={(event) => setPollTitle(event.target.value)}
+                      required minLength={3} maxLength={160}
+                      placeholder="Например: Утвердить новый регламент"
+                      className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="block text-xs font-semibold text-muted-foreground mb-1">Подробности и контекст</span>
+                    <textarea
+                      value={pollDescription}
+                      onChange={(event) => setPollDescription(event.target.value)}
+                      maxLength={2000} rows={3}
+                      placeholder="Опишите, что именно предлагается решить."
+                      className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground resize-y"
+                    />
+                  </label>
+                  <fieldset>
+                    <legend className="block text-xs font-semibold text-muted-foreground mb-2">Кто допущен к голосованию</legend>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {POLL_ROLES.map((role) => (
+                        <label key={role.value} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={pollRoles.includes(role.value)}
+                            onChange={(event) => setPollRoles((current) =>
+                              event.target.checked
+                                ? [...current, role.value]
+                                : current.filter((item) => item !== role.value))}
+                            className="accent-primary"
+                          />
+                          {role.label}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="block text-xs font-semibold text-muted-foreground mb-1">Начало (местное время)</span>
+                      <input
+                        type="datetime-local" required value={pollSchedule.start}
+                        onChange={(event) => setPollSchedule((current) => ({ ...current, start: event.target.value }))}
+                        className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-xs font-semibold text-muted-foreground mb-1">Окончание (местное время)</span>
+                      <input
+                        type="datetime-local" required value={pollSchedule.end}
+                        onChange={(event) => setPollSchedule((current) => ({ ...current, end: event.target.value }))}
+                        className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground"
+                      />
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Для участия по-прежнему требуются совершеннолетие и подтверждённый KYC. Голос — «За» или «Против».
+                  </p>
+                  {pollFormError && <div role="alert" className="text-sm text-red-300">{pollFormError}</div>}
+                  <button
+                    type="submit" disabled={pollSubmitting}
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold disabled:opacity-50"
+                  >
+                    {pollSubmitting ? "Создаём…" : "Запланировать голосование"}
+                  </button>
+                </form>
+
+                <section className="space-y-3">
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Запланированные и завершённые</h2>
+                  {generalPollsLoading && <div className="text-sm text-muted-foreground py-6">Загрузка…</div>}
+                  {!generalPollsLoading && generalPolls.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground text-sm bg-muted/20 rounded-xl border border-border">
+                      Общих голосований пока нет
+                    </div>
+                  )}
+                  {generalPolls.map((poll) => {
+                    const statusLabels: Record<GeneralPollEntry["status"], string> = {
+                      scheduled: "Запланировано",
+                      active: "Идёт голосование",
+                      completed: "Завершено",
+                      cancelled: "Отменено",
+                    };
+                    return (
+                      <article key={poll.id} className="bg-card border border-border rounded-xl p-4">
+                        <div className="flex flex-wrap justify-between gap-2">
+                          <h3 className="font-semibold text-foreground">{poll.title}</h3>
+                          <span className="text-xs text-muted-foreground">{statusLabels[poll.status]}</span>
+                        </div>
+                        {poll.description && <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">{poll.description}</p>}
+                        <div className="text-xs text-muted-foreground mt-3">
+                          Допущены: {poll.eligibleRoles.map(pollRoleLabel).join(", ")}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {new Date(poll.startsAt).toLocaleString("ru-RU")} — {new Date(poll.endsAt).toLocaleString("ru-RU")}
+                        </div>
+                        <div className="text-xs font-mono text-muted-foreground mt-2">За: {poll.yesCount} · Против: {poll.noCount}</div>
+                      </article>
+                    );
+                  })}
+                </section>
               </div>
             )}
           </>

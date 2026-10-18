@@ -20,7 +20,9 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminGovernmentPoll,
   AuthSession,
+  CastGovernmentPollVote200,
   Citizen,
   CitizenInput,
   CitizenRegistrationResult,
@@ -32,6 +34,9 @@ import type {
   GetTvLiveSlotParams,
   GetTvScheduleParams,
   GetTvSlotsParams,
+  GovernmentPollInput,
+  GovernmentPollVote,
+  GovernmentPollWithBallots,
   HealthStatus,
   HeritageTransferInput,
   HeritageTransferResult,
@@ -2468,4 +2473,301 @@ export function useGetTvSchedule<TData = Awaited<ReturnType<typeof getTvSchedule
 
 
 
+
+export const getListActiveGovernmentPollsUrl = () => {
+
+
+
+
+  return `/api/gov/polls`
+}
+
+/**
+ * @summary List active polls available to the authenticated citizen
+ */
+export const listActiveGovernmentPolls = async ( options?: RequestInit): Promise<GovernmentPollWithBallots[]> => {
+
+  return customFetch<GovernmentPollWithBallots[]>(getListActiveGovernmentPollsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListActiveGovernmentPollsQueryKey = () => {
+    return [
+    `/api/gov/polls`
+    ] as const;
+    }
+
+
+export const getListActiveGovernmentPollsQueryOptions = <TData = Awaited<ReturnType<typeof listActiveGovernmentPolls>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listActiveGovernmentPolls>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListActiveGovernmentPollsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listActiveGovernmentPolls>>> = ({ signal }) => listActiveGovernmentPolls({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listActiveGovernmentPolls>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListActiveGovernmentPollsQueryResult = NonNullable<Awaited<ReturnType<typeof listActiveGovernmentPolls>>>
+export type ListActiveGovernmentPollsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List active polls available to the authenticated citizen
+ */
+
+export function useListActiveGovernmentPolls<TData = Awaited<ReturnType<typeof listActiveGovernmentPolls>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listActiveGovernmentPolls>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListActiveGovernmentPollsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCastGovernmentPollVoteUrl = (id: number,) => {
+
+
+
+
+  return `/api/gov/polls/${id}/cast`
+}
+
+/**
+ * @summary Cast or change a vote on an active poll
+ */
+export const castGovernmentPollVote = async (id: number,
+    governmentPollVote: GovernmentPollVote, options?: RequestInit): Promise<CastGovernmentPollVote200> => {
+
+  return customFetch<CastGovernmentPollVote200>(getCastGovernmentPollVoteUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      governmentPollVote,)
+  }
+);}
+
+
+
+
+export const getCastGovernmentPollVoteMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof castGovernmentPollVote>>, TError,{id: number;data: BodyType<GovernmentPollVote>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof castGovernmentPollVote>>, TError,{id: number;data: BodyType<GovernmentPollVote>}, TContext> => {
+
+const mutationKey = ['castGovernmentPollVote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof castGovernmentPollVote>>, {id: number;data: BodyType<GovernmentPollVote>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  castGovernmentPollVote(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CastGovernmentPollVoteMutationResult = NonNullable<Awaited<ReturnType<typeof castGovernmentPollVote>>>
+    export type CastGovernmentPollVoteMutationBody = BodyType<GovernmentPollVote>
+    export type CastGovernmentPollVoteMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Cast or change a vote on an active poll
+ */
+export const useCastGovernmentPollVote = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof castGovernmentPollVote>>, TError,{id: number;data: BodyType<GovernmentPollVote>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof castGovernmentPollVote>>,
+        TError,
+        {id: number;data: BodyType<GovernmentPollVote>},
+        TContext
+      > => {
+      return useMutation(getCastGovernmentPollVoteMutationOptions(options));
+    }
+
+export const getListAdminGovernmentPollsUrl = () => {
+
+
+
+
+  return `/api/admin/registry/general-votes`
+}
+
+/**
+ * @summary List all general polls for the administrator
+ */
+export const listAdminGovernmentPolls = async ( options?: RequestInit): Promise<AdminGovernmentPoll[]> => {
+
+  return customFetch<AdminGovernmentPoll[]>(getListAdminGovernmentPollsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminGovernmentPollsQueryKey = () => {
+    return [
+    `/api/admin/registry/general-votes`
+    ] as const;
+    }
+
+
+export const getListAdminGovernmentPollsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminGovernmentPolls>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminGovernmentPolls>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminGovernmentPollsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminGovernmentPolls>>> = ({ signal }) => listAdminGovernmentPolls({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminGovernmentPolls>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminGovernmentPollsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminGovernmentPolls>>>
+export type ListAdminGovernmentPollsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List all general polls for the administrator
+ */
+
+export function useListAdminGovernmentPolls<TData = Awaited<ReturnType<typeof listAdminGovernmentPolls>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminGovernmentPolls>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminGovernmentPollsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateAdminGovernmentPollUrl = () => {
+
+
+
+
+  return `/api/admin/registry/general-votes`
+}
+
+/**
+ * @summary Create a scheduled general poll
+ */
+export const createAdminGovernmentPoll = async (governmentPollInput: GovernmentPollInput, options?: RequestInit): Promise<AdminGovernmentPoll> => {
+
+  return customFetch<AdminGovernmentPoll>(getCreateAdminGovernmentPollUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      governmentPollInput,)
+  }
+);}
+
+
+
+
+export const getCreateAdminGovernmentPollMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminGovernmentPoll>>, TError,{data: BodyType<GovernmentPollInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminGovernmentPoll>>, TError,{data: BodyType<GovernmentPollInput>}, TContext> => {
+
+const mutationKey = ['createAdminGovernmentPoll'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminGovernmentPoll>>, {data: BodyType<GovernmentPollInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAdminGovernmentPoll(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminGovernmentPollMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminGovernmentPoll>>>
+    export type CreateAdminGovernmentPollMutationBody = BodyType<GovernmentPollInput>
+    export type CreateAdminGovernmentPollMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create a scheduled general poll
+ */
+export const useCreateAdminGovernmentPoll = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminGovernmentPoll>>, TError,{data: BodyType<GovernmentPollInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminGovernmentPoll>>,
+        TError,
+        {data: BodyType<GovernmentPollInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAdminGovernmentPollMutationOptions(options));
+    }
 
