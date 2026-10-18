@@ -1431,9 +1431,6 @@ export default function TimerScreen() {
         </View>
         {citizen && (
           <View style={styles.headerRight}>
-            <View style={styles.rankPill}>
-              <Text style={styles.rankText}>{citizen.rank ?? ui.login}</Text>
-            </View>
             <View style={styles.balancePill}>
               <Feather name="clock" size={12} color={colors.primary} />
               <Text style={styles.balanceText}>{citizen.balanceMinutes} Д</Text>
@@ -1878,8 +1875,6 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     headerBrand: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 },
     headerTitle: { fontSize: 19, fontFamily: "Inter_700Bold", color: colors.primary, letterSpacing: 1 },
     headerRight: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4, flexShrink: 1, paddingRight: 8, minWidth: 0 },
-    rankPill: { backgroundColor: "rgba(201,168,76,0.15)", borderWidth: 1, borderColor: "rgba(201,168,76,0.4)", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 20 },
-    rankText: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.primary, letterSpacing: 0 },
     balancePill: { flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: colors.goldGlow, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 20 },
     balanceText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.primary },
     shopBtn: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
