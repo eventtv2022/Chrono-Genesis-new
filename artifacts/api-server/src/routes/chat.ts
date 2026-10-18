@@ -983,6 +983,64 @@ router.patch("/chat/messages/read/:withCitizenId", async (req, res): Promise<voi
   res.json({ ok: true });
 });
 
+// ── DELETE /chat/messages/:messageId — delete a sent DM for both participants ──
+router.delete("/chat/messages/:messageId", async (req, res): Promise<void> => {
+  const me = await getAuthCitizen(req.headers.authorization);
+  if (!me) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  const parsedId = z.coerce.number().int().positive().safeParse(req.params["messageId"]);
+  if (!parsedId.success) { res.status(400).json({ error: "Некорректный messageId" }); return; }
+
+  const [message] = await db
+    .select({
+      id: dmMessagesTable.id,
+      fromCitizenId: dmMessagesTable.fromCitizenId,
+      toCitizenId: dmMessagesTable.toCitizenId,
+      attachments: dmMessagesTable.attachments,
+    })
+    .from(dmMessagesTable)
+    .where(eq(dmMessagesTable.id, parsedId.data))
+    .limit(1);
+
+  if (!message) { res.status(404).json({ error: "Сообщение не найдено" }); return; }
+  if (message.fromCitizenId !== me.id) {
+    res.status(403).json({ error: "Удалить для всех можно только своё сообщение" });
+    return;
+  }
+
+  await db.delete(dmMessagesTable).where(eq(dmMessagesTable.id, message.id));
+  if (message.attachments) {
+    try {
+      const attachments = JSON.parse(message.attachments) as AttachmentMeta[];
+      for (const attachment of attachments) {
+        const match = /^\/api\/chat\/attachment\/(att_[A-Za-z0-9_.-]+)$/.exec(attachment.url);
+        const filename = match?.[1];
+        if (!filename) continue;
+
+        const stillReferenced = await db
+          .select({ id: dmMessagesTable.id })
+          .from(dmMessagesTable)
+          .where(and(
+            ilike(dmMessagesTable.attachments, `%${filename}%`),
+            sql`${dmMessagesTable.id} <> ${message.id}`,
+          ))
+          .limit(1);
+        if (stillReferenced.length === 0) {
+          await fs.promises.unlink(path.resolve(CHAT_VAULT, filename)).catch((error: NodeJS.ErrnoException) => {
+            if (error.code !== "ENOENT") throw error;
+          });
+        }
+      }
+    } catch (error) {
+      logger.warn({ messageId: message.id, error }, "Could not clean deleted chat attachments");
+    }
+  }
+  const event = { type: "message_deleted", messageId: message.id, byId: me.id };
+  pushToCitizen(message.fromCitizenId, event);
+  pushToCitizen(message.toCitizenId, event);
+  res.json({ ok: true, messageId: message.id });
+});
+
 // ── POST /chat/reactions — add reaction ───────────────────────────────────
 
 const reactionSchema = z.object({ messageId: z.number().int().positive(), emoji: z.string().min(1).max(8) });

@@ -357,6 +357,12 @@ export default function ConversationScreen() {
           }
         }
 
+        if (msg["type"] === "message_deleted") {
+          const messageId = msg["messageId"] as number;
+          setMessages((prev) => prev.filter((m) => m.id !== messageId));
+          setSelectedMsg((prev) => prev?.id === messageId ? null : prev);
+        }
+
         if (msg["type"] === "message_delivered") {
           const mId = msg["messageId"] as number;
           setMessages((prev) => prev.map((m) => m.id === mId ? { ...m, delivered_at: new Date().toISOString() } : m));
@@ -904,6 +910,35 @@ export default function ConversationScreen() {
       });
     }
     setSelectedMsg(null);
+  }
+
+  function confirmDeleteForEveryone(message: DecryptedMessage) {
+    setSelectedMsg(null);
+    Alert.alert(
+      "Удалить для всех?",
+      "Сообщение будет удалено у вас и у собеседника.",
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Удалить у всех",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const headers = await getStoredAuthHeaders();
+              const response = await fetch(`${BASE_URL}/api/chat/messages/${message.id}`, {
+                method: "DELETE",
+                headers,
+              });
+              const data = await response.json() as { error?: string };
+              if (!response.ok) throw new Error(data.error ?? "Не удалось удалить сообщение");
+              setMessages((prev) => prev.filter((item) => item.id !== message.id));
+            } catch (error) {
+              Alert.alert("Ошибка", error instanceof Error ? error.message : "Не удалось удалить сообщение");
+            }
+          },
+        },
+      ],
+    );
   }
 
   // ── File attachment picker ────────────────────────────────────────────────
@@ -1737,6 +1772,16 @@ export default function ConversationScreen() {
               <Feather name="corner-up-left" size={18} color={C.fg} />
               <Text style={s.actionText}>Ответить</Text>
             </TouchableOpacity>
+            {selectedMsg && selectedMsg.from_citizen_id === citizen.id && (
+              <TouchableOpacity
+                style={s.actionItem}
+                onPress={() => confirmDeleteForEveryone(selectedMsg)}
+                activeOpacity={0.75}
+              >
+                <Feather name="trash-2" size={18} color="#E05050" />
+                <Text style={[s.actionText, { color: "#E05050" }]}>Удалить у всех</Text>
+              </TouchableOpacity>
+            )}
             {/* Tip — only available on peer's messages */}
             {selectedMsg && selectedMsg.from_citizen_id !== citizen.id && (
               <TouchableOpacity
