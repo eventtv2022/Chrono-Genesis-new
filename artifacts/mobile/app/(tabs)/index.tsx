@@ -1455,8 +1455,15 @@ export default function TimerScreen() {
               style={styles.chatBtn}
               onPress={() => router.push("/chat")}
               activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={ui.chat_secure_title}
+              accessibilityHint={ui.chat_secure_description}
+              testID="secure-messenger-header-button"
             >
-              <Feather name="message-square" size={13} color={colors.primary} />
+              <Feather name="message-square" size={16} color={colors.primaryForeground} />
+              <View pointerEvents="none" style={styles.chatLockBadge}>
+                <Feather name="lock" size={8} color={colors.successForeground} />
+              </View>
             </TouchableOpacity>
           </View>
         )}
@@ -1470,6 +1477,28 @@ export default function TimerScreen() {
           <Text style={styles.meritText}>{citizen.totalGiven.toFixed(2)} Д</Text>
         </View>
       )}
+
+      <TouchableOpacity
+        style={styles.messengerCard}
+        onPress={() => router.push("/chat")}
+        activeOpacity={0.82}
+        accessibilityRole="button"
+        accessibilityLabel={ui.chat_secure_title}
+        accessibilityHint={ui.chat_secure_description}
+        testID="secure-messenger-promo"
+      >
+        <View style={styles.messengerIconWrap}>
+          <Feather name="message-square" size={19} color={colors.primaryForeground} />
+          <View pointerEvents="none" style={styles.messengerLockBadge}>
+            <Feather name="lock" size={9} color={colors.successForeground} />
+          </View>
+        </View>
+        <View style={styles.messengerCopy}>
+          <Text style={styles.messengerTitle}>{ui.chat_secure_title}</Text>
+          <Text style={styles.messengerDescription}>{ui.chat_secure_description}</Text>
+        </View>
+        <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+      </TouchableOpacity>
 
       {/* ── Passport card / Registration banner ────────────────────────────── */}
       {citizen ? (
@@ -1835,7 +1864,14 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     walletBtn: { width: 26, height: 26, borderRadius: 13, borderWidth: 1, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
     walletBtnVerified: { backgroundColor: colors.primary, borderColor: colors.primary },
     walletBtnText: { fontSize: 9, fontFamily: "Inter_600SemiBold", color: colors.primary, letterSpacing: 0.3 },
-    chatBtn: { width: 26, height: 26, borderRadius: 13, borderWidth: 1, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
+    chatBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary, position: "relative" },
+    chatLockBadge: { position: "absolute", top: -3, right: -4, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: colors.background, backgroundColor: colors.success, alignItems: "center", justifyContent: "center" },
+    messengerCard: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 16, marginTop: 2, marginBottom: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.surface },
+    messengerIconWrap: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", position: "relative" },
+    messengerLockBadge: { position: "absolute", right: -4, bottom: -3, width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: colors.surface, backgroundColor: colors.success, alignItems: "center", justifyContent: "center" },
+    messengerCopy: { flex: 1, minWidth: 0, gap: 3 },
+    messengerTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground },
+    messengerDescription: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground, lineHeight: 15 },
     meritBar: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, paddingBottom: 8 },
     meritText: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
     meritSep: { fontSize: 11, color: colors.mutedForeground },
