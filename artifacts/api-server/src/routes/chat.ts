@@ -1003,8 +1003,8 @@ router.delete("/chat/messages/:messageId", async (req, res): Promise<void> => {
     .limit(1);
 
   if (!message) { res.status(404).json({ error: "Сообщение не найдено" }); return; }
-  if (message.fromCitizenId !== me.id) {
-    res.status(403).json({ error: "Удалить для всех можно только своё сообщение" });
+  if (message.fromCitizenId !== me.id && message.toCitizenId !== me.id) {
+    res.status(403).json({ error: "Нет доступа к сообщению" });
     return;
   }
 

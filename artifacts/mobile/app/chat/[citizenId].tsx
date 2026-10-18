@@ -145,6 +145,9 @@ export default function ConversationScreen() {
   const [safetyModal, setSafetyModal] = useState(false);
   const [replyTo, setReplyTo] = useState<{ id: number; text: string; senderName: string } | null>(null);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [deleteConfirmMsg, setDeleteConfirmMsg] = useState<DecryptedMessage | null>(null);
+  const [deletingMessageId, setDeletingMessageId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   // ── Phase 1: Tip + Chrono UI state ────────────────────────────────────────
   const [tippingMsgId, setTippingMsgId] = useState<number | null>(null);
@@ -912,33 +915,26 @@ export default function ConversationScreen() {
     setSelectedMsg(null);
   }
 
-  function confirmDeleteForEveryone(message: DecryptedMessage) {
-    setSelectedMsg(null);
-    Alert.alert(
-      "Удалить для всех?",
-      "Сообщение будет удалено у вас и у собеседника.",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Удалить у всех",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const headers = await getStoredAuthHeaders();
-              const response = await fetch(`${BASE_URL}/api/chat/messages/${message.id}`, {
-                method: "DELETE",
-                headers,
-              });
-              const data = await response.json() as { error?: string };
-              if (!response.ok) throw new Error(data.error ?? "Не удалось удалить сообщение");
-              setMessages((prev) => prev.filter((item) => item.id !== message.id));
-            } catch (error) {
-              Alert.alert("Ошибка", error instanceof Error ? error.message : "Не удалось удалить сообщение");
-            }
-          },
-        },
-      ],
-    );
+  async function deleteMessageForEveryone() {
+    if (!deleteConfirmMsg || deletingMessageId !== null) return;
+    const messageId = deleteConfirmMsg.id;
+    setDeletingMessageId(messageId);
+    setDeleteError("");
+    try {
+      const headers = await getStoredAuthHeaders();
+      const response = await fetch(`${BASE_URL}/api/chat/messages/${messageId}`, {
+        method: "DELETE",
+        headers,
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Не удалось удалить сообщение");
+      setMessages((prev) => prev.filter((item) => item.id !== messageId));
+      setDeleteConfirmMsg(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Не удалось удалить сообщение");
+    } finally {
+      setDeletingMessageId(null);
+    }
   }
 
   // ── File attachment picker ────────────────────────────────────────────────
@@ -1772,10 +1768,14 @@ export default function ConversationScreen() {
               <Feather name="corner-up-left" size={18} color={C.fg} />
               <Text style={s.actionText}>Ответить</Text>
             </TouchableOpacity>
-            {selectedMsg && selectedMsg.from_citizen_id === citizen.id && (
+            {selectedMsg && (
               <TouchableOpacity
                 style={s.actionItem}
-                onPress={() => confirmDeleteForEveryone(selectedMsg)}
+                onPress={() => {
+                  setDeleteError("");
+                  setDeleteConfirmMsg(selectedMsg);
+                  setSelectedMsg(null);
+                }}
                 activeOpacity={0.75}
               >
                 <Feather name="trash-2" size={18} color="#E05050" />
@@ -1796,6 +1796,47 @@ export default function ConversationScreen() {
             )}
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Explicit confirmation for deleting a message from both participants' chat */}
+      <Modal
+        visible={!!deleteConfirmMsg}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (deletingMessageId === null) setDeleteConfirmMsg(null);
+        }}
+      >
+        <View style={[s.modalOverlay, { justifyContent: "center", padding: 24 }]}>
+          <View style={[s.modalSheet, { borderRadius: 18 }]}>
+            <Text style={s.modalTitle}>Удалить сообщение у всех?</Text>
+            <Text style={{ color: C.muted, fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 20 }}>
+              Сообщение исчезнет из переписки у вас и у собеседника.
+            </Text>
+            {!!deleteError && (
+              <Text style={{ color: "#E05050", fontFamily: "Inter_400Regular", fontSize: 13 }}>
+                {deleteError}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[s.transferBtn, { backgroundColor: "#E05050" }, deletingMessageId !== null && { opacity: 0.65 }]}
+              onPress={() => void deleteMessageForEveryone()}
+              disabled={deletingMessageId !== null}
+              activeOpacity={0.8}
+            >
+              {deletingMessageId !== null
+                ? <ActivityIndicator color="#FFFFFF" />
+                : <Text style={[s.transferBtnText, { color: "#FFFFFF" }]}>Удалить у всех</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setDeleteConfirmMsg(null)}
+              disabled={deletingMessageId !== null}
+              style={{ alignItems: "center", paddingVertical: 8 }}
+            >
+              <Text style={{ color: C.muted, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Отмена</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* Forward modal */}
