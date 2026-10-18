@@ -1255,6 +1255,7 @@ export default function TimerScreen() {
   const walletGuide = useContextualGuide("wallet");
 
   const [mode, setMode] = useState<"transfer" | "escrow">("transfer");
+  const [settingsVisible, setSettingsVisible] = useState(false);
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [selectedRecipient, setSelectedRecipient] = useState<Citizen | null>(null);
@@ -1465,6 +1466,16 @@ export default function TimerScreen() {
                 <Feather name="lock" size={8} color={colors.successForeground} />
               </View>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.settingsBtn}
+              onPress={() => setSettingsVisible(true)}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={lang === "en" ? "Settings" : "Настройки"}
+              testID="settings-open-button"
+            >
+              <Feather name="settings" size={16} color={colors.primary} />
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -1518,59 +1529,6 @@ export default function TimerScreen() {
               <Text style={[styles.passportRank, { marginTop: 2 }]}>{citizen.rank ?? ui.login}</Text>
             </View>
           </View>
-          <View style={styles.passportActions}>
-            <TouchableOpacity
-              style={styles.passportRefresh}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void refreshCitizen(); }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Feather name="refresh-cw" size={15} color={colors.mutedForeground} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.passportLogout,
-                { borderColor: colors.destructive + "55", backgroundColor: colors.destructive + "15" },
-                isLoggingOut && { opacity: 0.5 },
-              ]}
-              onPress={handleLogoutPress}
-              disabled={isLoggingOut}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-            >
-              {isLoggingOut
-                ? <ActivityIndicator size={13} color={colors.destructive} />
-                : <Feather name="log-out" size={13} color={colors.destructive} />}
-              <Text style={[styles.passportLogoutText, { color: colors.destructive }]}>
-                {ui.logout}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.passportLogout,
-                { borderColor: "#ef444455", backgroundColor: "#ef444410" },
-                isDeletingAccount && { opacity: 0.5 },
-              ]}
-              onPress={handleDeleteAccount}
-              disabled={isDeletingAccount}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-            >
-              {isDeletingAccount
-                ? <ActivityIndicator size={13} color="#ef4444" />
-                : <Feather name="trash-2" size={13} color="#ef4444" />}
-              <Text style={[styles.passportLogoutText, { color: "#ef4444" }]}>
-                {ui.mod_delete_account}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.passportLogout, { borderColor: colors.border, backgroundColor: "transparent" }]}
-              onPress={() => Linking.openURL("https://timenation.info/privacy")}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-            >
-              <Feather name="shield" size={13} color={colors.mutedForeground} />
-              <Text style={[styles.passportLogoutText, { color: colors.mutedForeground }]}>
-                Конфиденциальность
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
       ) : (
         <TouchableOpacity
@@ -1587,11 +1545,6 @@ export default function TimerScreen() {
           </View>
           <Feather name="chevron-right" size={18} color={colors.primary} />
         </TouchableOpacity>
-      )}
-
-      {/* ── Telegram Notifications ─────────────────────────────────────────── */}
-      {citizen && (
-        <TelegramSection colors={colors} ui={ui} />
       )}
 
       {/* ── Guest: login form instead of timer ─────────────────────────────── */}
@@ -1845,6 +1798,75 @@ export default function TimerScreen() {
         explanation={ui.timer_wallet}
         ctaLabel={ui.stats_recent_tx}
       />
+      <Modal
+        visible={settingsVisible && !!citizen}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setSettingsVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: Platform.OS === "web" ? 67 : insets.top }}>
+          <View style={{ minHeight: 56, flexDirection: "row", alignItems: "center", paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <TouchableOpacity onPress={() => setSettingsVisible(false)} accessibilityRole="button" accessibilityLabel={ui.close} style={{ padding: 8, marginLeft: -8 }}>
+              <Feather name="arrow-left" size={21} color={colors.foreground} />
+            </TouchableOpacity>
+            <Text style={{ flex: 1, color: colors.foreground, fontSize: 19, fontFamily: "Inter_700Bold", marginLeft: 8 }}>
+              {lang === "en" ? "Settings" : "Настройки"}
+            </Text>
+            <Feather name="settings" size={19} color={colors.primary} />
+          </View>
+          <ScrollView contentContainerStyle={{ paddingTop: 18, paddingBottom: (Platform.OS === "web" ? 34 : insets.bottom) + 24 }}>
+            {citizen && (
+              <View style={[styles.passportCard, { marginBottom: 16 }]}>
+                <View style={styles.passportLeft}>
+                  <CitizenAvatar citizenId={citizen.id} name={citizen.name} hasPhoto={!!citizen.photoUrl} size={42} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.passportName} numberOfLines={1}>{citizen.name}</Text>
+                    <Text style={styles.passportId}>ID #{citizen.id}</Text>
+                    <Text style={[styles.passportRank, { marginTop: 2 }]}>{citizen.rank ?? ui.login}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void refreshCitizen(); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={ui.refresh}
+                    style={{ padding: 10 }}
+                  >
+                    <Feather name="refresh-cw" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.settingsActions}>
+                  <TouchableOpacity
+                    style={[styles.settingsAction, { borderColor: colors.destructive + "55", backgroundColor: colors.destructive + "15" }]}
+                    onPress={handleLogoutPress}
+                    disabled={isLoggingOut}
+                    accessibilityRole="button"
+                  >
+                    {isLoggingOut ? <ActivityIndicator size={14} color={colors.destructive} /> : <Feather name="log-out" size={14} color={colors.destructive} />}
+                    <Text style={[styles.passportLogoutText, { color: colors.destructive }]}>{ui.logout}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.settingsAction, { borderColor: colors.destructive + "55", backgroundColor: colors.destructive + "10" }]}
+                    onPress={handleDeleteAccount}
+                    disabled={isDeletingAccount}
+                    accessibilityRole="button"
+                  >
+                    {isDeletingAccount ? <ActivityIndicator size={14} color={colors.destructive} /> : <Feather name="trash-2" size={14} color={colors.destructive} />}
+                    <Text style={[styles.passportLogoutText, { color: colors.destructive }]}>{ui.mod_delete_account}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.settingsAction, { borderColor: colors.border }]}
+                    onPress={() => Linking.openURL("https://timenation.info/privacy")}
+                    accessibilityRole="link"
+                  >
+                    <Feather name="shield" size={14} color={colors.mutedForeground} />
+                    <Text style={[styles.passportLogoutText, { color: colors.mutedForeground }]}>{lang === "en" ? "Privacy" : "Конфиденциальность"}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            <TelegramSection colors={colors} ui={ui} />
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1865,6 +1887,7 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     walletBtnVerified: { backgroundColor: colors.primary, borderColor: colors.primary },
     walletBtnText: { fontSize: 9, fontFamily: "Inter_600SemiBold", color: colors.primary, letterSpacing: 0.3 },
     chatBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary, position: "relative" },
+    settingsBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", marginLeft: 2 },
     chatLockBadge: { position: "absolute", top: -3, right: -4, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: colors.background, backgroundColor: colors.success, alignItems: "center", justifyContent: "center" },
     messengerCard: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 16, marginTop: 2, marginBottom: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.surface },
     messengerIconWrap: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", position: "relative" },
@@ -1904,6 +1927,8 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     passportRefresh: { padding: 6, borderRadius: 8 },
     passportLogout: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
     passportLogoutText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+    settingsActions: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 12 },
+    settingsAction: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 9, borderWidth: 1 },
     passportRight: { alignItems: "flex-end" },
 
     // Registration banner
