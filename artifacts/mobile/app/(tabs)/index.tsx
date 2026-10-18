@@ -1743,7 +1743,7 @@ export default function TimerScreen() {
       )}
 
       {citizen && activeSession && mode === "transfer" && (
-        <View style={[styles.stopActionDock, { bottom: Platform.OS === "web" ? botPad + 84 : insets.bottom + 76 }]}>
+        <View style={[styles.stopActionDock, { bottom: Platform.OS === "web" ? botPad + 72 : insets.bottom + 64 }]}>
           <TouchableOpacity
             style={styles.stopBtn}
             onPress={handleStop}
