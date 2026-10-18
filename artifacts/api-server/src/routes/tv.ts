@@ -45,6 +45,7 @@ const router: IRouter = Router();
 // ─── Style preview cache ──────────────────────────────────────────────────────
 // Key: `${style}:${seed}` → { buffer, expiresAt }
 const stylePreviewCache = new Map<string, { buffer: Buffer; expiresAt: number }>();
+const stylePreviewInFlight = new Map<string, Promise<Buffer>>();
 const PREVIEW_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const PREVIEW_CACHE_DIR = "/tmp/tn-style-previews";
 
@@ -107,42 +108,71 @@ router.get("/tv/styles/preview", async (req, res): Promise<void> => {
     `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}` +
     `?width=1280&height=720&nologo=true&seed=42`;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30_000);
-  let imageRes: Response;
-  try {
-    imageRes = await fetch(url, { signal: controller.signal });
-  } catch (err) {
-    clearTimeout(timer);
-    req.log.warn({ err, style, seed }, "Style preview: Pollinations fetch error");
-    res.status(502).json({ error: "Превью временно недоступно" });
-    return;
-  }
-  clearTimeout(timer);
-
-  if (!imageRes.ok) {
-    req.log.warn({ status: imageRes.status, style }, "Style preview: Pollinations returned error");
-    res.status(502).json({ error: "Превью временно недоступно" });
-    return;
-  }
-
-  const buffer = Buffer.from(await imageRes.arrayBuffer());
-  const cachedAt = Date.now();
-  stylePreviewCache.set(cacheKey, { buffer, expiresAt: cachedAt + PREVIEW_TTL_MS });
-  // Publish complete files atomically so parallel requests never read a partial JPEG.
-  const tempPath = `${cachePath}.${randomUUID()}.tmp`;
-  try {
-    await fs.promises.mkdir(PREVIEW_CACHE_DIR, { recursive: true });
-    await fs.promises.writeFile(tempPath, buffer);
-    await fs.promises.rename(tempPath, cachePath);
-  } catch (err) {
-    req.log.warn({ err, style }, "Style preview: disk cache write failed");
-  } finally {
-    await fs.promises.unlink(tempPath).catch((err: NodeJS.ErrnoException) => {
-      if (err.code !== "ENOENT") {
-        req.log.warn({ err, style }, "Style preview: disk cache temp cleanup failed");
+  let generation = stylePreviewInFlight.get(cacheKey);
+  if (!generation) {
+    generation = (async (): Promise<Buffer> => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30_000);
+      let imageRes: Response;
+      try {
+        imageRes = await fetch(url, { signal: controller.signal });
+      } catch (err) {
+        req.log.warn({ err, style, seed }, "Style preview: Pollinations fetch error");
+        throw err;
+      } finally {
+        clearTimeout(timer);
       }
-    });
+
+      if (!imageRes.ok) {
+        req.log.warn({ status: imageRes.status, style }, "Style preview: Pollinations returned error");
+        throw new Error(`Pollinations returned status ${imageRes.status}`);
+      }
+
+      let buffer: Buffer;
+      try {
+        buffer = Buffer.from(await imageRes.arrayBuffer());
+      } catch (err) {
+        req.log.warn({ err, style, seed }, "Style preview: Pollinations response read error");
+        throw err;
+      }
+
+      const cachedAt = Date.now();
+      stylePreviewCache.set(cacheKey, { buffer, expiresAt: cachedAt + PREVIEW_TTL_MS });
+      // Publish complete files atomically so parallel requests never read a partial JPEG.
+      const tempPath = `${cachePath}.${randomUUID()}.tmp`;
+      try {
+        await fs.promises.mkdir(PREVIEW_CACHE_DIR, { recursive: true });
+        await fs.promises.writeFile(tempPath, buffer);
+        await fs.promises.rename(tempPath, cachePath);
+      } catch (err) {
+        req.log.warn({ err, style }, "Style preview: disk cache write failed");
+      } finally {
+        await fs.promises.unlink(tempPath).catch((err: NodeJS.ErrnoException) => {
+          if (err.code !== "ENOENT") {
+            req.log.warn({ err, style }, "Style preview: disk cache temp cleanup failed");
+          }
+        });
+      }
+      return buffer;
+    })();
+    stylePreviewInFlight.set(cacheKey, generation);
+    const settledGeneration = generation;
+    void generation.then(
+      () => {
+        if (stylePreviewInFlight.get(cacheKey) === settledGeneration) stylePreviewInFlight.delete(cacheKey);
+      },
+      () => {
+        if (stylePreviewInFlight.get(cacheKey) === settledGeneration) stylePreviewInFlight.delete(cacheKey);
+      },
+    );
+  }
+
+  let buffer: Buffer;
+  try {
+    buffer = await generation;
+  } catch {
+    res.status(502).json({ error: "Превью временно недоступно" });
+    return;
   }
 
   res.setHeader("Content-Type", "image/jpeg");

@@ -120,3 +120,56 @@ test("upstream failures are not saved to disk", async (t) => {
   assert.equal(result.status, 502);
   assert.deepEqual(await fs.promises.readdir(directory), []);
 });
+
+test("concurrent requests for the same uncached preview share one Pollinations fetch", async (t) => {
+  const directory = await fixture(t);
+  let calls = 0;
+  let resolveFetch;
+  let markFetchStarted;
+  const fetchStarted = new Promise((resolve) => { markFetchStarted = resolve; });
+  const fetch = () => {
+    calls++;
+    markFetchStarted();
+    return new Promise((resolve) => { resolveFetch = () => resolve(new Response(jpeg)); });
+  };
+  const handler = loadHandler(directory, fetch);
+
+  const first = request(handler, "same-seed");
+  const second = request(handler, "same-seed");
+  await fetchStarted;
+  // Let the other request finish its disk-cache lookup while generation is blocked.
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(calls, 1);
+  resolveFetch();
+  const results = await Promise.all([first, second]);
+  assert.deepEqual(results.map((result) => result.body), [jpeg, jpeg]);
+});
+
+test("different preview keys generate independently and failed requests can be retried", async (t) => {
+  const directory = await fixture(t);
+  const pending = new Map();
+  let calls = 0;
+  const fetch = (url) => {
+    calls++;
+    const key = String(url);
+    return new Promise((resolve) => { pending.set(key, resolve); });
+  };
+  const handler = loadHandler(directory, fetch);
+
+  const first = request(handler, "seed-a", "space");
+  const different = request(handler, "seed-b", "space");
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(calls, 2);
+  for (const resolve of pending.values()) resolve(new Response(jpeg));
+  await Promise.all([first, different]);
+
+  let retryCalls = 0;
+  const retryHandler = loadHandler(directory, async () => {
+    retryCalls++;
+    if (retryCalls === 1) throw new TypeError("network unavailable");
+    return new Response(jpeg);
+  });
+  assert.equal((await request(retryHandler, "retry-seed")).status, 502);
+  assert.deepEqual((await request(retryHandler, "retry-seed")).body, jpeg);
+  assert.equal(retryCalls, 2);
+});
