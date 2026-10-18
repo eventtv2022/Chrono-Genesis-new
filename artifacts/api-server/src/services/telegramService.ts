@@ -7,12 +7,169 @@ import { logger } from "../lib/logger";
 let bot: Telegraf | null = null;
 let _botUsername = "";
 
+export type TelegramPollingState = "disabled" | "starting" | "polling" | "retrying" | "stopped";
+
+export interface TelegramPollingStatus {
+  state: TelegramPollingState;
+  retryAttempt: number;
+  lastFailureAt: string | null;
+  nextRetryAt: string | null;
+}
+
+let pollingStatus: TelegramPollingStatus = {
+  state: "disabled",
+  retryAttempt: 0,
+  lastFailureAt: null,
+  nextRetryAt: null,
+};
+let stopRequested = false;
+let pollingGeneration = 0;
+
+const POLLING_RETRY_BASE_MS = 1_000;
+const POLLING_RETRY_MAX_MS = 60_000;
+
 export function getBot(): Telegraf | null {
   return bot;
 }
 
 export function getBotUsername(): string {
   return _botUsername;
+}
+
+export function getTelegramPollingStatus(): TelegramPollingStatus {
+  return { ...pollingStatus };
+}
+
+function pollingErrorDetails(error: unknown, token: string): {
+  name: string;
+  message: string;
+  code?: number | string;
+} {
+  const err = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const response = err.response && typeof err.response === "object"
+    ? err.response as Record<string, unknown>
+    : {};
+  const rawMessage = error instanceof Error
+    ? error.message
+    : typeof error === "string" ? error : "Unknown polling error";
+  const message = (token ? rawMessage.split(token).join("[redacted]") : rawMessage)
+    .replace(/bot\d+:[A-Za-z0-9_-]+/g, "[redacted]");
+  const code = typeof err.code === "number" || typeof err.code === "string"
+    ? err.code
+    : typeof response.error_code === "number" ? response.error_code : undefined;
+
+  return {
+    name: error instanceof Error ? error.name : "Error",
+    message,
+    ...(code !== undefined ? { code } : {}),
+  };
+}
+
+function isRecoverablePollingError(error: unknown): boolean {
+  const err = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const response = err.response && typeof err.response === "object"
+    ? err.response as Record<string, unknown>
+    : {};
+  const code = typeof err.code === "number"
+    ? err.code
+    : typeof response.error_code === "number" ? response.error_code : undefined;
+
+  if (code !== undefined) {
+    return code === 409 || code === 429 || code >= 500;
+  }
+
+  const networkCode = typeof err.code === "string" ? err.code : "";
+  return (error instanceof TypeError && /fetch failed|network error/i.test(error.message))
+    || err.name === "FetchError"
+    || [
+      "ECONNRESET",
+      "ETIMEDOUT",
+      "EAI_AGAIN",
+      "ECONNREFUSED",
+      "ENETUNREACH",
+      "EHOSTUNREACH",
+      "UND_ERR_CONNECT_TIMEOUT",
+    ].includes(networkCode);
+}
+
+function isInternallyRetriedPollingError(error: unknown): boolean {
+  const err = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const response = err.response && typeof err.response === "object"
+    ? err.response as Record<string, unknown>
+    : {};
+  const code = typeof err.code === "number"
+    ? err.code
+    : typeof response.error_code === "number" ? response.error_code : undefined;
+
+  return err.name === "FetchError" || code === 429 || (code !== undefined && code >= 500);
+}
+
+function retryDelayMs(retryAttempt: number): number {
+  return Math.min(
+    POLLING_RETRY_MAX_MS,
+    POLLING_RETRY_BASE_MS * 2 ** Math.min(retryAttempt - 1, 10),
+  );
+}
+
+function waitForRetry(delayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+async function supervisePolling(
+  launchedBot: Telegraf,
+  token: string,
+  generation: number,
+): Promise<void> {
+  while (bot === launchedBot && pollingGeneration === generation && !stopRequested) {
+    pollingStatus = {
+      ...pollingStatus,
+      state: "starting",
+      nextRetryAt: null,
+    };
+
+    try {
+      await launchedBot.launch({}, () => {
+        if (bot !== launchedBot || pollingGeneration !== generation || stopRequested) return;
+        _botUsername = launchedBot.botInfo?.username ?? "";
+        logger.info({ username: _botUsername }, "Telegram bot identity resolved");
+      });
+
+      if (stopRequested || bot !== launchedBot || pollingGeneration !== generation) return;
+      throw new Error("Telegram polling stopped unexpectedly");
+    } catch (error) {
+      if (stopRequested || bot !== launchedBot || pollingGeneration !== generation) return;
+
+      const retryAttempt = pollingStatus.retryAttempt + 1;
+      const failedAt = new Date();
+      const details = pollingErrorDetails(error, token);
+      const recoverable = isRecoverablePollingError(error);
+
+      if (!recoverable) {
+        pollingStatus = {
+          state: "stopped",
+          retryAttempt,
+          lastFailureAt: failedAt.toISOString(),
+          nextRetryAt: null,
+        };
+        logger.error({ ...details, retryAttempt }, "Telegram bot polling stopped after a permanent failure");
+        return;
+      }
+
+      const delayMs = retryDelayMs(retryAttempt);
+      const nextRetryAt = new Date(failedAt.getTime() + delayMs);
+      pollingStatus = {
+        state: "retrying",
+        retryAttempt,
+        lastFailureAt: failedAt.toISOString(),
+        nextRetryAt: nextRetryAt.toISOString(),
+      };
+      logger.warn(
+        { ...details, retryAttempt, retryDelayMs: delayMs, nextRetryAt: nextRetryAt.toISOString() },
+        "Telegram bot polling failed; retry scheduled",
+      );
+      await waitForRetry(delayMs);
+    }
+  }
 }
 
 // ─── Legacy import data ────────────────────────────────────────────────────
@@ -40,7 +197,78 @@ function isAdmin(telegramId: string): boolean {
 // ─────────────────────────────────────────────────────────────────────────
 
 export function initBot(token: string): Telegraf {
-  bot = new Telegraf(token);
+  stopRequested = false;
+  const launchedBot = new Telegraf(token);
+  bot?.stop("replaced");
+  bot = launchedBot;
+  const generation = ++pollingGeneration;
+  pollingStatus = {
+    state: "starting",
+    retryAttempt: 0,
+    lastFailureAt: pollingStatus.lastFailureAt,
+    nextRetryAt: null,
+  };
+  const originalCallApi = launchedBot.telegram.callApi.bind(launchedBot.telegram);
+  launchedBot.telegram.callApi = new Proxy(originalCallApi, {
+    apply(target, thisArg, args: unknown[]) {
+      const isUpdatesRequest = args[0] === "getUpdates";
+      const result = Reflect.apply(target, thisArg, args);
+      if (!isUpdatesRequest || !result || typeof result.then !== "function") return result;
+
+      return Promise.resolve(result).then((value: unknown) => {
+        if (
+          isUpdatesRequest &&
+          bot === launchedBot &&
+          pollingGeneration === generation &&
+          !stopRequested
+        ) {
+          const wasPolling = pollingStatus.state === "polling";
+          pollingStatus = {
+            ...pollingStatus,
+            state: "polling",
+            retryAttempt: 0,
+            nextRetryAt: null,
+          };
+          if (!wasPolling) {
+            logger.info({ username: _botUsername }, "Telegram bot polling started");
+          }
+        }
+        return value;
+      }).catch((error: unknown) => {
+        if (
+          isInternallyRetriedPollingError(error) &&
+          bot === launchedBot &&
+          pollingGeneration === generation &&
+          !stopRequested
+        ) {
+          const failedAt = new Date();
+          const err = error && typeof error === "object" ? error as Record<string, unknown> : {};
+          const parameters = err.parameters && typeof err.parameters === "object"
+            ? err.parameters as Record<string, unknown>
+            : {};
+          const retryAfterSeconds = typeof parameters.retry_after === "number"
+            ? parameters.retry_after
+            : 5;
+          const nextRetryAt = new Date(failedAt.getTime() + retryAfterSeconds * 1_000);
+          pollingStatus = {
+            ...pollingStatus,
+            state: "retrying",
+            lastFailureAt: failedAt.toISOString(),
+            nextRetryAt: nextRetryAt.toISOString(),
+          };
+          logger.warn(
+            {
+              ...pollingErrorDetails(error, token),
+              retryDelayMs: retryAfterSeconds * 1_000,
+              nextRetryAt: nextRetryAt.toISOString(),
+            },
+            "Telegram getUpdates request failed; Telegraf will retry",
+          );
+        }
+        throw error;
+      });
+    },
+  }) as typeof launchedBot.telegram.callApi;
 
   // ── /start — handles both plain greeting and deep-link binding ───────────
   bot.start(async (ctx) => {
@@ -385,18 +613,22 @@ export function initBot(token: string): Telegraf {
     );
   });
 
-  const launchedBot = bot;
-  bot.launch({}, () => {
-    _botUsername = launchedBot.botInfo?.username ?? "";
-    logger.info({ username: _botUsername }, "Telegram bot identity resolved");
-  }).catch((err) => {
-    logger.error({ err }, "Telegram bot launch failed");
-  });
+  void supervisePolling(launchedBot, token, generation);
 
-  process.once("SIGINT", () => bot?.stop("SIGINT"));
-  process.once("SIGTERM", () => bot?.stop("SIGTERM"));
+  const stopPolling = (reason: "SIGINT" | "SIGTERM") => {
+    stopRequested = true;
+    pollingStatus = {
+      ...pollingStatus,
+      state: "stopped",
+      nextRetryAt: null,
+    };
+    bot?.stop(reason);
+    logger.info({ reason }, "Telegram bot polling stopped");
+  };
+  process.once("SIGINT", () => stopPolling("SIGINT"));
+  process.once("SIGTERM", () => stopPolling("SIGTERM"));
 
-  return bot;
+  return launchedBot;
 }
 
 // ─── Notification type guard ──────────────────────────────────────────────────

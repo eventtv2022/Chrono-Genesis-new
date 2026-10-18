@@ -5,8 +5,30 @@
  * TimeNation API — digital state where time is currency
  * OpenAPI spec version: 0.1.0
  */
+export type TelegramPollingStatusState = typeof TelegramPollingStatusState[keyof typeof TelegramPollingStatusState];
+
+
+export const TelegramPollingStatusState = {
+  disabled: 'disabled',
+  starting: 'starting',
+  polling: 'polling',
+  retrying: 'retrying',
+  stopped: 'stopped',
+} as const;
+
+export interface TelegramPollingStatus {
+  state: TelegramPollingStatusState;
+  /** @minimum 0 */
+  retryAttempt: number;
+  /** @nullable */
+  lastFailureAt: string | null;
+  /** @nullable */
+  nextRetryAt: string | null;
+}
+
 export interface HealthStatus {
   status: string;
+  telegramPolling: TelegramPollingStatus;
 }
 
 export interface ErrorResponse {

@@ -963,8 +963,32 @@ components:
       properties:
         status:
           type: string
+        telegramPolling:
+          $ref: "#/components/schemas/TelegramPollingStatus"
       required:
         - status
+        - telegramPolling
+
+    TelegramPollingStatus:
+      type: object
+      properties:
+        state:
+          type: string
+          enum: [disabled, starting, polling, retrying, stopped]
+        retryAttempt:
+          type: integer
+          minimum: 0
+        lastFailureAt:
+          type: ["string", "null"]
+          format: date-time
+        nextRetryAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - state
+        - retryAttempt
+        - lastFailureAt
+        - nextRetryAt
 
     ErrorResponse:
       type: object

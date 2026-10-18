@@ -10,6 +10,7 @@
 - [Expo web font loading](expo-web-font-loading.md) — avoid FontFaceObserver timeouts in browser previews while keeping bundled fonts on native
 - [Replit config edits](replit-config-edits.md) — `.replit` changes require the schema-validated replacement callback; direct patches are rejected
 - [Telegraf and esbuild](timenation-telegraf-bundling.md) — keep Telegraf external; bundling renames its AbortSignal shim and breaks node-fetch v2 polling
+- [Telegram polling lifecycle](telegram-polling.md) — Telegraf retries some getUpdates failures internally but lets terminal polling errors reject launch
 - [TimeNation age gate](timenation-age-gate.md) — block under-13 signup; keep KYC-required adult features fail-closed until a real verification flow exists
 - [Passport Telegram notifications](passport-notifications.md) — passport emission and issuance alerts go to both the citizen and the admin
 - [Upload boundary semantics](upload-boundaries.md) — Busboy rejects at the configured byte threshold; verify exact-limit acceptance with real multipart parsing.

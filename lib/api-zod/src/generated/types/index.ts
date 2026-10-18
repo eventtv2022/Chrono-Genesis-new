@@ -52,6 +52,8 @@ export * from './sessionInput';
 export * from './sessionResult';
 export * from './sessionStatus';
 export * from './stripeWebhook200';
+export * from './telegramPollingStatus';
+export * from './telegramPollingStatusState';
 export * from './telegramWebAppInput';
 export * from './telegramWebAppSession';
 export * from './telegramWebAppSessionStatus';

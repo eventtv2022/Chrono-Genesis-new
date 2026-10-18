@@ -236,8 +236,18 @@ export const UpdateCitizenOnboardingProgressResponse = zod.object({
  * Returns server health status
  * @summary Health check
  */
+export const healthCheckResponseTelegramPollingRetryAttemptMin = 0;
+
+
+
 export const HealthCheckResponse = zod.object({
-  "status": zod.string()
+  "status": zod.string(),
+  "telegramPolling": zod.object({
+  "state": zod.enum(['disabled', 'starting', 'polling', 'retrying', 'stopped']),
+  "retryAttempt": zod.number().min(healthCheckResponseTelegramPollingRetryAttemptMin),
+  "lastFailureAt": zod.coerce.date().nullable(),
+  "nextRetryAt": zod.coerce.date().nullable()
+})
 })
 
 

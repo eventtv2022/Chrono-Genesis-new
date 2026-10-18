@@ -5,7 +5,9 @@
  * TimeNation API — digital state where time is currency
  * OpenAPI spec version: 0.1.0
  */
+import type { TelegramPollingStatus } from './telegramPollingStatus';
 
 export interface HealthStatus {
   status: string;
+  telegramPolling: TelegramPollingStatus;
 }
