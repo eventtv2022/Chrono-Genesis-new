@@ -11,7 +11,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 
 function evaluate(source, expression, globals = {}) {
   const { code } = transformSync(source, { loader: "ts", format: "cjs", target: "es2022" });
-  return vm.runInNewContext(`${code}\n${expression}`, { exports: {}, ...globals });
+  return vm.runInNewContext(`${code}\n${expression}`, { exports: {}, module: { exports: {} }, ...globals });
 }
 
 function sourceBetween(source, startMarker, endMarker) {
@@ -423,6 +423,66 @@ test("one passport issuance failure does not stop the batch and remains eligible
   // The still-pending record is selected and successfully retried by the next run.
   assert.equal(await issueDuePassports(), 3);
   assert.deepEqual(attempts, [31, 32, 33, 31, 32, 33]);
+});
+
+test("passport backlog warning reports aggregate age and count without applicant data", async () => {
+  const fixedNow = new Date(Date.UTC(2026, 9, 17, 12));
+  const warnings = [];
+  let backlog = {
+    pendingEligibleCount: 8,
+    oldestAvailableAt: new Date(fixedNow.getTime() - 6 * 60_000),
+  };
+  const serviceSource = issuanceService
+    .slice(issuanceService.indexOf("export const PASSPORT_BACKLOG_WARNING_AGE_MS"))
+    .replaceAll("export const", "const")
+    .replaceAll("export async function", "async function");
+  const monitor = evaluate(
+    serviceSource,
+    "({ warnIfEligiblePassportBacklog, PASSPORT_BACKLOG_WARNING_AGE_MS })",
+    {
+      Date,
+      db: {
+        select: () => ({
+          from: () => ({
+            where: async () => [backlog],
+          }),
+        }),
+      },
+      citizensTable: {
+        registrationStatus: "registrationStatus",
+        availableAt: "availableAt",
+        signatureBase64: "signatureBase64",
+      },
+      and: (...conditions) => conditions,
+      eq: (...values) => values,
+      lte: (...values) => values,
+      sql: (...parts) => parts,
+      logger: { warn: (...args) => warnings.push(args) },
+    },
+  );
+
+  assert.equal(monitor.PASSPORT_BACKLOG_WARNING_AGE_MS, 5 * 60_000);
+  await monitor.warnIfEligiblePassportBacklog(fixedNow);
+  assert.equal(warnings.length, 1);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(warnings[0][0])),
+    {
+      pendingEligibleCount: 8,
+      oldestPendingAgeMs: 6 * 60_000,
+      warningAgeThresholdMs: 5 * 60_000,
+    },
+  );
+  assert.match(warnings[0][1], /Eligible passport issuance backlog exceeded age threshold/);
+
+  await monitor.warnIfEligiblePassportBacklog(new Date(fixedNow.getTime() + 30_000));
+  assert.equal(warnings.length, 1, "warning is rate-limited while the backlog persists");
+
+  backlog = {
+    pendingEligibleCount: 1,
+    oldestAvailableAt: new Date(fixedNow.getTime() - 4 * 60_000),
+  };
+  await monitor.warnIfEligiblePassportBacklog(new Date(fixedNow.getTime() + 60_000));
+  assert.equal(warnings.length, 1, "no warning is emitted below the age threshold");
 });
 
 test("passport issuance does not credit or ledger an ancestral minute twice for an existing grant", async () => {

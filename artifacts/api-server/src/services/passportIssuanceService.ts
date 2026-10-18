@@ -8,6 +8,10 @@ import { sendPassportEmail } from "./emailService";
 
 export const PASSPORT_WAIT_MS = 60 * 60 * 1000;
 export const SIMULATOR_DURATION_MS = PASSPORT_WAIT_MS - 60 * 1000;
+export const PASSPORT_BACKLOG_WARNING_AGE_MS = 5 * 60 * 1000;
+const PASSPORT_BACKLOG_WARNING_INTERVAL_MS = 5 * 60 * 1000;
+
+let lastPassportBacklogWarningAt: number | null = null;
 
 export type PassportIssuanceResult = {
   citizen: typeof citizensTable.$inferSelect;
@@ -164,4 +168,59 @@ export async function issueDuePassports(batchSize = 100): Promise<number> {
     }
   }
   return issuedCount;
+}
+
+/**
+ * Emit a rate-limited aggregate warning when eligible passports have waited
+ * too long. Applicant data is deliberately excluded from this operational log.
+ */
+export async function warnIfEligiblePassportBacklog(now = new Date()): Promise<void> {
+  const [backlog] = await db
+    .select({
+      pendingEligibleCount: sql<number>`count(*)::int`,
+      oldestAvailableAt: sql<Date | null>`min(${citizensTable.availableAt})`,
+    })
+    .from(citizensTable)
+    .where(
+      and(
+        eq(citizensTable.registrationStatus, "pending"),
+        lte(citizensTable.availableAt, now),
+        sql`btrim(${citizensTable.signatureBase64}) <> ''`,
+      ),
+    );
+
+  const pendingEligibleCount = Number(backlog?.pendingEligibleCount ?? 0);
+  const oldestAvailableAt = backlog?.oldestAvailableAt
+    ? new Date(backlog.oldestAvailableAt)
+    : null;
+  const oldestPendingAgeMs = oldestAvailableAt
+    ? now.getTime() - oldestAvailableAt.getTime()
+    : 0;
+
+  if (
+    pendingEligibleCount === 0 ||
+    !Number.isFinite(oldestPendingAgeMs) ||
+    oldestPendingAgeMs <= PASSPORT_BACKLOG_WARNING_AGE_MS
+  ) {
+    lastPassportBacklogWarningAt = null;
+    return;
+  }
+
+  const nowMs = now.getTime();
+  if (
+    lastPassportBacklogWarningAt !== null &&
+    nowMs - lastPassportBacklogWarningAt < PASSPORT_BACKLOG_WARNING_INTERVAL_MS
+  ) {
+    return;
+  }
+
+  lastPassportBacklogWarningAt = nowMs;
+  logger.warn(
+    {
+      pendingEligibleCount,
+      oldestPendingAgeMs,
+      warningAgeThresholdMs: PASSPORT_BACKLOG_WARNING_AGE_MS,
+    },
+    "Eligible passport issuance backlog exceeded age threshold",
+  );
 }

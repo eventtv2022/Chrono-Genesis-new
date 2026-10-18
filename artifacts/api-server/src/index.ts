@@ -1,7 +1,10 @@
 import http from "http";
 import app from "./app";
 import { logger } from "./lib/logger";
-import { issueDuePassports } from "./services/passportIssuanceService";
+import {
+  issueDuePassports,
+  warnIfEligiblePassportBacklog,
+} from "./services/passportIssuanceService";
 import { applyEntropy } from "./services/meritocracyService";
 import { drainEmissionQueue } from "./services/emissionService";
 import { airDueSlots } from "./services/tvService";
@@ -109,6 +112,11 @@ function schedulePassportIssuance() {
     try {
       const issued = await issueDuePassports();
       if (issued > 0) logger.info({ issued }, "Eligible passports issued by scheduler");
+      try {
+        await warnIfEligiblePassportBacklog();
+      } catch (err) {
+        logger.error({ err }, "Passport issuance backlog check failed");
+      }
     } catch (err) {
       logger.error({ err }, "Passport issuance scheduler failed");
     } finally {
