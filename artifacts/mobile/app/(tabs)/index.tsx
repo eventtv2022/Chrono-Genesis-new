@@ -1256,6 +1256,7 @@ export default function TimerScreen() {
 
   const [mode, setMode] = useState<"transfer" | "escrow">("transfer");
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [recipientPickerVisible, setRecipientPickerVisible] = useState(false);
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [selectedRecipient, setSelectedRecipient] = useState<Citizen | null>(null);
@@ -1314,10 +1315,16 @@ export default function TimerScreen() {
     );
   }, [ui, queryClient, setCitizen]);
 
-  const { data: citizens = [], isLoading: loadingCitizens } = useQuery<Citizen[]>({
+  const {
+    data: citizens = [],
+    isLoading: loadingCitizens,
+    isError: citizensError,
+    refetch: retryCitizens,
+  } = useQuery<Citizen[]>({
     queryKey: ["citizens"],
     queryFn: async () => {
       const res = await fetch(`${BASE_URL}/api/citizens`);
+      if (!res.ok) throw new Error(`Could not load citizens (${res.status})`);
       return res.json() as Promise<Citizen[]>;
     },
     enabled: !!citizen,
@@ -1688,7 +1695,20 @@ export default function TimerScreen() {
             ) : (
               <>
                 <Text style={styles.timerDisplay}>00:00</Text>
-                <Text style={styles.timerSub}>{selectedRecipient ? `→ ${selectedRecipient.name}` : ui.timer_pick_recipient}</Text>
+                <TouchableOpacity
+                  style={styles.recipientPickerTrigger}
+                  onPress={() => setRecipientPickerVisible(true)}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityLabel={selectedRecipient?.name ?? ui.timer_pick_recipient}
+                  testID="recipient-picker-open"
+                >
+                  <Feather name="users" size={14} color={selectedRecipient ? colors.primary : colors.mutedForeground} />
+                  <Text style={[styles.timerSub, { marginBottom: 0, color: selectedRecipient ? colors.primary : colors.mutedForeground }]}>
+                    {selectedRecipient ? `→ ${selectedRecipient.name}` : ui.timer_pick_recipient}
+                  </Text>
+                  <Feather name="chevron-down" size={14} color={colors.mutedForeground} />
+                </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.startBtn, !selectedRecipient && styles.startBtnDisabled]}
                   onPress={handleStart}
@@ -1713,60 +1733,6 @@ export default function TimerScreen() {
             <RateWidget recipient={selectedRecipient} colors={colors} />
           )}
 
-          <View style={styles.listSection}>
-            <Text style={styles.listTitle}>{activeSession ? ui.timer_session_active : ui.timer_pick_recipient}</Text>
-            {loadingCitizens && citizen && <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />}
-            {!loadingCitizens && others.length === 0 && citizen && (
-              <View style={styles.emptyState}>
-                <Feather name="users" size={32} color={colors.mutedForeground} />
-                <Text style={styles.emptyText}>{ui.timer_no_citizens}</Text>
-                <Text style={styles.emptySubtext}>{ui.timer_invite_hint}</Text>
-              </View>
-            )}
-            <FlatList
-              data={others}
-              keyExtractor={(item) => String(item.id)}
-              scrollEnabled={!!others.length}
-              showsVerticalScrollIndicator={false}
-              renderItem={({ item }) => {
-                const isSelected = selectedRecipient?.id === item.id;
-                const isActive = activeSession?.toCitizenId === item.id;
-                return (
-                  <TouchableOpacity
-                    style={[
-                      styles.citizenRow,
-                      isSelected && styles.citizenRowSelected,
-                      isActive && styles.citizenRowActive,
-                      !!activeSession && !isActive && styles.citizenRowDimmed,
-                    ]}
-                    onPress={() => {
-                      if (activeSession) return;
-                      setSelectedRecipient(isSelected ? null : item);
-                      Haptics.selectionAsync();
-                    }}
-                    activeOpacity={0.75}
-                    disabled={!!activeSession}
-                  >
-                    <View style={styles.citizenAvatar}>
-                      <Text style={styles.citizenAvatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-                    </View>
-                    <View style={styles.citizenInfo}>
-                      <Text style={styles.citizenName}>{item.name}</Text>
-                      <Text style={styles.citizenBalance}>{item.balanceMinutes} Д</Text>
-                    </View>
-                    {isActive && (
-                      <View style={styles.activeIndicator}>
-                        <View style={styles.activeDot} />
-                        <Text style={styles.activeText}>LIVE</Text>
-                      </View>
-                    )}
-                    {isSelected && !activeSession && <Feather name="check-circle" size={20} color={colors.primary} />}
-                  </TouchableOpacity>
-                );
-              }}
-              contentContainerStyle={{ paddingBottom: botPad + 90 }}
-            />
-          </View>
         </>
       )}
 
@@ -1795,6 +1761,82 @@ export default function TimerScreen() {
         explanation={ui.timer_wallet}
         ctaLabel={ui.stats_recent_tx}
       />
+      <Modal
+        visible={recipientPickerVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setRecipientPickerVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: Platform.OS === "web" ? 67 : insets.top }}>
+          <View style={{ minHeight: 56, flexDirection: "row", alignItems: "center", paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <TouchableOpacity onPress={() => setRecipientPickerVisible(false)} accessibilityRole="button" accessibilityLabel={ui.close} style={{ padding: 8, marginLeft: -8 }}>
+              <Feather name="arrow-left" size={21} color={colors.foreground} />
+            </TouchableOpacity>
+            <Text style={{ flex: 1, color: colors.foreground, fontSize: 18, fontFamily: "Inter_700Bold", marginLeft: 8 }}>
+              {ui.timer_pick_recipient}
+            </Text>
+            <Feather name="users" size={19} color={colors.primary} />
+          </View>
+          {loadingCitizens ? (
+            <ActivityIndicator color={colors.primary} style={{ marginTop: 28 }} />
+          ) : citizensError ? (
+            <View style={{ alignItems: "center", padding: 24, gap: 12 }}>
+              <Text style={{ color: colors.mutedForeground, textAlign: "center" }}>{ui.connection_error}</Text>
+              <TouchableOpacity onPress={() => void retryCitizens()} style={[styles.settingsAction, { borderColor: colors.border }]}>
+                <Feather name="refresh-cw" size={14} color={colors.primary} />
+                <Text style={[styles.passportLogoutText, { color: colors.primary }]}>{ui.refresh}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : others.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Feather name="users" size={32} color={colors.mutedForeground} />
+              <Text style={styles.emptyText}>{ui.timer_no_citizens}</Text>
+              <Text style={styles.emptySubtext}>{ui.timer_invite_hint}</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={others}
+              keyExtractor={(item) => String(item.id)}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ padding: 16, paddingBottom: (Platform.OS === "web" ? 34 : insets.bottom) + 24 }}
+              renderItem={({ item }) => {
+                const isSelected = selectedRecipient?.id === item.id;
+                const isActive = activeSession?.toCitizenId === item.id;
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.citizenRow,
+                      isSelected && styles.citizenRowSelected,
+                      isActive && styles.citizenRowActive,
+                      !!activeSession && !isActive && styles.citizenRowDimmed,
+                    ]}
+                    onPress={() => {
+                      if (activeSession) return;
+                      setSelectedRecipient(item);
+                      setRecipientPickerVisible(false);
+                      Haptics.selectionAsync();
+                    }}
+                    activeOpacity={0.75}
+                    disabled={!!activeSession}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.name}, ${item.balanceMinutes} Д`}
+                  >
+                    <View style={styles.citizenAvatar}>
+                      <Text style={styles.citizenAvatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.citizenInfo}>
+                      <Text style={styles.citizenName}>{item.name}</Text>
+                      <Text style={styles.citizenBalance}>{item.balanceMinutes} Д</Text>
+                    </View>
+                    {isActive && <Feather name="play-circle" size={18} color={colors.primary} />}
+                    {isSelected && !activeSession && <Feather name="check-circle" size={20} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          )}
+        </View>
+      </Modal>
       <Modal
         visible={settingsVisible && !!citizen}
         animationType="slide"
@@ -1907,8 +1949,7 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     startBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.primaryForeground, letterSpacing: 2 },
     stopBtn: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.destructive, paddingHorizontal: 40, paddingVertical: 14, borderRadius: 40 },
     stopBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: colors.destructiveForeground, letterSpacing: 2 },
-    listSection: { flex: 1, paddingHorizontal: 20, paddingTop: 14 },
-    listTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 12 },
+    recipientPickerTrigger: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 4, marginBottom: 20, paddingHorizontal: 12, paddingVertical: 7 },
     // Passport card
     passportCard: { flexDirection: "column", alignItems: "stretch", marginHorizontal: 20, marginBottom: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary + "55", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, gap: 0 },
     passportLeft: { flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0 },
