@@ -3,6 +3,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import {
   issueDuePassports,
+  retryPendingPassportReadyNotifications,
   warnIfEligiblePassportBacklog,
 } from "./services/passportIssuanceService";
 import { applyEntropy } from "./services/meritocracyService";
@@ -129,6 +130,16 @@ function schedulePassportIssuance() {
   logger.info("Passport issuance scheduler scheduled (15-second interval)");
 }
 
+function schedulePassportReadyNotificationRetries() {
+  const tick = () =>
+    retryPendingPassportReadyNotifications().catch((err) =>
+      logger.error({ err }, "Passport-ready Telegram notification retry worker failed"),
+    );
+  void tick();
+  setInterval(tick, 30_000);
+  logger.info("Passport-ready Telegram notification retry worker scheduled (30-second interval)");
+}
+
 function scheduleGovernmentPolls() {
   let running = false;
   const tick = async () => {
@@ -154,6 +165,7 @@ async function bootstrap(): Promise<void> {
   scheduleMidnightUTCEmissionDrain();
   scheduleMinuteTick();
   schedulePassportIssuance();
+  schedulePassportReadyNotificationRetries();
   scheduleGovernmentPolls();
   startNodeValidator();
 

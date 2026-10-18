@@ -682,6 +682,78 @@ export async function notifyUserConditional(
   }
 }
 
+export type PassportReadyDeliveryResult =
+  | { status: "delivered" }
+  | { status: "retryable"; error: string; errorCode: number | null }
+  | { status: "permanent"; error: string; errorCode: number | null };
+
+function classifyPassportTelegramError(err: unknown): {
+  retryable: boolean;
+  error: string;
+  errorCode: number | null;
+} {
+  const error = err as {
+    message?: string;
+    code?: string | number;
+    response?: { error_code?: number; description?: string };
+  } | null;
+  const responseCode = Number(error?.response?.error_code);
+  const errorCode = Number.isFinite(responseCode) && responseCode > 0
+    ? responseCode
+    : typeof error?.code === "number"
+      ? error.code
+      : null;
+  const errorText = (error?.response?.description ?? error?.message ?? "Telegram delivery failed").slice(0, 500);
+  const retryable =
+    errorCode === null ||
+    errorCode === 408 ||
+    errorCode === 425 ||
+    errorCode === 429 ||
+    errorCode >= 500;
+  return { retryable, error: errorText, errorCode };
+}
+
+/** Sends a passport-ready alert and reports whether another attempt can help. */
+export async function deliverPassportReadyNotification(
+  citizenId: number,
+  message: string,
+): Promise<PassportReadyDeliveryResult> {
+  if (!bot) {
+    return { status: "retryable", error: "Telegram bot is not configured", errorCode: null };
+  }
+
+  const [citizen] = await db
+    .select({
+      telegramId: citizensTable.telegramId,
+      tgNotifyState: citizensTable.tgNotifyState,
+    })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, citizenId))
+    .limit(1);
+
+  if (!citizen) {
+    return { status: "permanent", error: "Citizen no longer exists", errorCode: null };
+  }
+  if (!citizen.tgNotifyState) {
+    return { status: "permanent", error: "State notifications are disabled", errorCode: null };
+  }
+  if (!citizen.telegramId) {
+    return { status: "retryable", error: "Citizen has no linked Telegram account", errorCode: null };
+  }
+
+  try {
+    await bot.telegram.sendMessage(citizen.telegramId, message, { parse_mode: "Markdown" });
+    return { status: "delivered" };
+  } catch (err) {
+    const failure = classifyPassportTelegramError(err);
+    return {
+      status: failure.retryable ? "retryable" : "permanent",
+      error: failure.error,
+      errorCode: failure.errorCode,
+    };
+  }
+}
+
 // ─── State Treasury tax-pool notification ─────────────────────────────────────
 type TaxSourceType = "PAID_SESSION_TAX" | "AUCTION_TAX" | "ESCROW_FEE";
 

@@ -1,8 +1,16 @@
-import { and, eq, lte, sql } from "drizzle-orm";
-import { db, citizensTable, timeBankLedgerTable } from "@workspace/db";
+import { and, asc, eq, lte, or, sql } from "drizzle-orm";
+import {
+  db,
+  citizensTable,
+  passportReadyNotificationsTable,
+  timeBankLedgerTable,
+} from "@workspace/db";
 import { logger } from "../lib/logger";
 import { logCitizenIssuedToSheets } from "../lib/googleSheets";
-import { notifyAdminPassportLifecycle, notifyUserConditional } from "./telegramService";
+import {
+  deliverPassportReadyNotification,
+  notifyAdminPassportLifecycle,
+} from "./telegramService";
 import { decrypt } from "./encryptionService";
 import { sendPassportEmail } from "./emailService";
 
@@ -10,8 +18,12 @@ export const PASSPORT_WAIT_MS = 60 * 60 * 1000;
 export const SIMULATOR_DURATION_MS = PASSPORT_WAIT_MS - 60 * 1000;
 export const PASSPORT_BACKLOG_WARNING_AGE_MS = 5 * 60 * 1000;
 const PASSPORT_BACKLOG_WARNING_INTERVAL_MS = 5 * 60 * 1000;
+const PASSPORT_NOTIFICATION_RETRY_BASE_MS = 30 * 1000;
+const PASSPORT_NOTIFICATION_RETRY_MAX_MS = 6 * 60 * 60 * 1000;
+const PASSPORT_NOTIFICATION_PROCESSING_LEASE_MS = 5 * 60 * 1000;
 
 let lastPassportBacklogWarningAt: number | null = null;
+let passportNotificationWorkerRunning = false;
 
 export type PassportIssuanceResult = {
   citizen: typeof citizensTable.$inferSelect;
@@ -58,6 +70,7 @@ export async function issueEligiblePassport(
 
     if (!transitioned) return null;
 
+    let issuance: PassportIssuanceResult;
     if (!transitioned.ancestralMinuteGranted) {
       const [credited] = await tx
         .update(citizensTable)
@@ -75,10 +88,30 @@ export async function issueEligiblePassport(
         note: "Родовая минута начислена при выдаче паспорта",
       });
 
-      return { citizen: credited!, ancestralMinuteGranted: true };
+      issuance = { citizen: credited!, ancestralMinuteGranted: true };
+    } else {
+      issuance = { citizen: transitioned, ancestralMinuteGranted: false };
     }
 
-    return { citizen: transitioned, ancestralMinuteGranted: false };
+    const { citizen } = issuance;
+    if (citizen.telegramId && citizen.tgNotifyState) {
+      await tx
+        .insert(passportReadyNotificationsTable)
+        .values({
+          citizenId,
+          message:
+            `🎉 *Ваш паспорт гражданина TimeNation готов!*\n\n` +
+            `👤 *${citizen.name}*\n` +
+            `🪪 Гражданин №${citizen.citizenNumber ?? citizen.id}\n` +
+            `📜 Ранг: ${citizen.rank}\n` +
+            `${issuance.ancestralMinuteGranted ? "⏳ Родовая минута начислена: 1 Д\n\n" : "\n"}` +
+            "Откройте приложение TimeNation, чтобы просмотреть удостоверение личности.",
+          status: "pending",
+          nextAttemptAt: now,
+        });
+    }
+
+    return issuance;
   });
 
   if (!result) return null;
@@ -94,18 +127,11 @@ export async function issueEligiblePassport(
     "Passport issued at eligibility",
   );
 
-  void notifyUserConditional(
-    citizen.id,
-    `🎉 *Ваш паспорт гражданина TimeNation готов!*\n\n` +
-      `👤 *${citizen.name}*\n` +
-      `🪪 Гражданин №${citizen.citizenNumber ?? citizen.id}\n` +
-      `📜 Ранг: ${citizen.rank}\n` +
-      `${result.ancestralMinuteGranted ? "⏳ Родовая минута начислена: 1 Д\n\n" : "\n"}` +
-      "Откройте приложение TimeNation, чтобы просмотреть удостоверение личности.",
-    "state",
-  ).catch((err) =>
-    logger.warn({ err, citizenId }, "Passport issued, but Telegram notification failed"),
-  );
+  if (citizen.telegramId && citizen.tgNotifyState) {
+    void retryPendingPassportReadyNotifications(1).catch((err) =>
+      logger.warn({ err, citizenId }, "Passport issued, but Telegram notification delivery was deferred"),
+    );
+  }
   void notifyAdminPassportLifecycle({
     event: "passport_issued",
     citizenId: citizen.id,
@@ -141,6 +167,129 @@ export async function issueEligiblePassport(
   }
 
   return result;
+}
+
+/**
+ * Deliver due passport-ready outbox rows. The DB claim prevents concurrent
+ * server instances from sending the same message at the same time.
+ */
+export async function retryPendingPassportReadyNotifications(batchSize = 100): Promise<number> {
+  if (passportNotificationWorkerRunning) return 0;
+  passportNotificationWorkerRunning = true;
+  let delivered = 0;
+  const now = new Date();
+  const staleProcessingBefore = new Date(now.getTime() - PASSPORT_NOTIFICATION_PROCESSING_LEASE_MS);
+
+  try {
+    const due = await db
+      .select({
+        id: passportReadyNotificationsTable.id,
+        citizenId: passportReadyNotificationsTable.citizenId,
+      })
+      .from(passportReadyNotificationsTable)
+      .where(
+        and(
+          lte(passportReadyNotificationsTable.nextAttemptAt, now),
+          or(
+            eq(passportReadyNotificationsTable.status, "pending"),
+            and(
+              eq(passportReadyNotificationsTable.status, "processing"),
+              lte(passportReadyNotificationsTable.updatedAt, staleProcessingBefore),
+            ),
+          ),
+        ),
+      )
+      .orderBy(asc(passportReadyNotificationsTable.nextAttemptAt))
+      .limit(batchSize);
+
+    for (const candidate of due) {
+      const [claimed] = await db
+        .update(passportReadyNotificationsTable)
+        .set({ status: "processing", updatedAt: now })
+        .where(
+          and(
+            eq(passportReadyNotificationsTable.id, candidate.id),
+            lte(passportReadyNotificationsTable.nextAttemptAt, now),
+            or(
+              eq(passportReadyNotificationsTable.status, "pending"),
+              and(
+                eq(passportReadyNotificationsTable.status, "processing"),
+                lte(passportReadyNotificationsTable.updatedAt, staleProcessingBefore),
+              ),
+            ),
+          ),
+        )
+        .returning();
+
+      if (!claimed) continue;
+
+      let delivery: Awaited<ReturnType<typeof deliverPassportReadyNotification>>;
+      try {
+        delivery = await deliverPassportReadyNotification(claimed.citizenId, claimed.message);
+      } catch (err) {
+        delivery = {
+          status: "retryable" as const,
+          error: err instanceof Error ? err.message.slice(0, 500) : "Telegram delivery failed",
+          errorCode: null,
+        };
+      }
+
+      if (delivery.status === "delivered") {
+        await db
+          .delete(passportReadyNotificationsTable)
+          .where(
+            and(
+              eq(passportReadyNotificationsTable.id, claimed.id),
+              eq(passportReadyNotificationsTable.status, "processing"),
+            ),
+          );
+        delivered += 1;
+        continue;
+      }
+
+      if (delivery.status === "permanent") {
+        await db
+          .update(passportReadyNotificationsTable)
+          .set({
+            status: "permanent_failure",
+            lastError: delivery.error,
+            lastErrorCode: delivery.errorCode,
+            updatedAt: new Date(),
+          })
+          .where(eq(passportReadyNotificationsTable.id, claimed.id));
+        logger.warn(
+          { citizenId: claimed.citizenId, errorCode: delivery.errorCode },
+          "Passport-ready Telegram notification failed permanently",
+        );
+        continue;
+      }
+
+      const attemptCount = claimed.attemptCount + 1;
+      const retryDelay = Math.min(
+        PASSPORT_NOTIFICATION_RETRY_BASE_MS * 2 ** Math.min(attemptCount - 1, 20),
+        PASSPORT_NOTIFICATION_RETRY_MAX_MS,
+      );
+      await db
+        .update(passportReadyNotificationsTable)
+        .set({
+          status: "pending",
+          attemptCount,
+          nextAttemptAt: new Date(Date.now() + retryDelay),
+          lastError: delivery.error,
+          lastErrorCode: delivery.errorCode,
+          updatedAt: new Date(),
+        })
+        .where(eq(passportReadyNotificationsTable.id, claimed.id));
+      logger.warn(
+        { citizenId: claimed.citizenId, attemptCount, retryDelayMs: retryDelay, errorCode: delivery.errorCode },
+        "Passport-ready Telegram notification retry scheduled",
+      );
+    }
+  } finally {
+    passportNotificationWorkerRunning = false;
+  }
+
+  return delivered;
 }
 
 /** Best-effort worker; request-driven issuance remains the fallback on wake-up. */
