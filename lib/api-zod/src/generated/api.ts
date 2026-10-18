@@ -782,7 +782,7 @@ export const CreateAdminGovernmentPollBody = zod.object({
   "title": zod.string().min(createAdminGovernmentPollBodyTitleMin).max(createAdminGovernmentPollBodyTitleMax),
   "description": zod.string().max(createAdminGovernmentPollBodyDescriptionMax).optional(),
   "eligibleRoles": zod.array(zod.enum(['citizen', 'labor_officer', 'gov_admin', 'system_admin'])).min(1),
-  "startsAt": zod.coerce.date(),
+  "startsAt": zod.coerce.date().describe('Poll start must be at least 24 hours after creation.'),
   "endsAt": zod.coerce.date()
 })
 

@@ -76,6 +76,11 @@ function toLocalDateTimeInput(date: Date): string {
   return local.toISOString().slice(0, 16);
 }
 
+function minimumPollStartInput(): string {
+  const minimum = Date.now() + 24 * 60 * 60_000;
+  return toLocalDateTimeInput(new Date(Math.ceil(minimum / 60_000) * 60_000));
+}
+
 function pollRoleLabel(role: string): string {
   return POLL_ROLES.find((option) => option.value === role)?.label ?? role;
 }
@@ -638,10 +643,11 @@ export function AdminRegistry() {
   const [pollDescription, setPollDescription] = useState("");
   const [pollRoles, setPollRoles] = useState<string[]>([]);
   const [pollSchedule, setPollSchedule] = useState(() => {
-    const start = new Date(Date.now() + 5 * 60_000);
+    const start = new Date(Date.now() + 25 * 60 * 60_000);
     const end = new Date(start.getTime() + 60 * 60_000);
     return { start: toLocalDateTimeInput(start), end: toLocalDateTimeInput(end) };
   });
+  const minimumPollStart = minimumPollStartInput();
 
   // Redirect non-admins
   useEffect(() => {
@@ -754,6 +760,10 @@ export function AdminRegistry() {
     const endsAt = new Date(pollSchedule.end);
     if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || startsAt >= endsAt) {
       setPollFormError("Дата окончания должна быть позже даты начала.");
+      return;
+    }
+    if (startsAt.getTime() < Date.now() + 24 * 60 * 60_000) {
+      setPollFormError("Начало голосования нужно назначить минимум через 24 часа.");
       return;
     }
 
@@ -1155,9 +1165,9 @@ export function AdminRegistry() {
                   </fieldset>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <label className="block">
-                      <span className="block text-xs font-semibold text-muted-foreground mb-1">Начало (местное время)</span>
+                      <span className="block text-xs font-semibold text-muted-foreground mb-1">Начало (минимум через 24 часа, местное время)</span>
                       <input
-                        type="datetime-local" required value={pollSchedule.start}
+                        type="datetime-local" required min={minimumPollStart} value={pollSchedule.start}
                         onChange={(event) => setPollSchedule((current) => ({ ...current, start: event.target.value }))}
                         className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground"
                       />
@@ -1172,7 +1182,7 @@ export function AdminRegistry() {
                     </label>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Для участия по-прежнему требуются совершеннолетие и подтверждённый KYC. Голос — «За» или «Против».
+                    Напоминания в Telegram придут за 24 часа, 1 час и 1 минуту. Для участия по-прежнему требуются совершеннолетие и подтверждённый KYC. Голос — «За» или «Против».
                   </p>
                   {pollFormError && <div role="alert" className="text-sm text-red-300">{pollFormError}</div>}
                   <button

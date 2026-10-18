@@ -9,6 +9,9 @@ export const governmentPollsTable = pgTable("government_polls", {
   createdBy: integer("created_by").notNull(),
   startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
   endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  reminder24hSentAt: timestamp("reminder_24h_sent_at", { withTimezone: true }),
+  reminder1hSentAt: timestamp("reminder_1h_sent_at", { withTimezone: true }),
+  reminder1mSentAt: timestamp("reminder_1m_sent_at", { withTimezone: true }),
   status: text("status").notNull().default("scheduled"), // scheduled | active | completed | cancelled
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

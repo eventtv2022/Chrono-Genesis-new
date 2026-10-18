@@ -940,7 +940,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminGovernmentPoll"
         "400":
-          description: Invalid poll settings
+          description: Invalid poll settings or start time less than 24 hours away
           content:
             application/json:
               schema:
@@ -1711,6 +1711,7 @@ components:
         startsAt:
           type: string
           format: date-time
+          description: Poll start must be at least 24 hours after creation.
         endsAt:
           type: string
           format: date-time

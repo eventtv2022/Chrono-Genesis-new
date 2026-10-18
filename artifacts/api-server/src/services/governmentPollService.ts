@@ -1,4 +1,4 @@
-import { and, eq, inArray, lte, gt } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lte } from "drizzle-orm";
 import { db, citizensTable, governmentPollsTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { canUseAdultKycFeature } from "./ageGateService";
@@ -19,7 +19,23 @@ export function citizenMatchesPollRoles(
     (citizen.isAdmin === 1 && roles.includes("system_admin"));
 }
 
-async function notifyEligibleVoters(poll: typeof governmentPollsTable.$inferSelect): Promise<void> {
+type PollNotice = "reminder24h" | "reminder1h" | "reminder1m" | "started";
+
+const REMINDERS: {
+  key: Exclude<PollNotice, "started">;
+  field: "reminder24hSentAt" | "reminder1hSentAt" | "reminder1mSentAt";
+  leadMs: number;
+  label: string;
+}[] = [
+  { key: "reminder24h", field: "reminder24hSentAt", leadMs: 24 * 60 * 60 * 1000, label: "через 24 часа" },
+  { key: "reminder1h", field: "reminder1hSentAt", leadMs: 60 * 60 * 1000, label: "через 1 час" },
+  { key: "reminder1m", field: "reminder1mSentAt", leadMs: 60 * 1000, label: "через 1 минуту" },
+];
+
+async function notifyEligibleVoters(
+  poll: typeof governmentPollsTable.$inferSelect,
+  notice: PollNotice,
+): Promise<void> {
   const bot = getBot();
   if (!bot) {
     logger.warn({ pollId: poll.id }, "Poll started without Telegram bot; notifications were not sent");
@@ -68,14 +84,20 @@ async function notifyEligibleVoters(poll: typeof governmentPollsTable.$inferSele
 
   const start = poll.startsAt.toLocaleString("ru-RU", { timeZone: "UTC" });
   const end = poll.endsAt.toLocaleString("ru-RU", { timeZone: "UTC" });
+  const reminder = REMINDERS.find((item) => item.key === notice);
   const message =
-    `🗳️ Голосование TimeNation началось\n\n` +
+    (reminder
+      ? `⏰ Напоминание: голосование начнётся ${reminder.label}\n\n`
+      : "🗳️ Голосование TimeNation началось\n\n") +
     `Тема: ${poll.title}\n` +
     (poll.description ? `Цель и подробности: ${poll.description}\n` : "") +
     `Начало: ${start} UTC\nОкончание: ${end} UTC\n\n` +
-    `Голосуйте «За» или «Против» до указанного времени.`;
-  const url = process.env["REPLIT_DOMAINS"]?.split(",")[0]
-    ? `https://${process.env["REPLIT_DOMAINS"]!.split(",")[0]}/web/gov/polls`
+    (notice === "started"
+      ? "Голосуйте «За» или «Против» до указанного времени."
+      : "Интерфейс голосования откроется в назначенное время.");
+  const domain = process.env["REPLIT_DOMAINS"]?.split(",")[0]?.trim();
+  const url = domain
+    ? `https://${domain}/web/gov/polls`
     : "https://timenation.info/web/gov/polls";
 
   const results = await Promise.allSettled(recipients.map((recipient) =>
@@ -91,6 +113,31 @@ async function notifyEligibleVoters(poll: typeof governmentPollsTable.$inferSele
 
 export async function processGovernmentPollSchedule(): Promise<void> {
   const now = new Date();
+  const scheduledSoon = await db
+    .select()
+    .from(governmentPollsTable)
+    .where(and(
+      eq(governmentPollsTable.status, "scheduled"),
+      gt(governmentPollsTable.startsAt, now),
+      lte(governmentPollsTable.startsAt, new Date(now.getTime() + REMINDERS[0]!.leadMs)),
+    ));
+
+  for (const poll of scheduledSoon) {
+    for (const reminder of REMINDERS) {
+      if (poll.startsAt.getTime() - now.getTime() > reminder.leadMs || !getBot()) continue;
+      const [claimed] = await db
+        .update(governmentPollsTable)
+        .set({ [reminder.field]: now })
+        .where(and(
+          eq(governmentPollsTable.id, poll.id),
+          eq(governmentPollsTable.status, "scheduled"),
+          isNull(governmentPollsTable[reminder.field]),
+        ))
+        .returning();
+      if (claimed) await notifyEligibleVoters(claimed, reminder.key);
+    }
+  }
+
   const starting = await db
     .select()
     .from(governmentPollsTable)
@@ -109,7 +156,7 @@ export async function processGovernmentPollSchedule(): Promise<void> {
         eq(governmentPollsTable.status, "scheduled"),
       ))
       .returning();
-    if (activated) await notifyEligibleVoters(activated);
+    if (activated) await notifyEligibleVoters(activated, "started");
   }
 
   await db

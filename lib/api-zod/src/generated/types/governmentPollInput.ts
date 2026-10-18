@@ -17,6 +17,7 @@ export interface GovernmentPollInput {
   description?: string;
   /** @minItems 1 */
   eligibleRoles: GovernmentPollInputEligibleRolesItem[];
+  /** Poll start must be at least 24 hours after creation. */
   startsAt: Date;
   endsAt: Date;
 }

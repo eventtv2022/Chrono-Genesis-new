@@ -543,6 +543,7 @@ router.get("/admin/registry/block-votes", requireRegistrySession, async (req, re
 });
 
 const PollRole = z.enum(["citizen", "labor_officer", "gov_admin", "system_admin"]);
+const GOVERNMENT_POLL_MIN_LEAD_MS = 24 * 60 * 60 * 1000;
 const CreateGovernmentPollBody = z.object({
   title: z.string().trim().min(3).max(160),
   description: z.string().trim().max(2000).default(""),
@@ -582,6 +583,10 @@ router.post("/admin/registry/general-votes", requireRegistrySession, async (req,
   const endsAt = new Date(parsed.data.endsAt);
   if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || startsAt >= endsAt) {
     res.status(400).json({ error: "Время окончания должно быть позже времени начала" });
+    return;
+  }
+  if (startsAt.getTime() < Date.now() + GOVERNMENT_POLL_MIN_LEAD_MS) {
+    res.status(400).json({ error: "Запланируйте голосование минимум за 24 часа до его начала" });
     return;
   }
 
