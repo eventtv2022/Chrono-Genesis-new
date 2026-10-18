@@ -156,6 +156,48 @@ export interface NewCitizenNotifyParams {
   email: string | null;
 }
 
+export type PassportEmailDeliveryResult =
+  | { status: "delivered" | "already_sent"; error?: never; errorCode?: never }
+  | { status: "retryable" | "permanent"; error: string; errorCode: number | null };
+
+type GmailApiError = {
+  error?: {
+    message?: string;
+    errors?: Array<{ reason?: string }>;
+  };
+};
+
+function gmailFailure(
+  status: number,
+  body: GmailApiError | null,
+  fallback: string,
+): Extract<PassportEmailDeliveryResult, { status: "retryable" | "permanent" }> {
+  const reasons = body?.error?.errors?.map((item) => item.reason ?? "") ?? [];
+  const retryable =
+    status === 408 ||
+    status === 429 ||
+    status >= 500 ||
+    (status === 403 &&
+      reasons.some((reason) =>
+        ["rateLimitExceeded", "userRateLimitExceeded", "backendError"].includes(reason),
+      ));
+  return {
+    status: retryable ? "retryable" : "permanent",
+    error: (body?.error?.message ?? fallback).slice(0, 500),
+    errorCode: status || null,
+  };
+}
+
+async function readGmailError(response: Response, fallback: string): Promise<ReturnType<typeof gmailFailure>> {
+  let body: GmailApiError | null = null;
+  try {
+    body = await response.json() as GmailApiError;
+  } catch {
+    // Keep the HTTP status as the classification when Gmail returns no JSON.
+  }
+  return gmailFailure(response.status, body, fallback);
+}
+
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -170,16 +212,21 @@ function wrapBase64(value: string): string {
   return value.match(/.{1,76}/g)?.join("\r\n") ?? "";
 }
 
-export async function sendPassportEmail(params: NewCitizenNotifyParams): Promise<void> {
-  if (!params.email) return;
+export async function sendPassportEmail(
+  params: NewCitizenNotifyParams,
+  notificationId: number,
+): Promise<PassportEmailDeliveryResult> {
+  if (!params.email) {
+    return { status: "permanent", error: "Citizen email is missing", errorCode: null };
+  }
   if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(params.email)) {
-    logger.warn({ citizenNumber: params.citizenNumber }, "Invalid citizen email; passport email not sent");
-    return;
+    return { status: "permanent", error: "Citizen email address is invalid", errorCode: 400 };
   }
 
   const appDomain = getAppDomain();
   const idCardUrl = `${appDomain}/api/citizens/number/${params.citizenNumber}/id-card`;
   const subject = `🏛️ Ваш паспорт гражданина TimeNation #${params.citizenNumber}`;
+  const messageId = `passport-${notificationId}@timenation.app`;
   const safeName = escapeHtml(params.name);
   const safeRank = escapeHtml(params.rank);
   const safeCitizenNumber = escapeHtml(params.citizenNumber);
@@ -201,23 +248,38 @@ export async function sendPassportEmail(params: NewCitizenNotifyParams): Promise
 
   try {
     const connectors = new ReplitConnectors();
+    const existingResponse = await connectors.proxy(
+      "google-mail",
+      `/gmail/v1/users/me/messages?q=${encodeURIComponent(`in:sent rfc822msgid:${messageId}`)}`,
+      { method: "GET" },
+    );
+    if (!existingResponse.ok) {
+      return await readGmailError(existingResponse, "Gmail sent-message lookup failed");
+    }
+    const existing = await existingResponse.json() as { messages?: Array<{ id?: string }> };
+    if (existing.messages?.length) {
+      logger.info({ citizenNumber: params.citizenNumber, notificationId }, "Passport email already accepted by Gmail");
+      return { status: "already_sent" };
+    }
+
     const profileResponse = await connectors.proxy(
       "google-mail",
       "/gmail/v1/users/me/profile",
       { method: "GET" },
     );
     if (!profileResponse.ok) {
-      throw new Error(`Gmail profile request failed (${profileResponse.status})`);
+      return await readGmailError(profileResponse, "Gmail profile request failed");
     }
     const profile = await profileResponse.json() as { emailAddress?: string };
     if (!profile.emailAddress || /[\r\n<>]/.test(profile.emailAddress)) {
-      throw new Error("Gmail profile did not return a usable sender address");
+      return { status: "permanent", error: "Gmail profile did not return a usable sender address", errorCode: null };
     }
 
-    const boundary = `timenation-${params.citizenNumber}-${Date.now()}`;
+    const boundary = `timenation-${notificationId}-${Date.now()}`;
     const mime = [
       `From: TimeNation <${profile.emailAddress}>`,
       `To: ${params.email}`,
+      `Message-ID: <${messageId}>`,
       `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`,
       "MIME-Version: 1.0",
       `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -246,12 +308,14 @@ export async function sendPassportEmail(params: NewCitizenNotifyParams): Promise
       },
     );
     if (!sendResponse.ok) {
-      throw new Error(`Gmail send request failed (${sendResponse.status})`);
+      return await readGmailError(sendResponse, "Gmail send request failed");
     }
-    await sendResponse.json();
     logger.info({ citizenNumber: params.citizenNumber }, "Passport email sent through Gmail");
+    return { status: "delivered" };
   } catch (err) {
-    logger.error({ err, citizenNumber: params.citizenNumber }, "Failed to send passport email");
+    const error = err instanceof Error ? err.message.slice(0, 500) : "Gmail request failed";
+    logger.warn({ err, citizenNumber: params.citizenNumber }, "Passport email delivery will be retried");
+    return { status: "retryable", error, errorCode: null };
   }
 }
 

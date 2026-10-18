@@ -28,3 +28,4 @@ export * from "./blockVotes";
 export * from "./governmentPolls";
 export * from "./trc20Payments";
 export * from "./passportReadyNotifications";
+export * from "./passportEmailNotifications";

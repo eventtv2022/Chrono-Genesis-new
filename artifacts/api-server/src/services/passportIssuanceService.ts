@@ -3,6 +3,7 @@ import {
   db,
   citizensTable,
   passportReadyNotificationsTable,
+  passportEmailNotificationsTable,
   timeBankLedgerTable,
 } from "@workspace/db";
 import { logger } from "../lib/logger";
@@ -12,7 +13,7 @@ import {
   notifyAdminPassportLifecycle,
 } from "./telegramService";
 import { decrypt } from "./encryptionService";
-import { sendPassportEmail } from "./emailService";
+import { sendPassportEmail, type PassportEmailDeliveryResult } from "./emailService";
 
 export const PASSPORT_WAIT_MS = 60 * 60 * 1000;
 export const SIMULATOR_DURATION_MS = PASSPORT_WAIT_MS - 60 * 1000;
@@ -21,9 +22,14 @@ const PASSPORT_BACKLOG_WARNING_INTERVAL_MS = 5 * 60 * 1000;
 const PASSPORT_NOTIFICATION_RETRY_BASE_MS = 30 * 1000;
 const PASSPORT_NOTIFICATION_RETRY_MAX_MS = 6 * 60 * 60 * 1000;
 const PASSPORT_NOTIFICATION_PROCESSING_LEASE_MS = 5 * 60 * 1000;
+const PASSPORT_EMAIL_RETRY_BASE_MS = 30 * 1000;
+const PASSPORT_EMAIL_RETRY_MAX_MS = 6 * 60 * 60 * 1000;
+const PASSPORT_EMAIL_MAX_ATTEMPTS = 10;
+const PASSPORT_EMAIL_PROCESSING_LEASE_MS = 5 * 60 * 1000;
 
 let lastPassportBacklogWarningAt: number | null = null;
 let passportNotificationWorkerRunning = false;
+let passportEmailWorkerRunning = false;
 
 export type PassportIssuanceResult = {
   citizen: typeof citizensTable.$inferSelect;
@@ -110,6 +116,13 @@ export async function issueEligiblePassport(
           nextAttemptAt: now,
         });
     }
+    if (citizen.email) {
+      await tx.insert(passportEmailNotificationsTable).values({
+        citizenId,
+        status: "pending",
+        nextAttemptAt: now,
+      });
+    }
 
     return issuance;
   });
@@ -143,14 +156,11 @@ export async function issueEligiblePassport(
   const email = citizen.email?.startsWith("v1:")
     ? decrypt(citizen.email)
     : citizen.email;
-  void sendPassportEmail({
-    name: citizen.name,
-    citizenNumber: citizen.citizenNumber ?? String(citizen.id),
-    rank: citizen.rank,
-    email: email ?? null,
-  }).catch((err) =>
-    logger.warn({ citizenId }, "Passport issued, but email notification failed"),
-  );
+  if (email) {
+    void retryPendingPassportEmails(1).catch((err) =>
+      logger.warn({ err, citizenId }, "Passport issued, but email notification delivery was deferred"),
+    );
+  }
 
   if (citizen.citizenNumber) {
     void logCitizenIssuedToSheets({
@@ -287,6 +297,168 @@ export async function retryPendingPassportReadyNotifications(batchSize = 100): P
     }
   } finally {
     passportNotificationWorkerRunning = false;
+  }
+
+  return delivered;
+}
+
+/**
+ * Deliver due passport email outbox rows. The DB claim prevents concurrent
+ * server instances from sending the same message at the same time.
+ */
+export async function retryPendingPassportEmails(batchSize = 100): Promise<number> {
+  if (passportEmailWorkerRunning) return 0;
+  passportEmailWorkerRunning = true;
+  let delivered = 0;
+  const now = new Date();
+  const staleProcessingBefore = new Date(now.getTime() - PASSPORT_EMAIL_PROCESSING_LEASE_MS);
+
+  try {
+    const due = await db
+      .select({
+        id: passportEmailNotificationsTable.id,
+        citizenId: passportEmailNotificationsTable.citizenId,
+      })
+      .from(passportEmailNotificationsTable)
+      .where(
+        and(
+          lte(passportEmailNotificationsTable.nextAttemptAt, now),
+          or(
+            eq(passportEmailNotificationsTable.status, "pending"),
+            and(
+              eq(passportEmailNotificationsTable.status, "processing"),
+              lte(passportEmailNotificationsTable.updatedAt, staleProcessingBefore),
+            ),
+          ),
+        ),
+      )
+      .orderBy(asc(passportEmailNotificationsTable.nextAttemptAt))
+      .limit(batchSize);
+
+    for (const candidate of due) {
+      const [claimed] = await db
+        .update(passportEmailNotificationsTable)
+        .set({ status: "processing", updatedAt: now })
+        .where(
+          and(
+            eq(passportEmailNotificationsTable.id, candidate.id),
+            lte(passportEmailNotificationsTable.nextAttemptAt, now),
+            or(
+              eq(passportEmailNotificationsTable.status, "pending"),
+              and(
+                eq(passportEmailNotificationsTable.status, "processing"),
+                lte(passportEmailNotificationsTable.updatedAt, staleProcessingBefore),
+              ),
+            ),
+          ),
+        )
+        .returning();
+
+      if (!claimed) continue;
+
+      let delivery: PassportEmailDeliveryResult;
+      try {
+        const [citizen] = await db
+          .select({
+            id: citizensTable.id,
+            name: citizensTable.name,
+            citizenNumber: citizensTable.citizenNumber,
+            rank: citizensTable.rank,
+            email: citizensTable.email,
+          })
+          .from(citizensTable)
+          .where(eq(citizensTable.id, claimed.citizenId))
+          .limit(1);
+        const email = citizen?.email?.startsWith("v1:")
+          ? decrypt(citizen.email)
+          : citizen?.email;
+        if (!citizen) {
+          delivery = { status: "permanent", error: "Citizen record no longer exists", errorCode: null };
+        } else {
+          delivery = await sendPassportEmail({
+            name: citizen.name,
+            citizenNumber: citizen.citizenNumber ?? String(citizen.id),
+            rank: citizen.rank,
+            email: email ?? null,
+          }, claimed.id);
+        }
+      } catch (err) {
+        delivery = {
+          status: "retryable",
+          error: err instanceof Error ? err.message.slice(0, 500) : "Passport email delivery failed",
+          errorCode: null,
+        };
+      }
+
+      if (delivery.status === "delivered" || delivery.status === "already_sent") {
+        await db
+          .update(passportEmailNotificationsTable)
+          .set({
+            status: "delivered",
+            lastError: null,
+            lastErrorCode: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(passportEmailNotificationsTable.id, claimed.id),
+              eq(passportEmailNotificationsTable.status, "processing"),
+            ),
+          );
+        delivered += 1;
+        continue;
+      }
+
+      if (delivery.status === "permanent") {
+        await db
+          .update(passportEmailNotificationsTable)
+          .set({
+            status: "permanent_failure",
+            lastError: delivery.error,
+            lastErrorCode: delivery.errorCode,
+            updatedAt: new Date(),
+          })
+          .where(eq(passportEmailNotificationsTable.id, claimed.id));
+        logger.error(
+          { citizenId: claimed.citizenId, notificationId: claimed.id, errorCode: delivery.errorCode, error: delivery.error },
+          "Passport email delivery failed permanently and needs review",
+        );
+        continue;
+      }
+
+      const attemptCount = claimed.attemptCount + 1;
+      const retryDelay = Math.min(
+        PASSPORT_EMAIL_RETRY_BASE_MS * 2 ** Math.min(attemptCount - 1, 20),
+        PASSPORT_EMAIL_RETRY_MAX_MS,
+      );
+      const exhausted = attemptCount >= PASSPORT_EMAIL_MAX_ATTEMPTS;
+      await db
+        .update(passportEmailNotificationsTable)
+        .set({
+          status: exhausted ? "retry_exhausted" : "pending",
+          attemptCount,
+          nextAttemptAt: new Date(Date.now() + retryDelay),
+          lastError: delivery.error,
+          lastErrorCode: delivery.errorCode,
+          updatedAt: new Date(),
+        })
+        .where(eq(passportEmailNotificationsTable.id, claimed.id));
+      const logFields = {
+        citizenId: claimed.citizenId,
+        notificationId: claimed.id,
+        attemptCount,
+        retryDelayMs: retryDelay,
+        errorCode: delivery.errorCode,
+        error: delivery.error,
+      };
+      if (exhausted) {
+        logger.error(logFields, "Passport email retries exhausted; delivery needs review");
+      } else {
+        logger.warn(logFields, "Passport email retry scheduled");
+      }
+    }
+  } finally {
+    passportEmailWorkerRunning = false;
   }
 
   return delivered;

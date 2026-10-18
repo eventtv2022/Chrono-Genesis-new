@@ -13,4 +13,5 @@
 - [Telegram polling lifecycle](telegram-polling.md) — Telegraf retries some getUpdates failures internally but lets terminal polling errors reject launch
 - [TimeNation age gate](timenation-age-gate.md) — block under-13 signup; keep KYC-required adult features fail-closed until a real verification flow exists
 - [Passport Telegram notifications](passport-notifications.md) — passport emission and issuance alerts go to both the citizen and the admin
+- [Passport email retries](passport-email-retries.md) — use a stable RFC Message-ID and Gmail Sent lookup to detect accepted sends before retrying
 - [Upload boundary semantics](upload-boundaries.md) — Busboy rejects at the configured byte threshold; verify exact-limit acceptance with real multipart parsing.

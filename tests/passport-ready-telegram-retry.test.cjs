@@ -36,6 +36,7 @@ test("passport issuance commits the ready alert to the outbox and does not chang
     onboardingCompleted: false,
     name: "Test Citizen",
     rank: "Citizen",
+    email: "citizen@example.test",
     meritScore: 0,
     phone: "+10000000000",
     signatureBase64: "test-signature",
@@ -43,6 +44,7 @@ test("passport issuance commits the ready alert to the outbox and does not chang
     tgNotifyState: 1,
   };
   const outbox = [];
+  const emailOutbox = [];
   const ledger = [];
   const citizensTable = {
     id: "id",
@@ -52,6 +54,7 @@ test("passport issuance commits the ready alert to the outbox and does not chang
     signatureBase64: "signatureBase64",
   };
   const outboxTable = { id: "notificationId" };
+  const emailOutboxTable = { id: "emailNotificationId" };
 
   const tx = {
     select: () => ({
@@ -78,12 +81,14 @@ test("passport issuance commits the ready alert to the outbox and does not chang
     insert: (table) => ({
       values: async (entry) => {
         if (table === outboxTable) outbox.push(entry);
+        else if (table === emailOutboxTable) emailOutbox.push(entry);
         else ledger.push(entry);
       },
     }),
   };
   const db = { transaction: async (callback) => callback(tx) };
   let retryKicks = 0;
+  let emailRetryKicks = 0;
   const issueEligiblePassport = evaluate(
     sourceBetween(
       issuanceSource,
@@ -95,6 +100,7 @@ test("passport issuance commits the ready alert to the outbox and does not chang
       db,
       citizensTable,
       passportReadyNotificationsTable: outboxTable,
+      passportEmailNotificationsTable: emailOutboxTable,
       timeBankLedgerTable: {},
       and: (...conditions) => conditions,
       eq: (...values) => values,
@@ -102,6 +108,7 @@ test("passport issuance commits the ready alert to the outbox and does not chang
       sql: () => ({ increment: true }),
       logger: { info() {}, warn() {} },
       retryPendingPassportReadyNotifications: async () => { retryKicks += 1; },
+      retryPendingPassportEmails: async () => { emailRetryKicks += 1; },
       notifyAdminPassportLifecycle: async () => {},
       logCitizenIssuedToSheets: async () => {},
       sendPassportEmail: async () => {},
@@ -116,8 +123,12 @@ test("passport issuance commits the ready alert to the outbox and does not chang
   assert.equal(outbox[0].citizenId, citizen.id);
   assert.equal(outbox[0].status, "pending");
   assert.match(outbox[0].message, /паспорт гражданина TimeNation готов/);
+  assert.equal(emailOutbox.length, 1);
+  assert.equal(emailOutbox[0].citizenId, citizen.id);
+  assert.equal(emailOutbox[0].status, "pending");
   assert.equal(ledger.length, 1);
   assert.equal(retryKicks, 1);
+  assert.equal(emailRetryKicks, 1);
 });
 
 function loadPassportReadyDelivery(sendMessage, citizen = { telegramId: "12345", tgNotifyState: 1 }) {
