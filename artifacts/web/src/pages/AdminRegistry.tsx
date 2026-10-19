@@ -30,6 +30,9 @@ interface CitizenRow {
 
 interface CitizenDetail extends CitizenRow {
   signatureBase64: string | null;
+  surname: string;
+  givenNames: string;
+  dateOfBirth: string | null;
   meritScore: number | null;
   totalGiven: number | null;
   totalReceived: number | null;
@@ -98,6 +101,15 @@ function passportStatusLabel(c: CitizenRow): { label: string; color: string } {
 function fmtDate(s: string | null) {
   if (!s) return "—";
   return new Date(s).toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Не удалось прочитать файл"));
+    reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
+    reader.readAsDataURL(file);
+  });
 }
 
 // ── 2FA Gate ─────────────────────────────────────────────────────────────────
@@ -315,16 +327,25 @@ function ProfileModal({
   registryToken,
   onClose,
   onAction,
+  onSaved,
 }: {
   citizenId: number;
   registryToken: string;
   onClose: () => void;
   onAction: (id: number, action: string, extra?: { reason?: string }) => Promise<{ message?: string; error?: string }>;
+  onSaved: () => Promise<void>;
 }) {
   const [citizen, setCitizen] = useState<CitizenDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [savingIdentity, setSavingIdentity] = useState(false);
+  const [identityError, setIdentityError] = useState<string | null>(null);
+  const [identitySuccess, setIdentitySuccess] = useState<string | null>(null);
+  const [identityForm, setIdentityForm] = useState({ name: "", surname: "", givenNames: "", dateOfBirth: "" });
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [signatureFile, setSignatureFile] = useState<File | null>(null);
 
   // Block reason dialog state
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
@@ -336,10 +357,66 @@ function ProfileModal({
         const res = await fetch(`/api/admin/registry/users/${citizenId}`, {
           headers: { "X-Registry-Token": registryToken },
         });
-        if (res.ok) setCitizen(await res.json() as CitizenDetail);
+        if (res.ok) {
+          const detail = await res.json() as CitizenDetail;
+          setCitizen(detail);
+          setIdentityForm({
+            name: detail.name ?? "",
+            surname: detail.surname ?? "",
+            givenNames: detail.givenNames ?? "",
+            dateOfBirth: detail.dateOfBirth ?? "",
+          });
+        }
       } finally { setLoading(false); }
     })();
   }, [citizenId, registryToken]);
+
+  async function saveIdentity(event: React.FormEvent) {
+    event.preventDefault();
+    if (!citizen) return;
+    setSavingIdentity(true);
+    setIdentityError(null);
+    setIdentitySuccess(null);
+    try {
+      if (signatureFile && signatureFile.size > 1_100_000) {
+        throw new Error("Файл подписи слишком большой (максимум около 1 МБ)");
+      }
+      const formData = new FormData();
+      formData.set("name", identityForm.name.trim());
+      formData.set("surname", identityForm.surname.trim());
+      formData.set("givenNames", identityForm.givenNames.trim());
+      formData.set("dateOfBirth", identityForm.dateOfBirth);
+      if (photoFile) formData.set("photo", photoFile);
+      if (signatureFile) formData.set("signatureBase64", await fileToDataUrl(signatureFile));
+      const res = await fetch(`/api/admin/registry/users/${citizenId}`, {
+        method: "PATCH",
+        headers: { "X-Registry-Token": registryToken },
+        body: formData,
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Не удалось сохранить паспорт");
+      const detailRes = await fetch(`/api/admin/registry/users/${citizenId}`, {
+        headers: { "X-Registry-Token": registryToken },
+      });
+      if (!detailRes.ok) throw new Error("Данные сохранены, но не удалось обновить карточку");
+      const detail = await detailRes.json() as CitizenDetail;
+      setCitizen(detail);
+      setIdentityForm({
+        name: detail.name ?? "",
+        surname: detail.surname ?? "",
+        givenNames: detail.givenNames ?? "",
+        dateOfBirth: detail.dateOfBirth ?? "",
+      });
+      setPhotoFile(null);
+      setSignatureFile(null);
+      setIdentitySuccess("Данные паспорта сохранены");
+      await onSaved();
+    } catch (error) {
+      setIdentityError(error instanceof Error ? error.message : "Ошибка сохранения");
+    } finally {
+      setSavingIdentity(false);
+    }
+  }
 
   async function handleAction(action: string, extra?: { reason?: string }) {
     setActionLoading(action);
@@ -451,6 +528,70 @@ function ProfileModal({
                 </div>
               ))}
             </div>
+
+            {/* Identity editor */}
+            <section className="rounded-xl border border-border overflow-hidden">
+              <button
+                type="button"
+                onClick={() => { setEditOpen((open) => !open); setIdentityError(null); setIdentitySuccess(null); }}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted/30"
+              >
+                <span>Изменить данные паспорта</span>
+                <span aria-hidden="true">{editOpen ? "−" : "+"}</span>
+              </button>
+              {editOpen && (
+                <form onSubmit={(event) => void saveIdentity(event)} className="p-4 pt-1 space-y-3 border-t border-border">
+                  <div className="rounded-lg border border-amber-700/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
+                    Сохранение сразу обновит публичный паспорт TimeNation. Это внутренний идентификатор платформы, не государственный документ.
+                  </div>
+                  <label className="block text-xs text-muted-foreground">
+                    Полное имя для профиля
+                    <input required maxLength={160} value={identityForm.name}
+                      onChange={(event) => setIdentityForm((v) => ({ ...v, name: event.target.value }))}
+                      className="mt-1 w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground" />
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="block text-xs text-muted-foreground">
+                      Фамилия
+                      <input required maxLength={80} value={identityForm.surname}
+                        onChange={(event) => setIdentityForm((v) => ({ ...v, surname: event.target.value }))}
+                        className="mt-1 w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground" />
+                    </label>
+                    <label className="block text-xs text-muted-foreground">
+                      Имя и отчество
+                      <input required maxLength={100} value={identityForm.givenNames}
+                        onChange={(event) => setIdentityForm((v) => ({ ...v, givenNames: event.target.value }))}
+                        className="mt-1 w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground" />
+                    </label>
+                  </div>
+                  <label className="block text-xs text-muted-foreground">
+                    Дата рождения
+                    <input type="date" required value={identityForm.dateOfBirth}
+                      onChange={(event) => setIdentityForm((v) => ({ ...v, dateOfBirth: event.target.value }))}
+                      className="mt-1 w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground" />
+                  </label>
+                  <label className="block text-xs text-muted-foreground">
+                    Фото (JPG, PNG или WEBP, до 8 МБ)
+                    <input type="file" accept="image/jpeg,image/png,image/webp"
+                      onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                      className="mt-1 block w-full text-xs text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-2 file:text-xs file:text-foreground" />
+                  </label>
+                  <label className="block text-xs text-muted-foreground">
+                    Подпись (PNG или JPEG)
+                    <input type="file" accept="image/png,image/jpeg"
+                      onChange={(event) => setSignatureFile(event.target.files?.[0] ?? null)}
+                      className="mt-1 block w-full text-xs text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-2 file:text-xs file:text-foreground" />
+                  </label>
+                  <p className="text-[11px] text-muted-foreground">Пустые поля файлов не заменяют уже сохранённые фото и подпись.</p>
+                  {identityError && <div role="alert" className="text-sm text-red-300">{identityError}</div>}
+                  {identitySuccess && <div role="status" className="text-sm text-emerald-300">{identitySuccess}</div>}
+                  <button type="submit" disabled={savingIdentity}
+                    className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-50">
+                    {savingIdentity ? "Сохраняем…" : "Сохранить данные паспорта"}
+                  </button>
+                </form>
+              )}
+            </section>
 
             {/* Documents: photo + signature */}
             {(citizen.hasPhoto || citizen.signatureBase64) && (
@@ -1238,6 +1379,7 @@ export function AdminRegistry() {
             registryToken={registryToken}
             onClose={() => setProfileId(null)}
             onAction={handleAction}
+            onSaved={() => fetchCitizens(registryToken, search, statusFilter)}
           />
         )}
 

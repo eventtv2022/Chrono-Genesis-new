@@ -16,6 +16,7 @@ import { Router } from "express";
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
+import multer from "multer";
 import { db } from "@workspace/db";
 import { citizensTable, blockVoteRequestsTable, governmentPollsTable, governmentPollBallotsTable } from "@workspace/db";
 import { eq, or, ilike, sql, ne } from "drizzle-orm";
@@ -26,8 +27,22 @@ import { sendRegistryOtpEmail } from "../services/emailService";
 import { logger } from "../lib/logger";
 import { issueEligiblePassport } from "../services/passportIssuanceService";
 import { notifyPassportEmissionStarted } from "../services/telegramService";
+import { encryptNullable, tryDecrypt } from "../services/encryptionService";
+import { cropSignature, normalizePassportPhoto } from "../services/imageService";
+import { deriveAgeTier } from "../services/ageGateService";
 
 const router = Router();
+const registryPhotoDir = path.join(process.cwd(), "secure_vault", "photos");
+fs.mkdirSync(registryPhotoDir, { recursive: true });
+
+const registryPhotoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, fieldSize: 1_500_000, fields: 8 },
+  fileFilter: (_req, file, cb) => {
+    if (["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Фото должно быть JPG, PNG или WEBP"));
+  },
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // In-memory stores
@@ -274,6 +289,9 @@ router.get("/admin/registry/users/:id", requireRegistrySession, async (req, res)
       lastActivity:       citizensTable.lastActivity,
       photoUrl:           citizensTable.photoUrl,
       signatureBase64:    citizensTable.signatureBase64,
+      surname:            citizensTable.surname,
+      givenNames:         citizensTable.givenNames,
+      dateOfBirth:        citizensTable.dateOfBirth,
       meritScore:         citizensTable.meritScore,
       totalGiven:         citizensTable.totalGiven,
       totalReceived:      citizensTable.totalReceived,
@@ -287,10 +305,107 @@ router.get("/admin/registry/users/:id", requireRegistrySession, async (req, res)
   // Never expose raw filesystem path to the client
   res.json({
     ...citizen,
+    surname: tryDecrypt(citizen.surname) ?? "",
+    givenNames: tryDecrypt(citizen.givenNames) ?? "",
     hasPhoto: !!citizen.photoUrl,
     photoUrl: undefined,
   });
 });
+
+// Update identity details and documents only from a valid admin registry session.
+router.patch(
+  "/admin/registry/users/:id",
+  requireRegistrySession,
+  registryPhotoUpload.single("photo"),
+  async (req, res): Promise<void> => {
+    const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const id = Number.parseInt(rawId ?? "", 10);
+    if (!Number.isInteger(id) || id < 1) {
+      res.status(400).json({ error: "Неверный ID гражданина" });
+      return;
+    }
+
+    const body = z.object({
+      name: z.string().trim().min(1).max(160),
+      surname: z.string().trim().min(1).max(80),
+      givenNames: z.string().trim().min(1).max(100),
+      dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Дата должна быть в формате ГГГГ-ММ-ДД"),
+      signatureBase64: z.string().max(1_500_000).optional(),
+    }).safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.issues[0]?.message ?? "Проверьте данные паспорта" });
+      return;
+    }
+    const dobDate = new Date(`${body.data.dateOfBirth}T00:00:00.000Z`);
+    if (Number.isNaN(dobDate.getTime()) || dobDate.toISOString().slice(0, 10) !== body.data.dateOfBirth) {
+      res.status(400).json({ error: "Укажите корректную дату рождения" });
+      return;
+    }
+
+    let signatureBase64: string | undefined;
+    if (body.data.signatureBase64 !== undefined) {
+      if (!/^data:image\/(?:png|jpeg);base64,/i.test(body.data.signatureBase64)) {
+        res.status(400).json({ error: "Подпись должна быть PNG или JPEG" });
+        return;
+      }
+      const cropped = await cropSignature(body.data.signatureBase64);
+      if (!cropped) {
+        res.status(400).json({ error: "Не удалось распознать подпись" });
+        return;
+      }
+      signatureBase64 = cropped;
+    }
+
+    const [current] = await db
+      .select({ id: citizensTable.id, photoUrl: citizensTable.photoUrl })
+      .from(citizensTable)
+      .where(eq(citizensTable.id, id))
+      .limit(1);
+    if (!current) {
+      res.status(404).json({ error: "Гражданин не найден" });
+      return;
+    }
+
+    let newPhotoPath: string | null = null;
+    if (req.file) {
+      const ext = req.file.mimetype === "image/png" ? ".png" : req.file.mimetype === "image/webp" ? ".webp" : ".jpg";
+      newPhotoPath = path.join(registryPhotoDir, `photo_registry_${id}_${randomUUID()}${ext}`);
+      fs.writeFileSync(newPhotoPath, req.file.buffer);
+      if (ext !== ".jpg") {
+        newPhotoPath = await normalizePassportPhoto(newPhotoPath);
+      }
+    }
+
+    const updates: Partial<typeof citizensTable.$inferInsert> = {
+      name: body.data.name,
+      surname: encryptNullable(body.data.surname),
+      givenNames: encryptNullable(body.data.givenNames),
+      dateOfBirth: body.data.dateOfBirth,
+      ageTier: deriveAgeTier(body.data.dateOfBirth),
+    };
+    if (signatureBase64 !== undefined) updates.signatureBase64 = signatureBase64;
+    if (newPhotoPath) updates.photoUrl = `vault:photos/${path.basename(newPhotoPath)}`;
+
+    try {
+      await db.update(citizensTable).set(updates).where(eq(citizensTable.id, id));
+    } catch (error) {
+      if (newPhotoPath) fs.unlink(newPhotoPath, () => undefined);
+      throw error;
+    }
+
+    if (newPhotoPath && current.photoUrl?.startsWith("vault:")) {
+      const oldRelative = current.photoUrl.slice("vault:".length);
+      const oldPath = path.resolve(process.cwd(), "secure_vault", oldRelative);
+      if (oldPath.startsWith(`${path.resolve(process.cwd(), "secure_vault")}${path.sep}`)) {
+        fs.unlink(oldPath, () => undefined);
+      }
+    }
+
+    const adminId = (req as unknown as { registryAdminId?: number }).registryAdminId;
+    req.log.info({ adminId, citizenId: id, photoUpdated: !!newPhotoPath, signatureUpdated: signatureBase64 !== undefined }, "Admin registry passport details updated");
+    res.json({ ok: true });
+  }
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /admin/registry/users/:id/photo?token=<session-token>
