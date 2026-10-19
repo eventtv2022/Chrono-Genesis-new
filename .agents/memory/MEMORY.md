@@ -15,3 +15,4 @@
 - [Passport Telegram notifications](passport-notifications.md) — passport emission and issuance alerts go to both the citizen and the admin
 - [Passport email retries](passport-email-retries.md) — use a stable RFC Message-ID and Gmail Sent lookup to detect accepted sends before retrying
 - [Upload boundary semantics](upload-boundaries.md) — Busboy rejects at the configured byte threshold; verify exact-limit acceptance with real multipart parsing.
+- [Nominatim Russian addresses](nominatim-russian-addresses.md) — normalize Russian street/house abbreviations before retrying; JavaScript `\b` does not match Cyrillic boundaries.

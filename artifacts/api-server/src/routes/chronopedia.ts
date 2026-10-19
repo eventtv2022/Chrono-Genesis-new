@@ -401,25 +401,43 @@ router.get("/chronopedia/places/search", async (req, res): Promise<void> => {
   if (!q) { res.json({ places: [] }); return; }
 
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&accept-language=ru&addressdetails=1`;
-    const upstream = await fetch(url, {
-      signal: AbortSignal.timeout(6000),
-      headers: { "User-Agent": "TimeNation-Chronopedia/1.0" },
-    });
-    if (!upstream.ok) { res.json({ places: [] }); return; }
-
-    const data = await upstream.json() as {
+    type NominatimResult = {
       place_id: number;
       display_name: string;
       name?: string;
       lat: string;
       lon: string;
       address?: { city?: string; town?: string; village?: string; country?: string };
-    }[];
+    };
+
+    // Nominatim often fails on abbreviated Russian street/house notation
+    // (for example, "ул. Дружбы д. 10/32"). Retry with expanded street and
+    // stripped house abbreviations if the original query has no match.
+    const normalizedQuery = q
+      .replace(/(^|[\s,])ул(?:ица)?(?:\.|\s+)\s*/giu, "$1улица ")
+      .replace(/(^|[\s,])д(?:ом)?(?:\.|\s+)\s*/giu, "$1")
+      .replace(/\s+/g, " ")
+      .trim();
+    const queries = [...new Set([q, normalizedQuery])];
+    let data: NominatimResult[] = [];
+    for (const searchQuery of queries) {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=5&accept-language=ru&addressdetails=1`;
+      try {
+        const upstream = await fetch(url, {
+          signal: AbortSignal.timeout(6000),
+          headers: { "User-Agent": "TimeNation-Chronopedia/1.0" },
+        });
+        if (!upstream.ok) continue;
+        data = await upstream.json() as NominatimResult[];
+        if (data.length > 0) break;
+      } catch {
+        // Try the normalized query before returning an empty result.
+      }
+    }
 
     const places = (data ?? []).slice(0, 5).map((r) => {
       const city = r.address?.city ?? r.address?.town ?? r.address?.village ?? "";
-      const name = r.name ?? r.display_name.split(",")[0] ?? q;
+      const name = r.name?.trim() || r.display_name.split(",")[0]?.trim() || q;
       const shortAddr = r.display_name.split(",").slice(0, 3).join(",");
       return {
         placeId: `osm_${r.place_id}`,
