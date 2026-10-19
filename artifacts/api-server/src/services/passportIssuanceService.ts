@@ -106,7 +106,7 @@ export async function issueEligiblePassport(
         .values({
           citizenId,
           message:
-            `🎉 *Ваш паспорт гражданина TimeNation готов!*\n\n` +
+            `🎉 *Оформление цифрового паспорта завершено!*\n\n` +
             `👤 *${citizen.name}*\n` +
             `🪪 Гражданин №${citizen.citizenNumber ?? citizen.id}\n` +
             `📜 Ранг: ${citizen.rank}\n` +

@@ -122,7 +122,7 @@ test("passport issuance commits the ready alert to the outbox and does not chang
   assert.equal(outbox.length, 1);
   assert.equal(outbox[0].citizenId, citizen.id);
   assert.equal(outbox[0].status, "pending");
-  assert.match(outbox[0].message, /паспорт гражданина TimeNation готов/);
+  assert.match(outbox[0].message, /Оформление цифрового паспорта завершено/);
   assert.equal(emailOutbox.length, 1);
   assert.equal(emailOutbox[0].citizenId, citizen.id);
   assert.equal(emailOutbox[0].status, "pending");
