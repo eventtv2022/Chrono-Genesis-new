@@ -336,6 +336,7 @@ function AddModal({
   const [manualLng, setManualLng] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const previousPlaceQuery = useRef(placeSearch.query);
 
   useEffect(() => {
     if (visible) {
@@ -344,8 +345,16 @@ function AddModal({
       if (mode === "slot") {
         setLocationName(placeSearch.selected?.name ?? "");
         setTimeMarker(new Date().toISOString().slice(0, 10));
-        setManualLat(pendingLat != null ? String(pendingLat) : "");
-        setManualLng(pendingLng != null ? String(pendingLng) : "");
+        setManualLat(
+          placeSearch.selected?.lat != null
+            ? String(placeSearch.selected.lat)
+            : pendingLat != null ? String(pendingLat) : "",
+        );
+        setManualLng(
+          placeSearch.selected?.lng != null
+            ? String(placeSearch.selected.lng)
+            : pendingLng != null ? String(pendingLng) : "",
+        );
       }
     }
   }, [visible, mode]);
@@ -357,6 +366,25 @@ function AddModal({
       setManualLng(String(placeSearch.selected.lng));
     }
   }, [placeSearch.selected]);
+
+  useEffect(() => {
+    if (previousPlaceQuery.current !== placeSearch.query && !placeSearch.selected && mode === "slot") {
+      setManualLat("");
+      setManualLng("");
+    }
+    previousPlaceQuery.current = placeSearch.query;
+  }, [mode, placeSearch.query, placeSearch.selected]);
+
+  // Fill coordinates from the best search match even if the user does not tap
+  // a suggestion. Suggestions stay visible so another result can still be chosen.
+  useEffect(() => {
+    if (mode !== "slot" || placeSearch.selected || placeSearch.results.length === 0) return;
+    const bestMatch = placeSearch.results[0];
+    if (Number.isFinite(bestMatch.lat) && Number.isFinite(bestMatch.lng)) {
+      setManualLat(String(bestMatch.lat));
+      setManualLng(String(bestMatch.lng));
+    }
+  }, [mode, placeSearch.results, placeSearch.selected]);
 
   // Auto-sync location name from search query when no place is selected
   useEffect(() => {
@@ -530,10 +558,10 @@ function AddModal({
               maxLength={200}
             />
 
-            <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>{t.tx_desc_placeholder}</Text>
+            <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>{t.chrono_opinion_body}</Text>
             <TextInput
               style={[st.field, st.fieldMulti, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
-              placeholder={t.tx_desc_placeholder}
+              placeholder={t.chrono_opinion_body}
               placeholderTextColor={colors.mutedForeground}
               value={description}
               onChangeText={setDescription}
@@ -591,19 +619,27 @@ export default function ChronopediaScreen() {
   // Google Places search with debounce
   useEffect(() => {
     if (!placeQuery.trim() || selectedPlace) return;
+    let cancelled = false;
     const t = setTimeout(async () => {
-      setPlaceLoading(true);
+      if (!cancelled) setPlaceLoading(true);
       try {
         const res = await fetch(`${BASE_URL}/api/chronopedia/places/search?q=${encodeURIComponent(placeQuery)}`);
         if (res.ok) {
           const data = await res.json() as { places: PlaceResult[] };
-          setPlaceResults(data.places);
+          if (!cancelled) setPlaceResults(data.places ?? []);
+        } else if (!cancelled) {
+          setPlaceResults([]);
         }
+      } catch {
+        if (!cancelled) setPlaceResults([]);
       } finally {
-        setPlaceLoading(false);
+        if (!cancelled) setPlaceLoading(false);
       }
     }, 600);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [placeQuery, selectedPlace]);
 
   // ── Queries ────────────────────────────────────────────────────────────────
@@ -1073,7 +1109,14 @@ export default function ChronopediaScreen() {
         colors={colors}
         placeSearch={{
           query: placeQuery,
-          setQuery: (q) => { setPlaceQuery(q); if (!q) { setSelectedPlace(null); setPlaceResults([]); } },
+          setQuery: (q) => {
+            setPlaceQuery(q);
+            setPlaceLoading(false);
+            if (!q || (selectedPlace && q.trim() !== selectedPlace.name)) {
+              setSelectedPlace(null);
+              setPlaceResults([]);
+            }
+          },
           results: placeResults,
           loading: placeLoading,
           selected: selectedPlace,
