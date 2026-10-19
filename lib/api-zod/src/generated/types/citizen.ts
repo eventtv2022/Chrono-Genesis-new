@@ -26,4 +26,5 @@ export interface Citizen {
   lastActivity: string | null;
   createdAt: string;
   onboardingCompleted?: boolean;
+  ageProfileRequired: boolean;
 }

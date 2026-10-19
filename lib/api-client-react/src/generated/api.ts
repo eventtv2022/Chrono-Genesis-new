@@ -28,6 +28,8 @@ import type {
   CitizenRegistrationResult,
   CitizenUpdate,
   CitizenWalletLinkInput,
+  CompleteAgeProfileInput,
+  CompleteAgeProfileResult,
   EconomyStats,
   ErrorResponse,
   GetTimelineOccupiedParams,
@@ -146,6 +148,77 @@ export const useLoginCitizen = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getLoginCitizenMutationOptions(options));
+    }
+
+export const getCompleteCitizenAgeProfileUrl = () => {
+
+
+
+
+  return `/api/auth/complete-age`
+}
+
+/**
+ * @summary Complete a logged-in citizen's missing age profile
+ */
+export const completeCitizenAgeProfile = async (completeAgeProfileInput: CompleteAgeProfileInput, options?: RequestInit): Promise<CompleteAgeProfileResult> => {
+
+  return customFetch<CompleteAgeProfileResult>(getCompleteCitizenAgeProfileUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      completeAgeProfileInput,)
+  }
+);}
+
+
+
+
+export const getCompleteCitizenAgeProfileMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeCitizenAgeProfile>>, TError,{data: BodyType<CompleteAgeProfileInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeCitizenAgeProfile>>, TError,{data: BodyType<CompleteAgeProfileInput>}, TContext> => {
+
+const mutationKey = ['completeCitizenAgeProfile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeCitizenAgeProfile>>, {data: BodyType<CompleteAgeProfileInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  completeCitizenAgeProfile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteCitizenAgeProfileMutationResult = NonNullable<Awaited<ReturnType<typeof completeCitizenAgeProfile>>>
+    export type CompleteCitizenAgeProfileMutationBody = BodyType<CompleteAgeProfileInput>
+    export type CompleteCitizenAgeProfileMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Complete a logged-in citizen's missing age profile
+ */
+export const useCompleteCitizenAgeProfile = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeCitizenAgeProfile>>, TError,{data: BodyType<CompleteAgeProfileInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeCitizenAgeProfile>>,
+        TError,
+        {data: BodyType<CompleteAgeProfileInput>},
+        TContext
+      > => {
+      return useMutation(getCompleteCitizenAgeProfileMutationOptions(options));
     }
 
 export const getRegisterCitizenWithPasswordUrl = () => {

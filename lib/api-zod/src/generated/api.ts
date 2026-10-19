@@ -38,7 +38,21 @@ export const LoginCitizenResponse = zod.object({
   "walletVerified": zod.number(),
   "ageVerified": zod.number(),
   "onboardingCompleted": zod.boolean(),
-  "authToken": zod.string()
+  "authToken": zod.string(),
+  "ageProfileRequired": zod.boolean()
+})
+
+
+/**
+ * @summary Complete a logged-in citizen's missing age profile
+ */
+export const CompleteCitizenAgeProfileBody = zod.object({
+  "dateOfBirth": zod.coerce.date()
+})
+
+export const CompleteCitizenAgeProfileResponse = zod.object({
+  "ok": zod.boolean(),
+  "ageTier": zod.enum(['TEEN', 'ADULT'])
 })
 
 
@@ -269,7 +283,8 @@ export const ListCitizensResponseItem = zod.object({
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
   "createdAt": zod.string(),
-  "onboardingCompleted": zod.boolean().optional()
+  "onboardingCompleted": zod.boolean().optional(),
+  "ageProfileRequired": zod.boolean()
 })
 export const ListCitizensResponse = zod.array(ListCitizensResponseItem)
 
@@ -314,7 +329,8 @@ export const GetCitizenResponse = zod.object({
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
   "createdAt": zod.string(),
-  "onboardingCompleted": zod.boolean().optional()
+  "onboardingCompleted": zod.boolean().optional(),
+  "ageProfileRequired": zod.boolean()
 })
 
 
@@ -346,7 +362,8 @@ export const UpdateCitizenResponse = zod.object({
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
   "createdAt": zod.string(),
-  "onboardingCompleted": zod.boolean().optional()
+  "onboardingCompleted": zod.boolean().optional(),
+  "ageProfileRequired": zod.boolean()
 })
 
 
@@ -372,7 +389,8 @@ export const GetCitizenByPhoneResponse = zod.object({
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
   "createdAt": zod.string(),
-  "onboardingCompleted": zod.boolean().optional()
+  "onboardingCompleted": zod.boolean().optional(),
+  "ageProfileRequired": zod.boolean()
 })
 
 
@@ -507,7 +525,8 @@ export const LinkWalletResponse = zod.object({
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
   "createdAt": zod.string(),
-  "onboardingCompleted": zod.boolean().optional()
+  "onboardingCompleted": zod.boolean().optional(),
+  "ageProfileRequired": zod.boolean()
 })
 
 
@@ -563,7 +582,8 @@ export const GetStatsResponse = zod.object({
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
   "createdAt": zod.string(),
-  "onboardingCompleted": zod.boolean().optional()
+  "onboardingCompleted": zod.boolean().optional(),
+  "ageProfileRequired": zod.boolean()
 })),
   "topReceivers": zod.array(zod.object({
   "id": zod.number(),
@@ -580,7 +600,8 @@ export const GetStatsResponse = zod.object({
   "rank": zod.string(),
   "lastActivity": zod.string().nullable(),
   "createdAt": zod.string(),
-  "onboardingCompleted": zod.boolean().optional()
+  "onboardingCompleted": zod.boolean().optional(),
+  "ageProfileRequired": zod.boolean()
 })),
   "recentTransactions": zod.array(zod.object({
   "id": zod.number(),

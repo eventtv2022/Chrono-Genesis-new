@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { useCompleteCitizenAgeProfile } from "@workspace/api-client-react";
 import { ONBOARDING_PROGRESS_TOKEN_KEY } from "../../../../lib/onboarding-questions";
 
 const STORAGE_KEY      = "timenation_citizen";
@@ -80,6 +81,12 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
   const [legacyDob, setLegacyDob] = useState("");
   const [legacyAgeError, setLegacyAgeError] = useState("");
   const [legacyAgeSubmitting, setLegacyAgeSubmitting] = useState(false);
+  const authHeaders: Record<string, string> = authToken
+    ? { Authorization: `Bearer ${authToken}` }
+    : {};
+  const completeAgeProfile = useCompleteCitizenAgeProfile({
+    request: { headers: authHeaders },
+  });
 
   useEffect(() => {
     // ── 1. Restore from localStorage ──────────────────────────────────────────
@@ -90,7 +97,10 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
       storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
       if (raw)         storedCitizen = JSON.parse(raw) as CitizenProfile;
       if (storedToken) setAuthTokenState(storedToken);
-      if (storedCitizen) setCitizenState(storedCitizen);
+      if (storedCitizen) {
+        setCitizenState(storedCitizen);
+        if (storedToken) setLegacyAgeGateRequired(storedCitizen.ageProfileRequired !== false);
+      }
       const cachedTwaStatus = localStorage.getItem(TWA_STATUS_KEY) as TwaStatus;
       if (cachedTwaStatus) setTwaStatus(cachedTwaStatus);
     } catch { /* ignore corrupt storage */ }
@@ -99,8 +109,27 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
     const initData = getTgInitData();
 
     if (!initData) {
-      // Not inside Telegram Mini App — nothing to do
-      setIsLoading(false);
+      // Re-check the server-owned age-profile flag for saved sessions. Older
+      // cached profiles predate this flag and cannot tell us whether DOB exists.
+      const refreshStoredCitizen = async () => {
+        if (storedToken && storedCitizen) {
+          try {
+            const response = await fetch(`/api/citizens/${storedCitizen.id}`, {
+              headers: { Authorization: `Bearer ${storedToken}` },
+            });
+            if (response.ok) {
+              const profile = await response.json() as CitizenProfile;
+              setCitizenState(profile);
+              setLegacyAgeGateRequired(!!profile.ageProfileRequired);
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+            }
+          } catch {
+            // Keep the cached session usable if the server is temporarily unavailable.
+          }
+        }
+        setIsLoading(false);
+      };
+      void refreshStoredCitizen();
       return;
     }
 
@@ -191,21 +220,13 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
     setLegacyAgeSubmitting(true);
     setLegacyAgeError("");
     try {
-      const response = await fetch("/api/auth/complete-age", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
-        body: JSON.stringify({ dateOfBirth: legacyDob }),
-      });
-      const data = await response.json() as { error?: string };
-      if (!response.ok) {
-        setLegacyAgeError(data.error ?? "Could not save date of birth.");
-        return;
-      }
+      await completeAgeProfile.mutateAsync({ data: { dateOfBirth: legacyDob } });
       setLegacyAgeGateRequired(false);
       setLegacyDob("");
       await refreshCitizen();
-    } catch {
-      setLegacyAgeError("Network error. Please try again.");
+    } catch (error) {
+      const apiError = error as Error & { data?: { error?: string } };
+      setLegacyAgeError(apiError.data?.error ?? "Could not save date of birth. Please try again.");
     } finally {
       setLegacyAgeSubmitting(false);
     }
@@ -221,6 +242,7 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const updated = (await res.json()) as CitizenProfile;
         setCitizenState(updated);
+        setLegacyAgeGateRequired(!!updated.ageProfileRequired);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       }
     } catch {}
@@ -256,10 +278,6 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(AUTH_TOKEN_KEY);
     }
   }
-
-  const authHeaders: Record<string, string> = authToken
-    ? { Authorization: `Bearer ${authToken}` }
-    : {};
 
   return (
     <>

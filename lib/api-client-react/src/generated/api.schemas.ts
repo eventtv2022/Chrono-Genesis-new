@@ -118,6 +118,7 @@ export interface Citizen {
   lastActivity: string | null;
   createdAt: string;
   onboardingCompleted?: boolean;
+  ageProfileRequired: boolean;
 }
 
 export interface LoginInput {
@@ -149,6 +150,24 @@ export interface AuthSession {
   ageVerified: number;
   onboardingCompleted: boolean;
   authToken: string;
+  ageProfileRequired: boolean;
+}
+
+export interface CompleteAgeProfileInput {
+  dateOfBirth: string;
+}
+
+export type CompleteAgeProfileResultAgeTier = typeof CompleteAgeProfileResultAgeTier[keyof typeof CompleteAgeProfileResultAgeTier];
+
+
+export const CompleteAgeProfileResultAgeTier = {
+  TEEN: 'TEEN',
+  ADULT: 'ADULT',
+} as const;
+
+export interface CompleteAgeProfileResult {
+  ok: true;
+  ageTier: CompleteAgeProfileResultAgeTier;
 }
 
 export interface CitizenInput {

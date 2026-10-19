@@ -71,6 +71,7 @@ function formatCitizenRow(c: typeof citizensTable.$inferSelect) {
     photoUrl: c.photoUrl ? "vault:protected" : null,
     hasSignature: !!c.signatureBase64?.trim(),
     transferableBalance: Math.max(0, c.balanceMinutes - 1),
+    ageProfileRequired: deriveAgeTier(c.dateOfBirth ?? "") === null,
     lastActivity: c.lastActivity?.toISOString() ?? null,
     createdAt: c.createdAt.toISOString(),
     availableAt: c.availableAt?.toISOString() ?? null,

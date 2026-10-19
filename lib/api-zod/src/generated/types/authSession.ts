@@ -29,4 +29,5 @@ export interface AuthSession {
   ageVerified: number;
   onboardingCompleted: boolean;
   authToken: string;
+  ageProfileRequired: boolean;
 }

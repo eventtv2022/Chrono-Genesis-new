@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import fs from "fs";
@@ -295,9 +295,20 @@ router.post("/auth/complete-age", requireAuth, async (req, res): Promise<void> =
     return;
   }
 
-  await db.update(citizensTable)
+  const previousDob = citizen.dateOfBirth;
+  const [updated] = await db.update(citizensTable)
     .set({ dateOfBirth: parsed.data.dateOfBirth, ageTier })
-    .where(eq(citizensTable.id, citizen.id));
+    .where(and(
+      eq(citizensTable.id, citizen.id),
+      previousDob == null
+        ? isNull(citizensTable.dateOfBirth)
+        : or(isNull(citizensTable.dateOfBirth), eq(citizensTable.dateOfBirth, previousDob)),
+    ))
+    .returning({ id: citizensTable.id });
+  if (!updated) {
+    res.status(409).json({ error: "Дата рождения уже подтверждена для этого аккаунта" });
+    return;
+  }
   res.json({ ok: true, ageTier });
 });
 
