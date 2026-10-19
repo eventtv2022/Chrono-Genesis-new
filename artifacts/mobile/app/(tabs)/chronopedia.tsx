@@ -411,7 +411,7 @@ function AddModal({
   }, [placeSearch.query, placeSearch.selected, mode]);
 
   const handleSubmit = () => {
-    if (!title.trim()) { Alert.alert(t.error, t.tl_enter_coords); return; }
+    if (mode === "event" && !title.trim()) { Alert.alert(t.error, t.tl_enter_coords); return; }
     if (!description.trim()) { Alert.alert(t.error, t.tl_enter_coords); return; }
     if (mode === "slot" && !locationName.trim()) { Alert.alert(t.error, t.chrono_search_place); return; }
     if (mode === "slot" && !timeMarker.trim()) { Alert.alert(t.error, t.tl_code_placeholder); return; }
@@ -431,7 +431,8 @@ function AddModal({
       placeId: placeSearch.selected?.placeId,
       lat: mode === "slot" ? lat : undefined,
       lng: mode === "slot" ? lng : undefined,
-      title: title.trim(),
+      // Creating a significant event uses its description as the required API title.
+      title: mode === "slot" ? description.trim().slice(0, 200) : title.trim(),
       description: description.trim(),
     });
   };
@@ -548,15 +549,19 @@ function AddModal({
               </>
             )}
 
-            <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>{t.chrono_add_opinion}</Text>
-            <TextInput
-              style={[st.field, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
-              placeholder={t.chrono_add_opinion}
-              placeholderTextColor={colors.mutedForeground}
-              value={title}
-              onChangeText={setTitle}
-              maxLength={200}
-            />
+            {mode === "event" && (
+              <>
+                <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>{t.chrono_add_opinion}</Text>
+                <TextInput
+                  style={[st.field, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}
+                  placeholder={t.chrono_add_opinion}
+                  placeholderTextColor={colors.mutedForeground}
+                  value={title}
+                  onChangeText={setTitle}
+                  maxLength={200}
+                />
+              </>
+            )}
 
             <Text style={[st.fieldLabel, { color: colors.mutedForeground }]}>{t.chrono_opinion_body}</Text>
             <TextInput
