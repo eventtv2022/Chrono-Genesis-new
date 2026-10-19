@@ -13,6 +13,7 @@ export interface EconomyStats {
   activeCitizens: number;
   totalTransactions: number;
   totalMinutesCirculated: number;
+  uniqueVisitors: number;
   topGivers: Citizen[];
   topReceivers: Citizen[];
   recentTransactions: Transaction[];

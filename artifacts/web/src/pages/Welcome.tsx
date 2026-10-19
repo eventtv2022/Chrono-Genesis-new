@@ -255,11 +255,11 @@ function NeonClock() {
 /* ═══════════════════════════════════════════════════════════════════
    GLOBAL ACTIVITY WIDGET — bottom-right
 ═══════════════════════════════════════════════════════════════════ */
-function ActivityWidget({ stats }: { stats: { activeCitizens: number; totalMinutesCirculated: number | string; totalTransactions: number } | undefined }) {
+function ActivityWidget({ stats }: { stats: { activeCitizens: number; totalMinutesCirculated: number | string; uniqueVisitors: number } | undefined }) {
   const rows = [
     { icon: "⚡", label: "Citizens Active",         value: stats ? stats.activeCitizens.toLocaleString()                              : "—", color: "#00ff88" },
     { icon: "⏳", label: "Darmīn in Circulation",   value: stats ? Number(stats.totalMinutesCirculated).toFixed(0)                    : "—", color: "#c9a84c" },
-    { icon: "🔄", label: "Transactions",             value: stats ? stats.totalTransactions.toLocaleString()                          : "—", color: "#00d4ff" },
+    { icon: "◉", label: "Visitors",                 value: stats ? stats.uniqueVisitors.toLocaleString()                              : "—", color: "#00d4ff" },
   ];
 
   return (
@@ -1020,7 +1020,7 @@ function MobileHero() {
             {[
               { label: "Citizens",   value: stats?.activeCitizens ?? "—",                                             color: "#00ff88" },
               { label: "Darmīn",    value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—",             color: "#c9a84c" },
-              { label: "Txns",      value: (stats as { totalTransactions?: number } | undefined)?.totalTransactions ?? "—", color: "#00d4ff" },
+              { label: "Visitors",  value: stats?.uniqueVisitors ?? "—", color: "#00d4ff" },
             ].map(r => (
               <div key={r.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
                 <span style={{ fontSize: 9, color: "#8080a0", fontFamily: FONT_EXO }}>{r.label}</span>

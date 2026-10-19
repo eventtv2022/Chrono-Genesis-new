@@ -1,5 +1,6 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { getGetStatsQueryKey } from "@workspace/api-client-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
@@ -182,6 +183,39 @@ function Router() {
   );
 }
 
+const SITE_VISITOR_ID_KEY = "timenation_site_visitor_id";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function SiteVisitorTracker() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    try {
+      let visitorId = localStorage.getItem(SITE_VISITOR_ID_KEY);
+      if (!visitorId || !UUID_PATTERN.test(visitorId)) {
+        visitorId = window.crypto.randomUUID();
+        localStorage.setItem(SITE_VISITOR_ID_KEY, visitorId);
+      }
+
+      void fetch("/api/stats/visitors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitorId }),
+      }).then(response => {
+        if (response.ok) {
+          void queryClient.invalidateQueries({ queryKey: getGetStatsQueryKey() });
+        }
+      }).catch(() => {
+        // Visitor counting must never prevent the site from loading.
+      });
+    } catch {
+      // Browsers with blocked local storage or crypto are not counted.
+    }
+  }, [queryClient]);
+
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -189,6 +223,7 @@ function App() {
         <CitizenProvider>
           <TooltipProvider>
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <SiteVisitorTracker />
               <Router />
             </WouterRouter>
             <Toaster />

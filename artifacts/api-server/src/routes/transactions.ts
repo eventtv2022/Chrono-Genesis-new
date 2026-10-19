@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { desc, eq, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { count, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@workspace/db";
-import { transactionsTable, citizensTable } from "@workspace/db";
+import { transactionsTable, citizensTable, siteVisitorsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -44,6 +45,7 @@ function publicCitizen(c: CitizenRow) {
 // Aliases for double-join on citizens
 const fromAlias = alias(citizensTable, "from_c");
 const toAlias   = alias(citizensTable, "to_c");
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // Select shape that replaces stored names with current citizen pseudonyms
 const txSelect = {
@@ -92,6 +94,9 @@ router.get("/transactions", async (req, res): Promise<void> => {
 
 router.get("/stats", async (_req, res): Promise<void> => {
   const citizens = await db.select().from(citizensTable);
+  const [visitorCount] = await db
+    .select({ total: count() })
+    .from(siteVisitorsTable);
 
   const recentRows = await db
     .select(txSelect)
@@ -118,6 +123,7 @@ router.get("/stats", async (_req, res): Promise<void> => {
     activeCitizens:         citizens.filter((c) => c.status === "active").length,
     totalTransactions:      recentRows.length,
     totalMinutesCirculated: totalMinutesAll,
+    uniqueVisitors:         visitorCount?.total ?? 0,
     topGivers,
     topReceivers,
     recentTransactions: recentRows.slice(0, 10).map((t) => ({
@@ -127,6 +133,24 @@ router.get("/stats", async (_req, res): Promise<void> => {
       createdAt: t.createdAt.toISOString(),
     })),
   });
+});
+
+router.post("/stats/visitors", async (req, res): Promise<void> => {
+  const visitorId = req.body?.visitorId;
+  if (typeof visitorId !== "string" || !UUID_PATTERN.test(visitorId)) {
+    res.status(400).json({ error: "A valid visitor ID is required" });
+    return;
+  }
+
+  const visitorHash = createHash("sha256")
+    .update(visitorId.toLowerCase())
+    .digest("hex");
+  await db
+    .insert(siteVisitorsTable)
+    .values({ visitorHash })
+    .onConflictDoNothing({ target: siteVisitorsTable.visitorHash });
+
+  res.status(204).end();
 });
 
 export default router;

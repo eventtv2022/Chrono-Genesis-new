@@ -55,6 +55,7 @@ import type {
   Session,
   SessionInput,
   SessionResult,
+  SiteVisitorInput,
   StripeWebhook200,
   TelegramWebAppInput,
   TelegramWebAppSession,
@@ -2009,7 +2010,7 @@ export const getGetStatsUrl = () => {
 }
 
 /**
- * @summary Get global economy stats
+ * @summary Get global activity stats
  */
 export const getStats = async ( options?: RequestInit): Promise<EconomyStats> => {
 
@@ -2056,7 +2057,7 @@ export type GetStatsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Get global economy stats
+ * @summary Get global activity stats
  */
 
 export function useGetStats<TData = Awaited<ReturnType<typeof getStats>>, TError = ErrorType<unknown>>(
@@ -2076,6 +2077,77 @@ export function useGetStats<TData = Awaited<ReturnType<typeof getStats>>, TError
 
 
 
+
+export const getRegisterSiteVisitorUrl = () => {
+
+
+
+
+  return `/api/stats/visitors`
+}
+
+/**
+ * @summary Count a unique site visitor
+ */
+export const registerSiteVisitor = async (siteVisitorInput: SiteVisitorInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRegisterSiteVisitorUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      siteVisitorInput,)
+  }
+);}
+
+
+
+
+export const getRegisterSiteVisitorMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerSiteVisitor>>, TError,{data: BodyType<SiteVisitorInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerSiteVisitor>>, TError,{data: BodyType<SiteVisitorInput>}, TContext> => {
+
+const mutationKey = ['registerSiteVisitor'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerSiteVisitor>>, {data: BodyType<SiteVisitorInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerSiteVisitor(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterSiteVisitorMutationResult = NonNullable<Awaited<ReturnType<typeof registerSiteVisitor>>>
+    export type RegisterSiteVisitorMutationBody = BodyType<SiteVisitorInput>
+    export type RegisterSiteVisitorMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Count a unique site visitor
+ */
+export const useRegisterSiteVisitor = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerSiteVisitor>>, TError,{data: BodyType<SiteVisitorInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerSiteVisitor>>,
+        TError,
+        {data: BodyType<SiteVisitorInput>},
+        TContext
+      > => {
+      return useMutation(getRegisterSiteVisitorMutationOptions(options));
+    }
 
 export const getGetMinutePackagesUrl = () => {
 

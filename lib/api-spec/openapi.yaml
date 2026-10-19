@@ -692,14 +692,35 @@ paths:
     get:
       operationId: getStats
       tags: [citizens]
-      summary: Get global economy stats
+      summary: Get global activity stats
       responses:
         "200":
-          description: Economy stats
+          description: Global activity stats
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/EconomyStats"
+
+  /stats/visitors:
+    post:
+      operationId: registerSiteVisitor
+      tags: [citizens]
+      summary: Count a unique site visitor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SiteVisitorInput"
+      responses:
+        "204":
+          description: Visitor counted or already registered
+        "400":
+          description: Invalid visitor identifier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /payments/packages:
     get:
@@ -1578,6 +1599,8 @@ components:
           type: integer
         totalMinutesCirculated:
           type: integer
+        uniqueVisitors:
+          type: integer
         topGivers:
           type: array
           items:
@@ -1595,9 +1618,19 @@ components:
         - activeCitizens
         - totalTransactions
         - totalMinutesCirculated
+        - uniqueVisitors
         - topGivers
         - topReceivers
         - recentTransactions
+
+    SiteVisitorInput:
+      type: object
+      properties:
+        visitorId:
+          type: string
+          format: uuid
+      required:
+        - visitorId
 
     MinutePackage:
       type: object

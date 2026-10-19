@@ -560,13 +560,14 @@ export const GetTimelineOccupiedResponse = zod.array(GetTimelineOccupiedResponse
 
 
 /**
- * @summary Get global economy stats
+ * @summary Get global activity stats
  */
 export const GetStatsResponse = zod.object({
   "totalCitizens": zod.number(),
   "activeCitizens": zod.number(),
   "totalTransactions": zod.number(),
   "totalMinutesCirculated": zod.number(),
+  "uniqueVisitors": zod.number(),
   "topGivers": zod.array(zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -614,6 +615,14 @@ export const GetStatsResponse = zod.object({
   "durationSeconds": zod.number(),
   "createdAt": zod.string()
 }))
+})
+
+
+/**
+ * @summary Count a unique site visitor
+ */
+export const RegisterSiteVisitorBody = zod.object({
+  "visitorId": zod.string().uuid()
 })
 
 
