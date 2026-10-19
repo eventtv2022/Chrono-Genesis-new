@@ -67,6 +67,26 @@ function getTgInitData(): string | null {
   }
 }
 
+function normalizeDateOfBirth(value: string): string | null {
+  const input = value.trim();
+  const isoMatch = input.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const localMatch = input.match(/^(\d{2})[./](\d{2})[./](\d{4})$/);
+  const year = Number(isoMatch?.[1] ?? localMatch?.[3]);
+  const month = Number(isoMatch?.[2] ?? localMatch?.[2]);
+  const day = Number(isoMatch?.[3] ?? localMatch?.[1]);
+
+  if (!isoMatch && !localMatch) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+}
+
 export function CitizenProvider({ children }: { children: React.ReactNode }) {
   const [citizen, setCitizenState]     = useState<CitizenProfile | null>(null);
   const [authToken, setAuthTokenState] = useState<string | null>(null);
@@ -194,8 +214,9 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
 
   async function submitTwaAgeGate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(ageGateDob)) {
-      setAgeGateError("Enter a valid date of birth.");
+    const normalizedDob = normalizeDateOfBirth(ageGateDob);
+    if (!normalizedDob) {
+      setAgeGateError("Введите дату в формате ГГГГ-ММ-ДД или ДД.ММ.ГГГГ.");
       return;
     }
     const initData = getTgInitData();
@@ -203,7 +224,7 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
     setAgeGateSubmitting(true);
     setAgeGateError("");
     try {
-      await authenticateTwa(initData, ageGateDob);
+      await authenticateTwa(initData, normalizedDob);
     } catch {
       setAgeGateError("Network error. Please try again.");
     } finally {
@@ -297,7 +318,18 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
           <h2 id="twa-age-title" className="text-lg font-semibold">Age check / Проверка возраста</h2>
           <p className="text-sm text-muted-foreground">Date of birth is required. Registration is available from age 13. Your date is not saved if you are under 13.</p>
           <label className="block text-sm" htmlFor="twa-date-of-birth">Date of birth / Дата рождения</label>
-          <input id="twa-date-of-birth" type="date" required value={ageGateDob} onChange={e => setAgeGateDob(e.target.value)} className="w-full rounded-md border bg-background p-2" />
+          <input
+            id="twa-date-of-birth"
+            type="text"
+            inputMode="text"
+            autoComplete="bday"
+            maxLength={10}
+            placeholder="ГГГГ-ММ-ДД или ДД.ММ.ГГГГ"
+            required
+            value={ageGateDob}
+            onChange={e => setAgeGateDob(e.target.value)}
+            className="w-full rounded-md border bg-background p-2"
+          />
           {ageGateError && <p role="alert" className="text-sm text-red-600">{ageGateError}</p>}
           <button type="submit" disabled={ageGateSubmitting} className="w-full rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50">
             {ageGateSubmitting ? "Checking…" : "Continue"}
