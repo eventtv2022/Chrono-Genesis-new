@@ -44,7 +44,7 @@ router.get("/referrals/me", requireAuth, async (req, res): Promise<void> => {
     ));
 
   res.json({
-    referralUrl: `https://chrono-genesis.replit.app/mobile/register?ref=${citizen.id}`,
+    referralUrl: `https://${req.get("host")}/web/register?ref=${citizen.id}`,
     referralCount: referrals.length,
     earnedBonusMinutes: Number(earned?.total ?? 0),
     bonusBalanceMinutes: citizen.referralBonusMinutes,

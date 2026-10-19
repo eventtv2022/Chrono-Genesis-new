@@ -14,6 +14,13 @@ import { getPreApplicationProgressToken, isPreApplicationGuideComplete } from ".
 
 const BASE_WEB = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 const MANIFESTO_URL = "https://issuu.com/timenation2025/docs/_timenatio";
+const REFERRER_STORAGE_KEY = "timenation.referrerId";
+
+function getValidReferrerId(value: string | null): string | null {
+  if (!value) return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? String(id) : null;
+}
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function formatCountdown(s: number) {
@@ -75,6 +82,11 @@ export function Register() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { document.title = `${t.nav_become_citizen} | TimeNation`; }, [t]);
+
+  useEffect(() => {
+    const referrerId = getValidReferrerId(new URLSearchParams(window.location.search).get("ref"));
+    if (referrerId) localStorage.setItem(REFERRER_STORAGE_KEY, referrerId);
+  }, []);
 
   useEffect(() => {
     if (!citizen && !isPreApplicationGuideComplete()) navigate("/onboarding");
@@ -160,6 +172,10 @@ export function Register() {
         return;
       }
       formData.append("preApplicationProgressToken", preApplicationProgressToken);
+      const referrerId =
+        getValidReferrerId(new URLSearchParams(window.location.search).get("ref")) ??
+        getValidReferrerId(localStorage.getItem(REFERRER_STORAGE_KEY));
+      if (referrerId) formData.append("referrerId", referrerId);
       if (photo) formData.append("passport_photo", photo);
       if (signatureBase64) formData.append("signatureBase64", signatureBase64);
 
@@ -175,6 +191,7 @@ export function Register() {
       const res = await fetch("/api/citizens", { method: "POST", body: formData });
       const data = await res.json() as { id?: number; name?: string; citizenNumber?: string; availableAt?: string; authToken?: string; error?: string; } & Record<string, unknown>;
       if (!res.ok) { setError(data.error ?? t.reg_error); return; }
+      localStorage.removeItem(REFERRER_STORAGE_KEY);
       if (data.citizenNumber && data.availableAt) {
         if (typeof data.authToken === "string" && typeof data.id === "number") {
           const { authToken: _authToken, ...profile } = data;

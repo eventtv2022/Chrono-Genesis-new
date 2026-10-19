@@ -7,4 +7,4 @@ New citizens receive exactly one ancestral DarMin when their passport is issued.
 
 **Why:** the user explicitly requires a 1 DarMin starting balance, a 15 DarMin referral reward after successful registration/issuance, and technical prevention of cash-out.
 
-**How to apply:** Any new citizen-to-citizen service or marketplace settlement must keep cash and referral-credit portions separate in escrow, taxes, refunds, and recipient credits. External payment and wallet flows should use only the ordinary balance.
+**How to apply:** Any new citizen-to-citizen service or marketplace settlement must keep cash and referral-credit portions separate in escrow, taxes, refunds, and recipient credits. External payment and wallet flows should use only the ordinary balance. For shareable registration links, use the published web route `/web/register?ref=...`; nested Expo routes like `/mobile/register` are not served by the current production static route.
