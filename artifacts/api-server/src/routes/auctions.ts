@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { auctionsTable, auctionLogsTable, citizensTable, chronopediaSlotsTable, stateTaxLogsTable, timelineAnchorsTable, timelineCapsulesTable } from "@workspace/db";
+import { auctionsTable, auctionLogsTable, citizensTable, chronopediaSlotsTable, stateTaxLogsTable, timelineAnchorsTable, timelineCapsulesTable, referralBonusLedgerTable } from "@workspace/db";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
@@ -286,8 +286,9 @@ router.post("/auctions/:id/bid", requireAuth, async (req, res): Promise<void> =>
   }
 
   // Balance check — buyer must keep ≥ 1 Д (Ancestral Minute)
-  if (buyer.balanceMinutes - bid < 1) {
-    res.status(400).json({ error: `Недостаточно средств. Доступно: ${Math.max(0, buyer.balanceMinutes - 1).toFixed(2)} Д` });
+  const bidBonusAvailable = auction.assetType === "DARMIN_CURRENCY" ? 0 : buyer.referralBonusMinutes;
+  if (buyer.balanceMinutes - 1 + bidBonusAvailable < bid) {
+    res.status(400).json({ error: `Недостаточно средств. Доступно: ${(Math.max(0, buyer.balanceMinutes - 1) + bidBonusAvailable).toFixed(2)} Д` });
     return;
   }
 
@@ -462,21 +463,47 @@ async function finalizeSlotAuction(
         .set({ ownerCitizenId: auction.buyerId, isLocked: false })
         .where(eq(chronopediaSlotsTable.id, slotId));
 
-      // Deduct bid amount from winner
-      const netSeller = parseFloat((finalPrice - tax).toFixed(4));
+      const [buyerFunds] = await tx.select({
+        balance: citizensTable.balanceMinutes,
+        bonus: citizensTable.referralBonusMinutes,
+      }).from(citizensTable).where(eq(citizensTable.id, auction.buyerId!)).for("update").limit(1);
+      if (!buyerFunds) throw new Error("Auction buyer no longer exists");
+      const bonusPaid = Math.min(finalPrice, buyerFunds.bonus);
+      const regularPaid = finalPrice - bonusPaid;
+      const bonusTax = Math.min(tax, parseFloat((bonusPaid * 0.02).toFixed(4)));
+      const regularTax = tax - bonusTax;
+      if (buyerFunds.balance - regularPaid < 1) throw new Error("Недостаточно обычных DarMin для завершения аукциона");
+      const bonusNet = bonusPaid - bonusTax;
+      const regularNet = regularPaid - regularTax;
       await tx.update(citizensTable)
-        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} - ${finalPrice}` })
+        .set({
+          balanceMinutes: sql`${citizensTable.balanceMinutes} - ${regularPaid}`,
+          referralBonusMinutes: sql`${citizensTable.referralBonusMinutes} - ${bonusPaid}`,
+        })
         .where(eq(citizensTable.id, auction.buyerId!));
 
-      // Credit seller net
+      // Keep the paid bonus restricted when the seller receives it.
       await tx.update(citizensTable)
-        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${netSeller}` })
+        .set({
+          balanceMinutes: sql`${citizensTable.balanceMinutes} + ${regularNet}`,
+          referralBonusMinutes: sql`${citizensTable.referralBonusMinutes} + ${bonusNet}`,
+        })
         .where(eq(citizensTable.id, auction.sellerId));
 
       // 2% to Treasury
       await tx.update(citizensTable)
-        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${tax}` })
+        .set({
+          balanceMinutes: sql`${citizensTable.balanceMinutes} + ${regularTax}`,
+          referralBonusMinutes: sql`${citizensTable.referralBonusMinutes} + ${bonusTax}`,
+        })
         .where(eq(citizensTable.id, TREASURY_CITIZEN_ID));
+      if (bonusPaid > 0) {
+        await tx.insert(referralBonusLedgerTable).values([
+          { citizenId: auction.buyerId!, relatedCitizenId: auction.sellerId, type: "spent", amount: bonusPaid, note: `Оплата внутреннего аукциона #${id}` },
+          { citizenId: auction.sellerId, relatedCitizenId: auction.buyerId!, type: "received", amount: bonusNet, note: `Бонусная часть оплаты аукциона #${id}` },
+          ...(bonusTax > 0 ? [{ citizenId: TREASURY_CITIZEN_ID, relatedCitizenId: auction.buyerId!, type: "received", amount: bonusTax, note: `Бонусный налог с аукциона #${id}` }] : []),
+        ]);
+      }
 
       await tx.insert(auctionLogsTable).values({
         auctionId:  id,
@@ -528,21 +555,47 @@ async function finalizeAnchorAuction(
         .set({ citizenId: auction.buyerId!, status: "active" })
         .where(eq(timelineAnchorsTable.id, anchor.id));
 
-      // Deduct bid from winner
+      const [buyerFunds] = await tx.select({
+        balance: citizensTable.balanceMinutes,
+        bonus: citizensTable.referralBonusMinutes,
+      }).from(citizensTable).where(eq(citizensTable.id, auction.buyerId!)).for("update").limit(1);
+      if (!buyerFunds) throw new Error("Auction buyer no longer exists");
+      const bonusPaid = Math.min(finalPrice, buyerFunds.bonus);
+      const regularPaid = finalPrice - bonusPaid;
+      const bonusTax = Math.min(tax, parseFloat((bonusPaid * 0.02).toFixed(4)));
+      const regularTax = tax - bonusTax;
+      if (buyerFunds.balance - regularPaid < 1) throw new Error("Недостаточно обычных DarMin для завершения аукциона");
+      const bonusNet = bonusPaid - bonusTax;
+      const regularNet = regularPaid - regularTax;
       await tx.update(citizensTable)
-        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} - ${finalPrice}` })
+        .set({
+          balanceMinutes: sql`${citizensTable.balanceMinutes} - ${regularPaid}`,
+          referralBonusMinutes: sql`${citizensTable.referralBonusMinutes} - ${bonusPaid}`,
+        })
         .where(eq(citizensTable.id, auction.buyerId!));
 
       // Credit seller net (finalPrice − 2% tax)
-      const netSeller = parseFloat((finalPrice - tax).toFixed(4));
       await tx.update(citizensTable)
-        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${netSeller}` })
+        .set({
+          balanceMinutes: sql`${citizensTable.balanceMinutes} + ${regularNet}`,
+          referralBonusMinutes: sql`${citizensTable.referralBonusMinutes} + ${bonusNet}`,
+        })
         .where(eq(citizensTable.id, auction.sellerId));
 
       // 2% to Treasury
       await tx.update(citizensTable)
-        .set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${tax}` })
+        .set({
+          balanceMinutes: sql`${citizensTable.balanceMinutes} + ${regularTax}`,
+          referralBonusMinutes: sql`${citizensTable.referralBonusMinutes} + ${bonusTax}`,
+        })
         .where(eq(citizensTable.id, TREASURY_CITIZEN_ID));
+      if (bonusPaid > 0) {
+        await tx.insert(referralBonusLedgerTable).values([
+          { citizenId: auction.buyerId!, relatedCitizenId: auction.sellerId, type: "spent", amount: bonusPaid, note: `Оплата временной координаты на аукционе #${id}` },
+          { citizenId: auction.sellerId, relatedCitizenId: auction.buyerId!, type: "received", amount: bonusNet, note: `Бонусная часть оплаты аукциона #${id}` },
+          ...(bonusTax > 0 ? [{ citizenId: TREASURY_CITIZEN_ID, relatedCitizenId: auction.buyerId!, type: "received", amount: bonusTax, note: `Бонусный налог с аукциона #${id}` }] : []),
+        ]);
+      }
 
       await tx.insert(auctionLogsTable).values({
         auctionId:  id,

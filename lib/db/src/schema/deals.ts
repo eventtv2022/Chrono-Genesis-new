@@ -8,6 +8,7 @@ export const dealsTable = pgTable("deals", {
   senderId: integer("sender_id").notNull(),
   receiverId: integer("receiver_id"),            // null = open marketplace deal
   amount: integer("amount").notNull(),           // TiMETR minutes locked in escrow
+  bonusAmount: real("bonus_amount").notNull().default(0),
   description: text("description").notNull(),
   // Statuses: open → accepted → proof_submitted → completed | declined | disputed
   //           open → cancelled (sender cancels before accepted)

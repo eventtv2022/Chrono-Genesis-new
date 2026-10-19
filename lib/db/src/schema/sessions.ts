@@ -10,6 +10,7 @@ export const sessionsTable = pgTable("sessions", {
   stoppedAt: timestamp("stopped_at", { withTimezone: true }),
   durationSeconds: integer("duration_seconds"),
   minutesTransferred: real("minutes_transferred"),
+  bonusMinutesTransferred: real("bonus_minutes_transferred").notNull().default(0),
   status: text("status").notNull().default("active"),
 });
 

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { citizensTable, sessionsTable, transactionsTable } from "@workspace/db";
+import { citizensTable, sessionsTable, transactionsTable, referralBonusLedgerTable } from "@workspace/db";
 import { StartSessionBody } from "@workspace/api-zod";
 import { logTransactionToSheets } from "../lib/googleSheets";
 import { sendTransactionNotification } from "../services/telegramService";
@@ -138,10 +138,16 @@ router.post("/sessions/:id/stop", async (req, res): Promise<void> => {
     return;
   }
 
-  const actualMinutes = Math.min(minutesTransferred, fromCitizen.balanceMinutes - 1);
+  const spendableMinutes = Math.max(0, fromCitizen.balanceMinutes - 1) + fromCitizen.referralBonusMinutes;
+  const actualMinutes = Math.min(minutesTransferred, spendableMinutes);
+  const bonusTransferred = Math.min(actualMinutes, fromCitizen.referralBonusMinutes);
+  const regularTransferred = actualMinutes - bonusTransferred;
   // 2% казначейский налог. Точная дробь (например 1 Д → 0.02 Д).
   const treasuryTax = actualMinutes > 0 ? calcTreasuryTax(actualMinutes) : 0;
   const toReceives = Math.max(0, actualMinutes - treasuryTax);
+  const bonusTax = actualMinutes > 0 ? calcTreasuryTax(bonusTransferred) : 0;
+  const bonusReceives = Math.max(0, bonusTransferred - bonusTax);
+  const regularReceives = Math.max(0, toReceives - bonusReceives);
 
   const [updatedSession] = await db
     .update(sessionsTable)
@@ -149,6 +155,7 @@ router.post("/sessions/:id/stop", async (req, res): Promise<void> => {
       stoppedAt,
       durationSeconds,
       minutesTransferred: actualMinutes,
+      bonusMinutesTransferred: bonusTransferred,
       status: "completed",
     })
     .where(eq(sessionsTable.id, id))
@@ -157,20 +164,22 @@ router.post("/sessions/:id/stop", async (req, res): Promise<void> => {
   await db
     .update(citizensTable)
     .set({
-      balanceMinutes: fromCitizen.balanceMinutes - actualMinutes,
+      balanceMinutes: fromCitizen.balanceMinutes - regularTransferred,
+      referralBonusMinutes: fromCitizen.referralBonusMinutes - bonusTransferred,
       totalGiven: fromCitizen.totalGiven + actualMinutes,
     })
     .where(eq(citizensTable.id, session.fromCitizenId));
 
   // Автопогашение долга в Банке Времени: если у получателя есть активный долг,
   // направляем заработанные минуты на погашение (остаток идёт на личный баланс).
-  const autoRepaid = await autoRepayFromService(session.toCitizenId, toReceives).catch(() => 0);
-  const netToReceives = toReceives - autoRepaid;
+  const autoRepaid = await autoRepayFromService(session.toCitizenId, regularReceives).catch(() => 0);
+  const netToReceives = regularReceives - autoRepaid;
 
   await db
     .update(citizensTable)
     .set({
       balanceMinutes: toCitizen.balanceMinutes + netToReceives,
+      referralBonusMinutes: toCitizen.referralBonusMinutes + bonusReceives,
       totalReceived: toCitizen.totalReceived + toReceives, // totalReceived = полная сумма, без вычета долга
     })
     .where(eq(citizensTable.id, session.toCitizenId));
@@ -179,9 +188,38 @@ router.post("/sessions/:id/stop", async (req, res): Promise<void> => {
   if (treasuryTax > 0 && TREASURY_CITIZEN_ID !== session.fromCitizenId && TREASURY_CITIZEN_ID !== session.toCitizenId) {
     try {
       await db.execute(
-        sql`UPDATE citizens SET balance_minutes = balance_minutes + ${treasuryTax} WHERE id = ${TREASURY_CITIZEN_ID}`
+        sql`UPDATE citizens SET balance_minutes = balance_minutes + ${treasuryTax - bonusTax},
+          referral_bonus_minutes = referral_bonus_minutes + ${bonusTax}
+          WHERE id = ${TREASURY_CITIZEN_ID}`
       );
     } catch { /* казначейство необязательно в dev */ }
+  }
+  if (bonusTransferred > 0) {
+    await db.insert(referralBonusLedgerTable).values([
+      {
+        citizenId: session.fromCitizenId,
+        relatedCitizenId: session.toCitizenId,
+        type: "spent",
+        amount: bonusTransferred,
+        note: `Оплата услуги TiMETR, сессия #${id}`,
+      },
+      {
+        citizenId: session.toCitizenId,
+        relatedCitizenId: session.fromCitizenId,
+        type: "received",
+        amount: bonusReceives,
+        note: `Оплата услуги TiMETR, сессия #${id}`,
+      },
+    ]);
+    if (bonusTax > 0 && TREASURY_CITIZEN_ID !== session.fromCitizenId && TREASURY_CITIZEN_ID !== session.toCitizenId) {
+      await db.insert(referralBonusLedgerTable).values({
+        citizenId: TREASURY_CITIZEN_ID,
+        relatedCitizenId: session.fromCitizenId,
+        type: "received",
+        amount: bonusTax,
+        note: `Налог с бонусной оплаты TiMETR, сессия #${id}`,
+      });
+    }
   }
 
   const [transaction] = await db

@@ -12,7 +12,7 @@ import { useCitizen } from "@/context/CitizenContext";
 import { ActivityIndicator } from "react-native";
 
 function NativeTabLayout() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
@@ -51,13 +51,17 @@ function NativeTabLayout() {
         <Icon sf={{ default: "globe.americas", selected: "globe.americas.fill" }} />
         <Label>{t.tab_clock}</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="profile">
+        <Icon sf={{ default: "person.crop.circle", selected: "person.crop.circle.fill" }} />
+        <Label>{lang === "ru" ? "Профиль" : "Profile"}</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
 
 function ClassicTabLayout() {
   const colors = useColors();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
@@ -146,6 +150,13 @@ function ClassicTabLayout() {
         options={{
           title: t.tab_clock,
           tabBarIcon: ({ color }) => <Feather name="globe" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: lang === "ru" ? "Профиль" : "Profile",
+          tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
         }}
       />
     </Tabs>

@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import fs from "fs";
 import path from "path";
 import { z } from "zod";
-import { db, citizensTable, onboardingProgressTable } from "@workspace/db";
+import { db, citizensTable, onboardingProgressTable, referralsTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
 import { deriveAgeTier } from "../services/ageGateService";
@@ -58,6 +58,7 @@ const RegisterBody = z.object({
   photoBase64: z.string().optional(), // data:image/...;base64,... from mobile
   whatsappPhone: z.string().optional(),
   preferredChannels: z.string().optional(), // JSON: ['email','telegram','whatsapp','sms','phone'] — ≥2
+  referrerId: z.coerce.number().int().positive().optional(),
   preApplicationProgressToken: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
@@ -68,7 +69,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  const { name, phone, password, surname, givenNames, dateOfBirth, email, telegramId, tosAcceptedAt, privacyAgreementAccepted, photoBase64, whatsappPhone, preferredChannels, preApplicationProgressToken } = parsed.data;
+  const { name, phone, password, surname, givenNames, dateOfBirth, email, telegramId, tosAcceptedAt, privacyAgreementAccepted, photoBase64, whatsappPhone, preferredChannels, preApplicationProgressToken, referrerId } = parsed.data;
   const ageTier = deriveAgeTier(dateOfBirth);
   if (!ageTier) {
     res.status(400).json({ error: "Укажите корректную дату рождения" });
@@ -167,6 +168,22 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       })
       .returning();
     if (!created) throw new Error("Citizen insert returned no row");
+
+    if (referrerId && referrerId !== created.id) {
+      const [referrer] = await tx
+        .select({ id: citizensTable.id })
+        .from(citizensTable)
+        .where(and(
+          eq(citizensTable.id, referrerId),
+          or(isNull(citizensTable.registrationStatus), eq(citizensTable.registrationStatus, "issued")),
+        ))
+        .limit(1);
+      if (referrer) {
+        await tx.insert(referralsTable)
+          .values({ referrerId: referrer.id, referredCitizenId: created.id })
+          .onConflictDoNothing();
+      }
+    }
 
     await tx
       .update(onboardingProgressTable)

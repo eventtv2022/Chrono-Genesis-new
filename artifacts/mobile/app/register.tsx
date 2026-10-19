@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCitizen, CitizenProfile } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -89,6 +89,7 @@ function WebSignaturePad({
 
 
 const MANIFESTO_URL = "https://issuu.com/timenation2025/docs/_timenatio";
+const REFERRER_STORAGE_KEY = "@timenation/referrer_id";
 
 const BASE_URL = getBaseUrl();
 
@@ -116,12 +117,21 @@ export default function RegisterScreen({ initialMode }: { initialMode?: Mode } =
   const { citizen, setCitizen, setAuthToken } = useCitizen();
   const { lang, setLang } = useLanguage();
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{ ref?: string | string[] }>();
   const queryClient = useQueryClient();
   const loginLang: "ru" | "en" = lang === "ru" ? "ru" : "en";
   const L = UI[loginLang];
   const t = (ru: string, en: string) => loginLang === "ru" ? ru : en;
 
   const [mode, setMode] = useState<Mode>(initialMode ?? "choose");
+
+  useEffect(() => {
+    const rawReferrer = Array.isArray(routeParams.ref) ? routeParams.ref[0] : routeParams.ref;
+    const referrerId = Number(rawReferrer);
+    if (Number.isInteger(referrerId) && referrerId > 0) {
+      void AsyncStorage.setItem(REFERRER_STORAGE_KEY, String(referrerId));
+    }
+  }, [routeParams.ref]);
 
   // Registration form
   const [name, setName] = useState("");
@@ -353,6 +363,10 @@ export default function RegisterScreen({ initialMode }: { initialMode?: Mode } =
         return;
       }
       body["preApplicationProgressToken"] = preApplicationProgressToken;
+      const referrerValue = Array.isArray(routeParams.ref) ? routeParams.ref[0] : routeParams.ref;
+      const storedReferrerValue = await AsyncStorage.getItem(REFERRER_STORAGE_KEY);
+      const referrerId = Number(referrerValue ?? storedReferrerValue);
+      if (Number.isInteger(referrerId) && referrerId > 0) body["referrerId"] = String(referrerId);
       if (surname.trim()) body["surname"] = surname.trim();
       if (givenNames.trim()) body["givenNames"] = givenNames.trim();
       body["dateOfBirth"] = dateOfBirth.trim();
@@ -383,6 +397,7 @@ export default function RegisterScreen({ initialMode }: { initialMode?: Mode } =
         Alert.alert("Ошибка", (data as { error: string }).error);
         return;
       }
+      await AsyncStorage.removeItem(REFERRER_STORAGE_KEY);
 
       const cd = data as CitizenProfile & {
         citizenNumber?: string;

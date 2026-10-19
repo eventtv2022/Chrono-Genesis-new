@@ -16,3 +16,4 @@
 - [Passport email retries](passport-email-retries.md) — use a stable RFC Message-ID and Gmail Sent lookup to detect accepted sends before retrying
 - [Upload boundary semantics](upload-boundaries.md) — Busboy rejects at the configured byte threshold; verify exact-limit acceptance with real multipart parsing.
 - [Nominatim Russian addresses](nominatim-russian-addresses.md) — normalize Russian street/house abbreviations before retrying; JavaScript `\b` does not match Cyrillic boundaries.
+- [Referral DarMin restrictions](referral-darmin.md) — reward referrers only after passport issuance; keep bonus credits separate and restricted through internal payments.

@@ -1,11 +1,12 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and, or, isNull } from "drizzle-orm";
 import crypto from "crypto";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@workspace/db";
+import { referralsTable } from "@workspace/db";
 import { citizensTable, onboardingProgressTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable } from "@workspace/db";
 import { auditCitizenRate } from "../services/rateAuditorService";
 import {
@@ -444,6 +445,7 @@ const RegisterCitizenBody = z.object({
   telegramId: z.string().optional(),
   email: z.string().email("Неверный формат email").optional().or(z.literal("")).optional(),
   privacyAgreementAccepted: z.string().optional(), // "true" from FormData
+  referrerId: z.coerce.number().int().positive().optional(),
   signatureBase64: z.string()
     .min(1)
     .max(1_500_000)
@@ -475,7 +477,7 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
   const availableAt = new Date(Date.now() + 60 * 60 * 1000); // +1 hour
   const authToken = crypto.randomBytes(32).toString("hex");
 
-  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted, signatureBase64: rawSignature, whatsappPhone, preferredChannels, preApplicationProgressToken } = parsed.data;
+  const { name, phone, surname, givenNames, dateOfBirth, tosAcceptedAt, telegramId, email, privacyAgreementAccepted, signatureBase64: rawSignature, whatsappPhone, preferredChannels, preApplicationProgressToken, referrerId } = parsed.data;
   const ageTier = deriveAgeTier(dateOfBirth);
   if (!ageTier) {
     res.status(400).json({ error: "Укажите корректную дату рождения" });
@@ -551,6 +553,21 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
       })
       .returning();
     if (!created) throw new Error("Citizen insert returned no row");
+    if (referrerId && referrerId !== created.id) {
+      const [referrer] = await tx
+        .select({ id: citizensTable.id })
+        .from(citizensTable)
+        .where(and(
+          eq(citizensTable.id, referrerId),
+          or(isNull(citizensTable.registrationStatus), eq(citizensTable.registrationStatus, "issued")),
+        ))
+        .limit(1);
+      if (referrer) {
+        await tx.insert(referralsTable)
+          .values({ referrerId: referrer.id, referredCitizenId: created.id })
+          .onConflictDoNothing();
+      }
+    }
     await tx
       .update(onboardingProgressTable)
       .set({ citizenId: created.id, updatedAt: new Date() })

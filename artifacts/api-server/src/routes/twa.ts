@@ -10,11 +10,11 @@
  * /api/v1/auth/telegram-webapp etc. work per the specification.
  */
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { db, citizensTable, onboardingProgressTable } from "@workspace/db";
+import { db, citizensTable, onboardingProgressTable, referralsTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { encryptNullable } from "../services/encryptionService";
 import { notifyPassportEmissionStarted } from "../services/telegramService";
@@ -122,6 +122,7 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
     initData?: string;
     preApplicationProgressToken?: string;
     dateOfBirth?: string;
+    referrerId?: number;
   };
 
   if (!initData) {
@@ -275,6 +276,22 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
       })
       .returning();
     if (!created) throw new Error("Citizen insert returned no row");
+    const referrerId = Number(req.body?.referrerId);
+    if (Number.isInteger(referrerId) && referrerId > 0 && referrerId !== created.id) {
+      const [referrer] = await tx
+        .select({ id: citizensTable.id })
+        .from(citizensTable)
+        .where(and(
+          eq(citizensTable.id, referrerId),
+          or(isNull(citizensTable.registrationStatus), eq(citizensTable.registrationStatus, "issued")),
+        ))
+        .limit(1);
+      if (referrer) {
+        await tx.insert(referralsTable)
+          .values({ referrerId: referrer.id, referredCitizenId: created.id })
+          .onConflictDoNothing();
+      }
+    }
     await tx
       .update(onboardingProgressTable)
       .set({ citizenId: created.id, updatedAt: new Date() })

@@ -5,6 +5,8 @@ import {
   passportReadyNotificationsTable,
   passportEmailNotificationsTable,
   timeBankLedgerTable,
+  referralsTable,
+  referralBonusLedgerTable,
 } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { logCitizenIssuedToSheets } from "../lib/googleSheets";
@@ -97,6 +99,37 @@ export async function issueEligiblePassport(
       issuance = { citizen: credited!, ancestralMinuteGranted: true };
     } else {
       issuance = { citizen: transitioned, ancestralMinuteGranted: false };
+    }
+
+    const [pendingReferral] = await tx
+      .select()
+      .from(referralsTable)
+      .where(and(
+        eq(referralsTable.referredCitizenId, citizenId),
+        eq(referralsTable.status, "pending"),
+      ))
+      .for("update")
+      .limit(1);
+    if (pendingReferral) {
+      const [referrer] = await tx
+        .update(citizensTable)
+        .set({ referralBonusMinutes: sql`${citizensTable.referralBonusMinutes} + 15` })
+        .where(eq(citizensTable.id, pendingReferral.referrerId))
+        .returning({ id: citizensTable.id });
+      await tx
+        .update(referralsTable)
+        .set({ status: referrer ? "rewarded" : "cancelled", rewardedAt: referrer ? now : null })
+        .where(eq(referralsTable.id, pendingReferral.id));
+      if (referrer) {
+        await tx.insert(referralBonusLedgerTable).values({
+          citizenId: referrer.id,
+          relatedCitizenId: citizenId,
+          referralId: pendingReferral.id,
+          type: "earned",
+          amount: 15,
+          note: "Бонус за успешно приглашённого гражданина",
+        });
+      }
     }
 
     const { citizen } = issuance;

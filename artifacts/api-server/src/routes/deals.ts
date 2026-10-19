@@ -2,8 +2,8 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import multer from "multer";
 import path from "path";
 import { db } from "@workspace/db";
-import { dealsTable, citizensTable, chatMessagesTable } from "@workspace/db";
-import { eq, or, asc } from "drizzle-orm";
+import { dealsTable, citizensTable, chatMessagesTable, referralBonusLedgerTable } from "@workspace/db";
+import { eq, or, asc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -126,13 +126,20 @@ router.post("/deals", async (req, res): Promise<void> => {
   const { senderId, receiverId, amount, description } = parsed.data;
 
   const [sender] = await db
-    .select({ id: citizensTable.id, balance: citizensTable.balanceMinutes, minuteRate: citizensTable.calculatedMinuteRate })
+    .select({
+      id: citizensTable.id,
+      balance: citizensTable.balanceMinutes,
+      bonusBalance: citizensTable.referralBonusMinutes,
+      minuteRate: citizensTable.calculatedMinuteRate,
+    })
     .from(citizensTable)
     .where(eq(citizensTable.id, senderId))
     .limit(1);
 
   if (!sender) { res.status(404).json({ error: "Отправитель не найден" }); return; }
-  if (sender.balance - 1 < amount) {
+  const bonusAmount = Math.min(amount, sender.bonusBalance);
+  const regularAmount = amount - bonusAmount;
+  if (sender.balance - 1 < regularAmount) {
     // -1 because founding minute cannot be transferred
     res.status(402).json({ error: `Недостаточно Дарминов. Доступно: ${sender.balance - 1} Д` });
     return;
@@ -141,7 +148,10 @@ router.post("/deals", async (req, res): Promise<void> => {
   // Lock minutes in escrow (deduct from sender immediately)
   await db
     .update(citizensTable)
-    .set({ balanceMinutes: sender.balance - amount })
+    .set({
+      balanceMinutes: sender.balance - regularAmount,
+      referralBonusMinutes: sender.bonusBalance - bonusAmount,
+    })
     .where(eq(citizensTable.id, senderId));
 
   // Snapshot the sender's current Kq so future rate adjustments
@@ -152,6 +162,7 @@ router.post("/deals", async (req, res): Promise<void> => {
       senderId,
       receiverId: receiverId ?? null,
       amount,
+      bonusAmount,
       description,
       status: "open",
       snapshotMinuteRate: sender.minuteRate ?? 1.0,
@@ -159,6 +170,15 @@ router.post("/deals", async (req, res): Promise<void> => {
     .returning();
 
   req.log.info({ dealId: deal.id, senderId, amount }, "TiMETR escrow deal created");
+  if (bonusAmount > 0) {
+    await db.insert(referralBonusLedgerTable).values({
+      citizenId: senderId,
+      relatedCitizenId: receiverId ?? null,
+      type: "spent",
+      amount: bonusAmount,
+      note: `Бонусные DarMin зарезервированы в сделке #${deal.id}`,
+    });
+  }
 
   // Notify sender
   void notifyUserConditional(
@@ -325,8 +345,20 @@ router.post("/deals/:id/complete", async (req, res): Promise<void> => {
 
   await db
     .update(citizensTable)
-    .set({ balanceMinutes: receiver.balance + deal.amount })
+    .set({
+      balanceMinutes: receiver.balance + deal.amount - deal.bonusAmount,
+      referralBonusMinutes: sql`${citizensTable.referralBonusMinutes} + ${deal.bonusAmount}`,
+    })
     .where(eq(citizensTable.id, deal.receiverId));
+  if (deal.bonusAmount > 0) {
+    await db.insert(referralBonusLedgerTable).values({
+      citizenId: deal.receiverId,
+      relatedCitizenId: deal.senderId,
+      type: "received",
+      amount: deal.bonusAmount,
+      note: `Бонусные DarMin получены за сделку #${id}`,
+    });
+  }
 
   const [updated] = await db
     .update(dealsTable)
@@ -399,7 +431,10 @@ router.post("/deals/:id/cancel", async (req, res): Promise<void> => {
 
   // Return escrow to sender
   const [sender] = await db
-    .select({ balance: citizensTable.balanceMinutes })
+    .select({
+      balance: citizensTable.balanceMinutes,
+      bonusBalance: citizensTable.referralBonusMinutes,
+    })
     .from(citizensTable)
     .where(eq(citizensTable.id, deal.senderId))
     .limit(1);
@@ -408,8 +443,20 @@ router.post("/deals/:id/cancel", async (req, res): Promise<void> => {
 
   await db
     .update(citizensTable)
-    .set({ balanceMinutes: sender.balance + deal.amount })
+    .set({
+      balanceMinutes: sender.balance + deal.amount - deal.bonusAmount,
+      referralBonusMinutes: sender.bonusBalance + deal.bonusAmount,
+    })
     .where(eq(citizensTable.id, deal.senderId));
+  if (deal.bonusAmount > 0) {
+    await db.insert(referralBonusLedgerTable).values({
+      citizenId: deal.senderId,
+      relatedCitizenId: deal.receiverId,
+      type: "received",
+      amount: deal.bonusAmount,
+      note: `Бонусные DarMin возвращены из отменённой сделки #${id}`,
+    });
+  }
 
   const [updated] = await db
     .update(dealsTable)
