@@ -69,7 +69,7 @@ export async function issueEligiblePassport(
           eq(citizensTable.id, citizenId),
           eq(citizensTable.registrationStatus, "pending"),
           lte(citizensTable.availableAt, now),
-          sql`btrim(${citizensTable.signatureBase64}) <> ''`,
+          sql`${citizensTable.signatureBase64} ~ '^data:image/png;base64,iVBORw0KGgo[A-Za-z0-9+/]+={0,2}$'`,
         ),
       )
       .returning();

@@ -6,7 +6,8 @@ const vm = require("node:vm");
 const { createRequire } = require("node:module");
 
 const root = path.resolve(__dirname, "..");
-const { transformSync } = createRequire(path.join(root, "artifacts/api-server/package.json"))("esbuild");
+const apiRequire = createRequire(path.join(root, "artifacts/api-server/package.json"));
+const { transformSync } = apiRequire("esbuild");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
 function evaluate(source, expression, globals = {}) {
@@ -344,17 +345,24 @@ test("passport issuance waits until availableAt and credits a new applicant exac
     status: "pending",
     onboardingCompleted: false,
     name: "Test Citizen",
+    email: "citizen@example.test",
     rank: "Citizen",
     meritScore: 0,
     phone: null,
-    signatureBase64: "test-signature",
+    signatureBase64: validSignature,
   });
-  const serviceSource =
+  const serviceSource = [
     sourceBetween(
       issuanceService,
       "export async function issueEligiblePassport(",
-      "/** Best-effort worker; request-driven issuance remains the fallback on wake-up. */",
-    ) + issuanceService.slice(issuanceService.indexOf("export async function issueDuePassports("));
+      "/**\n * Deliver due passport-ready outbox rows.",
+    ),
+    sourceBetween(
+      issuanceService,
+      "export async function issueDuePassports(",
+      "/**\n * Emit a rate-limited aggregate warning",
+    ),
+  ].join("\n");
   const issue = evaluate(
     serviceSource.replaceAll("export async function", "async function"),
     "({ issueEligiblePassport, issueDuePassports })",
@@ -376,6 +384,148 @@ test("passport issuance waits until availableAt and credits a new applicant exac
   assert.equal(fake.ledger.length, 1);
   assert.equal(fake.ledger[0].type, "ancestral_minute_granted");
   assert.equal(fake.ledger[0].amount, 1);
+  assert.equal(fake.emailNotifications.length, 1);
+  assert.equal(fake.emailNotificationAttempts, 1);
+});
+
+test("missing, blank, and malformed signatures cannot issue an eligible pending citizen", async () => {
+  for (const [label, signatureBase64] of [
+    ["missing", null],
+    ["blank", "   "],
+    ["malformed", "not-a-signature"],
+    ["invalid image data", "data:image/png;base64,AAAA"],
+    ["invalid base64", "data:image/png;base64,iVBORw0KGgo%%%"],
+  ]) {
+    const fake = makeIssuanceDb({
+      id: 28,
+      citizenNumber: "000000028",
+      registrationStatus: "pending",
+      availableAt: new Date(Date.now() - 1000),
+      balanceMinutes: 0,
+      ancestralMinuteGranted: false,
+      status: "pending",
+      onboardingCompleted: false,
+      name: "Unsigned Citizen",
+      email: "citizen@example.test",
+      rank: "Citizen",
+      meritScore: 0,
+      phone: null,
+      signatureBase64,
+    });
+    const issue = loadIssuanceFunction(fake);
+
+    assert.equal(await issue(28), null, `${label} signature must be rejected`);
+    assert.equal(fake.state.registrationStatus, "pending");
+    assert.equal(fake.state.status, "pending");
+    assert.equal(fake.state.balanceMinutes, 0);
+    assert.equal(fake.ledger.length, 0);
+    assert.equal(fake.emailNotifications.length, 0);
+    assert.equal(fake.emailNotificationAttempts, 0);
+  }
+});
+
+test("a valid saved signature issues after eligibility and queues email only after the transition", async () => {
+  const availableAt = new Date(Date.now() - 1000);
+  const fake = makeIssuanceDb({
+    id: 29,
+    citizenNumber: "000000029",
+    registrationStatus: "pending",
+    availableAt,
+    balanceMinutes: 0,
+    ancestralMinuteGranted: false,
+    status: "pending",
+    onboardingCompleted: false,
+    name: "Signed Citizen",
+    email: "citizen@example.test",
+    rank: "Citizen",
+    meritScore: 0,
+    phone: null,
+    signatureBase64: validSignature,
+  });
+  const issue = loadIssuanceFunction(fake);
+
+  assert.equal(await issue(29, new Date(availableAt.getTime() - 1)), null);
+  assert.equal(fake.emailNotifications.length, 0);
+  assert.equal(fake.emailNotificationAttempts, 0);
+
+  const result = await issue(29, availableAt);
+  assert.equal(result.citizen.registrationStatus, "issued");
+  assert.equal(result.citizen.status, "active");
+  assert.equal(result.ancestralMinuteGranted, true);
+  assert.equal(fake.state.balanceMinutes, 1);
+  assert.equal(fake.emailNotifications.length, 1);
+  assert.equal(fake.emailNotificationAttempts, 1);
+  assert.equal(fake.emailNotificationAttemptsAfterTransition, 1);
+});
+
+test("concurrent eligible issuance attempts grant one minute and attempt one notification", async () => {
+  const availableAt = new Date(Date.now() - 1000);
+  const fake = makeIssuanceDb({
+    id: 30,
+    citizenNumber: "000000030",
+    registrationStatus: "pending",
+    availableAt,
+    balanceMinutes: 0,
+    ancestralMinuteGranted: false,
+    status: "pending",
+    onboardingCompleted: false,
+    name: "Concurrent Citizen",
+    email: "citizen@example.test",
+    rank: "Citizen",
+    meritScore: 0,
+    phone: null,
+    signatureBase64: validSignature,
+  });
+  const issue = loadIssuanceFunction(fake);
+
+  const results = await Promise.all([issue(30, availableAt), issue(30, availableAt)]);
+
+  assert.equal(results.filter(Boolean).length, 1);
+  assert.equal(fake.state.registrationStatus, "issued");
+  assert.equal(fake.state.balanceMinutes, 1);
+  assert.equal(fake.ledger.length, 1);
+  assert.equal(fake.emailNotifications.length, 1);
+  assert.equal(fake.emailNotificationAttempts, 1);
+  assert.equal(fake.emailNotificationAttemptsAfterTransition, 1);
+});
+
+test("signature upload rejects missing, blank, malformed, and uncroppable signatures", async () => {
+  const source = read("artifacts/api-server/src/routes/citizens.ts");
+  const route = sourceBetween(
+    source,
+    'router.post("/citizens/me/signature"',
+    '\n});',
+  );
+  const handlerSource = route.slice(route.indexOf("async (req, res): Promise<void> => {"));
+  const handler = evaluate(
+    `const handler = ${handlerSource}}; globalThis.__handler = handler;`,
+    "__handler",
+    {
+      z: apiRequire("zod"),
+      cropSignature: async () => null,
+      db: { update: () => { throw new Error("invalid signature must not be saved"); } },
+      citizensTable: {},
+      eq: () => ({}),
+      issueEligiblePassport: async () => { throw new Error("invalid signature must not trigger issuance"); },
+    },
+  );
+
+  for (const body of [
+    {},
+    { signatureBase64: "" },
+    { signatureBase64: "not-an-image" },
+    { signatureBase64: "data:image/png;base64,AAAA" },
+  ]) {
+    const res = {
+      statusCode: 200,
+      body: undefined,
+      status(code) { this.statusCode = code; return this; },
+      json(value) { this.body = value; return this; },
+    };
+    await handler({ body, citizen: { id: 31, registrationStatus: "pending" } }, res);
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.body.success, undefined);
+  }
 });
 
 test("one passport issuance failure does not stop the batch and remains eligible for retry", async () => {
@@ -499,10 +649,14 @@ test("passport issuance does not credit or ledger an ancestral minute twice for 
     rank: "Citizen",
     meritScore: 0,
     phone: null,
-    signatureBase64: "test-signature",
+    signatureBase64: validSignature,
   });
   const issue = evaluate(
-    sourceBetween(issuanceService, "export async function issueEligiblePassport(", "export async function issueDuePassports(")
+    sourceBetween(
+      issuanceService,
+      "export async function issueEligiblePassport(",
+      "/**\n * Deliver due passport-ready outbox rows.",
+    )
       .replace("export async function", "async function"),
     "issueEligiblePassport",
     fake.dependencies,
@@ -515,7 +669,25 @@ test("passport issuance does not credit or ledger an ancestral minute twice for 
   assert.equal(fake.ledger.length, 0);
 });
 
+const validSignature =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/jZkAAAAASUVORK5CYII=";
+
+function loadIssuanceFunction(fake) {
+  const issue = evaluate(
+    sourceBetween(
+      issuanceService,
+      "export async function issueEligiblePassport(",
+      "/**\n * Deliver due passport-ready outbox rows.",
+    ).replace("export async function", "async function"),
+    "issueEligiblePassport",
+    fake.dependencies,
+  );
+  return issue;
+}
+
 function makeIssuanceDb(initialCitizen) {
+  const timeBankLedgerTable = {};
+  const passportEmailNotificationsTable = {};
   const citizensTable = {
     id: "id",
     citizenNumber: "citizenNumber",
@@ -525,6 +697,9 @@ function makeIssuanceDb(initialCitizen) {
   };
   const state = { signatureBase64: "signed-signature", ...initialCitizen };
   const ledger = [];
+  const emailNotifications = [];
+  let emailNotificationAttempts = 0;
+  let emailNotificationAttemptsAfterTransition = 0;
   let transactionQueue = Promise.resolve();
 
   function matches(condition) {
@@ -532,6 +707,7 @@ function makeIssuanceDb(initialCitizen) {
     if (condition.type === "and") return condition.conditions.every(matches);
     if (condition.type === "eq") return state[condition.column] === condition.value;
     if (condition.type === "lte") return state[condition.column] <= condition.value;
+    if (condition.type === "signature-valid") return isValidSavedSignature(state.signatureBase64);
     if (condition.type === "sql") return Boolean(state.signatureBase64?.trim());
     return false;
   }
@@ -568,8 +744,11 @@ function makeIssuanceDb(initialCitizen) {
           }),
         }),
       }),
-      insert: () => ({
-        values: async (entry) => { ledger.push(entry); },
+      insert: (table) => ({
+        values: async (entry) => {
+          if (table === timeBankLedgerTable) ledger.push(entry);
+          else if (table === passportEmailNotificationsTable) emailNotifications.push(entry);
+        },
       }),
       }));
       transactionQueue = result.catch(() => {});
@@ -583,19 +762,33 @@ function makeIssuanceDb(initialCitizen) {
     dependencies: {
       db,
       citizensTable,
-      timeBankLedgerTable: {},
+      timeBankLedgerTable,
+      passportEmailNotificationsTable,
       and: (...conditions) => ({ type: "and", conditions }),
       eq: (column, value) => ({ type: "eq", column, value }),
       lte: (column, value) => ({ type: "lte", column, value }),
-      sql: (strings) =>
-        strings.join("?").includes("btrim")
-          ? { type: "sql" }
-          : { type: "sql", increment: 1 },
+      sql: (strings) => {
+        const expression = strings.join("?");
+        if (expression.includes("base64")) return { type: "signature-valid" };
+        return { type: "sql", increment: 1 };
+      },
       logger: { info() {}, warn() {} },
       notifyUserConditional: async () => {},
       notifyAdminPassportLifecycle: async () => {},
       logCitizenIssuedToSheets: async () => {},
       sendPassportEmail: async () => {},
+      retryPendingPassportEmails: async () => {
+        emailNotificationAttempts += 1;
+        if (state.registrationStatus === "issued") emailNotificationAttemptsAfterTransition += 1;
+      },
     },
+    emailNotifications,
+    get emailNotificationAttempts() { return emailNotificationAttempts; },
+    get emailNotificationAttemptsAfterTransition() { return emailNotificationAttemptsAfterTransition; },
   };
+}
+
+function isValidSavedSignature(value) {
+  return typeof value === "string" &&
+    /^data:image\/png;base64,iVBORw0KGgo[A-Za-z0-9+/]+={0,2}$/.test(value);
 }

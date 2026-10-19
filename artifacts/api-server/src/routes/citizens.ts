@@ -410,6 +410,11 @@ router.post("/citizens/me/signature", requireAuth, async (req, res): Promise<voi
 
   const citizen = req.citizen!;
   const signatureBase64 = await cropSignature(parsed.data.signatureBase64);
+  if (!signatureBase64) {
+    res.status(400).json({ error: "Добавьте непустую подпись в формате PNG или JPEG" });
+    return;
+  }
+
   await db.update(citizensTable)
     .set({ signatureBase64 })
     .where(eq(citizensTable.id, citizen.id));
