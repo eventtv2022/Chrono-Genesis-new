@@ -24,6 +24,7 @@ import { sendAdminTelegramNotify } from "../services/emailService";
 import { notifyPassportEmissionStarted, sendDirectMessage } from "../services/telegramService";
 import { issueEligiblePassport } from "../services/passportIssuanceService";
 import { deriveAgeTier } from "../services/ageGateService";
+import { getCitizenDisplayName } from "../services/citizenIdentity";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
 export const VAULT_DIR = path.join(process.cwd(), "secure_vault");
@@ -604,7 +605,7 @@ router.post("/citizens", upload.single("passport_photo"), async (req, res): Prom
   // Telegram to admin (skipped silently if ADMIN_TELEGRAM_ID not set)
   sendAdminTelegramNotify({
     sendDirectMessage,
-    name: citizen.name,
+    name: getCitizenDisplayName(citizen),
     email: decryptedEmail,
     citizenNumber,
     citizenId: citizen.id,
@@ -836,7 +837,7 @@ router.get("/citizens/lookup/:num", async (req, res): Promise<void> => {
   res.json({
     status: "issued",
     citizenNumber: num,
-    name: citizen.name,
+    name: getCitizenDisplayName(citizen),
     rank: citizen.rank,
     idCardUrl: `/api/citizens/number/${num}/id-card`,
     passportUrl: `/api/citizens/number/${num}/passport`,

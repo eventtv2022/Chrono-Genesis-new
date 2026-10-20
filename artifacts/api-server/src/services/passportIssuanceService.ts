@@ -15,6 +15,7 @@ import {
   notifyAdminPassportLifecycle,
 } from "./telegramService";
 import { decrypt } from "./encryptionService";
+import { getCitizenDisplayName } from "./citizenIdentity";
 import { sendPassportEmail, type PassportEmailDeliveryResult } from "./emailService";
 
 export const PASSPORT_WAIT_MS = 60 * 60 * 1000;
@@ -140,7 +141,7 @@ export async function issueEligiblePassport(
           citizenId,
           message:
             `🎉 *Оформление цифрового паспорта завершено!*\n\n` +
-            `👤 *${citizen.name}*\n` +
+            `👤 *${getCitizenDisplayName(citizen)}*\n` +
             `🪪 Гражданин №${citizen.citizenNumber ?? citizen.id}\n` +
             `📜 Ранг: ${citizen.rank}\n` +
             `${issuance.ancestralMinuteGranted ? "⏳ Родовая минута начислена: 1 Д\n\n" : "\n"}` +
@@ -181,7 +182,7 @@ export async function issueEligiblePassport(
   void notifyAdminPassportLifecycle({
     event: "passport_issued",
     citizenId: citizen.id,
-    citizenName: citizen.name,
+    citizenName: getCitizenDisplayName(citizen),
     citizenNumber: citizen.citizenNumber,
     ancestralMinuteGranted: result.ancestralMinuteGranted,
   });
@@ -395,6 +396,8 @@ export async function retryPendingPassportEmails(batchSize = 100): Promise<numbe
           .select({
             id: citizensTable.id,
             name: citizensTable.name,
+            surname: citizensTable.surname,
+            givenNames: citizensTable.givenNames,
             citizenNumber: citizensTable.citizenNumber,
             rank: citizensTable.rank,
             email: citizensTable.email,
@@ -409,7 +412,7 @@ export async function retryPendingPassportEmails(batchSize = 100): Promise<numbe
           delivery = { status: "permanent", error: "Citizen record no longer exists", errorCode: null };
         } else {
           delivery = await sendPassportEmail({
-            name: citizen.name,
+            name: getCitizenDisplayName(citizen),
             citizenNumber: citizen.citizenNumber ?? String(citizen.id),
             rank: citizen.rank,
             email: email ?? null,

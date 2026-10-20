@@ -30,6 +30,7 @@ import { notifyPassportEmissionStarted } from "../services/telegramService";
 import { encryptNullable, tryDecrypt } from "../services/encryptionService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
 import { deriveAgeTier } from "../services/ageGateService";
+import { getCitizenDisplayName } from "../services/citizenIdentity";
 
 const router = Router();
 const registryPhotoDir = path.join(process.cwd(), "secure_vault", "photos");
@@ -207,6 +208,8 @@ router.get("/admin/registry/users", requireRegistrySession, async (req, res): Pr
     .select({
       id:                 citizensTable.id,
       name:               citizensTable.name,
+      surname:            citizensTable.surname,
+      givenNames:         citizensTable.givenNames,
       citizenNumber:      citizensTable.citizenNumber,
       rank:               citizensTable.rank,
       telegramId:         citizensTable.telegramId,
@@ -242,7 +245,10 @@ router.get("/admin/registry/users", requireRegistrySession, async (req, res): Pr
     }
   }
 
-  const citizens = await query.orderBy(citizensTable.id);
+  const citizens = (await query.orderBy(citizensTable.id)).map((citizen) => ({
+    ...citizen,
+    name: getCitizenDisplayName(citizen),
+  }));
 
   // Apply search filter in JS (simpler than complex SQL OR across text fields)
   const q = search?.toLowerCase().trim();
@@ -305,6 +311,7 @@ router.get("/admin/registry/users/:id", requireRegistrySession, async (req, res)
   // Never expose raw filesystem path to the client
   res.json({
     ...citizen,
+    name: getCitizenDisplayName(citizen),
     surname: tryDecrypt(citizen.surname) ?? "",
     givenNames: tryDecrypt(citizen.givenNames) ?? "",
     hasPhoto: !!citizen.photoUrl,
