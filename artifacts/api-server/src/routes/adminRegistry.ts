@@ -454,7 +454,7 @@ router.post("/admin/registry/users/:id/request-signature", requireRegistrySessio
   }
 
   const citizenName = getCitizenDisplayName(citizen);
-  const signatureUrl = "https://timenation.info/web/signature-request";
+  const signatureUrl = "https://chrono-genesis.replit.app/web/signature-request";
   try {
     await bot.telegram.sendMessage(
       citizen.telegramId,
