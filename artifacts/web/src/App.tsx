@@ -64,6 +64,8 @@ function TgGuard({ children }: { children: React.ReactNode }) {
     if (!IS_TELEGRAM) {
       if (isLoading) return;
 
+      if (location === "/signature-request") return;
+
       if (citizen?.registrationStatus === "pending") {
         if (location !== "/onboarding") navigate("/onboarding");
         return;
@@ -78,7 +80,6 @@ function TgGuard({ children }: { children: React.ReactNode }) {
         const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/reset-password", "/qr-login", "/signature-request"];
         if (!guestRoutes.includes(location)) navigate("/welcome");
         else if (location === "/") navigate("/welcome");
-        if (location === "/signature-request") return;
       }
       return;
     }
@@ -86,14 +87,14 @@ function TgGuard({ children }: { children: React.ReactNode }) {
     // ── TELEGRAM Mini App branch ──────────────────────────────────────────────
     if (twaLoading) return;
 
+    if (location === "/signature-request") return;
+
     if (!citizen) {
       if (location !== "/onboarding") navigate("/onboarding");
       return;
     }
 
     if (twaStatus === null) return;
-
-    if (location === "/signature-request") return;
 
     if (citizen.registrationStatus === "pending" || twaStatus === "IN_EMISSION") {
       if (location !== "/onboarding") navigate("/onboarding");

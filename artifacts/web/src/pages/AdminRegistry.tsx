@@ -614,7 +614,7 @@ function ProfileModal({
             </section>
 
             {/* Documents: photo + signature */}
-            {(citizen.hasPhoto || citizen.signatureBase64 || !citizen.hasSignature) && (
+            {(citizen.hasPhoto || citizen.signatureBase64 || !citizen.signatureBase64?.trim()) && (
               <div>
                 <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">📂 Документы</div>
                 <div className="grid grid-cols-2 gap-3">
@@ -659,7 +659,7 @@ function ProfileModal({
                     )}
                   </div>
                 </div>
-                {!citizen.hasSignature && (
+                {!citizen.signatureBase64?.trim() && (
                   <button
                     type="button"
                     onClick={() => void requestSignature()}
