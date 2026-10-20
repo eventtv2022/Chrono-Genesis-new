@@ -343,6 +343,7 @@ function ProfileModal({
   const [savingIdentity, setSavingIdentity] = useState(false);
   const [identityError, setIdentityError] = useState<string | null>(null);
   const [identitySuccess, setIdentitySuccess] = useState<string | null>(null);
+  const [requestingSignature, setRequestingSignature] = useState(false);
   const [identityForm, setIdentityForm] = useState({ name: "", surname: "", givenNames: "", dateOfBirth: "" });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
@@ -436,6 +437,25 @@ function ProfileModal({
         (action === "block" ? "Голосование о блокировке инициировано" :
          action === "activate" ? "Паспорт активирован" : "Эмиссия перезапущена")
       );
+    }
+  }
+
+  async function requestSignature() {
+    if (!citizen || requestingSignature) return;
+    setRequestingSignature(true);
+    setActionMsg(null);
+    try {
+      const response = await fetch(`/api/admin/registry/users/${citizenId}/request-signature`, {
+        method: "POST",
+        headers: { "X-Registry-Token": registryToken },
+      });
+      const result = await response.json() as { message?: string; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Не удалось отправить запрос");
+      setActionMsg(result.message ?? "Запрос подписи отправлен в Telegram");
+    } catch (error) {
+      setActionMsg(`⚠️ ${error instanceof Error ? error.message : "Ошибка сети"}`);
+    } finally {
+      setRequestingSignature(false);
     }
   }
 
@@ -594,7 +614,7 @@ function ProfileModal({
             </section>
 
             {/* Documents: photo + signature */}
-            {(citizen.hasPhoto || citizen.signatureBase64) && (
+            {(citizen.hasPhoto || citizen.signatureBase64 || !citizen.hasSignature) && (
               <div>
                 <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">📂 Документы</div>
                 <div className="grid grid-cols-2 gap-3">
@@ -639,6 +659,17 @@ function ProfileModal({
                     )}
                   </div>
                 </div>
+                {!citizen.hasSignature && (
+                  <button
+                    type="button"
+                    onClick={() => void requestSignature()}
+                    disabled={requestingSignature || !citizen.telegramId}
+                    className="mt-3 w-full rounded-lg border border-primary/40 bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    data-testid="button-request-citizen-signature"
+                  >
+                    {requestingSignature ? "Отправляем запрос…" : "✉️ Запросить подпись у гражданина"}
+                  </button>
+                )}
               </div>
             )}
 

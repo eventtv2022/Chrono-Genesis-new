@@ -36,7 +36,9 @@ export function Login() {
           const { authToken, ...profile } = session;
           setCitizen(profile as CitizenProfile);
           setAuthToken(authToken);
-          navigate(profile.onboardingCompleted === false ? "/onboarding" : "/");
+          const returnTo = new URLSearchParams(window.location.search).get("returnTo");
+          const safeReturnTo = returnTo?.startsWith("/") && !returnTo.startsWith("//") ? returnTo : null;
+          navigate(safeReturnTo ?? (profile.onboardingCompleted === false ? "/onboarding" : "/"));
         },
         onError: (err) => {
           const apiError = err as Error & { data?: { error?: string } };

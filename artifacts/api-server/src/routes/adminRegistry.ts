@@ -414,6 +414,68 @@ router.patch(
   }
 );
 
+router.post("/admin/registry/users/:id/request-signature", requireRegistrySession, async (req, res): Promise<void> => {
+  const id = Number.parseInt(String(req.params["id"] ?? ""), 10);
+  if (!Number.isInteger(id) || id < 1) {
+    res.status(400).json({ error: "Неверный ID гражданина" });
+    return;
+  }
+
+  const [citizen] = await db
+    .select({
+      id: citizensTable.id,
+      name: citizensTable.name,
+      surname: citizensTable.surname,
+      givenNames: citizensTable.givenNames,
+      telegramId: citizensTable.telegramId,
+      signatureBase64: citizensTable.signatureBase64,
+    })
+    .from(citizensTable)
+    .where(eq(citizensTable.id, id))
+    .limit(1);
+
+  if (!citizen) {
+    res.status(404).json({ error: "Гражданин не найден" });
+    return;
+  }
+  if (citizen.signatureBase64?.trim()) {
+    res.status(409).json({ error: "Подпись уже добавлена" });
+    return;
+  }
+  if (!citizen.telegramId) {
+    res.status(409).json({ error: "У гражданина не привязан Telegram" });
+    return;
+  }
+
+  const bot = getBot();
+  if (!bot) {
+    res.status(503).json({ error: "Telegram-бот сейчас недоступен" });
+    return;
+  }
+
+  const citizenName = getCitizenDisplayName(citizen);
+  const signatureUrl = "https://timenation.info/web/signature-request";
+  try {
+    await bot.telegram.sendMessage(
+      citizen.telegramId,
+      `✍️ ${citizenName}, администратор TimeNation просит добавить подпись в реестр граждан.\n\nОткройте форму, распишитесь пальцем или мышью и отправьте подпись. Она сохранится в вашем паспорте и реестре.`,
+      {
+        reply_markup: {
+          inline_keyboard: [[{ text: "Добавить подпись", url: signatureUrl }]],
+        },
+      },
+    );
+  } catch (error) {
+    logger.warn({ err: error, citizenId: id }, "Admin signature request Telegram delivery failed");
+    res.status(502).json({ error: "Не удалось отправить сообщение в Telegram" });
+    return;
+  }
+
+  const adminId = (req as import("express").Request & { registryAdminId?: number }).registryAdminId;
+  logger.info({ adminId, citizenId: id }, "Admin requested citizen passport signature");
+  res.json({ ok: true, message: `Запрос подписи отправлен гражданину ${citizenName} в Telegram` });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /admin/registry/users/:id/photo?token=<session-token>
 // Serves the citizen's vault photo. Uses query-param auth because <img> tags

@@ -40,6 +40,7 @@ import { Welcome } from "./pages/Welcome";
 import { Tos } from "./pages/Tos";
 import { Login } from "./pages/Login";
 import { OnboardingGame } from "./pages/OnboardingGame";
+import { SignatureRequest } from "./pages/SignatureRequest";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,9 +75,10 @@ function TgGuard({ children }: { children: React.ReactNode }) {
       }
 
       if (!citizen) {
-        const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/reset-password", "/qr-login"];
+        const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/reset-password", "/qr-login", "/signature-request"];
         if (!guestRoutes.includes(location)) navigate("/welcome");
         else if (location === "/") navigate("/welcome");
+        if (location === "/signature-request") return;
       }
       return;
     }
@@ -90,6 +92,8 @@ function TgGuard({ children }: { children: React.ReactNode }) {
     }
 
     if (twaStatus === null) return;
+
+    if (location === "/signature-request") return;
 
     if (citizen.registrationStatus === "pending" || twaStatus === "IN_EMISSION") {
       if (location !== "/onboarding") navigate("/onboarding");
@@ -164,6 +168,7 @@ function Router() {
         <Route path="/register" component={Register} />
         <Route path="/login" component={Login} />
         <Route path="/onboarding" component={OnboardingGame} />
+        <Route path="/signature-request" component={SignatureRequest} />
         <Route path="/passport-lookup" component={PassportLookup} />
         <Route path="/time" component={Time} />
         <Route path="/clock" component={Clock} />
