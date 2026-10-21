@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/context/LanguageContext";
 import { useCitizen } from "@/context/CitizenContext";
+import { CitizenAvatar } from "@/components/CitizenAvatar";
 import { getBaseUrl } from "@/lib/api";
 import { getStoredToken } from "@/lib/authStorage";
 
@@ -40,7 +41,7 @@ interface ReferralProfile {
 export default function ProfileScreen() {
   const colors = useColors();
   const { lang } = useLanguage();
-  const { authToken } = useCitizen();
+  const { authToken, citizen } = useCitizen();
   const insets = useSafeAreaInsets();
   const isRu = lang === "ru";
   const [profile, setProfile] = useState<ReferralProfile | null>(null);
@@ -153,8 +154,21 @@ export default function ProfileScreen() {
             <Text style={[styles.eyebrow, { color: colors.primary }]}>{isRu ? "ЛИЧНЫЙ КАБИНЕТ" : "CITIZEN CONTROL ROOM"}</Text>
             <Text style={[styles.title, { color: colors.foreground }]}>{isRu ? "Профиль" : "Profile"}</Text>
           </View>
-          <View style={[styles.headerMark, { backgroundColor: colors.goldGlow, borderColor: colors.border }]}>
-            <Feather name="user" size={20} color={colors.primary} />
+          <View
+            accessible
+            accessibilityLabel={isRu ? "Фотография гражданина из паспорта" : "Citizen passport photo"}
+            style={[styles.headerMark, { backgroundColor: colors.goldGlow, borderColor: colors.border }]}
+          >
+            {citizen ? (
+              <CitizenAvatar
+                citizenId={citizen.id}
+                name={citizen.name}
+                hasPhoto={!!citizen.photoUrl}
+                size={48}
+              />
+            ) : (
+              <Feather name="user" size={20} color={colors.primary} />
+            )}
           </View>
         </View>
 
@@ -363,7 +377,7 @@ const styles = StyleSheet.create({
   headingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 },
   eyebrow: { fontSize: 10, fontWeight: "700", letterSpacing: 1.65, marginBottom: 5 },
   title: { fontSize: 30, lineHeight: 36, fontWeight: "700", letterSpacing: -0.8 },
-  headerMark: { width: 44, height: 44, borderRadius: 15, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  headerMark: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   programCard: { borderWidth: 1, borderRadius: 20, padding: 18, overflow: "hidden" },
   programTop: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 15 },
   programIcon: { height: 34, width: 34, borderRadius: 11, alignItems: "center", justifyContent: "center" },
