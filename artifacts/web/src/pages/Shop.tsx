@@ -4,11 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AlertCircle, ShoppingBag, Tag, Zap, Copy, CheckCircle, CreditCard, Bitcoin } from "lucide-react";
 import { useCitizen } from "@/context/CitizenContext";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { lazy, Suspense, useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 const TRC20_WALLET      = "TDLRNKKjNJ5RNuit6Hr7nVta5syzEEwr2q";
 const SYSTEM_FEE        = 0.05;
+const WalletConnectCheckout = lazy(() =>
+  import("./WalletConnectCheckout").then(module => ({ default: module.WalletConnectCheckout })),
+);
 
 function calcUsdtLocal(darmins: number): number {
   let disc = 0;
@@ -119,7 +122,7 @@ export function Shop() {
   const activeTierIdx = TIERS.findLastIndex(t => amount >= t.from);
 
   // ── TRC20 state ──────────────────────────────────────────────────────────────
-  const [payMethod,     setPayMethod]     = useState<"stripe" | "trc20">("stripe");
+  const [payMethod,     setPayMethod]     = useState<"stripe" | "trc20" | "walletconnect">("stripe");
   const [trc20ReqId,    setTrc20ReqId]    = useState<number | null>(null);
   const [trc20Amount,   setTrc20Amount]   = useState<number | null>(null);
   const [trc20TxId,     setTrc20TxId]     = useState("");
@@ -294,7 +297,7 @@ export function Shop() {
             </div>
 
             {/* Payment method selector */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => setPayMethod("stripe")}
                 className={`flex flex-col items-center gap-1 p-3 rounded-sm border text-xs font-mono transition-colors ${payMethod === "stripe" ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-400" : "border-border text-muted-foreground hover:border-border/80"}`}
@@ -310,6 +313,15 @@ export function Shop() {
                 <Bitcoin className="w-4 h-4" />
                 <span className="font-bold">USDT TRC20</span>
                 <span className="text-[10px] opacity-70">Tron Network</span>
+              </button>
+              <button
+                onClick={() => setPayMethod("walletconnect")}
+                className={`flex flex-col items-center gap-1 p-3 rounded-sm border text-xs font-mono transition-colors ${payMethod === "walletconnect" ? "border-violet-400/60 bg-violet-500/10 text-violet-300" : "border-border text-muted-foreground hover:border-border/80"}`}
+                data-testid="button-walletconnect-payment"
+              >
+                <Bitcoin className="w-4 h-4" />
+                <span className="font-bold">WalletConnect</span>
+                <span className="text-[10px] opacity-70">USDT · TRON</span>
               </button>
             </div>
 
@@ -354,7 +366,7 @@ export function Shop() {
                         : <span className="flex items-center gap-2"><ShoppingBag className="w-5 h-5" />Купить {amount} Д за {price.totalEur.toFixed(2)} €</span>}
                     </Button>
                   </>
-                ) : (
+                ) : payMethod === "trc20" ? (
                   /* ── TRC20 payment flow ── */
                   <div className="space-y-3">
                     {/* Step 1: amount card */}
@@ -455,6 +467,14 @@ export function Shop() {
                       затем вставьте TxID и нажмите «Подтвердить». Ручная проверка: ~24 ч.
                     </p>
                   </div>
+                ) : (
+                  <Suspense fallback={<div className="rounded-sm border border-border p-4 text-center text-xs text-muted-foreground">Загрузка WalletConnect…</div>}>
+                    <WalletConnectCheckout
+                      citizenId={citizen?.id}
+                      authToken={authToken}
+                      amount={amount}
+                    />
+                  </Suspense>
                 )}
               </div>
             ) : (

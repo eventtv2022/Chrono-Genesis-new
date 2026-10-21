@@ -23,7 +23,9 @@ export function Login() {
   const login = useLoginCitizen();
   const [error, setError] = useState<string | null>(null);
   const form = useForm<LoginValues>({
-    resolver: zodResolver(loginSchema),
+    // Keep runtime validation while avoiding duplicate Zod v3 declaration identities
+    // introduced by the web wallet connector's dependency tree.
+    resolver: zodResolver(loginSchema as any),
     defaultValues: { phone: "", password: "" },
   });
 
