@@ -20,7 +20,7 @@ import { requireAdultKyc, requireAuth } from "../middleware/auth";
 const router: IRouter = Router();
 
 // ── Config ────────────────────────────────────────────────────────────────────
-export const CREATOR_TRC20_WALLET = "TJZZWWKU1L2v4EetVmMPKKfK396sZn82XC";
+export const CREATOR_TRC20_WALLET = "TDLRNKKjNJ5RNuit6Hr7nVta5syzEEwr2q";
 export const SYSTEM_FEE_PERCENT   = 0.05; // 5 %
 
 /**

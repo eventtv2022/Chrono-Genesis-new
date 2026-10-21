@@ -1,5 +1,5 @@
 import { getBaseUrl } from "@/lib/api";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
+import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { useCitizen } from "@/context/CitizenContext";
 import { useColors } from "@/hooks/useColors";
@@ -68,6 +69,15 @@ export default function ShopScreen() {
 
   const [amountStr, setAmountStr] = useState("100");
   const [loading,   setLoading]   = useState(false);
+  const [payMethod, setPayMethod] = useState<"stripe" | "trc20">("stripe");
+  const [trc20Payment, setTrc20Payment] = useState<{
+    requestId: number | null;
+    amountUsdt: number;
+    address: string;
+    darmins: number;
+  } | null>(null);
+  const [trc20TxId, setTrc20TxId] = useState("");
+  const [trc20Done, setTrc20Done] = useState(false);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const TIERS = useMemo(() => getTiers(t), [t]);
@@ -76,6 +86,12 @@ export default function ShopScreen() {
     const n = parseInt(amountStr, 10);
     return isNaN(n) || n < 1 ? 0 : n;
   }, [amountStr]);
+
+  useEffect(() => {
+    setTrc20Payment(null);
+    setTrc20TxId("");
+    setTrc20Done(false);
+  }, [amount]);
 
   const price = useMemo(() => (amount > 0 ? calcPrice(amount) : null), [amount]);
 
@@ -123,6 +139,70 @@ export default function ShopScreen() {
         await refreshCitizen();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
+    } catch {
+      Alert.alert(t.connection_error, t.no_internet);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleTrc20Request() {
+    if (!citizen || amount < 1) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/payments/trc20/request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ citizenId: citizen.id, darmins: amount, purpose: "darmins" }),
+      });
+      const data = await res.json() as {
+        requestId?: number | null;
+        totalUsdt?: number;
+        address?: string;
+        error?: string;
+      };
+      if (!res.ok || typeof data.totalUsdt !== "number" || !data.address) {
+        Alert.alert(t.error, data.error ?? "Не удалось создать запрос USDT TRC20");
+        return;
+      }
+      setTrc20Payment({
+        requestId: data.requestId ?? null,
+        amountUsdt: data.totalUsdt,
+        address: data.address,
+        darmins: amount,
+      });
+      setTrc20TxId("");
+      setTrc20Done(false);
+    } catch {
+      Alert.alert(t.connection_error, t.no_internet);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleTrc20Submit() {
+    if (!citizen || !trc20Payment || trc20TxId.trim().length < 10) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/payments/trc20/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({
+          requestId: trc20Payment.requestId ?? undefined,
+          citizenId: citizen.id,
+          txId: trc20TxId.trim(),
+          amountUsdt: trc20Payment.amountUsdt,
+          darmins: trc20Payment.darmins,
+          purpose: "darmins",
+        }),
+      });
+      const data = await res.json() as { success?: boolean; error?: string };
+      if (!res.ok || !data.success) {
+        Alert.alert(t.error, data.error ?? "Не удалось отправить TxID на проверку");
+        return;
+      }
+      setTrc20Done(true);
+      Alert.alert("Платёж отправлен на проверку", "Дармины будут начислены после подтверждения транзакции администратором.");
     } catch {
       Alert.alert(t.connection_error, t.no_internet);
     } finally {
@@ -233,34 +313,124 @@ export default function ShopScreen() {
                 <View>
                   <Text style={styles.totalLabel}>{t.shop_total_label}</Text>
                   <Text style={[styles.totalValue, { color: colors.primary }]}>
-                    {price.totalEur.toFixed(2)} €
+                    {payMethod === "stripe"
+                      ? `${price.totalEur.toFixed(2)} €`
+                      : trc20Payment?.darmins === amount
+                        ? `${trc20Payment.amountUsdt.toFixed(4)} USDT`
+                        : "USDT TRC20"}
                   </Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
                   <Text style={styles.totalLabel}>{t.shop_per_darmin_label}</Text>
                   <Text style={[styles.perDarminValue, { color: colors.mutedForeground }]}>
-                    {price.eurPerDarmin.toFixed(2)} €/Д
+                    {payMethod === "stripe" ? `${price.eurPerDarmin.toFixed(2)} €/Д` : "Сумма из запроса"}
                   </Text>
                 </View>
               </View>
 
-              <TouchableOpacity
-                style={[styles.buyBtn, (!citizen || loading) && styles.buyBtnDisabled]}
-                onPress={() => void handleBuy()}
-                disabled={loading || !citizen}
-                activeOpacity={0.85}
-              >
-                {loading ? (
-                  <ActivityIndicator color={colors.primaryForeground} />
-                ) : (
-                  <>
-                    <Feather name="credit-card" size={18} color={colors.primaryForeground} />
-                    <Text style={[styles.buyBtnText, { color: colors.primaryForeground }]}>
-                      {amount} Д — {price.totalEur.toFixed(2)} €
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                {([
+                  ["stripe", "Банковская карта · EUR"],
+                  ["trc20", "Криптовалюта · USDT TRC20"],
+                ] as const).map(([method, label]) => (
+                  <TouchableOpacity
+                    key={method}
+                    onPress={() => setPayMethod(method)}
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: payMethod === method ? colors.primary : colors.border,
+                      backgroundColor: payMethod === method ? colors.goldGlow : "transparent",
+                      borderRadius: 12,
+                      padding: 12,
+                      alignItems: "center",
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: payMethod === method }}
+                    testID={`shop-payment-${method}`}
+                  >
+                    <Text style={{ color: payMethod === method ? colors.primary : colors.mutedForeground, fontWeight: "600", textAlign: "center" }}>
+                      {label}
                     </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {payMethod === "stripe" ? (
+                <TouchableOpacity
+                  style={[styles.buyBtn, (!citizen || loading) && styles.buyBtnDisabled]}
+                  onPress={() => void handleBuy()}
+                  disabled={loading || !citizen}
+                  activeOpacity={0.85}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={colors.primaryForeground} />
+                  ) : (
+                    <>
+                      <Feather name="credit-card" size={18} color={colors.primaryForeground} />
+                      <Text style={[styles.buyBtnText, { color: colors.primaryForeground }]}>
+                        {amount} Д — {price.totalEur.toFixed(2)} €
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              ) : (
+                <View style={{ gap: 12, padding: 14, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}>
+                  <Text style={{ color: colors.foreground, fontWeight: "600" }}>
+                    Переведите USDT только по сети TRON (TRC20). Начисление — после проверки администратором.
+                  </Text>
+                  {trc20Payment?.darmins === amount ? (
+                    <>
+                      <Text style={{ color: colors.primary, fontSize: 20, fontWeight: "700" }}>
+                        {trc20Payment.amountUsdt.toFixed(4)} USDT
+                      </Text>
+                      <Text selectable style={{ color: colors.foreground, fontSize: 13 }}>
+                        {trc20Payment.address}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => void Clipboard.setStringAsync(trc20Payment.address).then(() => Alert.alert("Скопировано", "Адрес TRON скопирован."))}
+                        style={{ padding: 12, borderRadius: 10, backgroundColor: colors.goldGlow, alignItems: "center" }}
+                        testID="shop-copy-trc20-address"
+                      >
+                        <Text style={{ color: colors.primary, fontWeight: "700" }}>Скопировать адрес</Text>
+                      </TouchableOpacity>
+                      {!trc20Done && (
+                        <>
+                          <TextInput
+                            value={trc20TxId}
+                            onChangeText={setTrc20TxId}
+                            placeholder="TxID транзакции после перевода"
+                            placeholderTextColor={colors.mutedForeground}
+                            autoCapitalize="none"
+                            style={{ color: colors.foreground, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12 }}
+                            testID="shop-trc20-txid"
+                          />
+                          <TouchableOpacity
+                            style={[styles.buyBtn, (loading || trc20TxId.trim().length < 10) && styles.buyBtnDisabled]}
+                            disabled={loading || trc20TxId.trim().length < 10}
+                            onPress={() => void handleTrc20Submit()}
+                            testID="shop-submit-trc20"
+                          >
+                            {loading ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={[styles.buyBtnText, { color: colors.primaryForeground }]}>Отправить TxID на проверку</Text>}
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {trc20Done && (
+                        <Text style={{ color: colors.primary, fontWeight: "600" }}>TxID отправлен. Дармины зачислятся после проверки.</Text>
+                      )}
+                    </>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.buyBtn, (!citizen || loading) && styles.buyBtnDisabled]}
+                      onPress={() => void handleTrc20Request()}
+                      disabled={!citizen || loading}
+                      testID="shop-create-trc20-request"
+                    >
+                      {loading ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={[styles.buyBtnText, { color: colors.primaryForeground }]}>Получить сумму и адрес для перевода</Text>}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </>
           ) : (
             <View style={[styles.emptyHint, { borderColor: colors.border }]}>

@@ -139,7 +139,7 @@ const TRC20_SLOT_PRICES: Record<string, number> = {
   half:    10.49,
   apex:    26.24,
 };
-const TV_TRC20_WALLET = "TJZZWWKU1L2v4EetVmMPKKfK396sZn82XC";
+const TV_TRC20_WALLET = "TDLRNKKjNJ5RNuit6Hr7nVta5syzEEwr2q";
 
 const VISUAL_STYLE_DEFS = [
   { value: "space",     labelKey: "tv_style_space" as const,     descKey: "tv_style_space_desc" as const,     color: "#0D1B2A" },

@@ -7,7 +7,7 @@ import { useCitizen } from "@/context/CitizenContext";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 
-const TRC20_WALLET      = "TJZZWWKU1L2v4EetVmMPKKfK396sZn82XC";
+const TRC20_WALLET      = "TDLRNKKjNJ5RNuit6Hr7nVta5syzEEwr2q";
 const SYSTEM_FEE        = 0.05;
 
 function calcUsdtLocal(darmins: number): number {
