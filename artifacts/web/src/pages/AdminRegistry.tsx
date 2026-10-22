@@ -347,6 +347,11 @@ function ProfileModal({
   const [identityForm, setIdentityForm] = useState({ name: "", surname: "", givenNames: "", dateOfBirth: "" });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
+  const [passportNumberEditOpen, setPassportNumberEditOpen] = useState(false);
+  const [passportNumberForm, setPassportNumberForm] = useState("");
+  const [savingPassportNumber, setSavingPassportNumber] = useState(false);
+  const [passportNumberError, setPassportNumberError] = useState<string | null>(null);
+  const [passportNumberSuccess, setPassportNumberSuccess] = useState<string | null>(null);
 
   // Block reason dialog state
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
@@ -361,6 +366,7 @@ function ProfileModal({
         if (res.ok) {
           const detail = await res.json() as CitizenDetail;
           setCitizen(detail);
+          setPassportNumberForm(detail.citizenNumber ?? "");
           setIdentityForm({
             name: detail.name ?? "",
             surname: detail.surname ?? "",
@@ -402,6 +408,7 @@ function ProfileModal({
       if (!detailRes.ok) throw new Error("Данные сохранены, но не удалось обновить карточку");
       const detail = await detailRes.json() as CitizenDetail;
       setCitizen(detail);
+      setPassportNumberForm(detail.citizenNumber ?? "");
       setIdentityForm({
         name: detail.name ?? "",
         surname: detail.surname ?? "",
@@ -416,6 +423,39 @@ function ProfileModal({
       setIdentityError(error instanceof Error ? error.message : "Ошибка сохранения");
     } finally {
       setSavingIdentity(false);
+    }
+  }
+
+  async function savePassportNumber(event: React.FormEvent) {
+    event.preventDefault();
+    if (!citizen) return;
+    const citizenNumber = passportNumberForm.trim();
+    if (!/^\d{9}$/.test(citizenNumber)) {
+      setPassportNumberError("Номер паспорта должен содержать ровно 9 цифр");
+      return;
+    }
+
+    setSavingPassportNumber(true);
+    setPassportNumberError(null);
+    setPassportNumberSuccess(null);
+    try {
+      const res = await fetch(`/api/admin/registry/users/${citizen.id}/citizen-number`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-Registry-Token": registryToken },
+        body: JSON.stringify({ citizenNumber }),
+      });
+      const data = await res.json() as { error?: string; citizenNumber?: string };
+      if (!res.ok) throw new Error(data.error ?? "Не удалось сохранить номер паспорта");
+      const savedNumber = data.citizenNumber ?? citizenNumber;
+      setCitizen((current) => current ? { ...current, citizenNumber: savedNumber } : current);
+      setPassportNumberForm(savedNumber);
+      setPassportNumberEditOpen(false);
+      setPassportNumberSuccess("Номер паспорта сохранён");
+      await onSaved();
+    } catch (error) {
+      setPassportNumberError(error instanceof Error ? error.message : "Ошибка сохранения номера паспорта");
+    } finally {
+      setSavingPassportNumber(false);
     }
   }
 
@@ -505,17 +545,75 @@ function ProfileModal({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-foreground text-base">{citizen.name}</div>
-                <div className="text-xs text-muted-foreground font-mono">#{citizen.id} · {citizen.citizenNumber ?? "—"}</div>
+                <div className="text-xs text-muted-foreground font-mono">
+                  <span>Внутренний ID #{citizen.id}</span> · Паспорт №{" "}
+                  <span data-testid={`text-passport-number-${citizen.id}`}>{citizen.citizenNumber ?? "—"}</span>
+                </div>
                 <div className="text-xs text-muted-foreground">{citizen.rank ?? "—"}</div>
                 {ps && (
                   <span className={`inline-block mt-1.5 text-xs px-2 py-0.5 rounded-full border ${ps.color}`}>{ps.label}</span>
                 )}
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPassportNumberForm(citizen.citizenNumber ?? "");
+                      setPassportNumberError(null);
+                      setPassportNumberSuccess(null);
+                      setPassportNumberEditOpen((open) => !open);
+                    }}
+                    className="text-xs font-semibold text-primary hover:underline"
+                    data-testid={`button-edit-passport-number-${citizen.id}`}
+                  >
+                    {passportNumberEditOpen ? "Отмена" : "Изменить номер паспорта"}
+                  </button>
+                  {passportNumberSuccess && (
+                    <div role="status" className="mt-1 text-xs text-emerald-300">{passportNumberSuccess}</div>
+                  )}
+                </div>
               </div>
               <div className="text-right">
                 <div className="text-lg font-bold text-primary font-mono">{citizen.balanceMinutes.toFixed(2)} Д</div>
                 {citizen.isAdmin ? <div className="text-[10px] text-amber-400">👑 ADMIN</div> : null}
               </div>
             </div>
+
+            {passportNumberEditOpen && (
+              <form onSubmit={(event) => void savePassportNumber(event)} className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div className="text-xs text-muted-foreground">
+                  Укажите уникальный номер из 9 цифр. Внутренний ID гражданина не изменится. Ссылки и копии со старым номером потребуется обновить вручную.
+                </div>
+                <label className="block text-xs text-muted-foreground">
+                  Номер паспорта
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    required
+                    maxLength={9}
+                    pattern="[0-9]{9}"
+                    value={passportNumberForm}
+                    onChange={(event) => {
+                      setPassportNumberForm(event.target.value.replace(/\D/g, "").slice(0, 9));
+                      setPassportNumberError(null);
+                      setPassportNumberSuccess(null);
+                    }}
+                    className="mt-1 w-full bg-background border border-border rounded-lg px-3 py-2 font-mono text-sm text-foreground"
+                    data-testid={`input-passport-number-${citizen.id}`}
+                  />
+                </label>
+                {passportNumberError && <div role="alert" className="text-sm text-red-300">{passportNumberError}</div>}
+                {passportNumberSuccess && <div role="status" className="text-sm text-emerald-300">{passportNumberSuccess}</div>}
+                <button
+                  type="submit"
+                  disabled={savingPassportNumber || passportNumberForm.length !== 9}
+                  className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-50"
+                  data-testid={`button-save-passport-number-${citizen.id}`}
+                >
+                  {savingPassportNumber ? "Сохраняем…" : "Сохранить номер"}
+                </button>
+              </form>
+            )}
 
             {/* Contacts */}
             <div className="grid grid-cols-2 gap-3">

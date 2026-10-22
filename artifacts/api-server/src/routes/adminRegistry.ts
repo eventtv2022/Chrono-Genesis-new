@@ -321,6 +321,51 @@ router.get("/admin/registry/users/:id", requireRegistrySession, async (req, res)
 
 // Update identity details and documents only from a valid admin registry session.
 router.patch(
+  "/admin/registry/users/:id/citizen-number",
+  requireRegistrySession,
+  async (req, res): Promise<void> => {
+    const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id < 1) {
+      res.status(400).json({ error: "Неверный ID гражданина" });
+      return;
+    }
+
+    const body = z.object({
+      citizenNumber: z.string().regex(/^\d{9}$/, "Номер паспорта должен содержать 9 цифр"),
+    }).safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.issues[0]?.message ?? "Неверный номер паспорта" });
+      return;
+    }
+
+    try {
+      const [updated] = await db
+        .update(citizensTable)
+        .set({ citizenNumber: body.data.citizenNumber })
+        .where(eq(citizensTable.id, id))
+        .returning({ id: citizensTable.id, citizenNumber: citizensTable.citizenNumber });
+
+      if (!updated) {
+        res.status(404).json({ error: "Гражданин не найден" });
+        return;
+      }
+
+      const adminId = (req as unknown as { registryAdminId?: number }).registryAdminId;
+      req.log.info({ adminId, citizenId: id }, "Admin registry passport number updated");
+      res.json({ ok: true, id: updated.id, citizenNumber: updated.citizenNumber });
+    } catch (error) {
+      const dbError = error as { code?: string; cause?: { code?: string; cause?: { code?: string } } };
+      if (dbError.code === "23505" || dbError.cause?.code === "23505" || dbError.cause?.cause?.code === "23505") {
+        res.status(409).json({ error: "Этот номер паспорта уже назначен другому гражданину" });
+        return;
+      }
+      throw error;
+    }
+  },
+);
+
+router.patch(
   "/admin/registry/users/:id",
   requireRegistrySession,
   registryPhotoUpload.single("photo"),
