@@ -1516,6 +1516,13 @@ export const UI: Record<LangCode, UIStrings> = {
   },
 };
 
+UI.ru = {
+  ...UI.ru,
+  reg_subtitle: "При вступлении в гражданство на счёт гражданина автоматически начисляется неотчуждаемая родовая минута.",
+  reg_darmins_title: "Родовая минута",
+  reg_darmins_desc: "Её стоимость — 1 Дармин (игровая валюта виртуального государства TimeNation). Верификация — 60 мин · Паспорт выдаётся автоматически.",
+};
+
 export const RTL_LANGS: LangCode[] = ["ar", "ur", "he", "fa"];
 
 export function isRTL(code: LangCode): boolean {

@@ -16,5 +16,5 @@
 - [Passport email retries](passport-email-retries.md) — use a stable RFC Message-ID and Gmail Sent lookup to detect accepted sends before retrying
 - [Upload boundary semantics](upload-boundaries.md) — Busboy rejects at the configured byte threshold; verify exact-limit acceptance with real multipart parsing.
 - [Nominatim Russian addresses](nominatim-russian-addresses.md) — normalize Russian street/house abbreviations before retrying; JavaScript `\b` does not match Cyrillic boundaries.
-- [Referral DarMin restrictions](referral-darmin.md) — reward referrers only after passport issuance; keep bonus credits separate and restricted through internal payments.
+- [DarMin and ancestral-minute distinction](referral-darmin.md) — citizenship grants a non-transferable minute valued at 1 Darmin; referral DarMin is separate.
 - [TRON WalletConnect checkout](timenation-tron-walletconnect.md) — TRC20 transfers use Tron signing formats v1/v2; keep TxID submission under manual review.
