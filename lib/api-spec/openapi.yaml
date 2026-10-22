@@ -1325,6 +1325,12 @@ components:
         - rank
         - lastActivity
         - createdAt
+        - walletAddress
+        - walletVerified
+        - ageVerified
+        - onboardingCompleted
+        - authToken
+        - ageProfileRequired
 
     AdminTransaction:
       type: object
@@ -1350,13 +1356,7 @@ components:
         createdAt:
           type: string
           format: date-time
-      required: [id, fromCitizenId, toCitizenId, fromCitizenName, toCitizenName, minutesTransferred, durationSeconds, createdAt]
-        - walletAddress
-        - walletVerified
-        - ageVerified
-        - onboardingCompleted
-        - authToken
-        - ageProfileRequired
+      required: [id, fromCitizenId, toCitizenId, fromCitizenName, toCitizenName, fromCitizenNumber, toCitizenNumber, minutesTransferred, durationSeconds, createdAt]
 
     CompleteAgeProfileInput:
       type: object
