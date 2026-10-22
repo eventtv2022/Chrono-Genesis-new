@@ -252,6 +252,7 @@ function getTimeInZone(tz: string, lang = "ru"): { time: string; date: string; o
 }
 
 const PRESETS = [
+  { label: "1 мин", seconds: 60 },
   { label: "12 мин", seconds: 12 * 60 },
   { label: "24 мин", seconds: 24 * 60 },
   { label: "25 мин", seconds: 25 * 60 },
@@ -266,10 +267,37 @@ const DAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
 interface Subscriber { id: number; pseudonym: string; rank: string; }
 
+function MinuteHourglass({ remaining, running }: { remaining: number; running: boolean }) {
+  const minuteSeconds = remaining % 60;
+  const sandLeft = remaining === 0 ? 0 : minuteSeconds === 0 ? 1 : minuteSeconds / 60;
+  const drained = 1 - sandLeft;
+  const topY = 31 - sandLeft * 21;
+  const topWidth = 2 + sandLeft * 18;
+  const topLeft = 24 - topWidth / 2;
+  const bottomY = 55 - drained * 21;
+  const bottomWidth = 2 + drained * 18;
+  const bottomLeft = 24 - bottomWidth / 2;
+
+  return (
+    <svg
+      viewBox="0 0 48 64"
+      className={`h-20 w-14 shrink-0 ${running ? "text-primary" : "text-muted-foreground"}`}
+      role="img"
+      aria-label="Песочные часы: песок истекает за одну минуту"
+    >
+      <path d="M12 7h24M12 57h24M14 9c0 9 8 14 10 22-2 8-10 15-10 24M34 9c0 9-8 14-10 22 2 8 10 15 10 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity=".8" />
+      <path d={`M${topLeft} ${topY}h${topWidth}L25 31h-2z`} fill="hsl(var(--primary))" />
+      {drained > 0.02 && <path d={`M14 55h20L${bottomLeft + bottomWidth} ${bottomY}H${bottomLeft}z`} fill="hsl(var(--primary))" />}
+      {running && <path d="M24 31v3" stroke="hsl(var(--primary))" strokeWidth="1.5" strokeDasharray="1 1" />}
+    </svg>
+  );
+}
+
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export function Time() {
-  const { citizen } = useCitizen();
+  const { citizen, authToken, refreshCitizen } = useCitizen();
+  const authHeaders: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {};
   const { lang, t } = useLanguage();
   const [section, setSection] = useState<"clock" | "timer" | "alarm" | "social-alarm">("clock");
 
@@ -282,12 +310,21 @@ export function Time() {
   void tick;
 
   // ── Pomodoro timer ─────────────────────────────────────────────────────────
-  const [preset, setPreset] = useState(0);
-  const [remaining, setRemaining] = useState(PRESETS[0]!.seconds);
+  const [preset, setPreset] = useState(1);
+  const [remaining, setRemaining] = useState(PRESETS[1]!.seconds);
   const [running, setRunning] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [focusText, setFocusText] = useState("");
+  const [focusResult, setFocusResult] = useState<{ rewardDarmins: number; textCharacters: number } | null>(null);
+  const [focusError, setFocusError] = useState("");
+  const focusSessionId = useRef<number | null>(null);
+  const [quizAttempt, setQuizAttempt] = useState<{ id: string; question: string } | null>(null);
+  const [quizAnswer, setQuizAnswer] = useState("");
+  const [quizResult, setQuizResult] = useState<{ correct: boolean; totalCorrect: number; awardedDarmins: number } | null>(null);
+  const [quizError, setQuizError] = useState("");
+  const [quizBusy, setQuizBusy] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const sessionDurationRef = useRef(PRESETS[0]!.seconds);
+  const sessionDurationRef = useRef(PRESETS[1]!.seconds);
 
   const stopInterval = useCallback(() => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
@@ -297,16 +334,25 @@ export function Time() {
     stopInterval();
     setRunning(false);
     setCompleted(true);
-    if (citizen?.id) {
+    setFocusError("");
+    if (citizen?.id && focusSessionId.current) {
       try {
-        await fetch(`/api/citizens/log-focus`, {
+        const response = await fetch(`/api/citizens/focus/${focusSessionId.current}/complete`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ citizenId: citizen.id, durationMinutes: Math.round(sessionDurationRef.current / 60) }),
+          headers: { "Content-Type": "application/json", ...authHeaders },
+          body: JSON.stringify({ text: focusText }),
         });
-      } catch { /* offline is fine */ }
+        const data = await response.json() as { rewardDarmins?: number; textCharacters?: number; error?: string };
+        if (!response.ok) throw new Error(data.error || "Не удалось сохранить сеанс");
+        setFocusResult({ rewardDarmins: data.rewardDarmins ?? 0, textCharacters: data.textCharacters ?? 0 });
+        focusSessionId.current = null;
+        setFocusText("");
+        if ((data.rewardDarmins ?? 0) > 0) await refreshCitizen();
+      } catch (error) {
+        setFocusError(error instanceof Error ? error.message : "Не удалось сохранить сеанс");
+      }
     }
-  }, [citizen?.id, stopInterval]);
+  }, [authToken, citizen?.id, focusText, refreshCitizen, stopInterval]);
 
   useEffect(() => {
     if (running) {
@@ -324,9 +370,88 @@ export function Time() {
 
   const handlePreset = (i: number) => {
     stopInterval(); setRunning(false); setCompleted(false);
+    focusSessionId.current = null;
+    setFocusResult(null); setFocusError("");
     setPreset(i); setRemaining(PRESETS[i]!.seconds);
     sessionDurationRef.current = PRESETS[i]!.seconds;
   };
+
+  const toggleFocusTimer = async () => {
+    setFocusError("");
+    if (running) {
+      if (focusSessionId.current) {
+        const response = await fetch(`/api/citizens/focus/${focusSessionId.current}/pause`, { method: "POST", headers: authHeaders });
+        if (!response.ok) { setFocusError("Не удалось приостановить сеанс. Проверьте соединение."); return; }
+      }
+      setRunning(false);
+      return;
+    }
+    if (completed || remaining === 0) {
+      setRemaining(PRESETS[preset]!.seconds);
+      setCompleted(false);
+      setFocusResult(null);
+      setFocusText("");
+    }
+    if (citizen?.id) {
+      try {
+        const url = focusSessionId.current
+          ? `/api/citizens/focus/${focusSessionId.current}/resume`
+          : "/api/citizens/focus/start";
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders },
+          ...(focusSessionId.current ? {} : { body: JSON.stringify({ plannedSeconds: PRESETS[preset]!.seconds }) }),
+        });
+        const data = await response.json() as { sessionId?: number; error?: string };
+        if (!response.ok) throw new Error(data.error || "Не удалось начать сеанс");
+        if (data.sessionId) focusSessionId.current = data.sessionId;
+      } catch (error) {
+        setFocusError(error instanceof Error ? error.message : "Не удалось начать сеанс");
+        return;
+      }
+    }
+    setRunning(true);
+  };
+
+  const loadQuizQuestion = useCallback(async () => {
+    if (!citizen?.id) return;
+    setQuizError("");
+    try {
+      const response = await fetch("/api/citizens/focus/quiz/question", { headers: authHeaders });
+      const data = await response.json() as { attemptId?: string; question?: string; error?: string };
+      if (!response.ok || !data.attemptId || !data.question) throw new Error(data.error || "Не удалось загрузить вопрос");
+      setQuizAttempt({ id: data.attemptId, question: data.question });
+      setQuizAnswer("");
+    } catch (error) {
+      setQuizError(error instanceof Error ? error.message : "Не удалось загрузить вопрос");
+    }
+  }, [authToken, citizen?.id]);
+
+  const submitQuizAnswer = async () => {
+    if (!quizAttempt || !quizAnswer.trim() || quizBusy) return;
+    setQuizBusy(true); setQuizError("");
+    try {
+      const response = await fetch("/api/citizens/focus/quiz/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ attemptId: quizAttempt.id, answer: quizAnswer }),
+      });
+      const data = await response.json() as { correct?: boolean; totalCorrect?: number; awardedDarmins?: number; error?: string };
+      if (!response.ok) throw new Error(data.error || "Не удалось проверить ответ");
+      setQuizResult({ correct: !!data.correct, totalCorrect: data.totalCorrect ?? 0, awardedDarmins: data.awardedDarmins ?? 0 });
+      setQuizAttempt(null);
+      setQuizAnswer("");
+      if ((data.awardedDarmins ?? 0) > 0) await refreshCitizen();
+    } catch (error) {
+      setQuizError(error instanceof Error ? error.message : "Не удалось проверить ответ");
+    } finally {
+      setQuizBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (section === "timer" && citizen?.id && !quizAttempt) void loadQuizQuestion();
+  }, [citizen?.id, loadQuizQuestion, quizAttempt, section]);
 
   const timerMinutes = Math.floor(remaining / 60);
   const timerSeconds = remaining % 60;
@@ -723,12 +848,13 @@ export function Time() {
               <p className="text-xs text-muted-foreground">Завершённая сессия засчитывается ИИ-Аудитором</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {PRESETS.map((p, i) => (
+            {PRESETS.map((p, i) => (
                 <button
                   key={i}
                   onClick={() => handlePreset(i)}
+                disabled={running || focusSessionId.current !== null}
                   className={`px-3 py-2 rounded-md text-sm font-semibold border transition-colors ${
-                    preset === i ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:text-foreground"
+                  preset === i ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:text-foreground"
                   }`}
                 >
                   {p.label}
@@ -736,6 +862,7 @@ export function Time() {
               ))}
             </div>
             <div className="flex flex-col items-center gap-5 py-4">
+              <div className="flex w-full items-center justify-center gap-4">
               <div
                 className={`w-48 h-48 rounded-full border-8 flex flex-col items-center justify-center gap-1 transition-all ${running ? "border-primary" : "border-border"} bg-card`}
                 style={running ? { boxShadow: "0 0 32px var(--primary, #C9A84C)44" } : {}}
@@ -747,39 +874,83 @@ export function Time() {
                   {completed ? "Сессия завершена!" : running ? "Фокусируйся…" : "Готов к старту"}
                 </span>
               </div>
+                <MinuteHourglass remaining={remaining} running={running} />
+              </div>
               <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${(1 - progress) * 100}%` }} />
               </div>
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => { stopInterval(); setRunning(false); setCompleted(false); setRemaining(PRESETS[preset]!.seconds); }}
+                onClick={async () => {
+                  stopInterval();
+                  if (focusSessionId.current) {
+                    await fetch(`/api/citizens/focus/${focusSessionId.current}/pause`, { method: "POST", headers: authHeaders });
+                    focusSessionId.current = null;
+                  }
+                  setRunning(false); setCompleted(false); setFocusResult(null); setFocusText(""); setRemaining(PRESETS[preset]!.seconds);
+                }}
                 className="flex items-center gap-2 px-5 py-3 rounded-lg bg-card border border-border text-muted-foreground hover:text-foreground font-semibold transition-colors"
               >
                 <RotateCcw className="w-4 h-4" />
                 Сброс
               </button>
               <button
-                onClick={() => setRunning(r => !r)}
+                onClick={() => void toggleFocusTimer()}
                 className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold text-base transition-colors ${running ? "bg-secondary text-foreground border border-border" : "bg-primary text-primary-foreground"}`}
               >
                 {running ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                 {running ? "Пауза" : "Старт"}
               </button>
             </div>
+            <label className="block space-y-2">
+              <span className="text-sm font-semibold">Запишите мысли во время фокусировки</span>
+              <textarea
+                value={focusText}
+                onChange={event => setFocusText(event.target.value)}
+                maxLength={100000}
+                rows={6}
+                placeholder="Пишите свободно. Текст не сохраняется — для расчёта награды учитывается только его объём."
+                className="w-full resize-y rounded-lg border border-border bg-card p-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <span className="text-xs text-muted-foreground">{Array.from(focusText).length.toLocaleString()} символов · 1 страница ≈ 1 800 символов</span>
+            </label>
             {completed && (
               <div className="flex items-center gap-3 p-4 rounded-lg bg-primary/10 border border-primary/40">
                 <span className="text-xl">🎉</span>
                 <p className="text-sm text-foreground">
-                  Ты инвестировал <strong>{Math.round(sessionDurationRef.current / 60)} минут</strong> концентрации.
+                  Сеанс завершён: <strong>{Math.round(sessionDurationRef.current / 60)} минут</strong> концентрации.
+                  {focusResult && <> Учтено {focusResult.textCharacters} символов, начислено {focusResult.rewardDarmins} Д.</>}
                 </p>
                 <button onClick={() => setCompleted(false)} className="text-xs text-muted-foreground hover:text-foreground shrink-0">✕</button>
               </div>
             )}
+            {focusError && <p role="alert" className="text-sm text-destructive">{focusError}</p>}
             <div className="flex items-start gap-2 p-3 rounded-lg bg-muted text-xs text-muted-foreground">
               <Info className="w-4 h-4 shrink-0 mt-0.5" />
-              При завершении таймер отправит отчёт — ИИ-Аудитор учтёт минуты концентрации.
+              За завершённый сеанс от 12 минут начисляется 1 Д за каждые 1 800 символов. Текст не хранится.
             </div>
+            {citizen?.id && (
+              <div className="space-y-3 rounded-lg border border-border bg-card p-4">
+                <div>
+                  <h3 className="font-semibold">Вопрос о TimeNation</h3>
+                  <p className="text-xs text-muted-foreground">За каждые 12 правильных ответов начисляется 1 Дармин.</p>
+                </div>
+                {quizAttempt ? (
+                  <>
+                    <p className="text-sm">{quizAttempt.question}</p>
+                    <div className="flex gap-2">
+                      <input value={quizAnswer} onChange={event => setQuizAnswer(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void submitQuizAnswer(); }} placeholder="Введите ответ" className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                      <button disabled={!quizAnswer.trim() || quizBusy} onClick={() => void submitQuizAnswer()} className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50">Ответить</button>
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={() => void loadQuizQuestion()} className="rounded-md border border-border px-4 py-2 text-sm font-semibold hover:bg-muted">Получить вопрос</button>
+                )}
+                {quizResult && <p className="text-sm">{quizResult.correct ? "Верно" : "Неверно"} · Правильных ответов всего: {quizResult.totalCorrect}{quizResult.awardedDarmins ? " · Начислен 1 Д!" : ` · До награды: ${12 - (quizResult.totalCorrect % 12)}`}</p>}
+                {quizError && <p role="alert" className="text-sm text-destructive">{quizError}</p>}
+              </div>
+            )}
           </div>
         )}
 

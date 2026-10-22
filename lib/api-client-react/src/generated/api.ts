@@ -35,6 +35,15 @@ import type {
   CompleteAgeProfileResult,
   EconomyStats,
   ErrorResponse,
+  FocusQuizAnswerInput,
+  FocusQuizAnswerResult,
+  FocusQuizQuestion,
+  FocusSessionCompletionInput,
+  FocusSessionInput,
+  FocusSessionPaused,
+  FocusSessionResult,
+  FocusSessionResumed,
+  FocusSessionStarted,
   GetTimelineOccupiedParams,
   GetTvLiveSlotParams,
   GetTvScheduleParams,
@@ -1403,6 +1412,437 @@ export function useGetCitizenByPhone<TData = Awaited<ReturnType<typeof getCitize
 
 
 
+
+export const getStartFocusSessionUrl = () => {
+
+
+
+
+  return `/api/citizens/focus/start`
+}
+
+/**
+ * @summary Start an authenticated focus timer
+ */
+export const startFocusSession = async (focusSessionInput: FocusSessionInput, options?: RequestInit): Promise<FocusSessionStarted> => {
+
+  return customFetch<FocusSessionStarted>(getStartFocusSessionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      focusSessionInput,)
+  }
+);}
+
+
+
+
+export const getStartFocusSessionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startFocusSession>>, TError,{data: BodyType<FocusSessionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startFocusSession>>, TError,{data: BodyType<FocusSessionInput>}, TContext> => {
+
+const mutationKey = ['startFocusSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startFocusSession>>, {data: BodyType<FocusSessionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  startFocusSession(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartFocusSessionMutationResult = NonNullable<Awaited<ReturnType<typeof startFocusSession>>>
+    export type StartFocusSessionMutationBody = BodyType<FocusSessionInput>
+    export type StartFocusSessionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Start an authenticated focus timer
+ */
+export const useStartFocusSession = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startFocusSession>>, TError,{data: BodyType<FocusSessionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startFocusSession>>,
+        TError,
+        {data: BodyType<FocusSessionInput>},
+        TContext
+      > => {
+      return useMutation(getStartFocusSessionMutationOptions(options));
+    }
+
+export const getPauseFocusSessionUrl = (id: number,) => {
+
+
+
+
+  return `/api/citizens/focus/${id}/pause`
+}
+
+/**
+ * @summary Pause an authenticated focus session
+ */
+export const pauseFocusSession = async (id: number, options?: RequestInit): Promise<FocusSessionPaused> => {
+
+  return customFetch<FocusSessionPaused>(getPauseFocusSessionUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPauseFocusSessionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pauseFocusSession>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof pauseFocusSession>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['pauseFocusSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pauseFocusSession>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  pauseFocusSession(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PauseFocusSessionMutationResult = NonNullable<Awaited<ReturnType<typeof pauseFocusSession>>>
+
+    export type PauseFocusSessionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Pause an authenticated focus session
+ */
+export const usePauseFocusSession = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pauseFocusSession>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof pauseFocusSession>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getPauseFocusSessionMutationOptions(options));
+    }
+
+export const getResumeFocusSessionUrl = (id: number,) => {
+
+
+
+
+  return `/api/citizens/focus/${id}/resume`
+}
+
+/**
+ * @summary Resume a paused focus session
+ */
+export const resumeFocusSession = async (id: number, options?: RequestInit): Promise<FocusSessionResumed> => {
+
+  return customFetch<FocusSessionResumed>(getResumeFocusSessionUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getResumeFocusSessionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resumeFocusSession>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resumeFocusSession>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['resumeFocusSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resumeFocusSession>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  resumeFocusSession(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResumeFocusSessionMutationResult = NonNullable<Awaited<ReturnType<typeof resumeFocusSession>>>
+
+    export type ResumeFocusSessionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Resume a paused focus session
+ */
+export const useResumeFocusSession = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resumeFocusSession>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resumeFocusSession>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getResumeFocusSessionMutationOptions(options));
+    }
+
+export const getCompleteFocusSessionUrl = (id: number,) => {
+
+
+
+
+  return `/api/citizens/focus/${id}/complete`
+}
+
+/**
+ * @summary Complete a focus session and award Darmins for text volume
+ */
+export const completeFocusSession = async (id: number,
+    focusSessionCompletionInput: FocusSessionCompletionInput, options?: RequestInit): Promise<FocusSessionResult> => {
+
+  return customFetch<FocusSessionResult>(getCompleteFocusSessionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      focusSessionCompletionInput,)
+  }
+);}
+
+
+
+
+export const getCompleteFocusSessionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeFocusSession>>, TError,{id: number;data: BodyType<FocusSessionCompletionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeFocusSession>>, TError,{id: number;data: BodyType<FocusSessionCompletionInput>}, TContext> => {
+
+const mutationKey = ['completeFocusSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeFocusSession>>, {id: number;data: BodyType<FocusSessionCompletionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  completeFocusSession(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteFocusSessionMutationResult = NonNullable<Awaited<ReturnType<typeof completeFocusSession>>>
+    export type CompleteFocusSessionMutationBody = BodyType<FocusSessionCompletionInput>
+    export type CompleteFocusSessionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Complete a focus session and award Darmins for text volume
+ */
+export const useCompleteFocusSession = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeFocusSession>>, TError,{id: number;data: BodyType<FocusSessionCompletionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeFocusSession>>,
+        TError,
+        {id: number;data: BodyType<FocusSessionCompletionInput>},
+        TContext
+      > => {
+      return useMutation(getCompleteFocusSessionMutationOptions(options));
+    }
+
+export const getGetFocusQuizQuestionUrl = () => {
+
+
+
+
+  return `/api/citizens/focus/quiz/question`
+}
+
+/**
+ * @summary Get a TimeNation quiz question
+ */
+export const getFocusQuizQuestion = async ( options?: RequestInit): Promise<FocusQuizQuestion> => {
+
+  return customFetch<FocusQuizQuestion>(getGetFocusQuizQuestionUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFocusQuizQuestionQueryKey = () => {
+    return [
+    `/api/citizens/focus/quiz/question`
+    ] as const;
+    }
+
+
+export const getGetFocusQuizQuestionQueryOptions = <TData = Awaited<ReturnType<typeof getFocusQuizQuestion>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFocusQuizQuestion>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFocusQuizQuestionQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFocusQuizQuestion>>> = ({ signal }) => getFocusQuizQuestion({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFocusQuizQuestion>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFocusQuizQuestionQueryResult = NonNullable<Awaited<ReturnType<typeof getFocusQuizQuestion>>>
+export type GetFocusQuizQuestionQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get a TimeNation quiz question
+ */
+
+export function useGetFocusQuizQuestion<TData = Awaited<ReturnType<typeof getFocusQuizQuestion>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFocusQuizQuestion>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFocusQuizQuestionQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getAnswerFocusQuizQuestionUrl = () => {
+
+
+
+
+  return `/api/citizens/focus/quiz/answer`
+}
+
+/**
+ * @summary Submit an answer to a TimeNation quiz question
+ */
+export const answerFocusQuizQuestion = async (focusQuizAnswerInput: FocusQuizAnswerInput, options?: RequestInit): Promise<FocusQuizAnswerResult> => {
+
+  return customFetch<FocusQuizAnswerResult>(getAnswerFocusQuizQuestionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      focusQuizAnswerInput,)
+  }
+);}
+
+
+
+
+export const getAnswerFocusQuizQuestionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof answerFocusQuizQuestion>>, TError,{data: BodyType<FocusQuizAnswerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof answerFocusQuizQuestion>>, TError,{data: BodyType<FocusQuizAnswerInput>}, TContext> => {
+
+const mutationKey = ['answerFocusQuizQuestion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof answerFocusQuizQuestion>>, {data: BodyType<FocusQuizAnswerInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  answerFocusQuizQuestion(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnswerFocusQuizQuestionMutationResult = NonNullable<Awaited<ReturnType<typeof answerFocusQuizQuestion>>>
+    export type AnswerFocusQuizQuestionMutationBody = BodyType<FocusQuizAnswerInput>
+    export type AnswerFocusQuizQuestionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Submit an answer to a TimeNation quiz question
+ */
+export const useAnswerFocusQuizQuestion = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof answerFocusQuizQuestion>>, TError,{data: BodyType<FocusQuizAnswerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof answerFocusQuizQuestion>>,
+        TError,
+        {data: BodyType<FocusQuizAnswerInput>},
+        TContext
+      > => {
+      return useMutation(getAnswerFocusQuizQuestionMutationOptions(options));
+    }
 
 export const getStartSessionUrl = () => {
 

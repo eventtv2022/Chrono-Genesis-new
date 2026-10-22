@@ -7,7 +7,7 @@ import multer from "multer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@workspace/db";
 import { referralsTable } from "@workspace/db";
-import { citizensTable, onboardingProgressTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable } from "@workspace/db";
+import { citizensTable, onboardingProgressTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable, focusSessionsTable, focusQuizAttemptsTable } from "@workspace/db";
 import { auditCitizenRate } from "../services/rateAuditorService";
 import {
   UpdateCitizenBody,
@@ -1218,21 +1218,102 @@ router.get("/citizens/:id/rate", async (req, res): Promise<void> => {
 
 // ── POST /api/citizens/log-focus ──────────────────────────────────────────────
 // Records a completed Pomodoro focus session for AI-Auditor activity tracking.
-router.post("/citizens/log-focus", async (req, res): Promise<void> => {
-  const { citizenId, durationMinutes } = req.body as { citizenId?: number; durationMinutes?: number };
-  if (!citizenId || !durationMinutes) {
-    res.status(400).json({ error: "citizenId and durationMinutes required" });
-    return;
-  }
-  const [citizen] = await db
-    .select({ id: citizensTable.id, name: citizensTable.name })
-    .from(citizensTable)
-    .where(eq(citizensTable.id, citizenId))
-    .limit(1);
-  if (!citizen) { res.status(404).json({ error: "Гражданин не найден" }); return; }
+const focusQuestions = [
+  { id: "darmin", question: "Чему равен один Дармин в TimeNation?", answer: ["1 минута", "одна минута", "минута"] },
+  { id: "capital", question: "Какой город указан как столица суверенного времени TimeNation?", answer: ["фамагуста"] },
+  { id: "currency", question: "Как называется внутренняя единица времени TimeNation?", answer: ["дармин", "дармины"] },
+  { id: "chronopedia", question: "Как называется летопись моментов граждан TimeNation?", answer: ["хронопедия", "chronopedia"] },
+  { id: "metr", question: "Как называется система измерения времени взаимодействия в TimeNation?", answer: ["timetr", "тиметр"] },
+  { id: "minute", question: "Сколько минут жизни представляет один Дармин?", answer: ["1", "одна", "одну"] },
+  { id: "heritage", question: "Как называется непередаваемая минута, выдаваемая при гражданстве?", answer: ["родовая минута", "родовая"] },
+  { id: "auction", question: "Как называется P2P-площадка для продажи Дарминов?", answer: ["аукцион", "аукцион дарминов"] },
+  { id: "timeline", question: "Как называется временная лента граждан TimeNation?", answer: ["хронопедия", "таймлайн"] },
+  { id: "embassy", question: "Как называется инфраструктурный узел гражданина в TimeNation?", answer: ["посольство", "нода"] },
+  { id: "tv", question: "Как называется эфирная площадка TimeNation?", answer: ["timenation-tv", "timenation tv", "телевидение timenation"] },
+  { id: "merit", question: "Как называется показатель репутации гражданина в TimeNation?", answer: ["merit score", "мерит скор", "merit"] },
+];
+const normalizeQuizAnswer = (value: string) =>
+  value.toLocaleLowerCase("ru").replaceAll("ё", "е").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
-  req.log.info({ citizenId, durationMinutes }, "Focus session logged");
-  res.json({ ok: true, citizenId, durationMinutes, message: `${durationMinutes} мин фокусировки зачислено в профиль` });
+router.post("/citizens/focus/start", requireAuth, async (req, res): Promise<void> => {
+  const parsed = z.object({ plannedSeconds: z.number().int().min(60).max(5400) }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Неверная длительность таймера" }); return; }
+  const [session] = await db.insert(focusSessionsTable).values({
+    citizenId: req.citizen!.id, plannedSeconds: parsed.data.plannedSeconds, runningSince: new Date(),
+  }).returning({ id: focusSessionsTable.id });
+  res.status(201).json({ sessionId: session!.id });
+});
+
+router.post("/citizens/focus/:id/pause", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) { res.status(400).json({ error: "Неверный сеанс" }); return; }
+  const [session] = await db.select().from(focusSessionsTable).where(and(eq(focusSessionsTable.id, id), eq(focusSessionsTable.citizenId, req.citizen!.id))).limit(1);
+  if (!session || session.status !== "running" || !session.runningSince) { res.status(409).json({ error: "Сеанс нельзя приостановить" }); return; }
+  const elapsed = session.elapsedSeconds + Math.max(0, Math.floor((Date.now() - session.runningSince.getTime()) / 1000));
+  await db.update(focusSessionsTable).set({ elapsedSeconds: elapsed, runningSince: null, status: "paused" }).where(eq(focusSessionsTable.id, id));
+  res.json({ elapsedSeconds: elapsed });
+});
+
+router.post("/citizens/focus/:id/resume", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) { res.status(400).json({ error: "Неверный сеанс" }); return; }
+  const [session] = await db.select().from(focusSessionsTable).where(and(eq(focusSessionsTable.id, id), eq(focusSessionsTable.citizenId, req.citizen!.id))).limit(1);
+  if (!session || session.status !== "paused") { res.status(409).json({ error: "Сеанс нельзя продолжить" }); return; }
+  await db.update(focusSessionsTable).set({ runningSince: new Date(), status: "running" }).where(eq(focusSessionsTable.id, id));
+  res.json({ ok: true });
+});
+
+router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const parsed = z.object({ text: z.string().max(100_000) }).safeParse(req.body);
+  if (!Number.isInteger(id) || id < 1 || !parsed.success) { res.status(400).json({ error: "Неверные данные сеанса" }); return; }
+  const result = await db.transaction(async tx => {
+    const [session] = await tx.select().from(focusSessionsTable).where(and(eq(focusSessionsTable.id, id), eq(focusSessionsTable.citizenId, req.citizen!.id))).for("update").limit(1);
+    if (!session) return null;
+    if (session.status === "completed") {
+      return { elapsedSeconds: session.elapsedSeconds, textCharacters: session.textCharacters, rewardDarmins: session.rewardDarmins };
+    }
+    if (!["running", "paused"].includes(session.status)) return null;
+    const elapsedSeconds = session.elapsedSeconds + (session.status === "running" && session.runningSince ? Math.max(0, Math.floor((Date.now() - session.runningSince.getTime()) / 1000)) : 0);
+    if (elapsedSeconds < session.plannedSeconds - 3) return { tooEarly: true as const };
+    const chars = Array.from(parsed.data.text).length;
+    const reward = elapsedSeconds >= 12 * 60 ? Math.floor(chars / 1800) : 0;
+    await tx.update(focusSessionsTable).set({ status: "completed", runningSince: null, elapsedSeconds, textCharacters: chars, rewardDarmins: reward, completedAt: new Date() }).where(eq(focusSessionsTable.id, id));
+    if (reward) await tx.update(citizensTable).set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${reward}` }).where(eq(citizensTable.id, req.citizen!.id));
+    return { elapsedSeconds, textCharacters: chars, rewardDarmins: reward };
+  });
+  if (!result) { res.status(404).json({ error: "Сеанс не найден или уже завершён" }); return; }
+  if ("tooEarly" in result) { res.status(409).json({ error: "Таймер ещё не завершён" }); return; }
+  res.json(result);
+});
+
+router.get("/citizens/focus/quiz/question", requireAuth, async (req, res): Promise<void> => {
+  const question = focusQuestions[Math.floor(Math.random() * focusQuestions.length)]!;
+  const attemptId = crypto.randomUUID();
+  await db.insert(focusQuizAttemptsTable).values({ id: attemptId, citizenId: req.citizen!.id, questionId: question.id });
+  res.json({ attemptId, question: question.question });
+});
+
+router.post("/citizens/focus/quiz/answer", requireAuth, async (req, res): Promise<void> => {
+  const parsed = z.object({ attemptId: z.string().uuid(), answer: z.string().min(1).max(500) }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Введите ответ" }); return; }
+  const result = await db.transaction(async tx => {
+    const [citizen] = await tx.select().from(citizensTable).where(eq(citizensTable.id, req.citizen!.id)).for("update").limit(1);
+    const [attempt] = await tx.select().from(focusQuizAttemptsTable).where(and(eq(focusQuizAttemptsTable.id, parsed.data.attemptId), eq(focusQuizAttemptsTable.citizenId, req.citizen!.id))).for("update").limit(1);
+    if (!citizen || !attempt || attempt.answeredAt) return null;
+    const question = focusQuestions.find(item => item.id === attempt.questionId);
+    const correct = !!question?.answer.some(answer => normalizeQuizAnswer(answer) === normalizeQuizAnswer(parsed.data.answer));
+    await tx.update(focusQuizAttemptsTable).set({ isCorrect: correct ? 1 : 0, answeredAt: new Date() }).where(eq(focusQuizAttemptsTable.id, attempt.id));
+    const totalCorrect = citizen.focusQuizCorrectAnswers + (correct ? 1 : 0);
+    const awarded = correct && totalCorrect % 12 === 0 ? 1 : 0;
+    await tx.update(citizensTable).set({
+      focusQuizCorrectAnswers: totalCorrect,
+      ...(awarded ? { balanceMinutes: sql`${citizensTable.balanceMinutes} + 1` } : {}),
+    }).where(eq(citizensTable.id, citizen.id));
+    return { correct, totalCorrect, awardedDarmins: awarded };
+  });
+  if (!result) { res.status(409).json({ error: "Ответ уже отправлен или вопрос не найден" }); return; }
+  res.json(result);
 });
 
 export default router;

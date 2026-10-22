@@ -421,6 +421,162 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /citizens/focus/start:
+    post:
+      operationId: startFocusSession
+      tags: [citizens]
+      summary: Start an authenticated focus timer
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FocusSessionInput"
+      responses:
+        "201":
+          description: Focus session started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FocusSessionStarted"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /citizens/focus/{id}/pause:
+    post:
+      operationId: pauseFocusSession
+      tags: [citizens]
+      summary: Pause an authenticated focus session
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Session paused
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FocusSessionPaused"
+        "409":
+          description: Session cannot be paused
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /citizens/focus/{id}/resume:
+    post:
+      operationId: resumeFocusSession
+      tags: [citizens]
+      summary: Resume a paused focus session
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Session resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FocusSessionResumed"
+        "409":
+          description: Session cannot be resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /citizens/focus/{id}/complete:
+    post:
+      operationId: completeFocusSession
+      tags: [citizens]
+      summary: Complete a focus session and award Darmins for text volume
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FocusSessionCompletionInput"
+      responses:
+        "200":
+          description: Session completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FocusSessionResult"
+        "409":
+          description: Session is not complete or was already submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /citizens/focus/quiz/question:
+    get:
+      operationId: getFocusQuizQuestion
+      tags: [citizens]
+      summary: Get a TimeNation quiz question
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Question and one-time attempt identifier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FocusQuizQuestion"
+
+  /citizens/focus/quiz/answer:
+    post:
+      operationId: answerFocusQuizQuestion
+      tags: [citizens]
+      summary: Submit an answer to a TimeNation quiz question
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FocusQuizAnswerInput"
+      responses:
+        "200":
+          description: Answer checked and reward progress updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FocusQuizAnswerResult"
+        "409":
+          description: Attempt has already been answered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /sessions:
     post:
       operationId: startSession
@@ -1562,6 +1718,90 @@ components:
           pattern: "^0x[a-fA-F0-9]{40}$"
       required:
         - walletAddress
+
+    FocusSessionInput:
+      type: object
+      properties:
+        plannedSeconds:
+          type: integer
+          minimum: 60
+          maximum: 5400
+      required: [plannedSeconds]
+
+    FocusSessionStarted:
+      type: object
+      properties:
+        sessionId:
+          type: integer
+        ok:
+          type: boolean
+      required: [sessionId]
+
+    FocusSessionPaused:
+      type: object
+      properties:
+        elapsedSeconds:
+          type: integer
+      required: [elapsedSeconds]
+
+    FocusSessionResumed:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]
+
+    FocusSessionCompletionInput:
+      type: object
+      properties:
+        text:
+          type: string
+          maxLength: 100000
+      required: [text]
+
+    FocusSessionResult:
+      type: object
+      properties:
+        elapsedSeconds:
+          type: integer
+        textCharacters:
+          type: integer
+        rewardDarmins:
+          type: integer
+      required: [elapsedSeconds, textCharacters, rewardDarmins]
+
+    FocusQuizQuestion:
+      type: object
+      properties:
+        attemptId:
+          type: string
+          format: uuid
+        question:
+          type: string
+      required: [attemptId, question]
+
+    FocusQuizAnswerInput:
+      type: object
+      properties:
+        attemptId:
+          type: string
+          format: uuid
+        answer:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required: [attemptId, answer]
+
+    FocusQuizAnswerResult:
+      type: object
+      properties:
+        correct:
+          type: boolean
+        totalCorrect:
+          type: integer
+        awardedDarmins:
+          type: integer
+      required: [correct, totalCorrect, awardedDarmins]
 
     Session:
       type: object

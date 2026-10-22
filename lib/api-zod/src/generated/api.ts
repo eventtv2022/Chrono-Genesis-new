@@ -399,6 +399,93 @@ export const GetCitizenByPhoneResponse = zod.object({
 
 
 /**
+ * @summary Start an authenticated focus timer
+ */
+export const startFocusSessionBodyPlannedSecondsMin = 60;
+export const startFocusSessionBodyPlannedSecondsMax = 5400;
+
+
+
+export const StartFocusSessionBody = zod.object({
+  "plannedSeconds": zod.number().min(startFocusSessionBodyPlannedSecondsMin).max(startFocusSessionBodyPlannedSecondsMax)
+})
+
+
+/**
+ * @summary Pause an authenticated focus session
+ */
+export const PauseFocusSessionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const PauseFocusSessionResponse = zod.object({
+  "elapsedSeconds": zod.number()
+})
+
+
+/**
+ * @summary Resume a paused focus session
+ */
+export const ResumeFocusSessionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ResumeFocusSessionResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Complete a focus session and award Darmins for text volume
+ */
+export const CompleteFocusSessionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const completeFocusSessionBodyTextMax = 100000;
+
+
+
+export const CompleteFocusSessionBody = zod.object({
+  "text": zod.string().max(completeFocusSessionBodyTextMax)
+})
+
+export const CompleteFocusSessionResponse = zod.object({
+  "elapsedSeconds": zod.number(),
+  "textCharacters": zod.number(),
+  "rewardDarmins": zod.number()
+})
+
+
+/**
+ * @summary Get a TimeNation quiz question
+ */
+export const GetFocusQuizQuestionResponse = zod.object({
+  "attemptId": zod.string().uuid(),
+  "question": zod.string()
+})
+
+
+/**
+ * @summary Submit an answer to a TimeNation quiz question
+ */
+export const answerFocusQuizQuestionBodyAnswerMax = 500;
+
+
+
+export const AnswerFocusQuizQuestionBody = zod.object({
+  "attemptId": zod.string().uuid(),
+  "answer": zod.string().min(1).max(answerFocusQuizQuestionBodyAnswerMax)
+})
+
+export const AnswerFocusQuizQuestionResponse = zod.object({
+  "correct": zod.boolean(),
+  "totalCorrect": zod.number(),
+  "awardedDarmins": zod.number()
+})
+
+
+/**
  * @summary Start a TiMETR session (time transfer)
  */
 export const StartSessionBody = zod.object({

@@ -299,6 +299,58 @@ export interface CitizenWalletLinkInput {
   walletAddress: string;
 }
 
+export interface FocusSessionInput {
+  /**
+     * @minimum 60
+     * @maximum 5400
+     */
+  plannedSeconds: number;
+}
+
+export interface FocusSessionStarted {
+  sessionId: number;
+  ok?: boolean;
+}
+
+export interface FocusSessionPaused {
+  elapsedSeconds: number;
+}
+
+export interface FocusSessionResumed {
+  ok: boolean;
+}
+
+export interface FocusSessionCompletionInput {
+  /** @maxLength 100000 */
+  text: string;
+}
+
+export interface FocusSessionResult {
+  elapsedSeconds: number;
+  textCharacters: number;
+  rewardDarmins: number;
+}
+
+export interface FocusQuizQuestion {
+  attemptId: string;
+  question: string;
+}
+
+export interface FocusQuizAnswerInput {
+  attemptId: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  answer: string;
+}
+
+export interface FocusQuizAnswerResult {
+  correct: boolean;
+  totalCorrect: number;
+  awardedDarmins: number;
+}
+
 export type SessionStatus = typeof SessionStatus[keyof typeof SessionStatus];
 
 
