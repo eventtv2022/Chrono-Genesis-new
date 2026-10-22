@@ -444,13 +444,21 @@ function ProfileModal({
         headers: { "Content-Type": "application/json", "X-Registry-Token": registryToken },
         body: JSON.stringify({ citizenNumber }),
       });
-      const data = await res.json() as { error?: string; citizenNumber?: string };
+      const data = await res.json() as {
+        error?: string;
+        citizenNumber?: string;
+        sheetSync?: { ok: boolean; error?: string } | null;
+      };
       if (!res.ok) throw new Error(data.error ?? "Не удалось сохранить номер паспорта");
       const savedNumber = data.citizenNumber ?? citizenNumber;
       setCitizen((current) => current ? { ...current, citizenNumber: savedNumber } : current);
       setPassportNumberForm(savedNumber);
       setPassportNumberEditOpen(false);
-      setPassportNumberSuccess("Номер паспорта сохранён");
+      setPassportNumberSuccess(data.sheetSync
+        ? data.sheetSync.ok
+          ? "Номер сохранён, Google Sheets синхронизирована"
+          : `Номер сохранён, но Google Sheets не обновлена: ${data.sheetSync.error ?? "ошибка синхронизации"}`
+        : "Номер паспорта сохранён");
       await onSaved();
     } catch (error) {
       setPassportNumberError(error instanceof Error ? error.message : "Ошибка сохранения номера паспорта");
@@ -568,7 +576,12 @@ function ProfileModal({
                     {passportNumberEditOpen ? "Отмена" : "Изменить номер паспорта"}
                   </button>
                   {passportNumberSuccess && (
-                    <div role="status" className="mt-1 text-xs text-emerald-300">{passportNumberSuccess}</div>
+                    <div
+                      role="status"
+                      className={`mt-1 text-xs ${passportNumberSuccess.includes("не обновлена") ? "text-amber-300" : "text-emerald-300"}`}
+                    >
+                      {passportNumberSuccess}
+                    </div>
                   )}
                 </div>
               </div>
@@ -903,6 +916,8 @@ export function AdminRegistry() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [profileId, setProfileId] = useState<number | null>(null);
   const [actionToast, setActionToast] = useState<string | null>(null);
+  const [sheetSyncing, setSheetSyncing] = useState(false);
+  const [sheetSyncMessage, setSheetSyncMessage] = useState<string | null>(null);
   const [blockVotes, setBlockVotes] = useState<BlockVoteEntry[]>([]);
   const [votesLoading, setVotesLoading] = useState(false);
   const [generalPolls, setGeneralPolls] = useState<GeneralPollEntry[]>([]);
@@ -950,6 +965,32 @@ export function AdminRegistry() {
   async function onGateSuccess(token: string) {
     setRegistryToken(token);
     await fetchCitizens(token, search, statusFilter);
+  }
+
+  async function syncGoogleSheets() {
+    if (!registryToken) return;
+    setSheetSyncing(true);
+    setSheetSyncMessage(null);
+    try {
+      const res = await fetch("/api/admin/registry/sync-google-sheets", {
+        method: "POST",
+        headers: { "X-Registry-Token": registryToken },
+      });
+      const data = await res.json() as {
+        error?: string;
+        updated?: number;
+        appended?: number;
+        unverified?: number;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Не удалось сверить Google Sheets");
+      setSheetSyncMessage(
+        `Таблица сверена: обновлено ${data.updated ?? 0}, добавлено ${data.appended ?? 0}; старых или неоднозначных строк оставлено без удаления: ${data.unverified ?? 0}.`,
+      );
+    } catch (error) {
+      setSheetSyncMessage(error instanceof Error ? error.message : "Ошибка синхронизации Google Sheets");
+    } finally {
+      setSheetSyncing(false);
+    }
   }
 
   // Debounced search
@@ -1201,8 +1242,31 @@ export function AdminRegistry() {
                   <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
                   Обновить
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void syncGoogleSheets()}
+                  disabled={sheetSyncing}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+                  data-testid="button-sync-production-sheets"
+                >
+                  {sheetSyncing ? "Сверяем…" : "Сверить Google Sheets"}
+                </button>
               </div>
             </div>
+
+            {sheetSyncMessage && (
+              <div
+                role="status"
+                className={`mb-4 rounded-xl border px-3 py-2 text-sm ${
+                  sheetSyncMessage.startsWith("Таблица сверена")
+                    ? "border-emerald-700/40 bg-emerald-900/20 text-emerald-300"
+                    : "border-amber-700/40 bg-amber-900/20 text-amber-300"
+                }`}
+                data-testid="status-google-sheets-sync"
+              >
+                {sheetSyncMessage}
+              </div>
+            )}
 
             {/* Count */}
             <div className="text-xs text-muted-foreground mb-3 font-mono">

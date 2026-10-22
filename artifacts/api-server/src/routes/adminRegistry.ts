@@ -19,7 +19,7 @@ import path from "path";
 import multer from "multer";
 import { db } from "@workspace/db";
 import { citizensTable, blockVoteRequestsTable, governmentPollsTable, governmentPollBallotsTable } from "@workspace/db";
-import { eq, or, ilike, sql, ne } from "drizzle-orm";
+import { eq, or, ilike, sql, ne, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { sendDirectMessage, getBot } from "../services/telegramService";
@@ -31,6 +31,7 @@ import { encryptNullable, tryDecrypt } from "../services/encryptionService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
 import { deriveAgeTier } from "../services/ageGateService";
 import { getCitizenDisplayName } from "../services/citizenIdentity";
+import { syncProductionCitizensToSheets } from "../lib/googleSheets";
 
 const router = Router();
 const registryPhotoDir = path.join(process.cwd(), "secure_vault", "photos");
@@ -44,6 +45,39 @@ const registryPhotoUpload = multer({
     else cb(new Error("Фото должно быть JPG, PNG или WEBP"));
   },
 });
+
+async function syncCurrentCitizenSnapshotToSheets() {
+  const rows = await db
+    .select({
+      citizenNumber: citizensTable.citizenNumber,
+      citizenId: citizensTable.id,
+      name: citizensTable.name,
+      phone: citizensTable.phone,
+      rank: citizensTable.rank,
+      balanceMinutes: citizensTable.balanceMinutes,
+      meritScore: citizensTable.meritScore,
+      registrationStatus: citizensTable.registrationStatus,
+    })
+    .from(citizensTable)
+    .where(isNotNull(citizensTable.citizenNumber))
+    .orderBy(citizensTable.id);
+
+  return syncProductionCitizensToSheets(
+    rows.flatMap((row) => row.citizenNumber
+      ? [{
+          citizenNumber: row.citizenNumber,
+          citizenId: row.citizenId,
+          name: row.name,
+          phone: row.phone,
+          rank: row.rank,
+          balanceMinutes: row.balanceMinutes,
+          meritScore: row.meritScore,
+          registrationStatus: row.registrationStatus ?? "issued",
+        }]
+      : []),
+    { completeSnapshot: true },
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // In-memory stores
@@ -266,6 +300,23 @@ router.get("/admin/registry/users", requireRegistrySession, async (req, res): Pr
   res.json(filtered);
 });
 
+router.post("/admin/registry/sync-google-sheets", requireRegistrySession, async (req, res): Promise<void> => {
+  if (process.env["NODE_ENV"] !== "production") {
+    res.status(409).json({ error: "Сверка доступна только в production" });
+    return;
+  }
+
+  const result = await syncCurrentCitizenSnapshotToSheets();
+  if (!result.ok) {
+    res.status(502).json({ error: result.error ?? "Не удалось синхронизировать таблицу" });
+    return;
+  }
+
+  const adminId = (req as unknown as { registryAdminId?: number }).registryAdminId;
+  req.log.info({ adminId, ...result }, "Admin synchronized production citizen register to Google Sheets");
+  res.json(result);
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /admin/registry/users/:id  — full profile (incl. photo + signature)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -353,7 +404,13 @@ router.patch(
 
       const adminId = (req as unknown as { registryAdminId?: number }).registryAdminId;
       req.log.info({ adminId, citizenId: id }, "Admin registry passport number updated");
-      res.json({ ok: true, id: updated.id, citizenNumber: updated.citizenNumber });
+      const sheetSync = process.env["NODE_ENV"] === "production"
+        ? await syncCurrentCitizenSnapshotToSheets()
+        : null;
+      if (sheetSync && !sheetSync.ok) {
+        req.log.warn({ adminId, citizenId: id, reason: sheetSync.error }, "Passport number saved but Google Sheets sync failed");
+      }
+      res.json({ ok: true, id: updated.id, citizenNumber: updated.citizenNumber, sheetSync });
     } catch (error) {
       const dbError = error as { code?: string; cause?: { code?: string; cause?: { code?: string } } };
       if (dbError.code === "23505" || dbError.cause?.code === "23505" || dbError.cause?.cause?.code === "23505") {
