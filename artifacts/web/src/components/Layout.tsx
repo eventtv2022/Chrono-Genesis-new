@@ -158,8 +158,8 @@ function CitizenWidget() {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const { t } = useLanguage();
-  const { citizen, refreshCitizen } = useCitizen();
+  const { t, lang } = useLanguage();
+  const { citizen, authToken, refreshCitizen } = useCitizen();
 
   // Real-time WS balance sync — refreshes citizen data when server pushes balance_update
   useWsSync({
@@ -174,6 +174,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/citizens",  label: t.nav_registry,        icon: Users     },
     { href: "/timeline",  label: t.nav_timeline,        icon: History   },
     { href: "/shop",      label: t.nav_treasury,        icon: ShoppingCart },
+    ...(citizen && authToken
+      ? [{ href: "/referrals", label: lang === "ru" ? "Рефералы" : "Referrals", icon: UserPlus }]
+      : []),
     { href: "/register",  label: t.nav_become_citizen,  icon: UserPlus  },
     { href: "/passport-lookup", label: t.nav_passport,  icon: Search    },
     { href: "/time",      label: t.nav_time,            icon: Clock     },
