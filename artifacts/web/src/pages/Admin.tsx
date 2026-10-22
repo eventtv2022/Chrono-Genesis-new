@@ -196,7 +196,7 @@ interface TransferFormProps {
   onSuccess: (newBalance: number) => void;
 }
 function DirectTransferForm({ authHeaders, adminBalance, onSuccess }: TransferFormProps) {
-  const [citizenId, setCitizenId] = useState("");
+  const [citizenNumber, setCitizenNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
@@ -205,23 +205,27 @@ function DirectTransferForm({ authHeaders, adminBalance, onSuccess }: TransferFo
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setResult(null);
+    if (!/^\d{9}$/.test(citizenNumber)) {
+      setResult({ ok: false, msg: "Введите номер паспорта из 9 цифр" });
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/admin/transfer", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
-          citizenId: parseInt(citizenId, 10),
+          citizenNumber,
           amount: parseFloat(amount),
           description: description || undefined,
         }),
       });
-      const data = await res.json() as { ok?: boolean; error?: string; newAdminBalance?: number };
+      const data = await res.json() as { ok?: boolean; error?: string; recipientName?: string; newAdminBalance?: number };
       if (!res.ok) { setResult({ ok: false, msg: data.error ?? "Ошибка" }); }
       else {
-        setResult({ ok: true, msg: `✓ Переведено ${amount} Д. Ваш баланс: ${(data.newAdminBalance ?? 0).toFixed(2)} Д` });
+        setResult({ ok: true, msg: `✓ Переведено ${amount} Д гражданину ${data.recipientName ?? ""}. Ваш баланс: ${(data.newAdminBalance ?? 0).toFixed(2)} Д` });
         onSuccess(data.newAdminBalance ?? 0);
-        setCitizenId(""); setAmount(""); setDescription("");
+        setCitizenNumber(""); setAmount(""); setDescription("");
       }
     } catch { setResult({ ok: false, msg: "Ошибка соединения" }); }
     setLoading(false);
@@ -236,8 +240,17 @@ function DirectTransferForm({ authHeaders, adminBalance, onSuccess }: TransferFo
       <CardContent>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
           <div>
-            <label className="text-xs font-mono text-muted-foreground uppercase tracking-widest block mb-1">ID гражданина</label>
-            <Input value={citizenId} onChange={e => setCitizenId(e.target.value)} placeholder="4" className="font-mono bg-secondary border-border" required />
+            <label className="text-xs font-mono text-muted-foreground uppercase tracking-widest block mb-1">Номер паспорта гражданина</label>
+            <Input
+              value={citizenNumber}
+              onChange={e => setCitizenNumber(e.target.value.replace(/\D/g, "").slice(0, 9))}
+              inputMode="numeric"
+              maxLength={9}
+              placeholder="123456789"
+              autoComplete="off"
+              className="font-mono bg-secondary border-border"
+              required
+            />
           </div>
           <div>
             <label className="text-xs font-mono text-muted-foreground uppercase tracking-widest block mb-1">Сумма (Д)</label>

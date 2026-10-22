@@ -488,6 +488,27 @@ export const ListAdminTransactionsResponse = zod.array(ListAdminTransactionsResp
 
 
 /**
+ * @summary Transfer Darmins from an administrator's personal balance by passport number
+ */
+export const makeAdminPersonalTransferBodyCitizenNumberRegExp = new RegExp('^\\d{9}$');
+export const makeAdminPersonalTransferBodyAmountExclusiveMin = 0;
+
+
+
+export const MakeAdminPersonalTransferBody = zod.object({
+  "citizenNumber": zod.string().regex(makeAdminPersonalTransferBodyCitizenNumberRegExp),
+  "amount": zod.number().gt(makeAdminPersonalTransferBodyAmountExclusiveMin),
+  "description": zod.string().optional()
+})
+
+export const MakeAdminPersonalTransferResponse = zod.object({
+  "ok": zod.boolean(),
+  "recipientName": zod.string(),
+  "newAdminBalance": zod.number()
+})
+
+
+/**
  * @summary List all transactions
  */
 export const ListTransactionsQueryParams = zod.object({

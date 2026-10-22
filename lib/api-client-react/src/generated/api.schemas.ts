@@ -170,6 +170,20 @@ export interface AdminTransaction {
   createdAt: string;
 }
 
+export interface AdminTransferInput {
+  /** @pattern ^\d{9}$ */
+  citizenNumber: string;
+  /** @exclusiveMinimum 0 */
+  amount: number;
+  description?: string;
+}
+
+export interface AdminTransferResult {
+  ok: true;
+  recipientName: string;
+  newAdminBalance: number;
+}
+
 export interface CompleteAgeProfileInput {
   dateOfBirth: string;
 }

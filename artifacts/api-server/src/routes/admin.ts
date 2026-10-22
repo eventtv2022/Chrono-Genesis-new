@@ -14,6 +14,10 @@ import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { applyMeritAfterSession } from "../services/meritocracyService";
 import { sendTransactionNotification, sendDirectMessage } from "../services/telegramService";
+import {
+  MakeAdminPersonalTransferBody,
+  MakeAdminPersonalTransferResponse,
+} from "@workspace/api-zod";
 
 const router = Router();
 
@@ -402,18 +406,14 @@ router.post("/admin/emit", async (req, res) => {
 
 // POST /admin/transfer — direct personal transfer from admin's balance
 router.post("/admin/transfer", async (req, res) => {
-  const { citizenId, amount, description } = req.body as {
-    citizenId?: number; amount?: number; description?: string;
-  };
-
-  if (!citizenId || !amount || amount <= 0) {
-    res.status(400).json({ error: "Требуются citizenId и amount > 0" }); return;
+  const input = MakeAdminPersonalTransferBody.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.issues[0]?.message ?? "Некорректные данные перевода" });
+    return;
   }
+  const { citizenNumber, amount, description } = input.data;
 
   const adminId = req.citizen!.id;
-  if (citizenId === adminId) {
-    res.status(400).json({ error: "Нельзя перевести самому себе" }); return;
-  }
 
   // Re-fetch admin's current balance
   const [admin] = await db
@@ -424,6 +424,18 @@ router.post("/admin/transfer", async (req, res) => {
 
   if (!admin) { res.status(404).json({ error: "Администратор не найден" }); return; }
 
+  const [recipient] = await db
+    .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes, totalReceived: citizensTable.totalReceived })
+    .from(citizensTable)
+    .where(eq(citizensTable.citizenNumber, citizenNumber))
+    .limit(1);
+
+  if (!recipient) { res.status(404).json({ error: "Гражданин с таким номером паспорта не найден" }); return; }
+  if (recipient.id === adminId) {
+    res.status(400).json({ error: "Нельзя перевести самому себе" });
+    return;
+  }
+
   // Keep 1 Д rodovaya minuta
   const transferable = admin.balanceMinutes - 1;
   if (amount > transferable) {
@@ -432,14 +444,6 @@ router.post("/admin/transfer", async (req, res) => {
     });
     return;
   }
-
-  const [recipient] = await db
-    .select({ id: citizensTable.id, name: citizensTable.name, balanceMinutes: citizensTable.balanceMinutes, totalReceived: citizensTable.totalReceived })
-    .from(citizensTable)
-    .where(eq(citizensTable.id, citizenId))
-    .limit(1);
-
-  if (!recipient) { res.status(404).json({ error: "Гражданин не найден" }); return; }
 
   // Admin direct transfer: no treasury tax (admin IS the treasury)
   await db.transaction(async (tx) => {
@@ -457,12 +461,12 @@ router.post("/admin/transfer", async (req, res) => {
         balanceMinutes: recipient.balanceMinutes + amount,
         totalReceived: sql`${citizensTable.totalReceived} + ${amount}`,
       })
-      .where(eq(citizensTable.id, citizenId));
+      .where(eq(citizensTable.id, recipient.id));
 
     await tx.insert(transactionsTable).values({
       sessionId: 0,
       fromCitizenId: adminId,
-      toCitizenId: citizenId,
+      toCitizenId: recipient.id,
       fromCitizenName: admin.name,
       toCitizenName: recipient.name,
       minutesTransferred: amount,
@@ -481,13 +485,17 @@ router.post("/admin/transfer", async (req, res) => {
       `🏛 *Казначейство TimeNation*\n\nЛичный перевод *${amount.toFixed(2)} Д* → *${recipient.name}*${desc}`
     ),
     sendTransactionNotification(
-      citizenId,
+      recipient.id,
       `🏛 *Казначейство TimeNation*\n\nПолучено *${amount.toFixed(2)} Д* от *${admin.name}* (Администратор)${desc}\n\n💰 Ваш баланс: *${(recipient.balanceMinutes + amount).toFixed(2)} Д*`
     ),
   ]).catch(() => null);
 
-  req.log.info({ adminId, citizenId, amount }, "admin direct transfer");
-  res.json({ ok: true, newAdminBalance: admin.balanceMinutes - amount });
+  req.log.info({ adminId, recipientId: recipient.id, citizenNumber, amount }, "admin direct transfer");
+  res.json(MakeAdminPersonalTransferResponse.parse({
+    ok: true,
+    recipientName: recipient.name,
+    newAdminBalance: admin.balanceMinutes - amount,
+  }));
 });
 
 export default router;

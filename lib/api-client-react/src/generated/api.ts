@@ -22,6 +22,8 @@ import type {
 import type {
   AdminGovernmentPoll,
   AdminTransaction,
+  AdminTransferInput,
+  AdminTransferResult,
   AuthSession,
   CastGovernmentPollVote200,
   Citizen,
@@ -1703,6 +1705,77 @@ export function useListAdminTransactions<TData = Awaited<ReturnType<typeof listA
 
 
 
+
+export const getMakeAdminPersonalTransferUrl = () => {
+
+
+
+
+  return `/api/admin/transfer`
+}
+
+/**
+ * @summary Transfer Darmins from an administrator's personal balance by passport number
+ */
+export const makeAdminPersonalTransfer = async (adminTransferInput: AdminTransferInput, options?: RequestInit): Promise<AdminTransferResult> => {
+
+  return customFetch<AdminTransferResult>(getMakeAdminPersonalTransferUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      adminTransferInput,)
+  }
+);}
+
+
+
+
+export const getMakeAdminPersonalTransferMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof makeAdminPersonalTransfer>>, TError,{data: BodyType<AdminTransferInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof makeAdminPersonalTransfer>>, TError,{data: BodyType<AdminTransferInput>}, TContext> => {
+
+const mutationKey = ['makeAdminPersonalTransfer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof makeAdminPersonalTransfer>>, {data: BodyType<AdminTransferInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  makeAdminPersonalTransfer(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MakeAdminPersonalTransferMutationResult = NonNullable<Awaited<ReturnType<typeof makeAdminPersonalTransfer>>>
+    export type MakeAdminPersonalTransferMutationBody = BodyType<AdminTransferInput>
+    export type MakeAdminPersonalTransferMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Transfer Darmins from an administrator's personal balance by passport number
+ */
+export const useMakeAdminPersonalTransfer = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof makeAdminPersonalTransfer>>, TError,{data: BodyType<AdminTransferInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof makeAdminPersonalTransfer>>,
+        TError,
+        {data: BodyType<AdminTransferInput>},
+        TContext
+      > => {
+      return useMutation(getMakeAdminPersonalTransferMutationOptions(options));
+    }
 
 export const getListTransactionsUrl = (params?: ListTransactionsParams,) => {
   const normalizedParams = new URLSearchParams();
