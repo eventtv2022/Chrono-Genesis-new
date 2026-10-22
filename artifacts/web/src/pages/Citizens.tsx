@@ -29,9 +29,16 @@ export function Citizens() {
   });
 
   const filtered = (citizens ?? []).filter(
-    (c) =>
-      !query ||
-      c.name.toLowerCase().includes(query.toLowerCase())
+    (c) => {
+      const normalized = query.trim().toLowerCase();
+      if (!normalized) return true;
+      const passportNumber = c.citizenNumber ?? "";
+      const numberQuery = normalized.replace(/\D/g, "");
+      return c.name.toLowerCase().includes(normalized)
+        || c.phone.toLowerCase().includes(normalized)
+        || String(c.id).includes(normalized)
+        || (numberQuery.length > 0 && passportNumber.includes(numberQuery));
+    }
   );
 
   const sorted = [...filtered].sort((a, b) => (b.meritScore ?? 0) - (a.meritScore ?? 0));
@@ -51,7 +58,7 @@ export function Citizens() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск по псевдониму..."
+            placeholder="Поиск по имени, телефону, ID или номеру паспорта..."
             className="pl-9 bg-secondary border-border font-mono text-sm"
           />
         </div>
@@ -89,6 +96,9 @@ export function Citizens() {
                     <span className="w-8 text-xs font-mono text-muted-foreground">#{citizen.id}</span>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">{citizen.name}</div>
+                      {citizen.citizenNumber && (
+                        <div className="text-[10px] font-mono text-muted-foreground">Паспорт № {citizen.citizenNumber}</div>
+                      )}
                     </div>
                     <div className="w-24 text-right">
                       <Badge

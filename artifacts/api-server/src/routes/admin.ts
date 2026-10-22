@@ -9,7 +9,8 @@ import {
   stateTaxLogsTable,
   auctionLogsTable,
 } from "@workspace/db";
-import { eq, desc, count, sum, gte, sql, and } from "drizzle-orm";
+import { eq, desc, count, sum, gte, sql, and, or } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { applyMeritAfterSession } from "../services/meritocracyService";
 import { sendTransactionNotification, sendDirectMessage } from "../services/telegramService";
@@ -222,7 +223,28 @@ router.patch("/admin/citizens/:id", async (req, res) => {
 
 // GET /admin/transactions
 router.get("/admin/transactions", async (req, res) => {
-  const limit = Math.min(parseInt(String(req.query["limit"] ?? "50"), 10), 200);
+  const rawLimit = parseInt(String(req.query["limit"] ?? "50"), 10);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 50;
+  const citizenNumber = String(req.query["citizenNumber"] ?? "").trim();
+  if (citizenNumber && !/^\d{9}$/.test(citizenNumber)) {
+    res.status(400).json({ error: "Номер паспорта должен содержать ровно 9 цифр" });
+    return;
+  }
+  let citizenId: number | undefined;
+  if (citizenNumber) {
+    const [citizen] = await db
+      .select({ id: citizensTable.id })
+      .from(citizensTable)
+      .where(eq(citizensTable.citizenNumber, citizenNumber))
+      .limit(1);
+    if (!citizen) {
+      res.json([]);
+      return;
+    }
+    citizenId = citizen.id;
+  }
+  const fromAlias = alias(citizensTable, "admin_tx_from");
+  const toAlias = alias(citizensTable, "admin_tx_to");
   const txs = await db
     .select({
       id: transactionsTable.id,
@@ -230,14 +252,22 @@ router.get("/admin/transactions", async (req, res) => {
       toCitizenId: transactionsTable.toCitizenId,
       fromCitizenName: transactionsTable.fromCitizenName,
       toCitizenName: transactionsTable.toCitizenName,
+      fromCitizenNumber: fromAlias.citizenNumber,
+      toCitizenNumber: toAlias.citizenNumber,
       minutesTransferred: transactionsTable.minutesTransferred,
       durationSeconds: transactionsTable.durationSeconds,
       createdAt: transactionsTable.createdAt,
     })
     .from(transactionsTable)
+    .leftJoin(fromAlias, eq(transactionsTable.fromCitizenId, fromAlias.id))
+    .leftJoin(toAlias, eq(transactionsTable.toCitizenId, toAlias.id))
+    .where(citizenId ? or(
+      eq(transactionsTable.fromCitizenId, citizenId),
+      eq(transactionsTable.toCitizenId, citizenId),
+    ) : undefined)
     .orderBy(desc(transactionsTable.createdAt))
     .limit(limit);
-  res.json(txs);
+  res.json(txs.map((tx) => ({ ...tx, createdAt: tx.createdAt.toISOString() })));
 });
 
 // POST /admin/emit/request-otp — step 1: generate OTP and email it

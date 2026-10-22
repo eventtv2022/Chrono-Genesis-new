@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
+import { Search, X } from "lucide-react";
 
 interface AdminStats {
   citizens: { total: number; totalBalance: number };
@@ -25,6 +26,7 @@ interface AdminCitizen {
   id: number;
   name: string;
   phone: string;
+  citizenNumber?: string | null;
   rank: string;
   meritScore: number;
   balanceMinutes: number;
@@ -38,6 +40,8 @@ interface AdminTx {
   toCitizenId: number;
   fromCitizenName: string;
   toCitizenName: string;
+  fromCitizenNumber: string | null;
+  toCitizenNumber: string | null;
   minutesTransferred: number;
   createdAt: string;
 }
@@ -270,6 +274,10 @@ export function Admin() {
   const [citizens, setCitizens] = useState<AdminCitizen[]>([]);
   const [transactions, setTransactions] = useState<AdminTx[]>([]);
   const [query, setQuery] = useState("");
+  const [transactionPassportQuery, setTransactionPassportQuery] = useState("");
+  const [transactionSearchError, setTransactionSearchError] = useState("");
+  const [searchedPassportNumber, setSearchedPassportNumber] = useState("");
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [tab, setTab] = useState<"overview" | "citizens" | "transactions" | "emit" | "transfer" | "treasury" | "heritage">("overview");
   const [heritageRows, setHeritageRows] = useState<{ id: number; timelineCoord: string; category: string; title: string; description: string }[]>([]);
   const [heritageTotal, setHeritageTotal] = useState(0);
@@ -303,8 +311,46 @@ export function Admin() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const filteredCitizens = citizens.filter(c =>
-    !query || c.name.toLowerCase().includes(query.toLowerCase()) || c.phone.includes(query) || String(c.id).includes(query)
+    !query || c.name.toLowerCase().includes(query.toLowerCase()) || c.phone.includes(query) || String(c.id).includes(query) || (c.citizenNumber ?? "").includes(query)
   );
+
+  async function searchTransactions(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const passportNumber = transactionPassportQuery.replace(/\D/g, "");
+    if (passportNumber.length !== 9) {
+      setTransactionSearchError("Введите номер паспорта из 9 цифр");
+      return;
+    }
+    setTransactionsLoading(true);
+    setTransactionSearchError("");
+    try {
+      const response = await fetch(`/api/admin/transactions?citizenNumber=${passportNumber}&limit=200`, { headers: authHeaders });
+      const data = await response.json() as AdminTx[] | { error?: string };
+      if (!response.ok) throw new Error(!Array.isArray(data) ? data.error : undefined);
+      setTransactions(data as AdminTx[]);
+      setSearchedPassportNumber(passportNumber);
+    } catch (cause) {
+      setTransactionSearchError(cause instanceof Error ? cause.message : "Не удалось загрузить транзакции");
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }
+
+  async function resetTransactionSearch() {
+    setTransactionPassportQuery("");
+    setTransactionSearchError("");
+    setSearchedPassportNumber("");
+    setTransactionsLoading(true);
+    try {
+      const response = await fetch("/api/admin/transactions?limit=50", { headers: authHeaders });
+      if (!response.ok) throw new Error("Не удалось загрузить транзакции");
+      setTransactions(await response.json() as AdminTx[]);
+    } catch (cause) {
+      setTransactionSearchError(cause instanceof Error ? cause.message : "Не удалось загрузить транзакции");
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }
 
   async function handleStatusToggle(c: AdminCitizen) {
     const newStatus = c.status === "active" ? "banned" : "active";
@@ -471,23 +517,57 @@ export function Admin() {
 
         {/* TRANSACTIONS */}
         {tab === "transactions" && (
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-mono text-muted-foreground">Последние 50 транзакций</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y divide-border/50">
-                {transactions.map(tx => (
-                  <div key={tx.id} className="flex items-center gap-4 px-6 py-2 hover:bg-secondary/30 text-sm">
-                    <span className="text-xs font-mono text-muted-foreground w-8">#{tx.id}</span>
-                    <span className="font-mono text-xs w-20 text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString("ru")}</span>
-                    <span className="font-mono text-xs text-muted-foreground truncate">{tx.fromCitizenName} → {tx.toCitizenName}</span>
-                    <span className="font-mono text-sm text-primary ml-auto shrink-0">{Number(tx.minutesTransferred).toFixed(2)} Д</span>
+          <div className="space-y-4">
+            <form onSubmit={(event) => void searchTransactions(event)} className="flex max-w-xl flex-col gap-2 sm:flex-row">
+              <Input
+                value={transactionPassportQuery}
+                onChange={(event) => setTransactionPassportQuery(event.target.value.replace(/\D/g, "").slice(0, 9))}
+                inputMode="numeric"
+                maxLength={9}
+                placeholder="Номер паспорта гражданина (9 цифр)"
+                aria-label="Поиск транзакций по номеру паспорта"
+                className="bg-secondary border-border font-mono text-sm"
+              />
+              <button type="submit" disabled={transactionsLoading} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+                <Search className="h-4 w-4" />Найти
+              </button>
+              {searchedPassportNumber && (
+                <button type="button" onClick={() => void resetTransactionSearch()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground hover:bg-secondary">
+                  <X className="h-4 w-4" />Сбросить
+                </button>
+              )}
+            </form>
+            {transactionSearchError && <p role="alert" className="text-sm text-destructive">{transactionSearchError}</p>}
+            <Card className="bg-card border-border">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-mono text-muted-foreground">
+                  {searchedPassportNumber ? `Транзакции по паспорту № ${searchedPassportNumber}` : "Последние 50 транзакций"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {transactionsLoading ? (
+                  <p className="px-6 py-6 text-sm text-muted-foreground">Загрузка…</p>
+                ) : transactions.length === 0 ? (
+                  <p className="px-6 py-6 text-sm text-muted-foreground">
+                    {searchedPassportNumber ? "Транзакции по этому номеру паспорта не найдены" : "Транзакций пока нет"}
+                  </p>
+                ) : (
+                  <div className="divide-y divide-border/50">
+                    {transactions.map(tx => (
+                      <div key={tx.id} className="flex items-center gap-4 px-6 py-2 hover:bg-secondary/30 text-sm">
+                        <span className="text-xs font-mono text-muted-foreground w-8">#{tx.id}</span>
+                        <span className="font-mono text-xs w-20 text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString("ru")}</span>
+                        <span className="font-mono text-xs text-muted-foreground truncate">
+                          {tx.fromCitizenName}{tx.fromCitizenNumber ? ` (№${tx.fromCitizenNumber})` : ""} → {tx.toCitizenName}{tx.toCitizenNumber ? ` (№${tx.toCitizenNumber})` : ""}
+                        </span>
+                        <span className="font-mono text-sm text-primary ml-auto shrink-0">{Number(tx.minutesTransferred).toFixed(2)} Д</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* EMIT */}
