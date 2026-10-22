@@ -328,11 +328,12 @@ function DesktopHero() {
   const py = (f: number) => `${mouse.y * f}px`;
 
   return (
-    <div
-      ref={heroRef}
-      onMouseMove={handleMouseMove}
-      style={{ minHeight: "100vh", display: "flex", flexDirection: "column", position: "relative", zIndex: 1 }}
-    >
+    <>
+      <div
+        ref={heroRef}
+        onMouseMove={handleMouseMove}
+        style={{ minHeight: "100vh", display: "flex", flexDirection: "column", position: "relative", zIndex: 1 }}
+      >
       {/* ── TOP BAR ─────────────────────────────────────────────── */}
       <div
         style={{
@@ -604,7 +605,48 @@ function DesktopHero() {
           }
         }
       `}</style>
-    </div>
+      </div>
+      <DesktopStoryCards copy={copy} />
+    </>
+  );
+}
+
+function DesktopStoryCards({ copy }: { copy: GateCopy }) {
+  const cards = [
+    { icon: "🛑", title: copy.cardTitles[0], body: copy.cardBodies[0] },
+    { icon: "🗺", title: copy.cardTitles[1], body: copy.cardBodies[1] },
+    { icon: "🌉", title: copy.cardTitles[2], body: copy.cardBodies[2] },
+  ];
+
+  return (
+    <section style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 1440, margin: "0 auto", padding: "56px clamp(24px, 5vw, 72px) 80px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 18 }}>
+        {cards.map((card) => (
+          <article
+            key={card.title}
+            style={{
+              minHeight: 176,
+              padding: "24px 22px",
+              borderRadius: 18,
+              background: "linear-gradient(145deg, rgba(4,8,30,0.92), rgba(4,8,30,0.62))",
+              border: "1px solid rgba(0,212,255,0.2)",
+              boxShadow: "0 0 24px rgba(0,212,255,0.07), inset 0 0 22px rgba(0,212,255,0.025)",
+              backdropFilter: "blur(14px)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+              <span aria-hidden="true" style={{ fontSize: 24 }}>{card.icon}</span>
+              <h2 style={{ margin: 0, color: "#00d4ff", fontFamily: FONT_ORBITRON, fontSize: "clamp(12px, 1.05vw, 16px)", lineHeight: 1.35, textShadow: "0 0 10px rgba(0,212,255,0.32)" }}>
+                {card.title}
+              </h2>
+            </div>
+            <p style={{ margin: 0, color: "#b3b6ca", fontFamily: FONT_EXO, fontSize: 14, lineHeight: 1.65 }}>
+              {card.body}
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 

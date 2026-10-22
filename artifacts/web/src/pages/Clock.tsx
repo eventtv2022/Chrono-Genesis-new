@@ -87,10 +87,31 @@ export function PeopleClockDial({ size = DIAL }: { size?: number }) {
         width: size,
         height: size,
         background: "radial-gradient(circle, #18181b 0%, #09090b 100%)",
-        border: `${Math.max(3, 6 * scale)}px double #f59e0b`,
         boxShadow: "0 0 30px rgba(245,158,11,0.22)",
       }}
     >
+      <svg
+        aria-hidden="true"
+        viewBox={`0 0 ${DIAL} ${DIAL}`}
+        className="pointer-events-none absolute inset-0 h-full w-full"
+        style={{ zIndex: 0 }}
+      >
+        <circle cx={DIAL / 2} cy={DIAL / 2} r={DIAL / 2 - 3} fill="none" stroke="#f59e0b" strokeWidth="6" />
+        <circle cx={DIAL / 2} cy={DIAL / 2} r={RADIUS} fill="none" stroke="rgba(245,158,11,0.25)" strokeWidth="1.5" />
+        <g transform={`rotate(${active.hour * 15} ${DIAL / 2} ${DIAL / 2})`}>
+          <line
+            x1={DIAL / 2}
+            y1={DIAL / 2}
+            x2={DIAL / 2}
+            y2={DIAL / 2 - HAND_LENGTH}
+            stroke="#ef4444"
+            strokeWidth="4"
+            strokeLinecap="round"
+          />
+        </g>
+        <circle cx={DIAL / 2} cy={DIAL / 2} r="7" fill="#f59e0b" />
+        <circle cx={DIAL / 2} cy={DIAL / 2} r="11" fill="none" stroke="rgba(245,158,11,0.25)" strokeWidth="2" />
+      </svg>
       {LANGUAGES_24.map((item) => {
         const angleRad = (item.hour * 15 - 90) * (Math.PI / 180);
         const x = center + radius * Math.cos(angleRad);
@@ -122,31 +143,6 @@ export function PeopleClockDial({ size = DIAL }: { size?: number }) {
           </button>
         );
       })}
-      <div
-        aria-hidden="true"
-        className="absolute z-[1] rounded-full bg-red-500 pointer-events-none"
-        style={{
-          width: Math.max(3, 4 * scale),
-          height: HAND_LENGTH * scale,
-          bottom: "50%",
-          left: `calc(50% - ${Math.max(1.5, 2 * scale)}px)`,
-          transformOrigin: "bottom center",
-          transform: `rotate(${active.hour * 15}deg)`,
-          transition: "transform 0.55s cubic-bezier(0.34,1.56,0.64,1)",
-          boxShadow: "0 0 6px rgba(239,68,68,0.6)",
-        }}
-      />
-      <div
-        aria-hidden="true"
-        className="absolute z-10 rounded-full bg-amber-400"
-        style={{
-          width: Math.max(10, 14 * scale),
-          height: Math.max(10, 14 * scale),
-          left: `calc(50% - ${Math.max(5, 7 * scale)}px)`,
-          top: `calc(50% - ${Math.max(5, 7 * scale)}px)`,
-          boxShadow: "0 0 8px #f59e0b",
-        }}
-      />
     </div>
   );
 }
