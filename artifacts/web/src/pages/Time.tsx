@@ -294,7 +294,14 @@ function MinuteHourglass({ elapsedSeconds, running }: { elapsedSeconds: number; 
           <clipPath id={`${clipId}-bottom`}><path d="M23 33H25L34 55H14Z" /></clipPath>
         </defs>
         <rect x="10" y={31 - 22 * topSand} width="28" height={22 * topSand} fill="hsl(var(--primary))" clipPath={`url(#${clipId}-top)`} />
-        <rect x="10" y={55 - 22 * bottomSand} width="28" height={22 * bottomSand} fill="hsl(var(--primary))" clipPath={`url(#${clipId}-bottom)`} />
+        <rect
+          x="10"
+          y={flipped ? 33 : 55 - 22 * bottomSand}
+          width="28"
+          height={22 * bottomSand}
+          fill="hsl(var(--primary))"
+          clipPath={`url(#${clipId}-bottom)`}
+        />
         {running && (
           <path d={flipped ? "M24 35v-6" : "M24 29v6"} stroke="hsl(var(--primary))" strokeWidth="1.5" strokeDasharray="1 1">
             <animate attributeName="stroke-dashoffset" from="0" to="2" dur=".25s" repeatCount="indefinite" />
