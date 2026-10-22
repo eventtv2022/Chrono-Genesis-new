@@ -277,7 +277,7 @@ function MinuteHourglass({ elapsedSeconds, running }: { elapsedSeconds: number; 
 
   return (
     <div
-      className="h-24 w-16 shrink-0"
+      className="h-[6.9rem] w-[4.6rem] shrink-0"
       style={{
         transform: flipped ? "rotate(180deg)" : "rotate(0deg)",
         transition: "transform 700ms ease-in-out",
