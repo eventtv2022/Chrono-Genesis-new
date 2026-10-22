@@ -7,8 +7,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 
 const ANTHEM = require("../assets/sounds/timenation-anthem.mp3");
+const ENGLISH_ANTHEM = require("../assets/sounds/timenation-anthem-en.mp3");
+const TRACK_ASSETS = { ru: ANTHEM, en: ENGLISH_ANTHEM } as const;
+const TRACKS = [
+  { id: "ru", label: "Рус. версия" },
+  { id: "en", label: "English version" },
+] as const;
+type TrackId = (typeof TRACKS)[number]["id"];
 const ENABLED_KEY = "timenation.anthem.enabled";
 const VOLUME_KEY = "timenation.anthem.volume.v2";
+const TRACK_KEY = "timenation.anthem.track";
 const DEFAULT_VOLUME = 0.28;
 
 export function AnthemPlayer({ active }: { active: boolean }) {
@@ -19,13 +27,14 @@ export function AnthemPlayer({ active }: { active: boolean }) {
   const volumeRef = useRef(DEFAULT_VOLUME);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [enabled, setEnabled] = useState(true);
+  const [track, setTrack] = useState<TrackId>("ru");
   const [volume, setVolume] = useState(DEFAULT_VOLUME);
   const [playing, setPlaying] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    void AsyncStorage.multiGet([ENABLED_KEY, VOLUME_KEY])
+    void AsyncStorage.multiGet([ENABLED_KEY, VOLUME_KEY, TRACK_KEY])
       .then((entries) => {
         if (!mounted) return;
         const savedEnabled = entries[0]?.[1];
@@ -34,12 +43,14 @@ export function AnthemPlayer({ active }: { active: boolean }) {
           ? Number.NaN
           : Number(rawVolume);
         const nextEnabled = savedEnabled !== "false";
+        const nextTrack: TrackId = entries[2]?.[1] === "en" ? "en" : "ru";
         const nextVolume = Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1
           ? savedVolume
           : DEFAULT_VOLUME;
         enabledRef.current = nextEnabled;
         volumeRef.current = nextVolume;
         setEnabled(nextEnabled);
+        setTrack(nextTrack);
         setVolume(nextVolume);
       })
       .catch(() => {})
@@ -56,8 +67,9 @@ export function AnthemPlayer({ active }: { active: boolean }) {
     void AsyncStorage.multiSet([
       [ENABLED_KEY, String(enabled)],
       [VOLUME_KEY, String(volume)],
+      [TRACK_KEY, track],
     ]).catch(() => {});
-  }, [enabled, preferencesLoaded, volume]);
+  }, [enabled, preferencesLoaded, track, volume]);
 
   useEffect(() => {
     if (!active || !preferencesLoaded) {
@@ -71,7 +83,7 @@ export function AnthemPlayer({ active }: { active: boolean }) {
         playsInSilentModeIOS: true,
         staysActiveInBackground: false,
       });
-      const { sound, status } = await Audio.Sound.createAsync(ANTHEM, {
+      const { sound, status } = await Audio.Sound.createAsync(TRACK_ASSETS[track], {
         shouldPlay: enabledRef.current,
         isLooping: true,
         volume: volumeRef.current,
@@ -106,7 +118,7 @@ export function AnthemPlayer({ active }: { active: boolean }) {
         void sound.stopAsync().catch(() => {}).then(() => sound.unloadAsync()).catch(() => {});
       }
     };
-  }, [active, preferencesLoaded]);
+  }, [active, preferencesLoaded, track]);
 
   useEffect(() => {
     const sound = soundRef.current;
@@ -124,20 +136,30 @@ export function AnthemPlayer({ active }: { active: boolean }) {
 
   if (!active || !preferencesLoaded) return null;
 
-  const togglePlayback = () => {
-    if (enabledRef.current && !playing) {
-      const sound = soundRef.current;
-      if (sound) {
-        void sound.playAsync()
-          .then(() => setAutoplayBlocked(false))
-          .catch(() => setAutoplayBlocked(true));
-      }
+  const selectTrack = (nextTrack: TrackId) => {
+    if (nextTrack !== track) {
+      enabledRef.current = true;
+      setEnabled(true);
+      setPlaying(false);
+      setAutoplayBlocked(false);
+      setTrack(nextTrack);
       return;
     }
-    const nextEnabled = !enabledRef.current;
-    enabledRef.current = nextEnabled;
-    setEnabled(nextEnabled);
+    if (enabledRef.current && playing) {
+      enabledRef.current = false;
+      setEnabled(false);
+      return;
+    }
+    enabledRef.current = true;
+    setEnabled(true);
+    const sound = soundRef.current;
+    if (sound) {
+      void sound.playAsync()
+        .then(() => setAutoplayBlocked(false))
+        .catch(() => setAutoplayBlocked(true));
+    }
   };
+
   const adjustVolume = (delta: number) => {
     const nextVolume = Math.max(0, Math.min(1, Math.round((volumeRef.current + delta) * 100) / 100));
     volumeRef.current = nextVolume;
@@ -158,42 +180,59 @@ export function AnthemPlayer({ active }: { active: boolean }) {
           },
         ]}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={playing ? "Отключить гимн TimeNation" : "Включить гимн TimeNation"}
-          testID="anthem-toggle"
-          onPress={togglePlayback}
-          style={[styles.iconButton, { borderColor: colors.border }]}
-        >
-          <Feather name={playing ? "pause" : "play"} size={16} color={colors.primary} />
-        </Pressable>
-        <View style={styles.copy}>
-          <Text numberOfLines={1} style={[styles.title, { color: colors.foreground }]}>Гимн TimeNation</Text>
-          <Text numberOfLines={1} style={[styles.status, { color: colors.mutedForeground }]}>
-            {autoplayBlocked ? "Нажмите ▶ для запуска" : playing ? "Воспроизведение" : "Отключён"}
+        {TRACKS.map(({ id, label }) => {
+          const selected = id === track;
+          const rowPlaying = selected && playing;
+          return (
+            <Pressable
+              key={id}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}, ${rowPlaying ? "пауза" : "воспроизвести"}`}
+              accessibilityState={{ selected }}
+              testID={`anthem-track-${id}`}
+              onPress={() => selectTrack(id)}
+              style={[
+                styles.trackButton,
+                {
+                  borderColor: selected ? colors.primary : colors.border,
+                  backgroundColor: selected ? `${colors.primary}18` : "transparent",
+                },
+              ]}
+            >
+              <Feather name={rowPlaying ? "pause" : "play"} size={15} color={selected ? colors.primary : colors.mutedForeground} />
+              <Text style={[styles.title, { color: selected ? colors.primary : colors.foreground }]}>{label}</Text>
+              {selected && (
+                <Text numberOfLines={1} style={[styles.status, { color: colors.mutedForeground }]}>
+                  {autoplayBlocked ? "Нажмите для запуска" : playing ? "Играет" : "Пауза"}
+                </Text>
+              )}
+            </Pressable>
+          );
+        })}
+        <View style={styles.volumeRow}>
+          <Text style={[styles.status, { color: colors.mutedForeground }]}>Громкость</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Уменьшить громкость"
+            testID="anthem-volume-down"
+            onPress={() => adjustVolume(-0.1)}
+            style={styles.volumeButton}
+          >
+            <Feather name="minus" size={15} color={colors.mutedForeground} />
+          </Pressable>
+          <Text accessibilityLabel={`Громкость ${Math.round(volume * 100)} процентов`} style={[styles.volumeValue, { color: colors.foreground }]}>
+            {Math.round(volume * 100)}%
           </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Увеличить громкость"
+            testID="anthem-volume-up"
+            onPress={() => adjustVolume(0.1)}
+            style={styles.volumeButton}
+          >
+            <Feather name="plus" size={15} color={colors.mutedForeground} />
+          </Pressable>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Уменьшить громкость"
-          testID="anthem-volume-down"
-          onPress={() => adjustVolume(-0.1)}
-          style={styles.volumeButton}
-        >
-          <Feather name="minus" size={15} color={colors.mutedForeground} />
-        </Pressable>
-        <Text accessibilityLabel={`Громкость ${Math.round(volume * 100)} процентов`} style={[styles.volumeValue, { color: colors.foreground }]}>
-          {Math.round(volume * 100)}%
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Увеличить громкость"
-          testID="anthem-volume-up"
-          onPress={() => adjustVolume(0.1)}
-          style={styles.volumeButton}
-        >
-          <Feather name="plus" size={15} color={colors.mutedForeground} />
-        </Pressable>
       </View>
     </View>
   );
@@ -203,11 +242,9 @@ const styles = StyleSheet.create({
   panel: {
     position: "absolute",
     zIndex: 100,
-    minHeight: 54,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 9,
+    width: 252,
+    gap: 5,
+    padding: 9,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 14,
     shadowColor: "#000",
@@ -216,17 +253,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
   },
-  iconButton: {
-    width: 34,
-    height: 34,
+  trackButton: {
+    minHeight: 34,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
+    borderRadius: 9,
   },
-  copy: { maxWidth: 116, gap: 2 },
   title: { fontSize: 11, fontWeight: "700" },
-  status: { fontSize: 9 },
+  status: { fontSize: 9, marginLeft: "auto" },
+  volumeRow: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 3 },
   volumeButton: {
     width: 28,
     height: 34,

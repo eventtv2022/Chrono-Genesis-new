@@ -3,11 +3,23 @@ import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 
 const STORAGE_ENABLED = "timenation.anthem.enabled";
 const STORAGE_VOLUME = "timenation.anthem.volume.v2";
+const STORAGE_TRACK = "timenation.anthem.track";
 const DEFAULT_VOLUME = 0.28;
-const ANTHEM_URL = `${import.meta.env.BASE_URL}audio/timenation-anthem.mp3`;
+const TRACKS = {
+  ru: { label: "Рус. версия", src: `${import.meta.env.BASE_URL}audio/timenation-anthem.mp3` },
+  en: { label: "English version", src: `${import.meta.env.BASE_URL}audio/timenation-anthem-en.mp3` },
+} as const;
+type TrackId = keyof typeof TRACKS;
 
 export function AnthemPlayer({ active }: { active: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [track, setTrack] = useState<TrackId>(() => {
+    try {
+      return localStorage.getItem(STORAGE_TRACK) === "en" ? "en" : "ru";
+    } catch {
+      return "ru";
+    }
+  });
   const [enabled, setEnabled] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_ENABLED) !== "false";
@@ -41,6 +53,7 @@ export function AnthemPlayer({ active }: { active: boolean }) {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_ENABLED, String(enabled));
+      localStorage.setItem(STORAGE_TRACK, track);
     } catch {
       // Audio controls remain usable when browser storage is unavailable.
     }
@@ -55,27 +68,39 @@ export function AnthemPlayer({ active }: { active: boolean }) {
       () => setAutoplayBlocked(false),
       () => setAutoplayBlocked(true),
     );
-  }, [active, enabled]);
+  }, [active, enabled, track]);
 
-  const togglePlayback = () => {
-    if (enabled && !playing) {
-      const audio = audioRef.current;
+  const selectTrack = (nextTrack: TrackId) => {
+    const audio = audioRef.current;
+    if (track === nextTrack) {
+      if (enabled && playing) {
+        setEnabled(false);
+        return;
+      }
+      setEnabled(true);
       if (audio) void audio.play().then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
       return;
     }
-    const nextEnabled = !enabled;
-    setEnabled(nextEnabled);
-    if (nextEnabled) {
-      const audio = audioRef.current;
-      if (audio) void audio.play().then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
+    setTrack(nextTrack);
+    setEnabled(true);
+    setPlaying(false);
+    if (audio) {
+      audio.src = TRACKS[nextTrack].src;
+      audio.load();
+      if (active) void audio.play().then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
     }
+  };
+
+  const playIcon = (trackId: TrackId) => {
+    if (trackId === track && playing) return <Pause size={15} />;
+    return <Play size={15} />;
   };
 
   return (
     <>
       <audio
         ref={audioRef}
-        src={ANTHEM_URL}
+        src={TRACKS[track].src}
         loop
         preload="none"
         onPlay={() => setPlaying(true)}
@@ -89,56 +114,66 @@ export function AnthemPlayer({ active }: { active: boolean }) {
             zIndex: 80,
             right: 18,
             bottom: 18,
+            width: 248,
             display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "10px 12px",
+            flexDirection: "column",
+            gap: 6,
+            padding: 10,
             border: "1px solid rgba(0,212,255,0.25)",
             borderRadius: 14,
             color: "#e8e8f4",
-            background: "rgba(4,8,30,0.9)",
+            background: "rgba(4,8,30,0.92)",
             boxShadow: "0 8px 30px rgba(0,0,0,0.3), 0 0 18px rgba(0,212,255,0.08)",
             backdropFilter: "blur(14px)",
             fontFamily: "'Exo 2', sans-serif",
           }}
         >
-          <button
-            type="button"
-            onClick={togglePlayback}
-            aria-label={playing ? "Отключить гимн" : "Включить гимн"}
-            title={playing ? "Отключить гимн" : "Включить гимн"}
-            style={{
-              width: 34,
-              height: 34,
-              display: "grid",
-              placeItems: "center",
-              flexShrink: 0,
-              border: "1px solid rgba(201,168,76,0.4)",
-              borderRadius: 9,
-              color: "#f5cc6a",
-              background: "rgba(201,168,76,0.1)",
-              cursor: "pointer",
-            }}
-          >
-            {playing ? <Pause size={16} /> : <Play size={16} />}
-          </button>
-          <div style={{ minWidth: 94 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>Гимн TimeNation</div>
-            <div style={{ color: "#9ba3ba", fontSize: 10, marginTop: 2 }}>
-              {autoplayBlocked ? "Нажмите ▶ для запуска" : playing ? "Воспроизведение" : "Отключён"}
-            </div>
+          {(Object.keys(TRACKS) as TrackId[]).map((trackId) => (
+            <button
+              key={trackId}
+              type="button"
+              onClick={() => selectTrack(trackId)}
+              aria-label={`${TRACKS[trackId].label}${trackId === track && playing ? ", pause" : ", play"}`}
+              aria-pressed={trackId === track}
+              style={{
+                minHeight: 36,
+                display: "flex",
+                alignItems: "center",
+                gap: 9,
+                padding: "5px 8px",
+                border: `1px solid ${trackId === track ? "rgba(201,168,76,0.48)" : "rgba(120,140,180,0.18)"}`,
+                borderRadius: 9,
+                color: trackId === track ? "#f5cc6a" : "#c0c7d9",
+                background: trackId === track ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.025)",
+                cursor: "pointer",
+                textAlign: "left",
+                font: "inherit",
+                fontSize: 12,
+                fontWeight: trackId === track ? 700 : 500,
+              }}
+            >
+              {playIcon(trackId)}
+              <span>{TRACKS[trackId].label}</span>
+              {trackId === track && (
+                <span style={{ marginLeft: "auto", color: "#9ba3ba", fontSize: 10 }}>
+                  {autoplayBlocked ? "Нажмите для запуска" : playing ? "Играет" : "Пауза"}
+                </span>
+              )}
+            </button>
+          ))}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "2px 4px 0" }}>
+            {volume === 0 ? <VolumeX size={15} color="#9ba3ba" /> : <Volume2 size={15} color="#9ba3ba" />}
+            <input
+              type="range"
+              aria-label="Громкость гимна"
+              min="0"
+              max="1"
+              step="0.05"
+              value={volume}
+              onChange={(event) => setVolume(Number(event.currentTarget.value))}
+              style={{ flex: 1, accentColor: "#c9a84c", cursor: "pointer" }}
+            />
           </div>
-          {volume === 0 ? <VolumeX size={15} color="#9ba3ba" /> : <Volume2 size={15} color="#9ba3ba" />}
-          <input
-            type="range"
-            aria-label="Громкость гимна"
-            min="0"
-            max="1"
-            step="0.05"
-            value={volume}
-            onChange={(event) => setVolume(Number(event.currentTarget.value))}
-            style={{ width: 76, accentColor: "#c9a84c", cursor: "pointer" }}
-          />
         </div>
       )}
     </>
