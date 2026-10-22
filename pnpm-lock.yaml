@@ -663,6 +663,9 @@ importers:
       '@reown/appkit-adapter-tron':
         specifier: ^1.8.24
         version: 1.8.24(@types/react@19.2.14)(react@19.1.0)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.1.0))(zod@3.25.76)
+      flag-icons:
+        specifier: ^7.6.0
+        version: 7.6.0
       qrcode.react:
         specifier: ^4.2.0
         version: 4.2.0(react@19.1.0)
@@ -5146,6 +5149,9 @@ packages:
   find-up@8.0.0:
     resolution: {integrity: sha512-JGG8pvDi2C+JxidYdIwQDyS/CgcrIdh18cvgxcBge3wSHRQOrooMD3GlFBcmMJAN9M42SAZjDp5zv1dglJjwww==}
     engines: {node: '>=20'}
+
+  flag-icons@7.6.0:
+    resolution: {integrity: sha512-hir/PsXwr0EESyizKrXJzmkzpLIMf+1vlNKLqAfvdh+bsU94a7LYWTiubkHKqptGoCPzOUGcm6c4PfC9/BaGSQ==}
 
   flow-enums-runtime@0.0.6:
     resolution: {integrity: sha512-3PYnM29RFXwvAN6Pc/scUfkI7RwhQ/xqyLUyPNlXUp9S40zI8nup9tUSrTLSVnWGBN38FNiGWbwZOB6uR4OGdw==}
@@ -13508,6 +13514,8 @@ snapshots:
     dependencies:
       locate-path: 8.0.0
       unicorn-magic: 0.3.0
+
+  flag-icons@7.6.0: {}
 
   flow-enums-runtime@0.0.6: {}
 

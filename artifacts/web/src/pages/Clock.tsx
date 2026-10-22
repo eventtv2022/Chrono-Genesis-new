@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { useLanguage } from "@/context/LanguageContext";
 import type { LangCode } from "@/i18n/ui";
+import "flag-icons/css/flag-icons.min.css";
 
 const LANGUAGES_24: {
   hour: number;
@@ -9,33 +10,33 @@ const LANGUAGES_24: {
   native: string;
   code: string;
   rtl: boolean;
-  flag: string;
+  countryCode: string;
   iso: string;
 }[] = [
-  { hour: 1,  label: "Русский",      native: "Русский",      code: "ru", rtl: false, flag: "🇷🇺", iso: "RU" },
-  { hour: 2,  label: "English",      native: "English",      code: "en", rtl: false, flag: "🇬🇧", iso: "EN" },
-  { hour: 3,  label: "中文",          native: "中文",          code: "zh", rtl: false, flag: "🇨🇳", iso: "ZH" },
-  { hour: 4,  label: "हिन्दी",        native: "हिन्दी",        code: "hi", rtl: false, flag: "🇮🇳", iso: "HI" },
-  { hour: 5,  label: "Español",      native: "Español",      code: "es", rtl: false, flag: "🇪🇸", iso: "ES" },
-  { hour: 6,  label: "Français",     native: "Français",     code: "fr", rtl: false, flag: "🇫🇷", iso: "FR" },
-  { hour: 7,  label: "العربية",      native: "العربية",      code: "ar", rtl: true,  flag: "🇸🇦", iso: "AR" },
-  { hour: 8,  label: "বাংলা",         native: "বাংলা",         code: "bn", rtl: false, flag: "🇧🇩", iso: "BN" },
-  { hour: 9,  label: "Português",    native: "Português",    code: "pt", rtl: false, flag: "🇵🇹", iso: "PT" },
-  { hour: 10, label: "اردو",          native: "اردو",          code: "ur", rtl: true,  flag: "🇵🇰", iso: "UR" },
-  { hour: 11, label: "Indonesia",    native: "Indonesia",    code: "id", rtl: false, flag: "🇮🇩", iso: "ID" },
-  { hour: 12, label: "Deutsch",      native: "Deutsch",      code: "de", rtl: false, flag: "🇩🇪", iso: "DE" },
-  { hour: 13, label: "日本語",         native: "日本語",         code: "ja", rtl: false, flag: "🇯🇵", iso: "JA" },
-  { hour: 14, label: "Türkçe",       native: "Türkçe",       code: "tr", rtl: false, flag: "🇹🇷", iso: "TR" },
-  { hour: 15, label: "Tiếng Việt",   native: "Tiếng Việt",   code: "vi", rtl: false, flag: "🇻🇳", iso: "VI" },
-  { hour: 16, label: "עברית",         native: "עברית",         code: "he", rtl: true,  flag: "🇮🇱", iso: "HE" },
-  { hour: 17, label: "فارسی",         native: "فارسی",         code: "fa", rtl: true,  flag: "🇮🇷", iso: "FA" },
-  { hour: 18, label: "한국어",         native: "한국어",         code: "ko", rtl: false, flag: "🇰🇷", iso: "KO" },
-  { hour: 19, label: "Italiano",     native: "Italiano",     code: "it", rtl: false, flag: "🇮🇹", iso: "IT" },
-  { hour: 20, label: "Polski",       native: "Polski",       code: "pl", rtl: false, flag: "🇵🇱", iso: "PL" },
-  { hour: 21, label: "Українська",   native: "Українська",   code: "uk", rtl: false, flag: "🇺🇦", iso: "UK" },
-  { hour: 22, label: "Nederlands",   native: "Nederlands",   code: "nl", rtl: false, flag: "🇳🇱", iso: "NL" },
-  { hour: 23, label: "Қазақша",      native: "Қазақша",      code: "kk", rtl: false, flag: "🇰🇿", iso: "KK" },
-  { hour: 24, label: "O'zbek",       native: "O'zbek",       code: "uz", rtl: false, flag: "🇺🇿", iso: "UZ" },
+  { hour: 1,  label: "Русский",      native: "Русский",      code: "ru", rtl: false, countryCode: "ru", iso: "RU" },
+  { hour: 2,  label: "English",      native: "English",      code: "en", rtl: false, countryCode: "gb", iso: "EN" },
+  { hour: 3,  label: "中文",          native: "中文",          code: "zh", rtl: false, countryCode: "cn", iso: "ZH" },
+  { hour: 4,  label: "हिन्दी",        native: "हिन्दी",        code: "hi", rtl: false, countryCode: "in", iso: "HI" },
+  { hour: 5,  label: "Español",      native: "Español",      code: "es", rtl: false, countryCode: "es", iso: "ES" },
+  { hour: 6,  label: "Français",     native: "Français",     code: "fr", rtl: false, countryCode: "fr", iso: "FR" },
+  { hour: 7,  label: "العربية",      native: "العربية",      code: "ar", rtl: true,  countryCode: "sa", iso: "AR" },
+  { hour: 8,  label: "বাংলা",         native: "বাংলা",         code: "bn", rtl: false, countryCode: "bd", iso: "BN" },
+  { hour: 9,  label: "Português",    native: "Português",    code: "pt", rtl: false, countryCode: "pt", iso: "PT" },
+  { hour: 10, label: "اردو",          native: "اردو",          code: "ur", rtl: true,  countryCode: "pk", iso: "UR" },
+  { hour: 11, label: "Indonesia",    native: "Indonesia",    code: "id", rtl: false, countryCode: "id", iso: "ID" },
+  { hour: 12, label: "Deutsch",      native: "Deutsch",      code: "de", rtl: false, countryCode: "de", iso: "DE" },
+  { hour: 13, label: "日本語",         native: "日本語",         code: "ja", rtl: false, countryCode: "jp", iso: "JA" },
+  { hour: 14, label: "Türkçe",       native: "Türkçe",       code: "tr", rtl: false, countryCode: "tr", iso: "TR" },
+  { hour: 15, label: "Tiếng Việt",   native: "Tiếng Việt",   code: "vi", rtl: false, countryCode: "vn", iso: "VI" },
+  { hour: 16, label: "עברית",         native: "עברית",         code: "he", rtl: true,  countryCode: "il", iso: "HE" },
+  { hour: 17, label: "فارسی",         native: "فارسی",         code: "fa", rtl: true,  countryCode: "ir", iso: "FA" },
+  { hour: 18, label: "한국어",         native: "한국어",         code: "ko", rtl: false, countryCode: "kr", iso: "KO" },
+  { hour: 19, label: "Italiano",     native: "Italiano",     code: "it", rtl: false, countryCode: "it", iso: "IT" },
+  { hour: 20, label: "Polski",       native: "Polski",       code: "pl", rtl: false, countryCode: "pl", iso: "PL" },
+  { hour: 21, label: "Українська",   native: "Українська",   code: "uk", rtl: false, countryCode: "ua", iso: "UK" },
+  { hour: 22, label: "Nederlands",   native: "Nederlands",   code: "nl", rtl: false, countryCode: "nl", iso: "NL" },
+  { hour: 23, label: "Қазақша",      native: "Қазақша",      code: "kk", rtl: false, countryCode: "kz", iso: "KK" },
+  { hour: 24, label: "O'zbek",       native: "O'zbek",       code: "uz", rtl: false, countryCode: "uz", iso: "UZ" },
 ];
 
 const TRANSLATIONS: Record<string, { welcome: string; select: string; status: string }> = {
@@ -117,7 +118,7 @@ export function PeopleClockDial({ size = DIAL }: { size?: number }) {
               zIndex: 2,
             }}
           >
-            {item.flag}
+            <span aria-hidden="true" className={`fi fi-${item.countryCode}`} />
           </button>
         );
       })}
@@ -177,7 +178,10 @@ export function Clock() {
         </h1>
         <p className="text-zinc-400 text-sm mb-8 text-center">
           {t.select}:{" "}
-          <span className="text-amber-500 font-bold">{active.flag} {activeHour}:00 · {active.iso} · {active.native}</span>
+          <span className="text-amber-500 font-bold">
+            <span aria-hidden="true" className={`fi fi-${active.countryCode} mr-1`} />
+            {activeHour}:00 · {active.iso} · {active.native}
+          </span>
         </p>
 
         {/* Two-column layout on large screens */}
@@ -215,7 +219,7 @@ export function Clock() {
                         : "bg-zinc-900/40 border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
                     }`}
                   >
-                    <span className="text-base leading-none shrink-0">{item.flag}</span>
+                    <span aria-hidden="true" className={`fi fi-${item.countryCode} text-base leading-none shrink-0`} />
                     <span className="font-mono text-[10px] text-zinc-500 shrink-0">{item.iso}</span>
                     <span className="truncate">{item.label}</span>
                     {item.rtl && (
