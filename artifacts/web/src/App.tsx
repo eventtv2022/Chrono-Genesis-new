@@ -41,6 +41,7 @@ import { Tos } from "./pages/Tos";
 import { Login } from "./pages/Login";
 import { OnboardingGame } from "./pages/OnboardingGame";
 import { SignatureRequest } from "./pages/SignatureRequest";
+import { AnthemPlayer } from "./components/AnthemPlayer";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -158,33 +159,40 @@ function TgGuard({ children }: { children: React.ReactNode }) {
 }
 
 function Router() {
+  const [location] = useLocation();
+  const { citizen, isLoading } = useCitizen();
+  const isGate = location === "/welcome" || (location === "/" && !citizen);
+
   return (
     <TgGuard>
-      <Switch>
-        <Route path="/" component={Home} />
-        <Route path="/tv" component={Tv} />
-        <Route path="/citizens" component={Citizens} />
-        <Route path="/timeline" component={Timeline} />
-        <Route path="/shop" component={Shop} />
-        <Route path="/register" component={Register} />
-        <Route path="/login" component={Login} />
-        <Route path="/onboarding" component={OnboardingGame} />
-        <Route path="/signature-request" component={SignatureRequest} />
-        <Route path="/passport-lookup" component={PassportLookup} />
-        <Route path="/time" component={Time} />
-        <Route path="/clock" component={Clock} />
-        <Route path="/government/labor-dashboard" component={LaborDashboard} />
-        <Route path="/reset-password" component={ResetPassword} />
-        <Route path="/admin" component={Admin} />
-        <Route path="/admin/registry" component={AdminRegistry} />
-        <Route path="/gov/block-votes" component={GovBlockVotes} />
-        <Route path="/gov/polls" component={GovPolls} />
-        <Route path="/qr-login" component={QrLogin} />
-        <Route path="/privacy" component={Privacy} />
-        <Route path="/tos" component={Tos} />
-        <Route path="/welcome" component={Welcome} />
-        <Route component={NotFound} />
-      </Switch>
+      <>
+        <Switch>
+          <Route path="/" component={Home} />
+          <Route path="/tv" component={Tv} />
+          <Route path="/citizens" component={Citizens} />
+          <Route path="/timeline" component={Timeline} />
+          <Route path="/shop" component={Shop} />
+          <Route path="/register" component={Register} />
+          <Route path="/login" component={Login} />
+          <Route path="/onboarding" component={OnboardingGame} />
+          <Route path="/signature-request" component={SignatureRequest} />
+          <Route path="/passport-lookup" component={PassportLookup} />
+          <Route path="/time" component={Time} />
+          <Route path="/clock" component={Clock} />
+          <Route path="/government/labor-dashboard" component={LaborDashboard} />
+          <Route path="/reset-password" component={ResetPassword} />
+          <Route path="/admin" component={Admin} />
+          <Route path="/admin/registry" component={AdminRegistry} />
+          <Route path="/gov/block-votes" component={GovBlockVotes} />
+          <Route path="/gov/polls" component={GovPolls} />
+          <Route path="/qr-login" component={QrLogin} />
+          <Route path="/privacy" component={Privacy} />
+          <Route path="/tos" component={Tos} />
+          <Route path="/welcome" component={Welcome} />
+          <Route component={NotFound} />
+        </Switch>
+        <AnthemPlayer active={!isLoading && !isGate} />
+      </>
     </TgGuard>
   );
 }

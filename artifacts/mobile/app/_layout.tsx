@@ -12,13 +12,14 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { Platform } from "react-native";
+import { Platform, View } from "react-native";
 import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { CitizenProvider, useCitizen } from "@/context/CitizenContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { getStoredToken } from "@/lib/authStorage";
+import { AnthemPlayer } from "@/components/AnthemPlayer";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -35,10 +36,13 @@ function RootLayoutNav() {
   const { citizen, isLoading } = useCitizen();
   const router = useRouter();
   const segments = useSegments();
+  const route = segments[0];
+  const isGuestLanding = !citizen
+    && route === "(tabs)"
+    && (segments.length === 1 || String(segments[1]) === "index");
 
   useEffect(() => {
     if (isLoading) return;
-    const route = segments[0];
     if (citizen?.registrationStatus === "pending") {
       if (route !== "onboarding") router.replace("/onboarding");
       return;
@@ -59,21 +63,24 @@ function RootLayoutNav() {
   }, [citizen?.id, citizen?.registrationStatus, isLoading, router, segments]);
 
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="register" options={{ headerShown: false, presentation: "modal" }} />
-      <Stack.Screen name="login" options={{ headerShown: false, presentation: "modal" }} />
-      <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
-      <Stack.Screen name="wallet" options={{ headerShown: false, presentation: "modal" }} />
-      <Stack.Screen name="shop" options={{ headerShown: false, presentation: "modal" }} />
-      <Stack.Screen name="citizens" options={{ headerShown: false }} />
-      <Stack.Screen name="passport-lookup" options={{ headerShown: false }} />
-      <Stack.Screen name="broadcast" options={{ headerShown: false }} />
-      <Stack.Screen name="chat" options={{ headerShown: false }} />
-      <Stack.Screen name="chat/[citizenId]" options={{ headerShown: false }} />
-      <Stack.Screen name="chat/group/[groupId]" options={{ headerShown: false }} />
-      <Stack.Screen name="chat/new-group" options={{ headerShown: false }} />
-    </Stack>
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerBackTitle: "Back" }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="register" options={{ headerShown: false, presentation: "modal" }} />
+        <Stack.Screen name="login" options={{ headerShown: false, presentation: "modal" }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="wallet" options={{ headerShown: false, presentation: "modal" }} />
+        <Stack.Screen name="shop" options={{ headerShown: false, presentation: "modal" }} />
+        <Stack.Screen name="citizens" options={{ headerShown: false }} />
+        <Stack.Screen name="passport-lookup" options={{ headerShown: false }} />
+        <Stack.Screen name="broadcast" options={{ headerShown: false }} />
+        <Stack.Screen name="chat" options={{ headerShown: false }} />
+        <Stack.Screen name="chat/[citizenId]" options={{ headerShown: false }} />
+        <Stack.Screen name="chat/group/[groupId]" options={{ headerShown: false }} />
+        <Stack.Screen name="chat/new-group" options={{ headerShown: false }} />
+      </Stack>
+      <AnthemPlayer active={!isLoading && !isGuestLanding} />
+    </View>
   );
 }
 
