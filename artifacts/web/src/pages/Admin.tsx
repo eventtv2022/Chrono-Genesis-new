@@ -4,6 +4,16 @@ import { useCitizen } from "@/context/CitizenContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useLocation } from "wouter";
 import { Search, X } from "lucide-react";
 
@@ -193,14 +203,23 @@ function OtpEmitModal({ onClose, onSuccess, authHeaders }: OtpModalProps) {
 interface TransferFormProps {
   authHeaders: Record<string, string>;
   adminBalance: number;
+  citizens: AdminCitizen[];
+  citizensLoaded: boolean;
   onSuccess: (newBalance: number) => void;
 }
-function DirectTransferForm({ authHeaders, adminBalance, onSuccess }: TransferFormProps) {
+function DirectTransferForm({ authHeaders, adminBalance, citizens, citizensLoaded, onSuccess }: TransferFormProps) {
   const [citizenNumber, setCitizenNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [pendingTransfer, setPendingTransfer] = useState<{
+    citizenNumber: string;
+    recipientName: string;
+    amount: number;
+    description?: string;
+  } | null>(null);
+  const [confirmationError, setConfirmationError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -209,26 +228,49 @@ function DirectTransferForm({ authHeaders, adminBalance, onSuccess }: TransferFo
       setResult({ ok: false, msg: "Введите номер паспорта из 9 цифр" });
       return;
     }
+    const transferAmount = Number(amount);
+    if (!Number.isFinite(transferAmount) || transferAmount <= 0) {
+      setResult({ ok: false, msg: "Введите сумму больше нуля" });
+      return;
+    }
+    const recipient = citizens.find((candidate) => candidate.citizenNumber === citizenNumber);
+    if (!recipient) {
+      setResult({ ok: false, msg: "Гражданин с таким номером паспорта не найден" });
+      return;
+    }
+    setConfirmationError("");
+    setPendingTransfer({
+      citizenNumber,
+      recipientName: recipient.name,
+      amount: transferAmount,
+      description: description || undefined,
+    });
+  }
+
+  async function confirmTransfer() {
+    if (!pendingTransfer || loading) return;
     setLoading(true);
+    setConfirmationError("");
     try {
       const res = await fetch("/api/admin/transfer", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
-          citizenNumber,
-          amount: parseFloat(amount),
-          description: description || undefined,
+          citizenNumber: pendingTransfer.citizenNumber,
+          amount: pendingTransfer.amount,
+          description: pendingTransfer.description,
         }),
       });
       const data = await res.json() as { ok?: boolean; error?: string; recipientName?: string; newAdminBalance?: number };
-      if (!res.ok) { setResult({ ok: false, msg: data.error ?? "Ошибка" }); }
+      if (!res.ok) { setConfirmationError(data.error ?? "Не удалось выполнить перевод"); }
       else {
-        setResult({ ok: true, msg: `✓ Переведено ${amount} Д гражданину ${data.recipientName ?? ""}. Ваш баланс: ${(data.newAdminBalance ?? 0).toFixed(2)} Д` });
+        setResult({ ok: true, msg: `✓ Переведено ${pendingTransfer.amount.toFixed(2)} Д гражданину ${data.recipientName ?? pendingTransfer.recipientName}. Ваш баланс: ${(data.newAdminBalance ?? 0).toFixed(2)} Д` });
         onSuccess(data.newAdminBalance ?? 0);
         setCitizenNumber(""); setAmount(""); setDescription("");
+        setPendingTransfer(null);
       }
-    } catch { setResult({ ok: false, msg: "Ошибка соединения" }); }
-    setLoading(false);
+    } catch { setConfirmationError("Ошибка соединения. Перевод не подтверждён."); }
+    finally { setLoading(false); }
   }
 
   return (
@@ -260,14 +302,60 @@ function DirectTransferForm({ authHeaders, adminBalance, onSuccess }: TransferFo
             <label className="text-xs font-mono text-muted-foreground uppercase tracking-widest block mb-1">Описание (необязательно)</label>
             <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Назначение перевода" className="font-mono bg-secondary border-border" />
           </div>
-          <button type="submit" disabled={loading} className="w-full bg-primary/90 hover:bg-primary text-primary-foreground rounded-sm py-2 text-sm font-mono transition-colors disabled:opacity-50">
-            {loading ? "Отправляю…" : "Перевести из моего баланса"}
+          <button type="submit" disabled={loading || !citizensLoaded} className="w-full bg-primary/90 hover:bg-primary text-primary-foreground rounded-sm py-2 text-sm font-mono transition-colors disabled:opacity-50">
+            {citizensLoaded ? "Проверить перевод" : "Загружаю реестр…"}
           </button>
           {result && (
             <p className={`text-xs font-mono mt-1 ${result.ok ? "text-emerald-400" : "text-destructive"}`}>{result.msg}</p>
           )}
         </form>
       </CardContent>
+      <AlertDialog
+        open={pendingTransfer !== null}
+        onOpenChange={(open) => {
+          if (!open && !loading) {
+            setPendingTransfer(null);
+            setConfirmationError("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Подтвердить перевод?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Проверьте имя получателя и сумму. Перевод будет выполнен только после подтверждения.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {pendingTransfer && (
+            <div className="space-y-2 rounded-md border border-border bg-secondary/40 p-4 text-sm">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">Получатель</div>
+                <div className="font-semibold text-foreground">{pendingTransfer.recipientName}</div>
+              </div>
+              <div className="font-mono text-xs text-muted-foreground">
+                Паспорт № {pendingTransfer.citizenNumber}
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">Сумма перевода</div>
+                <div className="font-mono text-xl font-bold text-primary">{pendingTransfer.amount.toFixed(2)} Д</div>
+              </div>
+            </div>
+          )}
+          {confirmationError && <p role="alert" className="text-sm text-destructive">{confirmationError}</p>}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={loading}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmTransfer();
+              }}
+            >
+              {loading ? "Перевожу…" : "Подтвердить перевод"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
@@ -285,6 +373,7 @@ export function Admin() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [treasury, setTreasury] = useState<TreasuryStats | null>(null);
   const [citizens, setCitizens] = useState<AdminCitizen[]>([]);
+  const [citizensLoaded, setCitizensLoaded] = useState(false);
   const [transactions, setTransactions] = useState<AdminTx[]>([]);
   const [query, setQuery] = useState("");
   const [transactionPassportQuery, setTransactionPassportQuery] = useState("");
@@ -316,7 +405,11 @@ export function Admin() {
     if (!authToken) return;
     void fetch("/api/admin/stats", { headers: authHeaders }).then(r => r.json()).then(setStats).catch(() => null);
     void fetch("/api/admin/treasury/stats", { headers: authHeaders }).then(r => r.json()).then(setTreasury).catch(() => null);
-    void fetch("/api/admin/citizens", { headers: authHeaders }).then(r => r.json()).then(setCitizens).catch(() => null);
+    void fetch("/api/admin/citizens", { headers: authHeaders })
+      .then(r => r.json())
+      .then((data: AdminCitizen[]) => setCitizens(data))
+      .catch(() => null)
+      .finally(() => setCitizensLoaded(true));
     void fetch("/api/admin/transactions?limit=50", { headers: authHeaders }).then(r => r.json()).then(setTransactions).catch(() => null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken]);
@@ -858,6 +951,8 @@ export function Admin() {
           <DirectTransferForm
             authHeaders={authHeaders}
             adminBalance={adminBalance}
+            citizens={citizens}
+            citizensLoaded={citizensLoaded}
             onSuccess={() => {
               loadData();
               void refreshCitizen();
