@@ -270,46 +270,45 @@ interface Subscriber { id: number; pseudonym: string; rank: string; }
 function MinuteHourglass({ elapsedSeconds, running }: { elapsedSeconds: number; running: boolean }) {
   const minuteIndex = Math.floor(elapsedSeconds / 60);
   const minuteProgress = (elapsedSeconds % 60) / 60;
-  const flipped = minuteIndex % 2 === 1;
-  const topSand = flipped ? minuteProgress : 1 - minuteProgress;
-  const bottomSand = flipped ? 1 - minuteProgress : minuteProgress;
-  const clipId = `minute-hourglass-${flipped ? "flipped" : "upright"}`;
+  const topSand = 1 - minuteProgress;
+  const bottomSand = minuteProgress;
+  const clipId = "minute-hourglass";
 
   return (
-    <div
-      className="h-[6.9rem] w-[4.6rem] shrink-0"
-      style={{
-        transform: flipped ? "rotate(180deg)" : "rotate(0deg)",
-        transition: "transform 700ms ease-in-out",
-      }}
-    >
-      <svg
-        viewBox="0 0 48 64"
-        className={`h-full w-full ${running ? "text-primary" : "text-muted-foreground"}`}
-        role="img"
-        aria-label="Песочные часы переворачиваются каждую минуту"
+    <>
+      <style>{`
+        @keyframes minute-hourglass-turn {
+          0% { transform: rotate(0deg); }
+          45% { transform: rotate(180deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+      <div
+        key={minuteIndex}
+        className="h-[6.9rem] w-[4.6rem] shrink-0"
+        style={{ animation: minuteIndex > 0 ? "minute-hourglass-turn 800ms ease-in-out" : undefined }}
       >
-        <defs>
-          <clipPath id={`${clipId}-top`}><path d="M14 9H34L25 31H23Z" /></clipPath>
-          <clipPath id={`${clipId}-bottom`}><path d="M23 33H25L34 55H14Z" /></clipPath>
-        </defs>
-        <rect x="10" y={31 - 22 * topSand} width="28" height={22 * topSand} fill="hsl(var(--primary))" clipPath={`url(#${clipId}-top)`} />
-        <rect
-          x="10"
-          y={flipped ? 33 : 55 - 22 * bottomSand}
-          width="28"
-          height={22 * bottomSand}
-          fill="hsl(var(--primary))"
-          clipPath={`url(#${clipId}-bottom)`}
-        />
-        {running && (
-          <path d={flipped ? "M24 35v-6" : "M24 29v6"} stroke="hsl(var(--primary))" strokeWidth="1.5" strokeDasharray="1 1">
-            <animate attributeName="stroke-dashoffset" from="0" to="2" dur=".25s" repeatCount="indefinite" />
-          </path>
-        )}
-        <path d="M12 7h24M12 57h24M14 9c0 9 8 14 10 22-2 8-10 15-10 24M34 9c0 9-8 14-10 22 2 8 10 15 10 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity=".8" />
-      </svg>
-    </div>
+        <svg
+          viewBox="0 0 48 64"
+          className={`h-full w-full ${running ? "text-primary" : "text-muted-foreground"}`}
+          role="img"
+          aria-label="Песок пересыпается вниз; песочные часы поворачиваются каждую минуту"
+        >
+          <defs>
+            <clipPath id={`${clipId}-top`}><path d="M14 9H34L25 31H23Z" /></clipPath>
+            <clipPath id={`${clipId}-bottom`}><path d="M23 33H25L34 55H14Z" /></clipPath>
+          </defs>
+          <rect x="10" y={31 - 22 * topSand} width="28" height={22 * topSand} fill="hsl(var(--primary))" clipPath={`url(#${clipId}-top)`} />
+          <rect x="10" y={55 - 22 * bottomSand} width="28" height={22 * bottomSand} fill="hsl(var(--primary))" clipPath={`url(#${clipId}-bottom)`} />
+          {running && (
+            <path d="M24 29v6" stroke="hsl(var(--primary))" strokeWidth="1.5" strokeDasharray="1 1">
+              <animate attributeName="stroke-dashoffset" from="0" to="2" dur=".25s" repeatCount="indefinite" />
+            </path>
+          )}
+          <path d="M12 7h24M12 57h24M14 9c0 9 8 14 10 22-2 8-10 15-10 24M34 9c0 9-8 14-10 22 2 8 10 15 10 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity=".8" />
+        </svg>
+      </div>
+    </>
   );
 }
 
