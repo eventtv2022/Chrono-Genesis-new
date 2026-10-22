@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { useLanguage } from "@/context/LanguageContext";
 import type { LangCode } from "@/i18n/ui";
@@ -66,33 +66,100 @@ const TRANSLATIONS: Record<string, { welcome: string; select: string; status: st
 };
 
 const DIAL = 340;
-const CX = DIAL / 2;
-const CY = DIAL / 2;
 const RADIUS = 130;
 const HAND_LENGTH = 105;
 
+export function PeopleClockDial({ size = DIAL }: { size?: number }) {
+  const { lang, setLang } = useLanguage();
+  const active = LANGUAGES_24.find((item) => item.code === lang) ?? LANGUAGES_24[0]!;
+  const scale = size / DIAL;
+  const center = size / 2;
+  const radius = RADIUS * scale;
+  const markerSize = Math.max(22, 32 * scale);
+
+  return (
+    <div
+      role="group"
+      aria-label={TRANSLATIONS[lang]?.select ?? TRANSLATIONS.en!.select}
+      className="relative flex shrink-0 items-center justify-center rounded-full"
+      style={{
+        width: size,
+        height: size,
+        background: "radial-gradient(circle, #18181b 0%, #09090b 100%)",
+        border: `${Math.max(3, 6 * scale)}px double #f59e0b`,
+        boxShadow: "0 0 30px rgba(245,158,11,0.22)",
+      }}
+    >
+      {LANGUAGES_24.map((item) => {
+        const angleRad = (item.hour * 15 - 90) * (Math.PI / 180);
+        const x = center + radius * Math.cos(angleRad);
+        const y = center + radius * Math.sin(angleRad);
+        const isActive = item.code === lang;
+        return (
+          <button
+            key={item.code}
+            type="button"
+            onClick={() => setLang(item.code as LangCode)}
+            title={`${item.native} · ${item.hour}:00`}
+            aria-label={`${item.native} · ${item.hour}:00`}
+            aria-pressed={isActive}
+            className="absolute flex items-center justify-center rounded-full transition-all duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
+            style={{
+              width: markerSize,
+              height: markerSize,
+              left: x - markerSize / 2,
+              top: y - markerSize / 2,
+              fontSize: Math.max(13, 18 * scale),
+              lineHeight: 1,
+              background: isActive ? "#f59e0b22" : "transparent",
+              border: `${isActive ? 2 : 1}px solid ${isActive ? "#f59e0b" : "#3f3f46"}`,
+              boxShadow: isActive ? "0 0 10px #f59e0b" : undefined,
+              zIndex: 2,
+            }}
+          >
+            {item.flag}
+          </button>
+        );
+      })}
+      <div
+        aria-hidden="true"
+        className="absolute z-[1] rounded-full bg-red-500 pointer-events-none"
+        style={{
+          width: Math.max(3, 4 * scale),
+          height: HAND_LENGTH * scale,
+          bottom: "50%",
+          left: `calc(50% - ${Math.max(1.5, 2 * scale)}px)`,
+          transformOrigin: "bottom center",
+          transform: `rotate(${active.hour * 15}deg)`,
+          transition: "transform 0.55s cubic-bezier(0.34,1.56,0.64,1)",
+          boxShadow: "0 0 6px rgba(239,68,68,0.6)",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        className="absolute z-10 rounded-full bg-amber-400"
+        style={{
+          width: Math.max(10, 14 * scale),
+          height: Math.max(10, 14 * scale),
+          left: `calc(50% - ${Math.max(5, 7 * scale)}px)`,
+          top: `calc(50% - ${Math.max(5, 7 * scale)}px)`,
+          boxShadow: "0 0 8px #f59e0b",
+        }}
+      />
+    </div>
+  );
+}
+
 export function Clock() {
   const { lang, setLang } = useLanguage();
-  // sync activeHour from global lang on mount
-  const [activeHour, setActiveHour] = useState(() => {
-    const found = LANGUAGES_24.find((l) => l.code === lang);
-    return found ? found.hour : 1;
-  });
-
-  function selectHour(hour: number, code: LangCode) {
-    setActiveHour(hour);
-    setLang(code);
-  }
-
-  const active = LANGUAGES_24.find((l) => l.hour === activeHour) ?? LANGUAGES_24[1]!;
+  const active = LANGUAGES_24.find((l) => l.code === lang) ?? LANGUAGES_24[0]!;
+  const activeHour = active.hour;
   const t = TRANSLATIONS[active.code] ?? TRANSLATIONS["ru"]!;
 
   // degrees: each hour = +15°, hour=24 at top (0°=up in CSS rotate)
-  const handDeg = activeHour * 15;
-
   useEffect(() => {
-    document.title = "Циферблат народов | TimeNation";
-  }, []);
+    document.title = `${t.welcome} | TimeNation`;
+  }, [t.welcome]);
 
   return (
     <Layout>
@@ -118,77 +185,7 @@ export function Clock() {
 
           {/* ── Clock face ── */}
           <div className="flex flex-col items-center gap-5 shrink-0">
-            <div
-              className="relative flex items-center justify-center rounded-full"
-              style={{
-                width: DIAL,
-                height: DIAL,
-                background: "radial-gradient(circle, #18181b 0%, #09090b 100%)",
-                border: "6px double #f59e0b",
-                boxShadow: "0 0 30px rgba(245,158,11,0.22)",
-              }}
-            >
-              {/* Hour markers */}
-              {LANGUAGES_24.map((item) => {
-                const angleRad = (item.hour * 15 - 90) * (Math.PI / 180);
-                const x = CX + RADIUS * Math.cos(angleRad);
-                const y = CY + RADIUS * Math.sin(angleRad);
-                const isActive = item.hour === activeHour;
-                return (
-                  <button
-                    key={item.hour}
-                    onClick={() => selectHour(item.hour, item.code as LangCode)}
-                    title={item.native}
-                    className="absolute flex items-center justify-center rounded-full transition-all duration-300"
-                    style={{
-                      width: 32,
-                      height: 32,
-                      left: x - 16,
-                      top: y - 16,
-                      fontSize: 18,
-                      lineHeight: 1,
-                      background: isActive ? "#f59e0b22" : "transparent",
-                      border: `${isActive ? 2 : 1}px solid ${isActive ? "#f59e0b" : "#3f3f46"}`,
-                      boxShadow: isActive ? "0 0 10px #f59e0b" : undefined,
-                      zIndex: 2,
-                    }}
-                  >
-                    {item.flag}
-                  </button>
-                );
-              })}
-
-              {/* Clock hand — CSS transform with origin-bottom */}
-              <div
-                className="absolute rounded-full pointer-events-none"
-                style={{
-                  width: 4,
-                  height: HAND_LENGTH,
-                  background: "#ef4444",
-                  borderRadius: 2,
-                  bottom: "50%",
-                  left: "calc(50% - 2px)",
-                  transformOrigin: "bottom center",
-                  transform: `rotate(${handDeg}deg)`,
-                  transition: "transform 0.55s cubic-bezier(0.34,1.56,0.64,1)",
-                  zIndex: 1,
-                  boxShadow: "0 0 6px rgba(239,68,68,0.6)",
-                }}
-              />
-
-              {/* Center dot */}
-              <div
-                className="absolute rounded-full z-10"
-                style={{
-                  width: 14,
-                  height: 14,
-                  background: "#f59e0b",
-                  left: "calc(50% - 7px)",
-                  top: "calc(50% - 7px)",
-                  boxShadow: "0 0 8px #f59e0b",
-                }}
-              />
-            </div>
+            <PeopleClockDial size={DIAL} />
 
             {/* Status quote */}
             <div
@@ -211,7 +208,7 @@ export function Clock() {
                 return (
                   <button
                     key={item.hour}
-                    onClick={() => selectHour(item.hour, item.code as LangCode)}
+                    onClick={() => setLang(item.code as LangCode)}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-left text-xs transition-all duration-200 border ${
                       isActive
                         ? "bg-amber-500/15 border-amber-500/50 text-amber-400 font-semibold"

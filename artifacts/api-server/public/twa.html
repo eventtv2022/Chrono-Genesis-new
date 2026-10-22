@@ -1017,6 +1017,44 @@
       font-size: 11px;
       text-align: center;
     }
+
+    /* ── Required date-of-birth form ── */
+    #dob-gate {
+      display: none;
+      width: 100%;
+      max-width: 420px;
+      flex-direction: column;
+      gap: 14px;
+      border: 1px solid rgba(201,168,76,.28);
+      box-shadow: 0 16px 40px rgba(0,0,0,.24);
+    }
+    #dob-gate.visible { display: flex; }
+    .dob-gate-title { font-size: 18px; font-weight: 700; }
+    .dob-gate-copy { color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .dob-gate-label { font-size: 13px; font-weight: 600; }
+    #dob-input {
+      width: 100%;
+      min-height: 48px;
+      padding: 11px 13px;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 10px;
+      background: rgba(255,255,255,.06);
+      color: var(--fg);
+      color-scheme: dark;
+      font: inherit;
+    }
+    #dob-submit-btn {
+      width: 100%;
+      min-height: 48px;
+      border: 0;
+      border-radius: 11px;
+      background: linear-gradient(120deg, #6c63ff, #9a72ff);
+      color: white;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #dob-submit-btn:disabled { opacity: .6; cursor: wait; }
   </style>
 </head>
 <body>
@@ -1092,6 +1130,18 @@
 
   <!-- Error -->
   <div class="error-box" id="error-box"></div>
+
+  <!-- Date of birth is requested only when the API reports it is missing -->
+  <form class="card" id="dob-gate" onsubmit="submitDateOfBirth(event)">
+    <div class="dob-gate-title">Укажите дату рождения</div>
+    <p class="dob-gate-copy">
+      Дата нужна для проверки возраста. Регистрация доступна с 13 лет.
+      Если вам меньше 13 лет, дата не будет сохранена.
+    </p>
+    <label class="dob-gate-label" for="dob-input">Дата рождения</label>
+    <input id="dob-input" type="date" required autocomplete="bday" />
+    <button id="dob-submit-btn" type="submit">Продолжить</button>
+  </form>
 
   <!-- ── Gate Landing Screen (shown after auth, before emission wizard) ── -->
   <div id="screen-gate">
@@ -1681,7 +1731,7 @@ function openMobileExperience() {
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────────
-async function init() {
+async function init(dateOfBirth) {
   const initData = tg?.initData ?? '';
 
   if (!initData) {
@@ -1694,11 +1744,15 @@ async function init() {
     const resp = await fetch(`${pathBase}/api/auth/telegram-webapp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData }),
+      body: JSON.stringify({ initData, dateOfBirth }),
     });
     const data = await resp.json();
 
     if (!resp.ok) {
+      if (data.code === 'DATE_OF_BIRTH_REQUIRED') {
+        showDateOfBirthGate();
+        return;
+      }
       showError(data.error ?? 'Ошибка авторизации');
       return;
     }
@@ -1783,9 +1837,34 @@ function hideLoading() {
 
 function showError(msg) {
   hideLoading();
+  document.getElementById('dob-gate').classList.remove('visible');
   const box = document.getElementById('error-box');
   box.textContent = msg;
   box.classList.add('visible');
+}
+
+function showDateOfBirthGate() {
+  hideLoading();
+  const errorBox = document.getElementById('error-box');
+  errorBox.textContent = '';
+  errorBox.classList.remove('visible');
+  document.getElementById('dob-gate').classList.add('visible');
+  const button = document.getElementById('dob-submit-btn');
+  button.disabled = false;
+  button.textContent = 'Продолжить';
+}
+
+async function submitDateOfBirth(event) {
+  event.preventDefault();
+  const input = document.getElementById('dob-input');
+  if (!input.reportValidity()) return;
+
+  const button = document.getElementById('dob-submit-btn');
+  button.disabled = true;
+  button.textContent = 'Проверяем…';
+  document.getElementById('dob-gate').classList.remove('visible');
+  document.getElementById('screen-loading').style.display = 'flex';
+  await init(input.value);
 }
 
 // ── Gate Landing ───────────────────────────────────────────────────────────────

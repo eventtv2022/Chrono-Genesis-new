@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useGetStats } from "@workspace/api-client-react";
+import { useLanguage } from "@/context/LanguageContext";
+import { GATE_COPY } from "@/i18n/gate";
+import type { GateCopy } from "@/i18n/gate";
+import { PeopleClockDial } from "@/pages/Clock";
 
 /* ─────────────────────── helpers ─────────────────────── */
 function pad2(n: number) { return String(n).padStart(2, "0"); }
@@ -199,67 +203,19 @@ function Emblem({ size = 240 }: { size?: number }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   NEON CLOCK — bottom-left floating widget
-═══════════════════════════════════════════════════════════════════ */
-function NeonClock() {
-  const [time, setTime] = useState({ h: "00", m: "00", s: "00" });
-  const [tilt, setTilt] = useState(0);
-
-  useEffect(() => {
-    const tick = () => {
-      const n = new Date();
-      setTime({ h: pad2(n.getHours()), m: pad2(n.getMinutes()), s: pad2(n.getSeconds()) });
-      setTilt(Math.sin(Date.now() / 3000) * 6);
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <div
-      style={{
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-        transform: `perspective(400px) rotateY(${tilt}deg) rotateX(${tilt * 0.4}deg)`,
-        transition: "transform 1s ease-in-out",
-      }}
-    >
-      <div style={{ fontSize: 9, letterSpacing: "0.2em", color: "#00d4ff", fontFamily: FONT_ORBITRON, opacity: 0.7, textTransform: "uppercase" }}>
-        Chronosphere Time
-      </div>
-      <div
-        style={{
-          fontFamily: FONT_ORBITRON,
-          fontSize: 28,
-          fontWeight: 700,
-          letterSpacing: "0.12em",
-          color: "#00d4ff",
-          textShadow: "0 0 14px rgba(0,212,255,0.9), 0 0 30px rgba(0,212,255,0.5), 0 0 50px rgba(0,212,255,0.25)",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {time.h}<span style={{ opacity: 0.5, animation: "colon-blink 1s step-end infinite" }}>:</span>
-        {time.m}<span style={{ opacity: 0.5, animation: "colon-blink 1s step-end infinite" }}>:</span>
-        {time.s}
-      </div>
-      <div style={{ fontSize: 8, color: "#8080a0", letterSpacing: "0.15em", textTransform: "uppercase" }}>
-        UTC+0 · Live
-      </div>
-      <style>{`
-        @keyframes colon-blink { 0%,49%{opacity:.5} 50%,100%{opacity:.1} }
-      `}</style>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
    GLOBAL ACTIVITY WIDGET — bottom-right
 ═══════════════════════════════════════════════════════════════════ */
-function ActivityWidget({ stats }: { stats: { activeCitizens: number; totalMinutesCirculated: number | string; uniqueVisitors: number } | undefined }) {
+function ActivityWidget({
+  stats,
+  copy,
+}: {
+  stats: { activeCitizens: number; totalMinutesCirculated: number | string; uniqueVisitors: number } | undefined;
+  copy: GateCopy;
+}) {
   const rows = [
-    { icon: "⚡", label: "Citizens Active",         value: stats ? stats.activeCitizens.toLocaleString()                              : "—", color: "#00ff88" },
-    { icon: "⏳", label: "Darmīn in Circulation",   value: stats ? Number(stats.totalMinutesCirculated).toFixed(0)                    : "—", color: "#c9a84c" },
-    { icon: "◉", label: "Visitors",                 value: stats ? stats.uniqueVisitors.toLocaleString()                              : "—", color: "#00d4ff" },
+    { icon: "⚡", label: copy.citizens, value: stats ? stats.activeCitizens.toLocaleString() : "—", color: "#00ff88" },
+    { icon: "⏳", label: copy.darmins, value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—", color: "#c9a84c" },
+    { icon: "◉", label: copy.visitors, value: stats ? stats.uniqueVisitors.toLocaleString() : "—", color: "#00d4ff" },
   ];
 
   return (
@@ -275,7 +231,7 @@ function ActivityWidget({ stats }: { stats: { activeCitizens: number; totalMinut
       }}
     >
       <div style={{ fontSize: 10, letterSpacing: "0.18em", color: "#00d4ff", fontFamily: FONT_ORBITRON, marginBottom: 12, textTransform: "uppercase", opacity: 0.8 }}>
-        ◉ Global Activity
+        ◉ {copy.activity}
       </div>
       {rows.map(r => (
         <div key={r.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
@@ -353,6 +309,8 @@ function NeonButton({
 ═══════════════════════════════════════════════════════════════════ */
 function DesktopHero() {
   const [, navigate] = useLocation();
+  const { lang } = useLanguage();
+  const copy = GATE_COPY[lang];
   const { data: stats } = useGetStats();
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
   const heroRef = useRef<HTMLDivElement>(null);
@@ -398,13 +356,13 @@ function DesktopHero() {
 
         {/* Status center */}
         <div style={{ display: "flex", alignItems: "center", gap: 20, fontFamily: FONT_EXO, fontSize: 12 }}>
-          <StatusPill label="SERVER STATUS" value="ONLINE" color="#00ff88" />
-          <StatusPill label="EMISSION" value="LIVE" color="#c9a84c" />
+          <StatusPill label={copy.server} value={copy.online} color="#00ff88" />
+          <StatusPill label={copy.emission} value={copy.live} color="#c9a84c" />
         </div>
 
         {/* Auth buttons */}
         <div style={{ display: "flex", gap: 12 }}>
-          <NeonButton onClick={() => navigate("/login")} color="#00d4ff">Log In</NeonButton>
+          <NeonButton onClick={() => navigate("/login")} color="#00d4ff">{copy.login}</NeonButton>
         </div>
       </div>
 
@@ -442,7 +400,7 @@ function DesktopHero() {
               opacity: 0.85,
             }}
           >
-            ✦ &nbsp;OFFICIAL STANDARD &nbsp; ✦
+            ✦ &nbsp;{copy.standard} &nbsp; ✦
           </div>
 
           {/* ── Video flag ──────────────────────────────────────── */}
@@ -505,7 +463,7 @@ function DesktopHero() {
             textTransform: "uppercase",
           }}>
             <span style={{ color: "#c9a84c", textShadow: "0 0 8px rgba(201,168,76,0.5)" }}>TimeNation</span>
-            &nbsp;·&nbsp; Государство Хронократии
+            &nbsp;·&nbsp; {copy.state}
           </div>
         </div>
 
@@ -546,6 +504,7 @@ function DesktopHero() {
                 fontSize: "clamp(26px, 2.8vw, 50px)",
                 fontWeight: 900,
                 lineHeight: 1.12,
+                whiteSpace: "pre-line",
                 background: "linear-gradient(135deg,#ffffff 0%,#00d4ff 40%,#a0e8ff 70%,#ffffff 100%)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
@@ -553,7 +512,7 @@ function DesktopHero() {
                 letterSpacing: "0.04em",
               }}
             >
-              WELCOME,<br />TEMPORAL CITIZEN!
+              {copy.desktopWelcome.replace("<br />", "\n")}
             </h1>
           </div>
 
@@ -565,7 +524,7 @@ function DesktopHero() {
             }}
           >
             <div style={{ fontFamily: FONT_EXO, fontSize: "clamp(12px,1.2vw,17px)", fontWeight: 300, color: "#7abfff", letterSpacing: "0.18em", textTransform: "uppercase", textShadow: "0 0 14px rgba(122,191,255,0.5)" }}>
-              EMBRACE THE CHRONOSPHERE
+              {copy.embrace}
             </div>
           </div>
 
@@ -577,7 +536,7 @@ function DesktopHero() {
             }}
           >
             <div style={{ fontFamily: FONT_EXO, fontSize: "clamp(11px,1.1vw,16px)", fontWeight: 700, color: "#c9a84c", letterSpacing: "0.14em", textTransform: "uppercase", textShadow: "0 0 18px rgba(201,168,76,0.6)" }}>
-              YOUR TIME.&nbsp;&nbsp;YOUR EMPIRE.
+              {copy.yourEmpire}
             </div>
           </div>
 
@@ -591,14 +550,14 @@ function DesktopHero() {
             }}
           >
             <NeonButton onClick={() => navigate("/register")} primary color="#c9a84c">
-              ⚡&nbsp; Register Your Passport
+              ⚡&nbsp; {copy.passport}
             </NeonButton>
             <div style={{ display: "flex", gap: 10 }}>
               <NeonButton onClick={() => navigate("/timeline")} color="#00d4ff">
-                🔭&nbsp; Chronopedia
+                🔭&nbsp; {copy.chronopedia}
               </NeonButton>
               <NeonButton onClick={() => navigate("/login")} color="#00ff88">
-                👑&nbsp; Log In
+                👑&nbsp; {copy.login}
               </NeonButton>
             </div>
           </div>
@@ -614,13 +573,14 @@ function DesktopHero() {
         }}
       >
         {/* Neon clock */}
-        <div style={{ pointerEvents: "auto", transform: `translate(${px(6)},${py(4)})`, transition: "transform .2s ease-out" }}>
-          <NeonClock />
+        <div style={{ pointerEvents: "auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, transform: `translate(${px(6)},${py(4)})`, transition: "transform .2s ease-out" }}>
+          <PeopleClockDial size={230} />
+          <span style={{ color: "#8080a0", fontSize: 9, letterSpacing: "0.08em", textAlign: "center" }}>{copy.dialHint}</span>
         </div>
 
         {/* Activity widget */}
         <div style={{ pointerEvents: "auto", transform: `translate(${px(-6)},${py(4)})`, transition: "transform .2s ease-out" }}>
-          <ActivityWidget stats={stats} />
+          <ActivityWidget stats={stats} copy={copy} />
         </div>
       </div>
 
@@ -728,6 +688,9 @@ function MobileCanvas() {
 ═══════════════════════════════════════════════════════════════════ */
 function MobileHero() {
   const [, navigate]        = useLocation();
+  const { lang }            = useLanguage();
+  const copy                = GATE_COPY[lang];
+  const isRtl               = ["ar", "ur", "he", "fa"].includes(lang);
   const { data: stats }     = useGetStats();
   const [clock, setClock]   = useState({ h: "00", m: "00", s: "00" });
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -772,19 +735,13 @@ function MobileHero() {
   const py = (f: number) => `${tilt.y * f}px`;
 
   const CARDS = [
-    { icon: "🛑", title: "Борьба с «цифровым мусором»",  body: "В твоём телефоне лежат тысячи случайных скриншотов, которые умрут на жёстком диске. В TimeNation ты создаёшь цифровой капитал смыслов.\n\nЗафиксировать 1 минуту в Хронопедии — поставить несгораемую точку." },
-    { icon: "🗺", title: "Топография жизни",               body: "Хронопедия даёт 3D-картину твоей судьбы. Через 5–10 лет ты увидишь точную карту вех: какие решения и смыслы происходили с тобой в конкретных точках планеты." },
-    { icon: "🌉", title: "Межпоколенческий мост",          body: "TimeNation гарантирует, что твоя личная история не растворится в цифровом шуме, а останется живым наследием для будущих поколений." },
-  ] as const;
-
-  const MOMENTS = [
-    "💡 Зафиксировать решение, которое изменило мой день",
-    "⏳ Записать мысль или эмоцию себе в будущее",
-    "✨ Запечатлеть знание этого момента",
-  ] as const;
+    { icon: "🛑", title: copy.cardTitles[0], body: copy.cardBodies[0] },
+    { icon: "🗺", title: copy.cardTitles[1], body: copy.cardBodies[1] },
+    { icon: "🌉", title: copy.cardTitles[2], body: copy.cardBodies[2] },
+  ];
 
   return (
-    <div style={{ minHeight: "100vh", color: "#e8e8f4", fontFamily: FONT_EXO, overflowX: "hidden", background: "#02020f", position: "relative" }}>
+    <div dir={isRtl ? "rtl" : "ltr"} style={{ minHeight: "100vh", color: "#e8e8f4", fontFamily: FONT_EXO, overflowX: "hidden", background: "#02020f", position: "relative" }}>
       <MobileCanvas />
 
       <div style={{ position: "relative", zIndex: 1, maxWidth: 500, margin: "0 auto", padding: "0 18px 80px" }}>
@@ -804,8 +761,8 @@ function MobileHero() {
             </span>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <MiniStatusPill label="SERVER" value="ONLINE" color="#00ff88" />
-            <MiniStatusPill label="EMISSION" value="LIVE" color="#c9a84c" />
+            <MiniStatusPill label={copy.server} value={copy.online} color="#00ff88" />
+            <MiniStatusPill label={copy.emission} value={copy.live} color="#c9a84c" />
           </div>
         </div>
 
@@ -876,7 +833,14 @@ function MobileHero() {
             color: "#7abfff", marginTop: 8,
             textShadow: "0 0 12px rgba(122,191,255,0.5)",
           }}>
-            Время — твой главный актив
+            {copy.timeAsset}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 20 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
+            <PeopleClockDial size={270} />
+            <span style={{ color: "#8080a0", fontSize: 10, letterSpacing: "0.04em", textAlign: "center" }}>{copy.dialHint}</span>
           </div>
         </div>
 
@@ -887,9 +851,9 @@ function MobileHero() {
           transition: "transform .25s ease-out",
         }}>
           {[
-            { icon: "👥", label: "Граждан",  value: stats?.activeCitizens ?? "—",  color: "0,212,255" },
-            { icon: "⏳", label: "Дарминов", value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—", color: "201,168,76" },
-            { icon: "⚡", label: "Статус",   value: "LIVE", color: "0,255,136"  },
+            { icon: "👥", label: copy.citizens, value: stats?.activeCitizens ?? "—", color: "0,212,255" },
+            { icon: "⏳", label: copy.darmins, value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—", color: "201,168,76" },
+            { icon: "⚡", label: copy.activity, value: copy.live, color: "0,255,136" },
           ].map(s => (
             <div key={s.label} style={{
               background: `rgba(${s.color},0.07)`,
@@ -912,14 +876,13 @@ function MobileHero() {
           transition: "transform .2s ease-out",
         }}>
           <h1 style={{ fontSize: "clamp(22px,6.5vw,34px)", fontWeight: 900, lineHeight: 1.18, margin: 0, fontFamily: FONT_ORBITRON }}>
-            <span style={{ color: "#e8e8f4" }}>Создай </span>
             <span style={{
               background: "linear-gradient(135deg,#00d4ff,#a78bfa)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               filter: "drop-shadow(0 0 12px rgba(0,212,255,0.5))",
             }}>
-              Капитал Смыслов
+              {copy.mobileWelcome}
             </span>
           </h1>
           <p style={{
@@ -927,7 +890,7 @@ function MobileHero() {
             letterSpacing: "0.16em", textTransform: "uppercase", marginTop: 10,
             textShadow: "0 0 14px rgba(201,168,76,0.5)",
           }}>
-            ✦ &nbsp;Your Time. Your Empire.&nbsp; ✦
+            ✦ &nbsp;{copy.yourEmpire}&nbsp; ✦
           </p>
         </div>
 
@@ -980,7 +943,7 @@ function MobileHero() {
             glow="rgba(201,168,76,0.45)"
             hoverGlow="rgba(201,168,76,0.8)"
           >
-            ⚡&nbsp; ОФОРМИТЬ ПАСПОРТ
+            ⚡&nbsp; {copy.passport}
           </GlassBtn>
 
           {/* Blue — dashboard */}
@@ -992,7 +955,7 @@ function MobileHero() {
             glow="rgba(0,212,255,0.3)"
             hoverGlow="rgba(0,212,255,0.65)"
           >
-            👑&nbsp; ВОЙТИ В КАБИНЕТ
+            👑&nbsp; {copy.login}
           </GlassBtn>
         </div>
 
@@ -1000,11 +963,11 @@ function MobileHero() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 32, gap: 12 }}>
           {/* Floating neon clock */}
           <div style={{ transform: `perspective(300px) rotateY(${clockTilt}deg) rotateX(${clockTilt * 0.3}deg)`, transition: "transform 1.2s ease-in-out" }}>
-            <div style={{ fontSize: 8, letterSpacing: "0.18em", color: "#00d4ff", fontFamily: FONT_ORBITRON, opacity: 0.7, textTransform: "uppercase", marginBottom: 4 }}>Chronosphere</div>
+            <div style={{ fontSize: 8, letterSpacing: "0.18em", color: "#00d4ff", fontFamily: FONT_ORBITRON, opacity: 0.7, textTransform: "uppercase", marginBottom: 4 }}>{copy.state}</div>
             <div style={{ fontFamily: FONT_ORBITRON, fontSize: 22, fontWeight: 700, color: "#00d4ff", textShadow: "0 0 12px rgba(0,212,255,0.8),0 0 24px rgba(0,212,255,0.4)", letterSpacing: "0.1em", fontVariantNumeric: "tabular-nums" }}>
               {clock.h}:{clock.m}:{clock.s}
             </div>
-            <div style={{ fontSize: 8, color: "#8080a0", letterSpacing: "0.12em", marginTop: 2 }}>UTC+0 · Live</div>
+            <div style={{ fontSize: 8, color: "#8080a0", letterSpacing: "0.12em", marginTop: 2 }}>{copy.utcLive}</div>
           </div>
 
           {/* Mini activity widget */}
@@ -1016,11 +979,11 @@ function MobileHero() {
             boxShadow: "0 0 20px rgba(0,212,255,0.06)",
             minWidth: 150,
           }}>
-            <div style={{ fontSize: 8, letterSpacing: "0.16em", color: "#00d4ff", fontFamily: FONT_ORBITRON, marginBottom: 8, textTransform: "uppercase", opacity: 0.8 }}>◉ Activity</div>
+            <div style={{ fontSize: 8, letterSpacing: "0.16em", color: "#00d4ff", fontFamily: FONT_ORBITRON, marginBottom: 8, textTransform: "uppercase", opacity: 0.8 }}>◉ {copy.activity}</div>
             {[
-              { label: "Citizens",   value: stats?.activeCitizens ?? "—",                                             color: "#00ff88" },
-              { label: "Darmīn",    value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—",             color: "#c9a84c" },
-              { label: "Visitors",  value: stats?.uniqueVisitors ?? "—", color: "#00d4ff" },
+              { label: copy.citizens, value: stats?.activeCitizens ?? "—", color: "#00ff88" },
+              { label: copy.darmins, value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—", color: "#c9a84c" },
+              { label: copy.visitors, value: stats?.uniqueVisitors ?? "—", color: "#00d4ff" },
             ].map(r => (
               <div key={r.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
                 <span style={{ fontSize: 9, color: "#8080a0", fontFamily: FONT_EXO }}>{r.label}</span>
@@ -1031,7 +994,7 @@ function MobileHero() {
         </div>
 
         <div style={{ textAlign: "center", marginTop: 28, fontSize: 10, color: "#8080a0", letterSpacing: "0.06em" }}>
-          © {new Date().getFullYear()} TimeNation · Цифровое государство будущего
+          © {new Date().getFullYear()} TimeNation · {copy.copyright}
         </div>
       </div>
 
@@ -1122,9 +1085,14 @@ function GlassBtn({
 ═══════════════════════════════════════════════════════════════════ */
 export function Welcome() {
   const [isDesktop, setIsDesktop] = useState(false);
+  const { lang } = useLanguage();
+  const isRtl = ["ar", "ur", "he", "fa"].includes(lang);
 
   useEffect(() => {
-    document.title = "TimeNation — Chronosphere";
+    document.title = `${GATE_COPY[lang].desktopWelcome.replace("<br />", " ")} | TimeNation`;
+  }, [lang]);
+
+  useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
     setIsDesktop(mq.matches);
     const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
@@ -1135,7 +1103,7 @@ export function Welcome() {
   if (!isDesktop) return <MobileHero />;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#02020f", color: "#e8e8f4", fontFamily: FONT_EXO, overflowX: "hidden" }}>
+    <div dir={isRtl ? "rtl" : "ltr"} style={{ minHeight: "100vh", background: "#02020f", color: "#e8e8f4", fontFamily: FONT_EXO, overflowX: "hidden" }}>
       <HyperspaceCanvas />
       <DesktopHero />
     </div>
