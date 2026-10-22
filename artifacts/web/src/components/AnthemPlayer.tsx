@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { Music2, Pause, Play, Volume2, VolumeX, X } from "lucide-react";
 
 const STORAGE_ENABLED = "timenation.anthem.enabled";
 const STORAGE_VOLUME = "timenation.anthem.volume.v2";
@@ -10,9 +10,25 @@ const TRACKS = {
   en: { label: "English version", src: `${import.meta.env.BASE_URL}audio/timenation-anthem-en.mp3` },
 } as const;
 type TrackId = keyof typeof TRACKS;
+const OPEN_EVENT = "timenation:anthem:open";
+
+export function AnthemButton() {
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event(OPEN_EVENT))}
+      aria-label="Открыть плеер: Гимн (Anthem of TimeNation)"
+      className="flex w-full items-center gap-3 rounded-sm px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+    >
+      <Music2 className="h-4 w-4 shrink-0" />
+      <span>Гимн (Anthem of TimeNation)</span>
+    </button>
+  );
+}
 
 export function AnthemPlayer({ active }: { active: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [open, setOpen] = useState(false);
   const [track, setTrack] = useState<TrackId>(() => {
     try {
       return localStorage.getItem(STORAGE_TRACK) === "en" ? "en" : "ru";
@@ -38,6 +54,16 @@ export function AnthemPlayer({ active }: { active: boolean }) {
   });
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    const openPlayer = () => setOpen(true);
+    window.addEventListener(OPEN_EVENT, openPlayer);
+    return () => window.removeEventListener(OPEN_EVENT, openPlayer);
+  }, []);
+
+  useEffect(() => {
+    if (!active) setOpen(false);
+  }, [active]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -106,14 +132,19 @@ export function AnthemPlayer({ active }: { active: boolean }) {
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
       />
-      {active && (
+      {active && open && (
         <div
-          aria-label="Гимн TimeNation"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+          role="presentation"
+        >
+          <section
+          aria-label="Плеер гимна TimeNation"
+          aria-modal="true"
+          role="dialog"
           style={{
-            position: "fixed",
-            zIndex: 80,
-            right: 18,
-            bottom: 18,
             width: 248,
             display: "flex",
             flexDirection: "column",
@@ -128,6 +159,17 @@ export function AnthemPlayer({ active }: { active: boolean }) {
             fontFamily: "'Exo 2', sans-serif",
           }}
         >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px 2px" }}>
+            <strong style={{ fontSize: 12 }}>Гимн TimeNation</strong>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Закрыть плеер гимна"
+              style={{ display: "grid", placeItems: "center", width: 30, height: 30, border: 0, borderRadius: 8, color: "#c0c7d9", background: "transparent", cursor: "pointer" }}
+            >
+              <X size={16} />
+            </button>
+          </div>
           {(Object.keys(TRACKS) as TrackId[]).map((trackId) => (
             <button
               key={trackId}
@@ -174,6 +216,7 @@ export function AnthemPlayer({ active }: { active: boolean }) {
               style={{ flex: 1, accentColor: "#c9a84c", cursor: "pointer" }}
             />
           </div>
+          </section>
         </div>
       )}
     </>

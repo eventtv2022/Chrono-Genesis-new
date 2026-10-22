@@ -2,8 +2,7 @@ import { Audio } from "expo-av";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
 
 const ANTHEM = require("../assets/sounds/timenation-anthem.mp3");
@@ -21,7 +20,6 @@ const DEFAULT_VOLUME = 0.28;
 
 export function AnthemPlayer({ active }: { active: boolean }) {
   const colors = useColors();
-  const insets = useSafeAreaInsets();
   const soundRef = useRef<Audio.Sound | null>(null);
   const enabledRef = useRef(true);
   const volumeRef = useRef(DEFAULT_VOLUME);
@@ -31,6 +29,7 @@ export function AnthemPlayer({ active }: { active: boolean }) {
   const [volume, setVolume] = useState(DEFAULT_VOLUME);
   const [playing, setPlaying] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -167,85 +166,131 @@ export function AnthemPlayer({ active }: { active: boolean }) {
   };
 
   return (
-    <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-      <View
-        accessibilityLabel="Управление гимном TimeNation"
-        style={[
-          styles.panel,
-          {
-            right: 12,
-            bottom: insets.bottom + (Platform.OS === "web" ? 92 : 82),
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        {TRACKS.map(({ id, label }) => {
-          const selected = id === track;
-          const rowPlaying = selected && playing;
-          return (
-            <Pressable
-              key={id}
-              accessibilityRole="button"
-              accessibilityLabel={`${label}, ${rowPlaying ? "пауза" : "воспроизвести"}`}
-              accessibilityState={{ selected }}
-              testID={`anthem-track-${id}`}
-              onPress={() => selectTrack(id)}
-              style={[
-                styles.trackButton,
-                {
-                  borderColor: selected ? colors.primary : colors.border,
-                  backgroundColor: selected ? `${colors.primary}18` : "transparent",
-                },
-              ]}
-            >
-              <Feather name={rowPlaying ? "pause" : "play"} size={15} color={selected ? colors.primary : colors.mutedForeground} />
-              <Text style={[styles.title, { color: selected ? colors.primary : colors.foreground }]}>{label}</Text>
-              {selected && (
-                <Text numberOfLines={1} style={[styles.status, { color: colors.mutedForeground }]}>
-                  {autoplayBlocked ? "Нажмите для запуска" : playing ? "Играет" : "Пауза"}
-                </Text>
-              )}
-            </Pressable>
-          );
-        })}
-        <View style={styles.volumeRow}>
-          <Text style={[styles.status, { color: colors.mutedForeground }]}>Громкость</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Уменьшить громкость"
-            testID="anthem-volume-down"
-            onPress={() => adjustVolume(-0.1)}
-            style={styles.volumeButton}
-          >
-            <Feather name="minus" size={15} color={colors.mutedForeground} />
-          </Pressable>
-          <Text accessibilityLabel={`Громкость ${Math.round(volume * 100)} процентов`} style={[styles.volumeValue, { color: colors.foreground }]}>
-            {Math.round(volume * 100)}%
+    <>
+      <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Открыть плеер: Гимн (Anthem of TimeNation)"
+          testID="anthem-open"
+          onPress={() => setOpen(true)}
+          style={styles.openButton}
+        >
+          <Feather name="music" size={16} color={colors.primary} />
+          <Text numberOfLines={1} style={[styles.openButtonLabel, { color: colors.foreground }]}>
+            Гимн (Anthem of TimeNation)
           </Text>
+          <Feather name="chevron-up" size={16} color={colors.mutedForeground} />
+        </Pressable>
+      </View>
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Увеличить громкость"
-            testID="anthem-volume-up"
-            onPress={() => adjustVolume(0.1)}
-            style={styles.volumeButton}
-          >
-            <Feather name="plus" size={15} color={colors.mutedForeground} />
-          </Pressable>
+            accessibilityLabel="Закрыть плеер гимна"
+            style={StyleSheet.absoluteFill}
+            onPress={() => setOpen(false)}
+          />
+          <View style={[styles.panel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.title, { color: colors.foreground }]}>Гимн TimeNation</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Закрыть плеер гимна"
+                onPress={() => setOpen(false)}
+                style={styles.closeButton}
+              >
+                <Feather name="x" size={18} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            {TRACKS.map(({ id, label }) => {
+              const selected = id === track;
+              const rowPlaying = selected && playing;
+              return (
+                <Pressable
+                  key={id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label}, ${rowPlaying ? "пауза" : "воспроизвести"}`}
+                  accessibilityState={{ selected }}
+                  testID={`anthem-track-${id}`}
+                  onPress={() => selectTrack(id)}
+                  style={[
+                    styles.trackButton,
+                    {
+                      borderColor: selected ? colors.primary : colors.border,
+                      backgroundColor: selected ? `${colors.primary}18` : "transparent",
+                    },
+                  ]}
+                >
+                  <Feather name={rowPlaying ? "pause" : "play"} size={15} color={selected ? colors.primary : colors.mutedForeground} />
+                  <Text style={[styles.title, { color: selected ? colors.primary : colors.foreground }]}>{label}</Text>
+                  {selected && (
+                    <Text numberOfLines={1} style={[styles.status, { color: colors.mutedForeground }]}>
+                      {autoplayBlocked ? "Нажмите для запуска" : playing ? "Играет" : "Пауза"}
+                    </Text>
+                  )}
+                </Pressable>
+              );
+            })}
+            <View style={styles.volumeRow}>
+              <Text style={[styles.status, { color: colors.mutedForeground }]}>Громкость</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Уменьшить громкость"
+                testID="anthem-volume-down"
+                onPress={() => adjustVolume(-0.1)}
+                style={styles.volumeButton}
+              >
+                <Feather name="minus" size={15} color={colors.mutedForeground} />
+              </Pressable>
+              <Text accessibilityLabel={`Громкость ${Math.round(volume * 100)} процентов`} style={[styles.volumeValue, { color: colors.foreground }]}>
+                {Math.round(volume * 100)}%
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Увеличить громкость"
+                testID="anthem-volume-up"
+                onPress={() => adjustVolume(0.1)}
+                style={styles.volumeButton}
+              >
+                <Feather name="plus" size={15} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+          </View>
         </View>
-      </View>
-    </View>
+      </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  footer: {
+    minHeight: 48,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  openButton: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9,
+  },
+  openButtonLabel: { fontSize: 12, fontWeight: "600" },
+  modalBackdrop: { flex: 1, justifyContent: "center", padding: 18, backgroundColor: "rgba(0,0,0,0.58)" },
   panel: {
-    position: "absolute",
-    zIndex: 100,
-    width: 252,
+    width: "100%",
+    maxWidth: 360,
+    alignSelf: "center",
     gap: 5,
-    padding: 9,
-    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    borderWidth: 1,
     borderRadius: 14,
     shadowColor: "#000",
     shadowOpacity: 0.2,
@@ -253,6 +298,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
   },
+  modalHeader: { minHeight: 34, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingLeft: 4 },
+  closeButton: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
   trackButton: {
     minHeight: 34,
     flexDirection: "row",

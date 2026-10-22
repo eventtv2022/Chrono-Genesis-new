@@ -8,6 +8,7 @@ import {
   useUpdateOnboardingProgressSession,
 } from "@workspace/api-client-react";
 import { ArrowLeft, ArrowRight, BookOpen, Check, Eye, ShieldCheck } from "lucide-react";
+import { AnthemButton } from "@/components/AnthemPlayer";
 import {
   ONBOARDING_PROGRESS_TOKEN_KEY,
   PRE_APPLICATION_GUIDE_COMPLETE_KEY,
@@ -120,6 +121,7 @@ export function PreApplicationGuide() {
   if (done || session?.guideCompleted) {
     return (
       <main className="min-h-screen bg-[#050713] px-6 text-white grid place-items-center">
+        <div className="w-full max-w-lg"><AnthemButton /></div>
         <section className="max-w-lg space-y-5 text-center">
           <ShieldCheck className="mx-auto h-14 w-14 text-primary" />
           <p className="font-mono text-xs uppercase tracking-[0.24em] text-primary">TimeNation · знакомство завершено</p>
@@ -149,6 +151,7 @@ export function PreApplicationGuide() {
   if (!session) {
     return (
       <main className="min-h-screen bg-[#050713] px-6 text-white grid place-items-center">
+        <div className="w-full max-w-lg"><AnthemButton /></div>
         <section className="max-w-lg space-y-4 text-center">
           <BookOpen className="mx-auto h-10 w-10 text-primary" />
           <h1 className="text-xl font-semibold">Подключаем знакомство</h1>
@@ -169,6 +172,7 @@ export function PreApplicationGuide() {
     <main className="min-h-screen bg-[#050713] px-4 py-8 text-white md:px-8">
       <div className="mx-auto max-w-3xl">
         <header className="mb-7">
+          <div className="mb-4 max-w-xs"><AnthemButton /></div>
           <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.22em] text-primary">
             <BookOpen className="h-4 w-4" />
             TimeNation · перед подачей заявления

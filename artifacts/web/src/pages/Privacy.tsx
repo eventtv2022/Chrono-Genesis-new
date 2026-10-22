@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { CookieConsent } from "@/components/CookieConsent";
+import { AnthemButton } from "@/components/AnthemPlayer";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 export type PrivacyLangCode =
@@ -393,6 +394,9 @@ export function Privacy() {
         <h1 style={{ margin: "0 0 8px", fontSize: "clamp(24px,4vw,42px)", fontWeight: 800, letterSpacing: "-1px" }}>{s.page_title}</h1>
         <p style={{ margin: "0 0 8px", color: muted, fontSize: 16 }}>{s.page_subtitle}</p>
         <p style={{ margin: 0, color: muted, fontSize: 13 }}>{s.last_updated}</p>
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
+            <AnthemButton />
+          </div>
       </div>
 
       {/* ── Body ────────────────────────────────────────────────────────────── */}

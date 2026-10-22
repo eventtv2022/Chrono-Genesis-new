@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useCitizen } from "@/context/CitizenContext";
 import { SignaturePad } from "@/components/SignaturePad";
+import { AnthemButton } from "@/components/AnthemPlayer";
 
 export function SignatureRequest() {
   const { citizen, authToken, setCitizen, refreshCitizen } = useCitizen();
@@ -38,6 +39,7 @@ export function SignatureRequest() {
     <main className="min-h-screen bg-[#050713] px-4 py-10 text-white">
       <section className="mx-auto w-full max-w-xl space-y-5 rounded-2xl border border-white/10 bg-white/[0.035] p-6 shadow-2xl">
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">TimeNation · Реестр граждан</p>
+        <AnthemButton />
         <h1 className="text-2xl font-bold">Подпись гражданина</h1>
         {!citizen ? (
           <>

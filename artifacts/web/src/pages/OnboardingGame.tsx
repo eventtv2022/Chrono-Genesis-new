@@ -9,6 +9,7 @@ import {
 import { ArrowRight, Check, Clock3, Eye, ShieldCheck } from "lucide-react";
 import { useCitizen } from "@/context/CitizenContext";
 import { SignaturePad } from "@/components/SignaturePad";
+import { AnthemButton } from "@/components/AnthemPlayer";
 import { PASSPORT_SIMULATOR_QUESTIONS, onboardingBlockTitle } from "../../../../lib/onboarding-questions";
 import { PreApplicationGuide } from "./PreApplicationGuide";
 
@@ -127,6 +128,7 @@ export function OnboardingGame() {
   if (status.data?.registrationStatus === "rejected") {
     return (
       <main className="min-h-screen bg-[#050713] text-white grid place-items-center px-6">
+        <div className="w-full max-w-xl"><AnthemButton /></div>
         <section className="max-w-xl space-y-5 text-center">
           <ShieldCheck className="mx-auto h-12 w-12 text-amber-400" />
           <h1 className="text-3xl font-bold">Заявление требует исправлений</h1>
@@ -143,6 +145,7 @@ export function OnboardingGame() {
     return (
       <main className="min-h-screen bg-[#050713] text-white grid place-items-center px-4 py-8">
         <section className="w-full max-w-xl space-y-5 rounded-2xl border border-white/10 bg-white/[0.035] p-6">
+          <AnthemButton />
           <ShieldCheck className="h-10 w-10 text-primary" />
           <h1 className="text-2xl font-bold">Добавьте подпись для выдачи паспорта</h1>
           <p className="text-sm leading-6 text-muted-foreground">
@@ -167,6 +170,7 @@ export function OnboardingGame() {
   if (status.isLoading || !status.data || !status.data.startedAt) {
     return (
       <main className="min-h-screen bg-[#050713] text-white grid place-items-center px-6">
+        <div className="w-full max-w-xl"><AnthemButton /></div>
         <div className="flex items-center gap-3 text-muted-foreground" role="status" data-testid="status-onboarding-loading">
           <Clock3 className="h-5 w-5 animate-pulse text-primary" />
           {status.isError ? "Не удалось загрузить симуляцию. Проверьте соединение." : "Подключаем симуляцию…"}
@@ -179,6 +183,7 @@ export function OnboardingGame() {
     return (
       <main className="min-h-screen bg-[#050713] text-white grid place-items-center px-6">
         <section className="max-w-xl space-y-5 text-center">
+          <AnthemButton />
           <div className="mx-auto grid h-24 w-24 place-items-center rounded-full border border-primary/50 bg-primary/10 shadow-[0_0_70px_rgba(201,168,76,.25)]">
             <ShieldCheck className="h-12 w-12 text-primary" />
           </div>
@@ -201,6 +206,7 @@ export function OnboardingGame() {
     return (
       <main className="min-h-screen bg-[#050713] text-white grid place-items-center px-6">
         <section className="max-w-xl space-y-5 text-center">
+          <AnthemButton />
           <Check className="mx-auto h-12 w-12 text-emerald-300" />
           <p className="font-mono text-xs uppercase tracking-[0.24em] text-primary">TimeNation · вопросы завершены</p>
           <h1 className="text-3xl font-bold">Симуляция продолжается</h1>
@@ -222,6 +228,7 @@ export function OnboardingGame() {
       <div className="mx-auto max-w-5xl">
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
+            <div className="mb-3 max-w-xs"><AnthemButton /></div>
             <p className="font-mono text-xs uppercase tracking-[0.24em] text-primary">TimeNation · симуляция заявления</p>
             <h1 className="mt-2 text-2xl font-bold md:text-3xl">Симуляция до финала за минуту до выдачи</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Отсчёт привязан к сроку eligibility, записанному при подаче заявления.</p>

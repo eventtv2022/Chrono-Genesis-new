@@ -5,6 +5,7 @@ import { SystemClock } from "./SystemClock";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useWsSync } from "@/hooks/useWsSync";
+import { AnthemButton } from "./AnthemPlayer";
 
 function CitizenWidget() {
   const { citizen, setCitizen, setAuthToken, refreshCitizen } = useCitizen();
@@ -250,6 +251,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          <AnthemButton />
         </nav>
         <div className="mt-auto">
           <SystemClock />

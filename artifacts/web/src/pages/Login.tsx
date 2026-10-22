@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useCitizen, type CitizenProfile } from "@/context/CitizenContext";
+import { AnthemButton } from "@/components/AnthemPlayer";
 
 const loginSchema = z.object({
   phone: z.string().min(5, "Введите номер телефона"),
@@ -53,6 +54,7 @@ export function Login() {
   return (
     <main className="grid min-h-screen place-items-center bg-[#050713] px-4 py-10 text-white">
       <section className="w-full max-w-md rounded-2xl border border-cyan-300/20 bg-white/[0.04] p-6 shadow-[0_20px_100px_rgba(0,0,0,.35)] md:p-8">
+        <AnthemButton />
         <Link href="/welcome" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition hover:text-white" data-testid="link-login-back">
           <ArrowLeft className="h-4 w-4" /> На главную
         </Link>
