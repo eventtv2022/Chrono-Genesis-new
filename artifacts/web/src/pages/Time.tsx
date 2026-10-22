@@ -267,29 +267,38 @@ const DAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
 interface Subscriber { id: number; pseudonym: string; rank: string; }
 
-function MinuteHourglass({ remaining, running }: { remaining: number; running: boolean }) {
-  const minuteSeconds = remaining % 60;
-  const sandLeft = remaining === 0 ? 0 : minuteSeconds === 0 ? 1 : minuteSeconds / 60;
-  const drained = 1 - sandLeft;
-  const topY = 31 - sandLeft * 21;
-  const topWidth = 2 + sandLeft * 18;
-  const topLeft = 24 - topWidth / 2;
-  const bottomY = 55 - drained * 21;
-  const bottomWidth = 2 + drained * 18;
-  const bottomLeft = 24 - bottomWidth / 2;
+function MinuteHourglass({ elapsedSeconds, running }: { elapsedSeconds: number; running: boolean }) {
+  const minuteIndex = Math.floor(elapsedSeconds / 60);
+  const minuteProgress = (elapsedSeconds % 60) / 60;
+  const flipped = minuteIndex % 2 === 1;
+  const topSand = flipped ? minuteProgress : 1 - minuteProgress;
+  const bottomSand = flipped ? 1 - minuteProgress : minuteProgress;
+  const clipId = `minute-hourglass-${flipped ? "flipped" : "upright"}`;
 
   return (
-    <svg
-      viewBox="0 0 48 64"
-      className={`h-20 w-14 shrink-0 ${running ? "text-primary" : "text-muted-foreground"}`}
-      role="img"
-      aria-label="Песочные часы: песок истекает за одну минуту"
+    <div
+      className="h-24 w-16 shrink-0"
+      style={{
+        transform: flipped ? "rotate(180deg)" : "rotate(0deg)",
+        transition: "transform 700ms ease-in-out",
+      }}
     >
-      <path d="M12 7h24M12 57h24M14 9c0 9 8 14 10 22-2 8-10 15-10 24M34 9c0 9-8 14-10 22 2 8 10 15 10 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity=".8" />
-      <path d={`M${topLeft} ${topY}h${topWidth}L25 31h-2z`} fill="hsl(var(--primary))" />
-      {drained > 0.02 && <path d={`M14 55h20L${bottomLeft + bottomWidth} ${bottomY}H${bottomLeft}z`} fill="hsl(var(--primary))" />}
-      {running && <path d="M24 31v3" stroke="hsl(var(--primary))" strokeWidth="1.5" strokeDasharray="1 1" />}
-    </svg>
+      <svg
+        viewBox="0 0 48 64"
+        className={`h-full w-full ${running ? "text-primary" : "text-muted-foreground"}`}
+        role="img"
+        aria-label="Песочные часы переворачиваются каждую минуту"
+      >
+        <defs>
+          <clipPath id={`${clipId}-top`}><path d="M14 9H34L25 31H23Z" /></clipPath>
+          <clipPath id={`${clipId}-bottom`}><path d="M23 33H25L34 55H14Z" /></clipPath>
+        </defs>
+        <rect x="10" y="9" width="28" height={22 * topSand} fill="hsl(var(--primary))" clipPath={`url(#${clipId}-top)`} />
+        <rect x="10" y={55 - 22 * bottomSand} width="28" height={22 * bottomSand} fill="hsl(var(--primary))" clipPath={`url(#${clipId}-bottom)`} />
+        {running && <path d="M24 31v3" stroke="hsl(var(--primary))" strokeWidth="1.5" strokeDasharray="1 1" />}
+        <path d="M12 7h24M12 57h24M14 9c0 9 8 14 10 22-2 8-10 15-10 24M34 9c0 9-8 14-10 22 2 8 10 15 10 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity=".8" />
+      </svg>
+    </div>
   );
 }
 
@@ -874,7 +883,10 @@ export function Time() {
                   {completed ? "Сессия завершена!" : running ? "Фокусируйся…" : "Готов к старту"}
                 </span>
               </div>
-                <MinuteHourglass remaining={remaining} running={running} />
+                <MinuteHourglass
+                  elapsedSeconds={Math.max(0, sessionDurationRef.current - remaining)}
+                  running={running}
+                />
               </div>
               <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${(1 - progress) * 100}%` }} />
