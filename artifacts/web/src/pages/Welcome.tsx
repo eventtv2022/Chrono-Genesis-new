@@ -11,6 +11,7 @@ function pad2(n: number) { return String(n).padStart(2, "0"); }
 
 const FONT_ORBITRON = "'Orbitron', 'Space Mono', monospace";
 const FONT_EXO      = "'Exo 2', 'Space Grotesk', sans-serif";
+const REFERRER_STORAGE_KEY = "timenation.referrerId";
 
 /* ═══════════════════════════════════════════════════════════════════
    HYPERSPACE CANVAS — converging neon threads + star-dust
@@ -1129,6 +1130,20 @@ export function Welcome() {
   const [isDesktop, setIsDesktop] = useState(false);
   const { lang } = useLanguage();
   const isRtl = ["ar", "ur", "he", "fa"].includes(lang);
+
+  useEffect(() => {
+    const rawReferrerId = new URLSearchParams(window.location.search).get("ref");
+    if (!rawReferrerId || !/^[1-9]\d*$/.test(rawReferrerId)) return;
+
+    const referrerId = Number(rawReferrerId);
+    if (!Number.isSafeInteger(referrerId)) return;
+
+    try {
+      localStorage.setItem(REFERRER_STORAGE_KEY, String(referrerId));
+    } catch {
+      // Do not block the gate if browser storage is disabled.
+    }
+  }, []);
 
   useEffect(() => {
     document.title = `${GATE_COPY[lang].desktopWelcome.replace("<br />", " ")} | TimeNation`;
