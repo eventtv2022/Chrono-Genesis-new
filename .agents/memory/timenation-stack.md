@@ -15,6 +15,15 @@ description: Ключевые факты о проекте Chrono-Genesis/TimeNa
 - STRIPE_WEBHOOK_SECRET — есть
 - GOOGLE_SHEETS_ID — опционально (заглушка в googleSheets.ts)
 
+## Google Sheets — реестр граждан
+- Production database is the source of truth for the citizen sheet; development must not write citizen rows.
+- Keep old/unmatched rows and mark them unverified rather than deleting them automatically.
+- Match rows using internal citizen ID plus phone; passport number is editable, and internal IDs can overlap between environments.
+
+**Why:** The user wants the sheet aligned to production, and existing rows include reused internal IDs across environments.
+
+**How to apply:** Run a protected full snapshot from the production admin registry. Preserve ambiguous legacy rows for review; never treat the spreadsheet as authoritative for database records.
+
 ## Crypto gateway (Cryptomus) — добавлен
 - Сервис: `artifacts/api-server/src/services/cryptomusService.ts`
 - Endpoint: `POST /api/tv/slots/book-crypto` — создаёт Cryptomus USDT/USDC payment

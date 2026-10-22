@@ -404,9 +404,21 @@ router.patch(
 
       const adminId = (req as unknown as { registryAdminId?: number }).registryAdminId;
       req.log.info({ adminId, citizenId: id }, "Admin registry passport number updated");
-      const sheetSync = process.env["NODE_ENV"] === "production"
-        ? await syncCurrentCitizenSnapshotToSheets()
-        : null;
+      let sheetSync: Awaited<ReturnType<typeof syncCurrentCitizenSnapshotToSheets>> | null = null;
+      if (process.env["NODE_ENV"] === "production") {
+        try {
+          sheetSync = await syncCurrentCitizenSnapshotToSheets();
+        } catch (syncError) {
+          req.log.warn({ err: syncError, adminId, citizenId: id }, "Passport number saved but production sheet snapshot could not be loaded");
+          sheetSync = {
+            ok: false,
+            updated: 0,
+            appended: 0,
+            unverified: 0,
+            error: "Номер сохранён, но не удалось загрузить production-реестр для синхронизации",
+          };
+        }
+      }
       if (sheetSync && !sheetSync.ok) {
         req.log.warn({ adminId, citizenId: id, reason: sheetSync.error }, "Passport number saved but Google Sheets sync failed");
       }

@@ -920,10 +920,146 @@
       background:transparent;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;
     }
     .pm-close-btn:active { background:rgba(255,255,255,.05); }
+
+    /* ── First visit: choose the TimeNation experience ── */
+    #entry-gate {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: max(24px, env(safe-area-inset-top)) 18px max(28px, env(safe-area-inset-bottom));
+      background:
+        radial-gradient(ellipse at 50% 18%, rgba(108,99,255,.22), transparent 48%),
+        radial-gradient(ellipse at 50% 100%, rgba(201,168,76,.10), transparent 45%),
+        #0f0f1a;
+    }
+    .entry-gate-content {
+      width: 100%;
+      max-width: 430px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .entry-brand {
+      text-align: center;
+      margin-bottom: 18px;
+    }
+    .entry-brand-mark {
+      width: 62px;
+      height: 62px;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 14px;
+      border-radius: 20px;
+      color: var(--gold);
+      font-size: 32px;
+      background: linear-gradient(145deg, rgba(108,99,255,.22), rgba(201,168,76,.12));
+      border: 1px solid rgba(201,168,76,.28);
+      box-shadow: 0 12px 36px rgba(0,0,0,.28);
+    }
+    .entry-brand h1 {
+      color: var(--fg);
+      font-size: 28px;
+      line-height: 1.15;
+      letter-spacing: .02em;
+    }
+    .entry-brand p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .entry-choice {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 16px;
+      background: rgba(255,255,255,.045);
+      color: var(--fg);
+      text-align: left;
+      text-decoration: none;
+      font: inherit;
+      cursor: pointer;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .entry-choice:active {
+      transform: scale(.985);
+      background: rgba(255,255,255,.08);
+    }
+    .entry-choice:focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 3px;
+    }
+    .entry-choice-primary {
+      border-color: rgba(201,168,76,.48);
+      background: linear-gradient(110deg, rgba(108,99,255,.18), rgba(201,168,76,.10));
+    }
+    .entry-choice-icon {
+      width: 44px;
+      height: 44px;
+      flex: 0 0 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      background: rgba(255,255,255,.07);
+      font-size: 22px;
+    }
+    .entry-choice-copy { flex: 1; min-width: 0; }
+    .entry-choice-title { display: block; font-size: 15px; font-weight: 700; }
+    .entry-choice-note { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .entry-choice-arrow { color: var(--gold); font-size: 20px; }
+    .entry-gate-footnote {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
-<div id="app">
+<main id="entry-gate" aria-labelledby="entry-title">
+  <div class="entry-gate-content">
+    <header class="entry-brand">
+      <div class="entry-brand-mark" aria-hidden="true">∞</div>
+      <h1 id="entry-title">TimeNation</h1>
+      <p>Выберите удобный формат</p>
+    </header>
+
+    <button class="entry-choice entry-choice-primary" type="button" onclick="openMobileExperience()">
+      <span class="entry-choice-icon" aria-hidden="true">📱</span>
+      <span class="entry-choice-copy">
+        <span class="entry-choice-title">Мобильная версия</span>
+        <span class="entry-choice-note">Продолжить в Telegram</span>
+      </span>
+      <span class="entry-choice-arrow" aria-hidden="true">›</span>
+    </button>
+
+    <a class="entry-choice" href="https://timenation.info/web/" onclick="return openEntryLink(event, 'https://timenation.info/web/')">
+      <span class="entry-choice-icon" aria-hidden="true">🖥️</span>
+      <span class="entry-choice-copy">
+        <span class="entry-choice-title">Десктопная версия</span>
+        <span class="entry-choice-note">Открыть веб-приложение</span>
+      </span>
+      <span class="entry-choice-arrow" aria-hidden="true">›</span>
+    </a>
+
+    <a class="entry-choice" href="https://timenation.info" onclick="return openEntryLink(event, 'https://timenation.info')">
+      <span class="entry-choice-icon" aria-hidden="true">🌐</span>
+      <span class="entry-choice-copy">
+        <span class="entry-choice-title">Официальный сайт</span>
+        <span class="entry-choice-note">Новости и информация о TimeNation</span>
+      </span>
+      <span class="entry-choice-arrow" aria-hidden="true">›</span>
+    </a>
+
+    <p class="entry-gate-footnote">Вы всегда сможете вернуться и выбрать другой формат.</p>
+  </div>
+</main>
+
+<div id="app" style="display:none">
 
   <!-- Subscription gate modal -->
   <div id="sub-modal-backdrop">
@@ -1530,6 +1666,19 @@ if (tg) {
 }
 
 document.getElementById('pp-year').textContent = new Date().getFullYear();
+
+function openEntryLink(event, url) {
+  event.preventDefault();
+  if (tg?.openLink) tg.openLink(url);
+  else window.location.assign(url);
+  return false;
+}
+
+function openMobileExperience() {
+  document.getElementById('entry-gate').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  init();
+}
 
 // ── Auth ───────────────────────────────────────────────────────────────────────
 async function init() {
@@ -2621,8 +2770,7 @@ function showToast(msg) {
   toastTimeout = setTimeout(() => toast.classList.remove('show'), 3200);
 }
 
-// ── Bootstrap ─────────────────────────────────────────────────────────────────
-init();
+// Authentication is intentionally deferred until the visitor chooses the mobile experience.
 </script>
 </body>
 </html>

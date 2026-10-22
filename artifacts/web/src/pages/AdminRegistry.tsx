@@ -1248,6 +1248,7 @@ export function AdminRegistry() {
                   disabled={sheetSyncing}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
                   data-testid="button-sync-production-sheets"
+                  title="Работает только в production. Обновляет production-записи, помечает старые неподтверждённые строки и ничего не удаляет."
                 >
                   {sheetSyncing ? "Сверяем…" : "Сверить Google Sheets"}
                 </button>

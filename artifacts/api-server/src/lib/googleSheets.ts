@@ -140,6 +140,9 @@ export async function syncProductionCitizensToSheets(
     if (headers[9] && headers[9] !== CITIZEN_SOURCE_HEADER) {
       return failedCitizenSync("Столбец J уже занят; данные не изменены");
     }
+    if (!headers[9] && grid.slice(1).some((row) => String(row[9] ?? "").trim())) {
+      return failedCitizenSync("В столбце J уже есть данные без заголовка; данные не изменены");
+    }
     if (!headers[9]) {
       await sheets.spreadsheets.values.update({
         spreadsheetId,
