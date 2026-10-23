@@ -812,6 +812,33 @@ export async function sendDirectMessage(
   }
 }
 
+export async function sendFocusThoughtsToTelegram(
+  telegramId: string,
+  thoughts: string,
+): Promise<boolean> {
+  if (!bot || !telegramId) return false;
+  const chunks: string[] = [];
+  let chunk = "";
+  for (const char of thoughts) {
+    if (chunk.length + char.length > 3500) {
+      chunks.push(chunk);
+      chunk = "";
+    }
+    chunk += char;
+  }
+  if (chunk) chunks.push(chunk);
+  try {
+    for (let index = 0; index < chunks.length; index += 1) {
+      const prefix = chunks.length > 1 ? `Мысли из фокус-сессии (${index + 1}/${chunks.length}):\n\n` : "Мысли из фокус-сессии:\n\n";
+      await bot.telegram.sendMessage(telegramId, `${prefix}${chunks[index]}`);
+    }
+    return true;
+  } catch (err) {
+    logger.warn({ err, telegramId }, "sendFocusThoughtsToTelegram failed");
+    return false;
+  }
+}
+
 export type PassportLifecycleEvent = "emission_started" | "passport_issued";
 
 interface PassportLifecycleNotice {

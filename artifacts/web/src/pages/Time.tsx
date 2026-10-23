@@ -334,7 +334,8 @@ export function Time() {
   const [running, setRunning] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [focusText, setFocusText] = useState("");
-  const [focusResult, setFocusResult] = useState<{ rewardDarmins: number; textCharacters: number } | null>(null);
+  const [forwardFocusToTelegram, setForwardFocusToTelegram] = useState(false);
+  const [focusResult, setFocusResult] = useState<{ rewardDarmins: number; textCharacters: number; telegramStatus?: "not_requested" | "sent" | "not_linked" | "failed" | "already_completed" } | null>(null);
   const [focusError, setFocusError] = useState("");
   const focusSessionId = useRef<number | null>(null);
   const [quizAttempt, setQuizAttempt] = useState<{ id: string; question: string } | null>(null);
@@ -359,19 +360,20 @@ export function Time() {
         const response = await fetch(`/api/citizens/focus/${focusSessionId.current}/complete`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders },
-          body: JSON.stringify({ text: focusText }),
+          body: JSON.stringify({ text: focusText, forwardToTelegram: forwardFocusToTelegram }),
         });
-        const data = await response.json() as { rewardDarmins?: number; textCharacters?: number; error?: string };
+        const data = await response.json() as { rewardDarmins?: number; textCharacters?: number; telegramStatus?: "not_requested" | "sent" | "not_linked" | "failed"; newlyCompleted?: boolean; error?: string };
         if (!response.ok) throw new Error(data.error || "Не удалось сохранить сеанс");
-        setFocusResult({ rewardDarmins: data.rewardDarmins ?? 0, textCharacters: data.textCharacters ?? 0 });
+        setFocusResult({ rewardDarmins: data.rewardDarmins ?? 0, textCharacters: data.textCharacters ?? 0, telegramStatus: data.newlyCompleted === false ? "already_completed" : data.telegramStatus });
         focusSessionId.current = null;
-        setFocusText("");
+        if (!forwardFocusToTelegram || data.telegramStatus === "sent" || !focusText.trim()) setFocusText("");
+        setForwardFocusToTelegram(false);
         if ((data.rewardDarmins ?? 0) > 0) await refreshCitizen();
       } catch (error) {
         setFocusError(error instanceof Error ? error.message : "Не удалось сохранить сеанс");
       }
     }
-  }, [authToken, citizen?.id, focusText, refreshCitizen, stopInterval]);
+  }, [authToken, citizen?.id, focusText, forwardFocusToTelegram, refreshCitizen, stopInterval]);
 
   useEffect(() => {
     if (running) {
@@ -937,12 +939,29 @@ export function Time() {
               />
               <span className="text-xs text-muted-foreground">{Array.from(focusText).length.toLocaleString()} символов · 1 страница ≈ 1 800 символов</span>
             </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={forwardFocusToTelegram}
+                onChange={event => setForwardFocusToTelegram(event.target.checked)}
+                disabled={completed}
+                data-testid="checkbox-forward-focus-telegram"
+                className="mt-0.5"
+              />
+              <span>
+                Отправить мысли в мой Telegram после завершения
+                <span className="block text-xs text-muted-foreground">Текст будет отправлен только при включённом флажке и привязанном Telegram-аккаунте.</span>
+              </span>
+            </label>
             {completed && (
               <div className="flex items-center gap-3 p-4 rounded-lg bg-primary/10 border border-primary/40">
                 <span className="text-xl">🎉</span>
                 <p className="text-sm text-foreground">
                   Сеанс завершён: <strong>{Math.round(sessionDurationRef.current / 60)} минут</strong> концентрации.
                   {focusResult && <> Учтено {focusResult.textCharacters} символов, начислено {focusResult.rewardDarmins} Д.</>}
+                  {focusResult?.telegramStatus === "sent" && <> Мысли отправлены в Telegram.</>}
+                  {focusResult?.telegramStatus === "not_linked" && <> Telegram не привязан — мысли не отправлены.</>}
+                  {focusResult?.telegramStatus === "failed" && <> Не удалось отправить мысли в Telegram.</>}
                 </p>
                 <button onClick={() => setCompleted(false)} className="text-xs text-muted-foreground hover:text-foreground shrink-0">✕</button>
               </div>

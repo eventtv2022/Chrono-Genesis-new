@@ -21,7 +21,7 @@ import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
 import { requireAdultKyc, requireAuth } from "../middleware/auth";
 import { sendAdminTelegramNotify } from "../services/emailService";
-import { notifyPassportEmissionStarted, sendDirectMessage } from "../services/telegramService";
+import { notifyPassportEmissionStarted, sendDirectMessage, sendFocusThoughtsToTelegram } from "../services/telegramService";
 import { issueEligiblePassport } from "../services/passportIssuanceService";
 import { deriveAgeTier } from "../services/ageGateService";
 import { getCitizenDisplayName } from "../services/citizenIdentity";
@@ -1265,13 +1265,16 @@ router.post("/citizens/focus/:id/resume", requireAuth, async (req, res): Promise
 
 router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
-  const parsed = z.object({ text: z.string().max(100_000) }).safeParse(req.body);
+  const parsed = z.object({
+    text: z.string().max(100_000),
+    forwardToTelegram: z.boolean().optional().default(false),
+  }).safeParse(req.body);
   if (!Number.isInteger(id) || id < 1 || !parsed.success) { res.status(400).json({ error: "Неверные данные сеанса" }); return; }
   const result = await db.transaction(async tx => {
     const [session] = await tx.select().from(focusSessionsTable).where(and(eq(focusSessionsTable.id, id), eq(focusSessionsTable.citizenId, req.citizen!.id))).for("update").limit(1);
     if (!session) return null;
     if (session.status === "completed") {
-      return { elapsedSeconds: session.elapsedSeconds, textCharacters: session.textCharacters, rewardDarmins: session.rewardDarmins };
+      return { elapsedSeconds: session.elapsedSeconds, textCharacters: session.textCharacters, rewardDarmins: session.rewardDarmins, newlyCompleted: false };
     }
     if (!["running", "paused"].includes(session.status)) return null;
     const elapsedSeconds = session.elapsedSeconds + (session.status === "running" && session.runningSince ? Math.max(0, Math.floor((Date.now() - session.runningSince.getTime()) / 1000)) : 0);
@@ -1280,11 +1283,23 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
     const reward = elapsedSeconds >= 12 * 60 ? Math.floor(chars / 1800) : 0;
     await tx.update(focusSessionsTable).set({ status: "completed", runningSince: null, elapsedSeconds, textCharacters: chars, rewardDarmins: reward, completedAt: new Date() }).where(eq(focusSessionsTable.id, id));
     if (reward) await tx.update(citizensTable).set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${reward}` }).where(eq(citizensTable.id, req.citizen!.id));
-    return { elapsedSeconds, textCharacters: chars, rewardDarmins: reward };
+    return { elapsedSeconds, textCharacters: chars, rewardDarmins: reward, newlyCompleted: true };
   });
   if (!result) { res.status(404).json({ error: "Сеанс не найден или уже завершён" }); return; }
   if ("tooEarly" in result) { res.status(409).json({ error: "Таймер ещё не завершён" }); return; }
-  res.json(result);
+  let telegramStatus: "not_requested" | "sent" | "not_linked" | "failed" = "not_requested";
+  if (parsed.data.forwardToTelegram && result.newlyCompleted && parsed.data.text.trim()) {
+    const [citizen] = await db.select({ telegramId: citizensTable.telegramId })
+      .from(citizensTable)
+      .where(eq(citizensTable.id, req.citizen!.id))
+      .limit(1);
+    if (!citizen?.telegramId) {
+      telegramStatus = "not_linked";
+    } else {
+      telegramStatus = await sendFocusThoughtsToTelegram(citizen.telegramId, parsed.data.text) ? "sent" : "failed";
+    }
+  }
+  res.json({ ...result, telegramStatus });
 });
 
 router.get("/citizens/focus/quiz/question", requireAuth, async (req, res): Promise<void> => {
