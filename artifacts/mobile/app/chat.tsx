@@ -256,6 +256,7 @@ export default function ChatListScreen() {
             refreshing={loading}
             contentContainerStyle={{ paddingBottom: 24 }}
             renderItem={({ item: conv }) => {
+              const isSelfChat = conv.peer_id === citizen.id;
               const isOnline = onlineIds.has(conv.peer_id);
               return (
                 <TouchableOpacity
@@ -265,13 +266,15 @@ export default function ChatListScreen() {
                 >
                   <View style={s.avatarWrap}>
                     <View style={s.avatar}>
-                      <Text style={s.avatarText}>{(conv.peer_name ?? "?")[0]?.toUpperCase()}</Text>
+                      {isSelfChat
+                        ? <Feather name="bookmark" size={18} color={C.primary} />
+                        : <Text style={s.avatarText}>{(conv.peer_name ?? "?")[0]?.toUpperCase()}</Text>}
                     </View>
                     {isOnline && <View style={s.onlineDot} />}
                   </View>
                   <View style={s.convBody}>
                     <View style={s.convTop}>
-                      <Text style={s.convName} numberOfLines={1}>{conv.peer_name ?? `ID ${conv.peer_id}`}</Text>
+                      <Text style={s.convName} numberOfLines={1}>{isSelfChat ? "Заметки себе" : conv.peer_name ?? `ID ${conv.peer_id}`}</Text>
                       <Text style={s.convTime}>{formatTime(conv.created_at)}</Text>
                     </View>
                     <View style={s.convBot}>
@@ -285,7 +288,9 @@ export default function ChatListScreen() {
                         </View>
                       )}
                     </View>
-                    {conv.peer_rank && <Text style={s.convRank}>{conv.peer_rank}</Text>}
+                    {isSelfChat
+                      ? <Text style={s.convRank}>Личный диалог</Text>
+                      : conv.peer_rank && <Text style={s.convRank}>{conv.peer_rank}</Text>}
                   </View>
                 </TouchableOpacity>
               );
@@ -361,6 +366,26 @@ export default function ChatListScreen() {
               onChangeText={setSearchQuery}
               autoFocus
             />
+            <TouchableOpacity
+              style={s.searchItem}
+              onPress={() => {
+                setSearchModal(false);
+                setSearchQuery("");
+                router.push(`/chat/${citizen.id}`);
+              }}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Открыть заметки себе"
+              testID="button-open-self-chat"
+            >
+              <View style={s.avatar}>
+                <Feather name="bookmark" size={18} color={C.primary} />
+              </View>
+              <View>
+                <Text style={s.searchName}>Заметки себе</Text>
+                <Text style={s.searchRank}>Личный зашифрованный диалог</Text>
+              </View>
+            </TouchableOpacity>
             {searching && <ActivityIndicator color={C.primary} style={{ marginTop: 12 }} />}
             <FlatList
               data={searchResults}

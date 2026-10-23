@@ -869,8 +869,7 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
 
   const { toCitizenId, ciphertext, nonce, msgType, darminAmount, forwardedFromId, replyToId, replySenderName, replyContent, attachments, metadata } = parsed.data;
   const attachmentsJson = attachments && attachments.length > 0 ? JSON.stringify(attachments) : null;
-
-  if (toCitizenId === me.id) { res.status(400).json({ error: "Нельзя отправить сообщение самому себе" }); return; }
+  const isSelfMessage = toCitizenId === me.id;
 
   const [recipient] = await db
     .select({ id: citizensTable.id, name: citizensTable.name, telegramId: citizensTable.telegramId })
@@ -882,13 +881,27 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
 
   const [inserted] = await db
     .insert(dmMessagesTable)
-    .values({ fromCitizenId: me.id, toCitizenId, ciphertext, nonce, msgType, darminAmount: darminAmount ?? null, forwardedFromId: forwardedFromId ?? null, replyToId: replyToId ?? null, replySenderName: replySenderName ?? null, replyContent: replyContent ?? null, attachments: attachmentsJson, metadata: metadata ?? null })
+    .values({
+      fromCitizenId: me.id,
+      toCitizenId,
+      ciphertext,
+      nonce,
+      msgType,
+      darminAmount: darminAmount ?? null,
+      forwardedFromId: forwardedFromId ?? null,
+      replyToId: replyToId ?? null,
+      replySenderName: replySenderName ?? null,
+      replyContent: replyContent ?? null,
+      attachments: attachmentsJson,
+      metadata: metadata ?? null,
+      ...(isSelfMessage ? { deliveredAt: new Date(), readAt: new Date() } : {}),
+    })
     .returning();
 
   if (!inserted) { res.status(500).json({ error: "Ошибка сохранения" }); return; }
 
-  // Push via WS — returns true if delivered in real-time
-  const wsDelivered = pushToCitizen(toCitizenId, {
+  // Self-notes are already visible in the sender's conversation and need no push or external notification.
+  const wsDelivered = isSelfMessage ? false : pushToCitizen(toCitizenId, {
     type: "chat_message",
     message: {
       id: inserted.id,
@@ -912,7 +925,9 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
     },
   });
 
-  if (wsDelivered) {
+  if (isSelfMessage) {
+    // The insert already marks the note delivered and read.
+  } else if (wsDelivered) {
     // Mark as delivered immediately
     await db.update(dmMessagesTable).set({ deliveredAt: new Date() }).where(eq(dmMessagesTable.id, inserted.id));
     // Notify sender
@@ -938,7 +953,7 @@ router.post("/chat/messages", async (req, res): Promise<void> => {
     }
   }
 
-  logger.info({ from: me.id, to: toCitizenId, msgType, wsDelivered }, "DM sent");
+  logger.info({ from: me.id, to: toCitizenId, msgType, wsDelivered, isSelfMessage }, "DM sent");
   // Map Drizzle camelCase to snake_case expected by the mobile client
   res.status(201).json({
     message: {

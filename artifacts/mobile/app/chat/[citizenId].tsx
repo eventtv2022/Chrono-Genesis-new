@@ -205,6 +205,36 @@ export default function ConversationScreen() {
   const fetchPeerKey = useCallback(async () => {
     if (!peerId) return;
 
+    if (citizen?.id === peerId) {
+      try {
+        const kp = await getOrCreateKeyPair();
+        secretKeyRef.current = kp.secretKey;
+        myPubKeyB64Ref.current = kp.publicKeyB64;
+        const hdrs = await getStoredAuthHeaders();
+        if (!hdrs.Authorization) return;
+        const registerRes = await fetch(`${BASE_URL}/api/chat/key`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...hdrs },
+          body: JSON.stringify({ publicKey: kp.publicKeyB64 }),
+        });
+        if (!registerRes.ok) throw new Error("Не удалось зарегистрировать ключ для личных заметок");
+        peerPubKeyRef.current = kp.publicKey;
+        peerPubKeyB64Ref.current = kp.publicKeyB64;
+        setPeer((prev) => ({
+          id: peerId,
+          name: citizen.name,
+          rank: prev?.rank ?? citizen.rank ?? null,
+          hasKey: true,
+          photoUrl: prev?.photoUrl ?? null,
+        }));
+        setMessages((prev) => redecrypt(prev));
+        return;
+      } catch (error) {
+        Alert.alert("Ошибка ключа", error instanceof Error ? error.message : "Не удалось открыть личные заметки");
+        return;
+      }
+    }
+
     // Try to get the encryption key first
     try {
       const keyRes = await fetch(`${BASE_URL}/api/chat/key/${peerId}`);
@@ -236,7 +266,7 @@ export default function ConversationScreen() {
     } catch { /* silent */ }
 
     setPeer((prev) => prev ?? { id: peerId, name: null, rank: null, hasKey: false });
-  }, [peerId]);
+  }, [peerId, citizen?.id, citizen?.name, citizen?.rank]);
 
   useEffect(() => { fetchPeerKey(); }, [fetchPeerKey]);
 
@@ -346,6 +376,8 @@ export default function ConversationScreen() {
 
         if (msg["type"] === "chat_message") {
           const m = msg["message"] as RawMessage;
+          // The sender's POST response already inserts their own self-note locally.
+          if (m.from_citizen_id === citizen.id && m.to_citizen_id === citizen.id) return;
           const isRelevant =
             (m.from_citizen_id === peerId && m.to_citizen_id === citizen.id) ||
             (m.from_citizen_id === citizen.id && m.to_citizen_id === peerId);
@@ -1154,6 +1186,7 @@ export default function ConversationScreen() {
   }
 
   const peerName = peer?.name ?? `ID ${peerId}`;
+  const isSelfChat = peerId === citizen.id;
   // canSend is always true — key loads on-demand inside sendMessage (ref doesn't trigger re-render)
   const canSend = true;
   const peerNoKey = false; // server Prekey System guarantees a key exists for all citizens
@@ -1204,7 +1237,9 @@ export default function ConversationScreen() {
           />
           <View style={s.peerNameBlock}>
             <Text style={s.peerName} numberOfLines={1} ellipsizeMode="tail">{peerName}</Text>
-            {peer && (
+            {isSelfChat ? (
+              <Text style={s.peerRank}>Личные заметки · E2EE</Text>
+            ) : peer && (
               <Text style={s.peerRank} numberOfLines={1}>
                 {peer.citizenDays !== undefined ? `${peer.citizenDays} дн.` : (peer.rank ?? "")}
                 {peer.meritScore !== undefined ? ` · Merit ${peer.meritScore.toFixed(1)}` : ""}
@@ -1223,7 +1258,7 @@ export default function ConversationScreen() {
         {/* Action buttons — fixed, never shrink */}
         <View style={s.headerActions}>
           {/* Paid consultation trigger — ALWAYS visible (rate>0 → start session, rate==0 → propose) */}
-          {!sessionActive && (
+          {!isSelfChat && !sessionActive && (
             <TouchableOpacity
               onPress={() => (peer?.consultationRate ?? 0) > 0 ? setConsultModal(true) : setProposeModal(true)}
               activeOpacity={0.7}
@@ -1246,23 +1281,23 @@ export default function ConversationScreen() {
             <Feather name={showSearch ? "x" : "search"} size={18} color={showSearch ? C.primary : C.muted} />
           </TouchableOpacity>
 
-          <TouchableOpacity
+          {!isSelfChat && <TouchableOpacity
             onPress={() => { void startCall("audio"); }}
             activeOpacity={0.6}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Feather name="phone" size={19} color={callState !== "idle" ? C.primary : C.fg} />
-          </TouchableOpacity>
+          </TouchableOpacity>}
 
-          <TouchableOpacity
+          {!isSelfChat && <TouchableOpacity
             onPress={() => { void startCall("video"); }}
             activeOpacity={0.6}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Feather name="video" size={19} color={callState !== "idle" ? C.primary : C.fg} />
-          </TouchableOpacity>
+          </TouchableOpacity>}
 
-          {!peerNoKey && myPubKeyB64Ref.current && peerPubKeyB64Ref.current && (
+          {!isSelfChat && !peerNoKey && myPubKeyB64Ref.current && peerPubKeyB64Ref.current && (
             <TouchableOpacity
               onPress={() => setSafetyModal(true)}
               activeOpacity={0.7}
@@ -1535,9 +1570,11 @@ export default function ConversationScreen() {
           <>
             <AttachmentPreviewStrip files={pendingFiles} onRemove={(i) => setPendingFiles((p) => p.filter((_, idx) => idx !== i))} />
             <View style={s.inputBar}>
-              <TouchableOpacity style={[s.darminBtn, peerNoKey && { opacity: 0.4 }]} onPress={() => !peerNoKey && setDarminModal(true)} disabled={peerNoKey} activeOpacity={0.75}>
-                <Text style={s.darminBtnText}>Д</Text>
-              </TouchableOpacity>
+              {!isSelfChat && (
+                <TouchableOpacity style={[s.darminBtn, peerNoKey && { opacity: 0.4 }]} onPress={() => !peerNoKey && setDarminModal(true)} disabled={peerNoKey} activeOpacity={0.75}>
+                  <Text style={s.darminBtnText}>Д</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity style={s.attachBtn} onPress={pickAttachment} activeOpacity={0.75} disabled={!canSend}>
                 <Feather name="paperclip" size={18} color={canSend ? C.muted : C.border} />
               </TouchableOpacity>
