@@ -287,7 +287,7 @@ export default function StatsScreen() {
           { icon: "users",    num: data?.totalCitizens ?? 0,          label: t.stats_citizens,       color: colors.primary  },
           { icon: "activity", num: data?.activeCitizens ?? 0,         label: t.stats_active,         color: colors.success  },
           { icon: "repeat",   num: data?.totalTransactions ?? 0,      label: t.stats_transactions,   color: colors.primary  },
-          { icon: "clock",    num: data?.totalMinutesCirculated ?? 0, label: t.stats_in_circulation, color: colors.primary  },
+          { icon: "clock",    num: (data?.totalMinutesCirculated ?? 0).toFixed(3), label: t.stats_in_circulation, color: colors.primary  },
         ].map((m) => (
           <View key={m.label} style={styles.metricCard}>
             <Feather name={m.icon as keyof typeof Feather.glyphMap} size={18} color={m.color} />

@@ -21,7 +21,11 @@ Same applies to auctions.ts `tax = finalPrice * 0.02`.
 **Why:** 1 Д transaction was charging 100% tax when Math.ceil(1 * 0.02) = Math.ceil(0.02) = 1. Now 1 Д → 0.02 Д tax.
 
 ## UI convention
-All Darmin displays use `.toFixed(2)`: mobile (index, stats, timebank, tv screens), web (Home, Citizens, Shop, Layout, Tv pages).
+Darmin amounts generally use `.toFixed(2)`. Exception: the mobile “D in circulation” KPI uses `.toFixed(3)` to fit its stat card while avoiding floating-point tails. Calculations and stored amounts retain full precision.
+
+**Why:** the user requested thousandth precision for this KPI so its value does not overflow the card.
+
+**How to apply:** Keep the three-decimal formatting limited to the circulation KPI; do not round balances or alter monetary calculations.
 
 ## What stays integer
 - `sessions.duration_seconds` — time counter, not monetary
