@@ -24,6 +24,7 @@ import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { LogoBrand } from "@/components/LogoBrand";
+import { MinuteHourglass } from "@/components/MinuteHourglass";
 
 const BASE_URL = getBaseUrl();
 
@@ -287,7 +288,7 @@ function getTimeInZone(tz: string, lang: string): { time: string; date: string; 
 
 // ── Pomodoro preset seconds (labels computed inside component) ────────────────
 
-const PRESET_SECONDS_CONST = [12, 24, 25, 36, 48, 50, 60, 90];
+const PRESET_MINUTES = [1, 12, 24, 25, 36, 48, 50, 60, 90];
 
 // ── Alarm days (computed inside component via Intl) ───────────────────────────
 
@@ -308,7 +309,7 @@ export default function TimeUtilsScreen() {
   const { t, lang } = useLanguage();
   const st = styles(colors);
   const DAYS = getDayNames(lang);
-  const PRESET_SECONDS = [12, 24, 25, 36, 48, 50, 60, 90].map((m) => ({ label: `${m}m`, seconds: m * 60 }));
+  const PRESET_SECONDS = PRESET_MINUTES.map((m) => ({ label: `${m}m`, seconds: m * 60 }));
 
   // ── Section toggle ──────────────────────────────────────────────────────────
   const [section, setSection] = useState<"clock" | "timer" | "alarm" | "social-alarm">("clock");
@@ -503,12 +504,12 @@ export default function TimeUtilsScreen() {
   }, []);
 
   // ── Pomodoro timer ──────────────────────────────────────────────────────────
-  const [preset, setPreset] = useState(0);
-  const [remaining, setRemaining] = useState(PRESET_SECONDS_CONST[0]! * 60);
+  const [preset, setPreset] = useState(1);
+  const [remaining, setRemaining] = useState(PRESET_MINUTES[1]! * 60);
   const [running, setRunning] = useState(false);
   const [completed, setCompleted] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const sessionDurationRef = useRef(PRESET_SECONDS_CONST[0]! * 60);
+  const sessionDurationRef = useRef(PRESET_MINUTES[1]! * 60);
 
   const stopInterval = useCallback(() => {
     if (intervalRef.current) {
@@ -564,12 +565,18 @@ export default function TimeUtilsScreen() {
     setRunning(false);
     setCompleted(false);
     setPreset(i);
-    setRemaining(PRESET_SECONDS_CONST[i]! * 60);
-    sessionDurationRef.current = PRESET_SECONDS_CONST[i]! * 60;
+    setRemaining(PRESET_MINUTES[i]! * 60);
+    sessionDurationRef.current = PRESET_MINUTES[i]! * 60;
   };
 
   const handleStartPause = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!running && (completed || remaining === 0)) {
+      const duration = PRESET_MINUTES[preset]! * 60;
+      setRemaining(duration);
+      sessionDurationRef.current = duration;
+      setCompleted(false);
+    }
     setRunning((r) => !r);
   };
 
@@ -578,12 +585,14 @@ export default function TimeUtilsScreen() {
     stopInterval();
     setRunning(false);
     setCompleted(false);
-    setRemaining(PRESET_SECONDS_CONST[preset]! * 60);
+    const duration = PRESET_MINUTES[preset]! * 60;
+    setRemaining(duration);
+    sessionDurationRef.current = duration;
   };
 
   const timerMinutes = Math.floor(remaining / 60);
   const timerSeconds = remaining % 60;
-  const progress = remaining / (PRESET_SECONDS_CONST[preset]! * 60);
+  const progress = remaining / (PRESET_MINUTES[preset]! * 60);
 
   // ── Alarm ───────────────────────────────────────────────────────────────────
   const [alarmHour, setAlarmHour] = useState(7);
@@ -884,6 +893,10 @@ export default function TimeUtilsScreen() {
                   key={i}
                   style={[st.presetBtn, preset === i && st.presetBtnActive]}
                   onPress={() => handlePreset(i)}
+                  disabled={running}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: preset === i, disabled: running }}
+                  testID={`timer-preset-${p.seconds / 60}`}
                 >
                   <Text style={[st.presetBtnText, preset === i && st.presetBtnTextActive]}>
                     {p.label}
@@ -895,13 +908,20 @@ export default function TimeUtilsScreen() {
             {/* Circular-style timer display */}
             <View style={st.timerDisplay}>
               {/* Progress ring via border trick */}
-              <View style={[st.timerRing, running && st.timerRingActive]}>
-                <Text style={[st.timerDigits, completed && st.timerDigitsComplete]}>
-                  {String(timerMinutes).padStart(2, "0")}:{String(timerSeconds).padStart(2, "0")}
-                </Text>
-                <Text style={st.timerLabel}>
-                  {completed ? t.time_session_done : running ? t.time_focusing : t.time_ready}
-                </Text>
+              <View style={st.timerVisualRow}>
+                <View style={[st.timerRing, running && st.timerRingActive]}>
+                  <Text style={[st.timerDigits, completed && st.timerDigitsComplete]}>
+                    {String(timerMinutes).padStart(2, "0")}:{String(timerSeconds).padStart(2, "0")}
+                  </Text>
+                  <Text style={st.timerLabel}>
+                    {completed ? t.time_session_done : running ? t.time_focusing : t.time_ready}
+                  </Text>
+                </View>
+                <MinuteHourglass
+                  elapsedSeconds={Math.max(0, sessionDurationRef.current - remaining)}
+                  running={running}
+                  size={52}
+                />
               </View>
 
               {/* Progress bar */}
@@ -1514,6 +1534,7 @@ function styles(colors: ReturnType<typeof useColors>) {
     presetBtnTextActive: { color: colors.primaryForeground },
 
     timerDisplay: { alignItems: "center", gap: 20, marginVertical: 8 },
+    timerVisualRow: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 14 },
     timerRing: {
       width: 200,
       height: 200,
