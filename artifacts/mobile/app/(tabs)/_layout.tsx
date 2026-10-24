@@ -2,7 +2,7 @@ import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Slot, Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useColors } from "@/hooks/useColors";
@@ -48,7 +48,7 @@ function NativeTabLayout() {
         <Label>{t.tab_time}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="language-clock">
-        <Icon sf={{ default: "globe.americas", selected: "globe.americas.fill" }} />
+        <Icon sf={{ default: "watch.analog", selected: "watch.analog" }} />
         <Label>{t.tab_clock}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
@@ -149,7 +149,7 @@ function ClassicTabLayout() {
         name="language-clock"
         options={{
           title: t.tab_clock,
-          tabBarIcon: ({ color }) => <Feather name="globe" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="watch-variant" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
