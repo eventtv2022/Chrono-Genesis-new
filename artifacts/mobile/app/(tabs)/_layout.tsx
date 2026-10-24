@@ -2,6 +2,7 @@ import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Slot, Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import { VectorIcon } from "expo-router/build/native-tabs";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
@@ -16,7 +17,7 @@ function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "timer", selected: "timer" }} />
+        <Icon src={<VectorIcon family={MaterialCommunityIcons} name="cash-clock" />} />
         <Label>{t.tab_timer}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="timeline">
@@ -93,7 +94,7 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: t.tab_timer,
-          tabBarIcon: ({ color }) => <Feather name="clock" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="cash-clock" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
