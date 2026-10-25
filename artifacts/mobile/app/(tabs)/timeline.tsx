@@ -1876,7 +1876,7 @@ export default function TimelineScreen() {
         colors={colors}
       />
 
-      <View style={[styles.legend, { paddingBottom: insets.bottom + 112 }]}>
+      <View style={[styles.legend, { paddingBottom: insets.bottom + 54 }]}>
         {[
           { color: colors.primary, label: t.tl_anchor_btn },
           { color: "#e63946",      label: t.tl_swap_occ  },

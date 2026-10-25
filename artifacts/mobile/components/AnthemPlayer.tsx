@@ -167,7 +167,7 @@ export function AnthemPlayer({ active }: { active: boolean }) {
 
   return (
     <>
-      <View style={[styles.footer, { borderColor: colors.border, backgroundColor: colors.background }]}>
+      <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Открыть плеер: Гимн (Anthem of TimeNation)"
@@ -175,11 +175,11 @@ export function AnthemPlayer({ active }: { active: boolean }) {
           onPress={() => setOpen(true)}
           style={styles.openButton}
         >
-          <Feather name="music" size={16} color={colors.primary} />
+          <Feather name="music" size={12} color={colors.primary} />
           <Text numberOfLines={1} style={[styles.openButtonLabel, { color: colors.foreground }]}>
             Гимн (Anthem of TimeNation)
           </Text>
-          <Feather name="chevron-up" size={16} color={colors.mutedForeground} />
+          <Feather name="chevron-up" size={12} color={colors.mutedForeground} />
         </Pressable>
       </View>
       <Modal
@@ -270,26 +270,20 @@ export function AnthemPlayer({ active }: { active: boolean }) {
 
 const styles = StyleSheet.create({
   footer: {
-    minHeight: 48,
-    width: "90%",
-    maxWidth: 360,
-    alignSelf: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
+    minHeight: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
     justifyContent: "center",
-    paddingHorizontal: 10,
-    marginVertical: 8,
+    paddingHorizontal: 14,
+    marginVertical: 4,
   },
   openButton: {
-    minHeight: 42,
-    width: "100%",
+    minHeight: 21,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 9,
-    paddingHorizontal: 8,
+    gap: 6,
   },
-  openButtonLabel: { fontSize: 12, fontWeight: "600" },
+  openButtonLabel: { fontSize: 10, fontWeight: "600" },
   modalBackdrop: { flex: 1, justifyContent: "center", padding: 18, backgroundColor: "rgba(0,0,0,0.58)" },
   panel: {
     width: "100%",
