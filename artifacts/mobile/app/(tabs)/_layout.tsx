@@ -74,7 +74,7 @@ function ClassicTabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
-        tabBarLabelStyle: { fontSize: 8, marginTop: 0 },
+        tabBarLabelStyle: { fontSize: 9, lineHeight: 9, marginTop: 0 },
         tabBarStyle: {
           position: "absolute",
           backgroundColor: isIOS ? "transparent" : colors.background,
@@ -83,7 +83,7 @@ function ClassicTabLayout() {
           elevation: 0,
           height: 42,
           paddingTop: 0,
-          paddingBottom: isWeb ? 16 : 0,
+          paddingBottom: isWeb ? 14 : 0,
         },
         tabBarBackground: () =>
           isIOS ? (
@@ -97,70 +97,70 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: t.tab_timer,
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="cash-clock" size={14} color={color} />,
+          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="cash-clock" size={16} color={color} />,
         }}
       />
       <Tabs.Screen
         name="timeline"
         options={{
           title: t.tab_timeline,
-          tabBarIcon: ({ color }) => <Feather name="grid" size={14} color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="grid" size={16} color={color} />,
         }}
       />
       <Tabs.Screen
         name="stats"
         options={{
           title: t.tab_economy,
-          tabBarIcon: ({ color }) => <Feather name="bar-chart-2" size={14} color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="bar-chart-2" size={16} color={color} />,
         }}
       />
       <Tabs.Screen
         name="embassies"
         options={{
           title: t.tab_embassies,
-          tabBarIcon: ({ color }) => <Feather name="map-pin" size={14} color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="map-pin" size={16} color={color} />,
         }}
       />
       <Tabs.Screen
         name="auctions"
         options={{
           title: t.tab_auction,
-          tabBarIcon: ({ color }) => <Feather name="tag" size={14} color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="tag" size={16} color={color} />,
         }}
       />
       <Tabs.Screen
         name="tv"
         options={{
           title: t.tab_tv,
-          tabBarIcon: ({ color }) => <Feather name="tv" size={14} color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="tv" size={16} color={color} />,
         }}
       />
       <Tabs.Screen
         name="chronopedia"
         options={{
           title: t.tab_chronopedia,
-          tabBarIcon: ({ color }) => <Feather name="globe" size={14} color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="globe" size={16} color={color} />,
         }}
       />
       <Tabs.Screen
         name="timeutils"
         options={{
           title: t.tab_time,
-          tabBarIcon: ({ color }) => <Feather name="clock" size={14} color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="clock" size={16} color={color} />,
         }}
       />
       <Tabs.Screen
         name="language-clock"
         options={{
           title: t.tab_clock,
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="watch-variant" size={14} color={color} />,
+          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="watch-variant" size={16} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: lang === "ru" ? "Профиль" : "Profile",
-          tabBarIcon: ({ color }) => <Feather name="user" size={14} color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="user" size={16} color={color} />,
         }}
       />
     </Tabs>
