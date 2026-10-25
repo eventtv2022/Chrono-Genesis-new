@@ -3,8 +3,8 @@ name: Expo web font loading
 description: Avoid FontFaceObserver timeouts in the Android Chrome browser preview.
 ---
 
-In the Expo SDK 54 browser preview, loading bundled Google fonts through `@expo-google-fonts/inter` can trigger a 6000 ms FontFaceObserver timeout on Android Chrome. Skip custom font loading in the web path and allow system fallback fonts; keep loading bundled Inter on iOS and Android.
+In the Expo SDK 54 browser preview, bundled Google fonts can trigger a 6000 ms FontFaceObserver timeout on Android Chrome. Keep both `expo-font` and `@expo-google-fonts/inter` imports inside a native-only dynamic loading path; use system fallback fonts on web. Continue loading bundled Inter on iOS and Android, but let the app start with fallback fonts if native loading fails.
 
-**Why:** The browser preview failed before the app could mount even though custom fonts are not required for startup.
+**Why:** A conditional native font gate was not sufficient while the font modules remained statically imported; Android Chrome still showed the timeout screen.
 
-**How to apply:** If a mobile Expo browser preview throws a FontFaceObserver timeout, bypass the web font map while preserving the native font-loading path.
+**How to apply:** If a mobile Expo browser preview throws a FontFaceObserver timeout, dynamically import and load fonts only from the native gate; keep web startup independent of font assets.

@@ -1,14 +1,7 @@
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  useFonts,
-} from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -105,20 +98,37 @@ function AppProviders() {
 }
 
 function NativeFontGate() {
-  const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-  });
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded, fontError]);
+    let active = true;
+    void (async () => {
+      try {
+        // Load the font package only on native. Importing/loading it in web
+        // can invoke FontFaceObserver and crash Android Chrome previews.
+        const [Font, fonts] = await Promise.all([
+          import("expo-font"),
+          import("@expo-google-fonts/inter"),
+        ]);
+        await Font.loadAsync({
+          Inter_400Regular: fonts.Inter_400Regular,
+          Inter_500Medium: fonts.Inter_500Medium,
+          Inter_600SemiBold: fonts.Inter_600SemiBold,
+          Inter_700Bold: fonts.Inter_700Bold,
+        });
+      } catch (error) {
+        console.warn("Native font loading failed; using system fonts.", error);
+      } finally {
+        if (active) {
+          setReady(true);
+          void SplashScreen.hideAsync();
+        }
+      }
+    })();
+    return () => { active = false; };
+  }, []);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!ready) return null;
   return <AppProviders />;
 }
 
