@@ -84,9 +84,28 @@ function RootLayoutNav() {
   );
 }
 
-export default function RootLayout() {
-  const isWeb = Platform.OS === "web";
-  const [fontsLoaded, fontError] = useFonts(isWeb ? {} : {
+function AppProviders() {
+  return (
+    <SafeAreaProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <LanguageProvider>
+            <CitizenProvider>
+              <GestureHandlerRootView>
+                <KeyboardProvider>
+                  <RootLayoutNav />
+                </KeyboardProvider>
+              </GestureHandlerRootView>
+            </CitizenProvider>
+          </LanguageProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </SafeAreaProvider>
+  );
+}
+
+function NativeFontGate() {
+  const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
@@ -94,28 +113,25 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (isWeb || fontsLoaded || fontError) {
+    if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
-  }, [isWeb, fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError]);
 
-  if (!isWeb && !fontsLoaded && !fontError) return null;
+  if (!fontsLoaded && !fontError) return null;
+  return <AppProviders />;
+}
 
-  return (
-    <SafeAreaProvider>
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <LanguageProvider>
-          <CitizenProvider>
-            <GestureHandlerRootView>
-              <KeyboardProvider>
-                <RootLayoutNav />
-              </KeyboardProvider>
-            </GestureHandlerRootView>
-          </CitizenProvider>
-          </LanguageProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
-    </SafeAreaProvider>
-  );
+export default function RootLayout() {
+  const isWeb = Platform.OS === "web";
+
+  useEffect(() => {
+    if (isWeb) {
+      SplashScreen.hideAsync();
+    }
+  }, [isWeb]);
+
+  // Do not invoke expo-font's web FontFaceObserver path. Android Chrome's
+  // embedded preview can time out while loading fonts that are optional there.
+  return isWeb ? <AppProviders /> : <NativeFontGate />;
 }
