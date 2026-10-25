@@ -19,3 +19,4 @@
 - [DarMin and ancestral-minute distinction](referral-darmin.md) — citizenship grants a non-transferable minute valued at 1 Darmin; referral DarMin is separate.
 - [TRON WalletConnect checkout](timenation-tron-walletconnect.md) — TRC20 transfers use Tron signing formats v1/v2; keep TxID submission under manual review.
 - [Focus timer rewards](focus-timer-rewards.md) — 1 Д per 1,800 typed characters after 12 focus minutes; quiz pays 1 Д per 12 correct answers.
+- [Professional documents & service catalog](professional-documents-and-service-catalog.md) — CV/portfolio stay private; AI analysis requires consent; catalog publication costs 1 Д.

@@ -29,6 +29,7 @@ import heritageRouter from "./heritage";
 import moderationRouter from "./moderation";
 import trc20Router from "./trc20";
 import referralsRouter from "./referrals";
+import serviceCatalogRouter from "./serviceCatalog";
 
 const router: IRouter = Router();
 
@@ -62,5 +63,6 @@ router.use(heritageRouter);
 router.use(moderationRouter);
 router.use(trc20Router);
 router.use(referralsRouter);
+router.use(serviceCatalogRouter);
 
 export default router;

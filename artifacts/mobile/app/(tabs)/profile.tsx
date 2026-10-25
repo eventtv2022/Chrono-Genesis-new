@@ -9,9 +9,12 @@ import {
   TouchableOpacity,
   View,
   Linking,
+  Platform,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
+import * as DocumentPicker from "expo-document-picker";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/context/LanguageContext";
@@ -42,6 +45,7 @@ export default function ProfileScreen() {
   const colors = useColors();
   const { lang } = useLanguage();
   const { authToken, citizen } = useCitizen();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const isRu = lang === "ru";
   const [profile, setProfile] = useState<ReferralProfile | null>(null);
@@ -49,6 +53,77 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [professionalDocs, setProfessionalDocs] = useState<{
+    resume: { fileName: string; uploadedAt: string | null } | null;
+    portfolio: { fileName: string; uploadedAt: string | null } | null;
+    aiConsent: boolean;
+  } | null>(null);
+  const [docConsent, setDocConsent] = useState(false);
+  const [docBusy, setDocBusy] = useState(false);
+  const [docError, setDocError] = useState("");
+
+  const loadProfessionalDocs = useCallback(async () => {
+    try {
+      const token = await getStoredToken() ?? authToken;
+      if (!token) return;
+      const response = await fetch(`${BASE_URL}/api/citizens/me/professional-documents`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) setProfessionalDocs(await response.json());
+    } catch { /* profile still works if document metadata is unavailable */ }
+  }, [authToken]);
+
+  useEffect(() => { void loadProfessionalDocs(); }, [loadProfessionalDocs]);
+
+  const uploadProfessionalDoc = async (kind: "resume" | "portfolio") => {
+    if (!docConsent) return;
+    const result = await DocumentPicker.getDocumentAsync({ type: "application/pdf", copyToCacheDirectory: true });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    setDocBusy(true);
+    setDocError("");
+    try {
+      const token = await getStoredToken() ?? authToken;
+      if (!token) throw new Error(isRu ? "Войдите в аккаунт." : "Please sign in.");
+      const form = new FormData();
+      if (Platform.OS === "web") {
+        const file = await fetch(asset.uri).then((response) => response.blob());
+        form.append("file", file, asset.name.toLowerCase().endsWith(".pdf") ? asset.name : `${asset.name}.pdf`);
+      } else {
+        form.append("file", { uri: asset.uri, name: asset.name, type: asset.mimeType ?? "application/pdf" } as unknown as Blob);
+      }
+      form.append("aiConsent", "true");
+      const response = await fetch(`${BASE_URL}/api/citizens/me/professional-documents/${kind}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? (isRu ? "Не удалось загрузить файл." : "Upload failed."));
+      await loadProfessionalDocs();
+    } catch (err) {
+      setDocError(err instanceof Error ? err.message : (isRu ? "Не удалось загрузить файл." : "Upload failed."));
+    } finally {
+      setDocBusy(false);
+    }
+  };
+
+  const removeProfessionalDoc = async (kind: "resume" | "portfolio") => {
+    setDocBusy(true);
+    setDocError("");
+    try {
+      const token = await getStoredToken() ?? authToken;
+      if (!token) throw new Error(isRu ? "Войдите в аккаунт." : "Please sign in.");
+      const response = await fetch(`${BASE_URL}/api/citizens/me/professional-documents/${kind}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error(isRu ? "Не удалось удалить файл." : "Could not remove file.");
+      await loadProfessionalDocs();
+    } catch (err) {
+      setDocError(err instanceof Error ? err.message : (isRu ? "Не удалось удалить файл." : "Could not remove file."));
+    } finally { setDocBusy(false); }
+  };
 
   const copy = isRu ? "Скопировать ссылку" : "Copy link";
   const invite = isRu ? "Пригласить друзей" : "Invite friends";
@@ -170,6 +245,45 @@ export default function ProfileScreen() {
               <Feather name="user" size={20} color={colors.primary} />
             )}
           </View>
+        </View>
+
+        <View style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{isRu ? "Резюме и портфолио" : "Resume & portfolio"}</Text>
+          <Text style={[styles.programCopy, { color: colors.mutedForeground }]}>
+            {isRu
+              ? "PDF-файлы до 3 МБ хранятся приватно и передаются ИИ-аудитору только при оценке предложения. Другие граждане не могут открыть ваши файлы."
+              : "PDF files stay private and are shared with the AI auditor only when assessing an offer. Other citizens cannot open them."}
+          </Text>
+          <TouchableOpacity onPress={() => setDocConsent((value) => !value)} style={{ flexDirection: "row", alignItems: "center", gap: 9, marginTop: 12 }}>
+            <Feather name={docConsent ? "check-square" : "square"} size={18} color={colors.primary} />
+            <Text style={{ color: colors.foreground, flex: 1, fontSize: 12, lineHeight: 17 }}>
+              {isRu ? "Согласен на приватное хранение и анализ моих файлов ИИ-аудитором" : "I agree to private storage and AI-auditor analysis of my files"}
+            </Text>
+          </TouchableOpacity>
+          {(["resume", "portfolio"] as const).map((kind) => {
+            const item = professionalDocs?.[kind];
+            const label = kind === "resume" ? (isRu ? "Резюме" : "Resume") : (isRu ? "Портфолио" : "Portfolio");
+            return (
+              <View key={kind} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: "600" }}>{label}</Text>
+                  <Text numberOfLines={1} style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 3 }}>
+                    {item?.fileName ?? (isRu ? "Файл не загружен" : "No file uploaded")}
+                  </Text>
+                </View>
+                {item && <TouchableOpacity disabled={docBusy} onPress={() => void removeProfessionalDoc(kind)} accessibilityLabel={isRu ? "Удалить файл" : "Remove file"}><Feather name="trash-2" size={17} color={colors.destructive} /></TouchableOpacity>}
+                <TouchableOpacity disabled={docBusy || !docConsent} onPress={() => void uploadProfessionalDoc(kind)} style={[styles.copyButton, { borderColor: colors.border, marginTop: 0, paddingHorizontal: 10, opacity: docConsent ? 1 : 0.45 }]}>
+                  {docBusy ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="upload" size={14} color={colors.primary} />}
+                  <Text style={[styles.copyText, { color: colors.primary }]}>{isRu ? (item ? "Заменить" : "Загрузить") : (item ? "Replace" : "Upload")}</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+          {!!docError && <Text style={[styles.inlineError, { color: colors.destructive, marginTop: 8 }]}>{docError}</Text>}
+          <TouchableOpacity onPress={() => router.push("/service-catalog")} style={[styles.copyButton, { borderColor: colors.primary, marginTop: 14 }]}>
+            <Feather name="grid" size={15} color={colors.primary} />
+            <Text style={[styles.copyText, { color: colors.primary }]}>{isRu ? "Каталог услуг · публикация за 1 Д" : "Service catalog · publish for 1 Д"}</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

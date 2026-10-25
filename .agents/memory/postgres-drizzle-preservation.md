@@ -9,6 +9,14 @@ The development PostgreSQL database can contain active raw-SQL tables that are m
 
 **How to apply:** Check live columns, types, defaults, nullability, constraints, indexes, and row counts when a push reports data loss. Choose only non-destructive changes after verifying current rows satisfy the new constraints.
 
+## Drizzle push CLI options
+
+With this workspace's Drizzle Kit, `push` rejects `--config` when any other CLI option is supplied. Use the database package's `push` script for the standard development schema sync; do not force-truncate tables to work around the CLI restriction.
+
+**Why:** A filtered push attempt failed because the CLI does not accept `--config` alongside `--tablesFilter`; the package script successfully applied the additive schema changes.
+
+**How to apply:** Prefer `pnpm --filter @workspace/db run push` for development changes. If a filtered push is essential, check the installed Drizzle Kit's supported config invocation first.
+
 ## Unique constraints during non-interactive pushes
 
 Do not accept a suggested table truncation just because Drizzle prompts for it while adding a unique constraint. The prompt can appear for a populated table even when the values are already unique, and non-TTY pushes cannot answer it. Check for duplicate keys first; if none exist, preserve the rows and apply only the needed constraint change.

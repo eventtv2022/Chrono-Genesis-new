@@ -483,6 +483,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
   refreshCitizen: () => Promise<void>;
 }) {
   const { t, lang } = useLanguage();
+  const router = useRouter();
   const STATUS_LABELS: Record<string, { label: string; color: string }> = {
     open:            { label: t.deal_status_open,      color: STATUS_COLORS.open },
     accepted:        { label: t.deal_status_accepted,  color: STATUS_COLORS.accepted },
@@ -509,6 +510,11 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
     suggestedAmount: number;
     summary: string;
     breakdown: string[];
+    minuteRate?: number;
+    qualificationSummary?: string;
+    creatorAssessment?: string;
+    executorAssessment?: string;
+    documentsAnalyzed?: number;
   } | null>(null);
   const [creating, setCreating] = useState(false);
   const [recipientError, setRecipientError] = useState(false);
@@ -567,19 +573,33 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       Alert.alert(t.error, t.deal_task_label);
       return;
     }
+    if (!selRecipient) {
+      Alert.alert(t.error, lang === "ru" ? "Сначала выберите исполнителя — аудитор учтёт его документы." : "Choose an executor first so the auditor can include their documents.");
+      return;
+    }
     setAuditing(true);
     try {
+      const authHeaders = await getStoredAuthHeaders();
       const r = await fetch(`${BASE_URL}/api/deals/audit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: description.trim(), lang }),
+        headers: { ...authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ description: description.trim(), lang, executorId: selRecipient.id }),
       });
-      const data = await r.json() as { suggestedAmount?: number; summary?: string; breakdown?: string[]; error?: string };
+      const data = await r.json() as {
+        suggestedAmount?: number; summary?: string; breakdown?: string[]; minuteRate?: number;
+        qualificationSummary?: string; creatorAssessment?: string; executorAssessment?: string;
+        documentsAnalyzed?: number; error?: string;
+      };
       if (!r.ok) throw new Error(data.error ?? t.error);
       setAuditResult({
         suggestedAmount: data.suggestedAmount ?? 1,
         summary: data.summary ?? "",
         breakdown: data.breakdown ?? [],
+        minuteRate: data.minuteRate,
+        qualificationSummary: data.qualificationSummary,
+        creatorAssessment: data.creatorAssessment,
+        executorAssessment: data.executorAssessment,
+        documentsAnalyzed: data.documentsAnalyzed,
       });
       setAmount(String(data.suggestedAmount ?? ""));
       // Refresh citizen balance so step 2 shows the real available amount
@@ -843,6 +863,10 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       {/* Header */}
       <View style={s.escrowHeader}>
         <Text style={s.escrowTitle}>{t.escrow_title}</Text>
+        <TouchableOpacity style={[s.createBtn, { backgroundColor: colors.card, marginRight: 8 }]} onPress={() => router.push("/service-catalog")} activeOpacity={0.8}>
+          <Feather name="grid" size={14} color={colors.primary} />
+          <Text style={[s.createBtnText, { color: colors.primary }]}>{lang === "ru" ? "Каталог" : "Catalog"}</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={s.createBtn} onPress={() => setShowCreate(true)} activeOpacity={0.8}>
           <Feather name="plus" size={14} color={colors.primaryForeground} />
           <Text style={s.createBtnText}>{t.escrow_new_deal}</Text>
@@ -919,6 +943,23 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
                 autoFocus
               />
 
+              <Text style={[s.label, { color: recipientError && !selRecipient ? "#E05252" : colors.mutedForeground }]}>
+                {t.deal_executor_label} · {lang === "ru" ? "нужен для аудита" : "required for audit"}
+              </Text>
+              <View style={{ gap: 7, marginBottom: 16 }}>
+                {others.map((candidate) => (
+                  <TouchableOpacity
+                    key={candidate.id}
+                    onPress={() => { setSelRecipient(candidate); setRecipientError(false); }}
+                    style={[s.selRow, { borderColor: selRecipient?.id === candidate.id ? colors.primary : colors.border }]}
+                  >
+                    <CitizenAvatar citizenId={candidate.id} name={candidate.name} hasPhoto={!!(candidate as { photoUrl?: string | null }).photoUrl} size={34} />
+                    <Text style={[s.selName, { color: colors.foreground, flex: 1 }]}>{candidate.name}</Text>
+                    {selRecipient?.id === candidate.id && <Feather name="check-circle" size={18} color={colors.primary} />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               <View style={{ backgroundColor: colors.card, borderRadius: 10, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: colors.border }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
                   <Feather name="cpu" size={14} color={colors.primary} />
@@ -973,6 +1014,18 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
                   <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_400Regular", lineHeight: 18, marginBottom: 10 }}>
                     {auditResult.summary}
                   </Text>
+                  {!!auditResult.qualificationSummary && (
+                    <Text style={{ fontSize: 11, color: colors.foreground, fontFamily: "Inter_400Regular", lineHeight: 17, marginBottom: 8 }}>
+                      {auditResult.qualificationSummary}
+                    </Text>
+                  )}
+                  <View style={{ borderTopWidth: 1, borderTopColor: colors.primary + "33", paddingTop: 8, marginBottom: 8, gap: 4 }}>
+                    {!!auditResult.creatorAssessment && <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{lang === "ru" ? "Автор предложения: " : "Offer author: "}{auditResult.creatorAssessment}</Text>}
+                    {!!auditResult.executorAssessment && <Text style={{ fontSize: 11, color: colors.mutedForeground }}>{lang === "ru" ? "Исполнитель: " : "Executor: "}{auditResult.executorAssessment}</Text>}
+                    <Text style={{ fontSize: 10, color: colors.mutedForeground }}>
+                      {lang === "ru" ? `Проанализировано файлов: ${auditResult.documentsAnalyzed ?? 0} · Коэффициент: ${auditResult.minuteRate?.toFixed(2) ?? "—"} Д/мин` : `Files analyzed: ${auditResult.documentsAnalyzed ?? 0} · Rate factor: ${auditResult.minuteRate?.toFixed(2) ?? "—"} Д/min`}
+                    </Text>
+                  </View>
                   <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: colors.mutedForeground, marginBottom: 6, letterSpacing: 0.5 }}>{t.deal_breakdown}</Text>
                   {auditResult.breakdown.map((line, i) => (
                     <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginBottom: 4 }}>
@@ -995,40 +1048,6 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
                   <Text style={{ fontSize: 11, color: colors.primary, fontFamily: "Inter_700Bold" }}>{t.deal_change_task}</Text>
                 </TouchableOpacity>
               </View>
-
-              {/* Recipient */}
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <Text style={[s.label, { color: recipientError && !selRecipient ? "#E05252" : colors.mutedForeground, marginBottom: 0 }]}>
-                  {t.deal_executor_label} <Text style={{ color: "#E05252" }}>*</Text>
-                </Text>
-                {recipientError && !selRecipient && (
-                  <Text style={{ fontSize: 11, color: "#E05252", fontFamily: "Inter_400Regular" }}>↑</Text>
-                )}
-              </View>
-              {others.map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[s.selRow, selRecipient?.id === c.id && s.selRowActive, {
-                    borderColor: selRecipient?.id === c.id
-                      ? colors.primary
-                      : recipientError && !selRecipient
-                        ? "#E05252" + "66"
-                        : colors.border
-                  }]}
-                  onPress={() => { setSelRecipient(c); setRecipientError(false); }}
-                  activeOpacity={0.8}
-                >
-                  <CitizenAvatar
-                    citizenId={c.id}
-                    name={c.name}
-                    hasPhoto={!!(c as { photoUrl?: string | null }).photoUrl}
-                    size={36}
-                  />
-                  <Text style={[s.selName, { color: colors.foreground }]}>{c.name}</Text>
-                  <Text style={[s.selBalance, { color: colors.mutedForeground }]}>{c.balanceMinutes} Д</Text>
-                  {selRecipient?.id === c.id && <Feather name="check-circle" size={18} color={colors.primary} />}
-                </TouchableOpacity>
-              ))}
 
               {/* Amount (pre-filled, editable) */}
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 16, marginBottom: 8 }}>

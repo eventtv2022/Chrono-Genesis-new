@@ -9,6 +9,8 @@ import { logger } from "../lib/logger";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { notifyUserConditional } from "../services/telegramService";
 import { UPLOADS_DIR } from "../app";
+import { requireAuth } from "../middleware/auth";
+import { auditProfessionalOffer } from "../services/professionalOfferAudit";
 
 // ── Multer: disk storage for chat image uploads ────────────────────────────────
 const upload = multer({
@@ -30,6 +32,7 @@ const router: IRouter = Router();
 const AuditBody = z.object({
   description: z.string().min(5).max(2000),
   lang: z.string().max(10).optional(),
+  executorId: z.number().int().positive(),
 });
 
 const CreateDealBody = z.object({
@@ -56,64 +59,23 @@ const DisputeBody = z.object({
 
 // ─── POST /api/deals/audit ────────────────────────────────────────────────────
 // ИИ-аудитор: анализирует описание задачи и предлагает справедливую сумму в Д.
-router.post("/deals/audit", async (req, res): Promise<void> => {
+router.post("/deals/audit", requireAuth, async (req, res): Promise<void> => {
   const parsed = AuditBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Описание задачи обязательно (мин. 5 символов)" }); return; }
 
-  const apiKey = process.env["GOOGLE_API_KEY"];
-  if (!apiKey) { res.status(503).json({ error: "ИИ-аудитор временно недоступен" }); return; }
-
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-    const responseLang = parsed.data.lang ?? "ru";
-
-    const prompt = `You are the AI Auditor of the Ministry of Labor of the sovereign state TimeNation.
-The state currency is Darmins (Д). 1 Darmin = 1 real working minute.
-
-Citizen's task:
-${parsed.data.description}
-
-Your job is to objectively assess the labor cost and return ONLY JSON without markdown blocks.
-
-Response format (strict JSON):
-{
-  "suggestedAmount": <integer Д from 1 to 1000>,
-  "summary": "<brief task assessment 1-2 sentences>",
-  "breakdown": [
-    "<action 1> — <N Д>",
-    "<action 2> — <N Д>",
-    ...
-  ]
-}
-
-Rules:
-- 1 Darmin = 1 minute. Simple task ~5-15 Д. Medium ~30-60 Д. Complex ~100-500 Д.
-- Break into 2-5 concrete stages with minute counts.
-- Sum of breakdown must equal suggestedAmount.
-- Respond entirely in the language with BCP-47 code: ${responseLang}`;
-
-    const result = await model.generateContent(prompt);
-    const rawText = result.response.text().trim();
-
-    // Strip possible markdown fences
-    const jsonText = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-    const audit = JSON.parse(jsonText) as {
-      suggestedAmount: number;
-      summary: string;
-      breakdown: string[];
-    };
-
-    if (!Number.isInteger(audit.suggestedAmount) || audit.suggestedAmount < 1) {
-      throw new Error("Invalid suggestedAmount from AI");
-    }
-
-    req.log.info({ description: parsed.data.description.slice(0, 80), suggestedAmount: audit.suggestedAmount }, "Deal audit completed");
+    const audit = await auditProfessionalOffer({
+      description: parsed.data.description,
+      lang: parsed.data.lang ?? "ru",
+      creatorId: req.citizen!.id,
+      executorId: parsed.data.executorId,
+    });
+    req.log.info({ creatorId: req.citizen!.id, executorId: parsed.data.executorId, suggestedAmount: audit.suggestedAmount, documentsAnalyzed: audit.documentsAnalyzed }, "Deal audit completed");
     res.json(audit);
   } catch (err) {
     req.log.error({ err }, "Deal audit failed");
-    res.status(500).json({ error: "ИИ-аудитор не смог обработать задачу. Попробуйте позже." });
+    const message = err instanceof Error ? err.message : "ИИ-аудитор не смог обработать задачу. Попробуйте позже.";
+    res.status(message.includes("временно недоступен") ? 503 : 500).json({ error: message });
   }
 });
 

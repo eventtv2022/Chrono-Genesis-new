@@ -7,7 +7,7 @@ import multer from "multer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@workspace/db";
 import { referralsTable } from "@workspace/db";
-import { citizensTable, onboardingProgressTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable, focusSessionsTable, focusQuizAttemptsTable } from "@workspace/db";
+import { citizensTable, onboardingProgressTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable, focusSessionsTable, focusQuizAttemptsTable, citizenProfessionalDocumentsTable } from "@workspace/db";
 import { auditCitizenRate } from "../services/rateAuditorService";
 import {
   UpdateCitizenBody,
@@ -16,7 +16,7 @@ import { z } from "zod";
 import { logger } from "../lib/logger";
 import { MEDIA_DIR } from "../services/renderService";
 import { generateIdCardSvg, loadPhotoAsDataUri } from "../services/idCardService";
-import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionService";
+import { encrypt, encryptNullable, tryDecrypt, encryptBytes } from "../services/encryptionService";
 import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
 import { requireAdultKyc, requireAuth } from "../middleware/auth";
@@ -43,6 +43,15 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith("image/")) cb(null, true);
     else cb(new Error("Только изображения разрешены"));
+  },
+});
+
+const professionalDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 3 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === "application/pdf" && path.extname(file.originalname).toLowerCase() === ".pdf") cb(null, true);
+    else cb(new Error("Загрузите файл PDF"));
   },
 });
 
@@ -1014,6 +1023,72 @@ router.post("/citizens/:id/wallet-link", requireAuth, requireAdultKyc, async (re
 // ── POST /citizens/:id/age-verify ────────────────────────────────────────────
 router.post("/citizens/:id/age-verify", (_req, res): void => {
   res.status(410).json({ error: "Самостоятельная age-verify отключена; возраст определяется по дате рождения." });
+});
+
+// ── POST /citizens/audit-rate — расчёт коэффициента Kq через ИИ ───────────────
+// Private CV/portfolio storage. Uploads are encrypted in PostgreSQL and are
+// never served as static files or included in public citizen responses.
+router.get("/citizens/me/professional-documents", requireAuth, async (req: Request, res: Response) => {
+  const [documents] = await db.select({
+    resumeFileName: citizenProfessionalDocumentsTable.resumeFileName,
+    resumeUploadedAt: citizenProfessionalDocumentsTable.resumeUploadedAt,
+    portfolioFileName: citizenProfessionalDocumentsTable.portfolioFileName,
+    portfolioUploadedAt: citizenProfessionalDocumentsTable.portfolioUploadedAt,
+    aiConsentAt: citizenProfessionalDocumentsTable.aiConsentAt,
+  }).from(citizenProfessionalDocumentsTable)
+    .where(eq(citizenProfessionalDocumentsTable.citizenId, req.citizen!.id)).limit(1);
+  res.json({
+    resume: documents?.resumeFileName ? { fileName: documents.resumeFileName, uploadedAt: documents.resumeUploadedAt?.toISOString() ?? null } : null,
+    portfolio: documents?.portfolioFileName ? { fileName: documents.portfolioFileName, uploadedAt: documents.portfolioUploadedAt?.toISOString() ?? null } : null,
+    aiConsent: !!documents?.aiConsentAt,
+  });
+});
+
+router.post(
+  "/citizens/me/professional-documents/:kind",
+  requireAuth,
+  professionalDocumentUpload.single("file"),
+  async (req: Request, res: Response): Promise<void> => {
+    const kind = req.params["kind"];
+    if (kind !== "resume" && kind !== "portfolio") { res.status(400).json({ error: "Выберите резюме или портфолио" }); return; }
+    if (req.body["aiConsent"] !== "true") { res.status(400).json({ error: "Нужно согласиться на приватное хранение и анализ документа ИИ-аудитором" }); return; }
+    if (!req.file || req.file.buffer.subarray(0, 5).toString("ascii") !== "%PDF-") { res.status(400).json({ error: "Файл не является PDF" }); return; }
+    const [existing] = await db.select().from(citizenProfessionalDocumentsTable)
+      .where(eq(citizenProfessionalDocumentsTable.citizenId, req.citizen!.id)).limit(1);
+    const safeName = path.basename(req.file.originalname).replace(/[\u0000-\u001f]/g, "").slice(0, 120) || `${kind}.pdf`;
+    const now = new Date();
+    const values = kind === "resume"
+      ? { resumeFileName: safeName, resumeEncryptedData: encryptBytes(req.file.buffer), resumeUploadedAt: now }
+      : { portfolioFileName: safeName, portfolioEncryptedData: encryptBytes(req.file.buffer), portfolioUploadedAt: now };
+    if (existing) {
+      await db.update(citizenProfessionalDocumentsTable)
+        .set({ ...values, aiConsentAt: now, updatedAt: now })
+        .where(eq(citizenProfessionalDocumentsTable.citizenId, req.citizen!.id));
+    } else {
+      await db.insert(citizenProfessionalDocumentsTable).values({
+        citizenId: req.citizen!.id,
+        ...values,
+        aiConsentAt: now,
+        updatedAt: now,
+      });
+    }
+    req.log.info({ citizenId: req.citizen!.id, kind, size: req.file.size }, "Professional document stored privately");
+    res.status(201).json({ kind, fileName: safeName, uploadedAt: now.toISOString(), aiConsent: true });
+  },
+);
+
+router.delete("/citizens/me/professional-documents/:kind", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const kind = req.params["kind"];
+  if (kind !== "resume" && kind !== "portfolio") { res.status(400).json({ error: "Выберите резюме или портфолио" }); return; }
+  const [existing] = await db.select().from(citizenProfessionalDocumentsTable)
+    .where(eq(citizenProfessionalDocumentsTable.citizenId, req.citizen!.id)).limit(1);
+  if (!existing) { res.json({ ok: true }); return; }
+  const change = kind === "resume"
+    ? { resumeFileName: null, resumeEncryptedData: null, resumeUploadedAt: null }
+    : { portfolioFileName: null, portfolioEncryptedData: null, portfolioUploadedAt: null };
+  await db.update(citizenProfessionalDocumentsTable).set({ ...change, updatedAt: new Date() })
+    .where(eq(citizenProfessionalDocumentsTable.citizenId, req.citizen!.id));
+  res.json({ ok: true });
 });
 
 // ── POST /citizens/audit-rate — расчёт коэффициента Kq через ИИ ───────────────

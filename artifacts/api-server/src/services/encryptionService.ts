@@ -44,6 +44,28 @@ export function encrypt(plaintext: string): string {
   return `v1:${iv.toString("hex")}:${tag.toString("hex")}:${ct.toString("hex")}`;
 }
 
+/** Encrypt binary uploads without expanding them into hexadecimal ciphertext. */
+export function encryptBytes(plaintext: Buffer): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv(ALGO, KEY, iv);
+  const ct = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  return `b1:${iv.toString("hex")}:${cipher.getAuthTag().toString("hex")}:${ct.toString("base64")}`;
+}
+
+/** Decrypt a binary upload; unsupported or corrupted data fails closed. */
+export function decryptBytes(ciphertext: string): Buffer | null {
+  try {
+    const parts = ciphertext.split(":");
+    if (parts.length !== 4 || parts[0] !== "b1") return null;
+    const [, ivHex, tagHex, ctBase64] = parts as [string, string, string, string];
+    const decipher = crypto.createDecipheriv(ALGO, KEY, Buffer.from(ivHex, "hex"));
+    decipher.setAuthTag(Buffer.from(tagHex, "hex"));
+    return Buffer.concat([decipher.update(Buffer.from(ctBase64, "base64")), decipher.final()]);
+  } catch {
+    return null;
+  }
+}
+
 /** Decrypt a `v1:…` ciphertext back to plaintext. Returns null on any error. */
 export function decrypt(ciphertext: string): string | null {
   if (!ciphertext.startsWith("v1:")) return null;
