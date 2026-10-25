@@ -64,6 +64,7 @@ export * from './passwordCitizenRegistrationInput';
 export * from './paymentCheckoutInput';
 export * from './paymentCheckoutResult';
 export * from './serviceCatalogAudit';
+export * from './serviceCatalogAuditEnglishTranslation';
 export * from './serviceCatalogAuditPreview';
 export * from './serviceCatalogAuditPreviewInput';
 export * from './serviceCatalogListing';

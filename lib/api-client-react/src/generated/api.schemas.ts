@@ -48,12 +48,19 @@ export interface ServiceCatalogPublishInput {
   priceDarmins: number;
 }
 
+export type ServiceCatalogAuditEnglishTranslation = {
+  title: string;
+  category: string;
+  description: string;
+};
+
 export interface ServiceCatalogAudit {
   suggestedAmount: number;
   minuteRate: number;
   summary: string;
   qualificationSummary: string;
   documentsAnalyzed: number;
+  englishTranslation: ServiceCatalogAuditEnglishTranslation;
 }
 
 export interface ServiceCatalogAuditPreview {
@@ -68,6 +75,13 @@ export interface ServiceCatalogListing {
   title: string;
   category: string;
   description: string;
+  sourceLang: string;
+  /** @nullable */
+  titleEn: string | null;
+  /** @nullable */
+  categoryEn: string | null;
+  /** @nullable */
+  descriptionEn: string | null;
   suggestedPriceDarmins: number;
   minuteRate: number;
   qualificationSummary: string;

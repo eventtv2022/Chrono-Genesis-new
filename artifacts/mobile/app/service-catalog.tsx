@@ -18,6 +18,10 @@ type Listing = {
   title: string;
   category: string;
   description: string;
+  sourceLang?: string;
+  titleEn?: string | null;
+  categoryEn?: string | null;
+  descriptionEn?: string | null;
   suggestedPriceDarmins: number;
   minuteRate: number;
   qualificationSummary: string;
@@ -47,6 +51,7 @@ export default function ServiceCatalogScreen() {
   const [auditToken, setAuditToken] = useState<string | null>(null);
   const [auditSuggestedAmount, setAuditSuggestedAmount] = useState<number | null>(null);
   const [auditSummary, setAuditSummary] = useState("");
+  const [englishPreview, setEnglishPreview] = useState<{ title: string; category: string; description: string } | null>(null);
   const [error, setError] = useState("");
   const [openingDocument, setOpeningDocument] = useState<string | null>(null);
   const requestKeyRef = useRef<string | null>(null);
@@ -93,6 +98,7 @@ export default function ServiceCatalogScreen() {
     setAuditToken(null);
     setAuditSuggestedAmount(null);
     setAuditSummary("");
+    setEnglishPreview(null);
     setPriceText("");
   };
 
@@ -116,6 +122,7 @@ export default function ServiceCatalogScreen() {
       setAuditToken(data.auditToken);
       setAuditSuggestedAmount(data.audit.suggestedAmount);
       setAuditSummary(data.audit.summary);
+      setEnglishPreview(data.audit.englishTranslation);
       setPriceText(String(data.audit.suggestedAmount));
     } catch (err) {
       setError(err instanceof Error ? err.message : (isRu ? "Не удалось проверить стоимость." : "Could not estimate the price."));
@@ -229,8 +236,8 @@ export default function ServiceCatalogScreen() {
         </View>
         <Text style={[styles.intro, { color: colors.mutedForeground }]}>
           {isRu
-            ? "Публикация стоит 1 Д. Для размещения загрузите в профиле хотя бы резюме или портфолио и согласитесь на анализ. Аудитор предложит стоимость. Файлы скрыты, пока вы не разрешите просмотр гражданам TimeNation."
-            : "Publishing costs 1 Д. Upload at least a resume or portfolio in your profile and consent to analysis. The auditor will recommend a price. Files stay hidden until you allow signed-in TimeNation citizens to view them."}
+            ? "Публикация стоит 1 Д. Перед публикацией появится английский перевод. Для размещения загрузите в профиле хотя бы резюме или портфолио и согласитесь на анализ. Аудитор предложит стоимость. Файлы скрыты, пока вы не разрешите просмотр гражданам TimeNation."
+            : "Publishing costs 1 Д. An English translation is prepared before publishing. Upload at least a resume or portfolio in your profile and consent to analysis. The auditor will recommend a price. Files stay hidden until you allow signed-in TimeNation citizens to view them."}
         </Text>
 
         {showForm && (
@@ -258,6 +265,13 @@ export default function ServiceCatalogScreen() {
                   {isRu ? `Рекомендация аудитора: ${auditSuggestedAmount} Д` : `Auditor recommendation: ${auditSuggestedAmount} Д`}
                 </Text>
                 {!!auditSummary && <Text style={{ color: colors.mutedForeground, fontSize: 11, lineHeight: 16 }}>{auditSummary}</Text>}
+                {!!englishPreview && lang !== "en" && (
+                  <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, gap: 3 }}>
+                    <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "700" }}>English translation</Text>
+                    <Text style={{ color: colors.foreground, fontSize: 12 }}>{englishPreview.title} · {englishPreview.category}</Text>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 11, lineHeight: 15 }}>{englishPreview.description}</Text>
+                  </View>
+                )}
                 <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600" }}>
                   {isRu ? "Стоимость вашей услуги" : "Your service price"}
                 </Text>
@@ -319,12 +333,28 @@ export default function ServiceCatalogScreen() {
           <View key={item.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.listingTop}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.listingTitle, { color: colors.foreground }]}>{item.title}</Text>
-                <Text style={[styles.category, { color: colors.primary }]}>{item.category} · {item.citizenName ?? (isRu ? "Гражданин" : "Citizen")}</Text>
+                <Text style={[styles.listingTitle, { color: colors.foreground }]}>
+                  {lang === "en" ? item.titleEn ?? item.title : item.title}
+                </Text>
+                {item.sourceLang !== "en" && (item.titleEn || item.categoryEn) && (
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>
+                    {lang === "en" ? item.title : item.titleEn} · {lang === "en" ? item.category : item.categoryEn}
+                  </Text>
+                )}
+                <Text style={[styles.category, { color: colors.primary }]}>
+                  {lang === "en" ? item.categoryEn ?? item.category : item.category} · {item.citizenName ?? (isRu ? "Гражданин" : "Citizen")}
+                </Text>
               </View>
               <Text style={[styles.price, { color: colors.primary }]}>{item.suggestedPriceDarmins} Д</Text>
             </View>
-            <Text style={[styles.listingDescription, { color: colors.foreground }]}>{item.description}</Text>
+            <Text style={[styles.listingDescription, { color: colors.foreground }]}>
+              {lang === "en" ? item.descriptionEn ?? item.description : item.description}
+            </Text>
+            {item.sourceLang !== "en" && (lang === "en" ? item.description : item.descriptionEn) && (
+              <Text style={[styles.listingDescription, { color: colors.mutedForeground, fontSize: 11 }]}>
+                {lang === "en" ? item.description : item.descriptionEn}
+              </Text>
+            )}
             <Text style={[styles.qualification, { color: colors.mutedForeground }]}>{item.qualificationSummary}</Text>
             {citizen && (item.resumeVisible || item.portfolioVisible) && (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>

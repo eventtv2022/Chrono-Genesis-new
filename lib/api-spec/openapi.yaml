@@ -1509,6 +1509,10 @@ components:
         title: { type: string }
         category: { type: string }
         description: { type: string }
+        sourceLang: { type: string }
+        titleEn: { type: ["string", "null"] }
+        categoryEn: { type: ["string", "null"] }
+        descriptionEn: { type: ["string", "null"] }
         suggestedPriceDarmins: { type: integer }
         minuteRate: { type: number }
         qualificationSummary: { type: string }
@@ -1516,7 +1520,7 @@ components:
         status: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, citizenId, title, category, description, suggestedPriceDarmins, minuteRate, qualificationSummary, publicationFeeDarmins, status, createdAt, updatedAt]
+      required: [id, citizenId, title, category, description, sourceLang, titleEn, categoryEn, descriptionEn, suggestedPriceDarmins, minuteRate, qualificationSummary, publicationFeeDarmins, status, createdAt, updatedAt]
 
     ServiceCatalogAudit:
       type: object
@@ -1526,7 +1530,14 @@ components:
         summary: { type: string }
         qualificationSummary: { type: string }
         documentsAnalyzed: { type: integer }
-      required: [suggestedAmount, minuteRate, summary, qualificationSummary, documentsAnalyzed]
+        englishTranslation:
+          type: object
+          properties:
+            title: { type: string }
+            category: { type: string }
+            description: { type: string }
+          required: [title, category, description]
+      required: [suggestedAmount, minuteRate, summary, qualificationSummary, documentsAnalyzed, englishTranslation]
 
     ServiceCatalogPublishResult:
       type: object

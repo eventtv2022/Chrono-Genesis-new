@@ -43,7 +43,12 @@ export const PreviewServiceCatalogListingResponse = zod.object({
   "minuteRate": zod.number(),
   "summary": zod.string(),
   "qualificationSummary": zod.string(),
-  "documentsAnalyzed": zod.number()
+  "documentsAnalyzed": zod.number(),
+  "englishTranslation": zod.object({
+  "title": zod.string(),
+  "category": zod.string(),
+  "description": zod.string()
+})
 })
 })
 

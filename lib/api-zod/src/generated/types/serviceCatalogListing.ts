@@ -12,6 +12,13 @@ export interface ServiceCatalogListing {
   title: string;
   category: string;
   description: string;
+  sourceLang: string;
+  /** @nullable */
+  titleEn: string | null;
+  /** @nullable */
+  categoryEn: string | null;
+  /** @nullable */
+  descriptionEn: string | null;
   suggestedPriceDarmins: number;
   minuteRate: number;
   qualificationSummary: string;

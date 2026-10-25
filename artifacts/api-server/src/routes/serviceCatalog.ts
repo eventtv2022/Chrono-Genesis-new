@@ -25,6 +25,10 @@ const AuditTokenPayload = z.object({
   title: z.string(),
   category: z.string(),
   description: z.string(),
+  sourceLang: z.string(),
+  titleEn: z.string(),
+  categoryEn: z.string(),
+  descriptionEn: z.string(),
   expiresAt: z.number().int(),
   audit: z.object({
     suggestedAmount: z.number().int().min(1).max(1000),
@@ -32,6 +36,11 @@ const AuditTokenPayload = z.object({
     qualificationSummary: z.string(),
     summary: z.string(),
     documentsAnalyzed: z.number().int().min(1),
+    englishTranslation: z.object({
+      title: z.string(),
+      category: z.string(),
+      description: z.string(),
+    }),
   }),
 });
 
@@ -71,6 +80,10 @@ router.get("/service-catalog", async (_req, res) => {
     title: serviceListingsTable.title,
     category: serviceListingsTable.category,
     description: serviceListingsTable.description,
+    sourceLang: serviceListingsTable.sourceLang,
+    titleEn: serviceListingsTable.titleEn,
+    categoryEn: serviceListingsTable.categoryEn,
+    descriptionEn: serviceListingsTable.descriptionEn,
     suggestedPriceDarmins: serviceListingsTable.suggestedPriceDarmins,
     minuteRate: serviceListingsTable.minuteRate,
     qualificationSummary: serviceListingsTable.qualificationSummary,
@@ -103,24 +116,33 @@ router.post("/service-catalog/preview", requireAuth, async (req: Request, res: R
   const parsed = AuditPreviewBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Проверьте название, категорию и описание услуги" }); return; }
   const { requestKey, title, category, description, lang } = parsed.data;
+  const sourceLang = lang ?? "ru";
 
   try {
     const audit = await auditProfessionalOffer({
       description: `Услуга: ${title}\nКатегория: ${category}\nОписание: ${description}`,
-      lang: lang ?? "ru",
+      lang: sourceLang,
       creatorId: req.citizen!.id,
+      ...(sourceLang.toLowerCase().startsWith("en")
+        ? {}
+        : { listingTranslation: { title, category, description, sourceLanguage: sourceLang } }),
     });
     if (audit.documentsAnalyzed === 0) {
       res.status(400).json({ error: "Для публикации загрузите резюме или портфолио и согласитесь на их анализ ИИ-аудитором." });
       return;
     }
     const expiresAt = Date.now() + 30 * 60 * 1000;
+    const englishTranslation = audit.englishTranslation ?? { title, category, description };
     const auditToken = signAuditPayload({
       citizenId: req.citizen!.id,
       requestKey,
       title,
       category,
       description,
+      sourceLang,
+      titleEn: audit.englishTranslation?.title ?? title,
+      categoryEn: audit.englishTranslation?.category ?? category,
+      descriptionEn: audit.englishTranslation?.description ?? description,
       expiresAt,
       audit: {
         suggestedAmount: audit.suggestedAmount,
@@ -128,6 +150,7 @@ router.post("/service-catalog/preview", requireAuth, async (req: Request, res: R
         qualificationSummary: audit.qualificationSummary || audit.summary,
         summary: audit.summary,
         documentsAnalyzed: audit.documentsAnalyzed,
+        englishTranslation,
       },
     });
     res.json({
@@ -139,6 +162,7 @@ router.post("/service-catalog/preview", requireAuth, async (req: Request, res: R
         qualificationSummary: audit.qualificationSummary || audit.summary,
         summary: audit.summary,
         documentsAnalyzed: audit.documentsAnalyzed,
+        englishTranslation,
       },
     });
   } catch (err) {
@@ -188,6 +212,10 @@ router.post("/service-catalog", requireAuth, async (req: Request, res: Response)
         title: auditPayload.title,
         category: auditPayload.category,
         description: auditPayload.description,
+        sourceLang: auditPayload.sourceLang,
+        titleEn: auditPayload.titleEn,
+        categoryEn: auditPayload.categoryEn,
+        descriptionEn: auditPayload.descriptionEn,
         suggestedPriceDarmins: priceDarmins,
         minuteRate: auditPayload.audit.minuteRate,
         qualificationSummary: auditPayload.audit.qualificationSummary,

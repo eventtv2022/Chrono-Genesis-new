@@ -5,6 +5,7 @@
  * TimeNation API — digital state where time is currency
  * OpenAPI spec version: 0.1.0
  */
+import type { ServiceCatalogAuditEnglishTranslation } from './serviceCatalogAuditEnglishTranslation';
 
 export interface ServiceCatalogAudit {
   suggestedAmount: number;
@@ -12,4 +13,5 @@ export interface ServiceCatalogAudit {
   summary: string;
   qualificationSummary: string;
   documentsAnalyzed: number;
+  englishTranslation: ServiceCatalogAuditEnglishTranslation;
 }
