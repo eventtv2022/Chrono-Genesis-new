@@ -684,6 +684,80 @@ export const AnchorTimelineBody = zod.object({
 
 
 /**
+ * @summary Move an authenticated citizen's anchor to a free coordinate
+ */
+export const moveTimelineAnchorBodySourceCoordRegExp = new RegExp('^\\d{12}$');
+export const moveTimelineAnchorBodyTargetCoordRegExp = new RegExp('^\\d{12}$');
+
+
+export const MoveTimelineAnchorBody = zod.object({
+  "sourceCoord": zod.string().regex(moveTimelineAnchorBodySourceCoordRegExp),
+  "targetCoord": zod.string().regex(moveTimelineAnchorBodyTargetCoordRegExp)
+})
+
+export const MoveTimelineAnchorResponse = zod.object({
+  "sourceCoord": zod.string(),
+  "targetCoord": zod.string()
+})
+
+
+/**
+ * @summary List exchange requests involving the authenticated citizen
+ */
+export const ListTimelineExchangesResponseItem = zod.object({
+  "id": zod.number(),
+  "fromCitizenId": zod.number(),
+  "toCitizenId": zod.number(),
+  "fromCitizenName": zod.string(),
+  "toCitizenName": zod.string(),
+  "fromCoord": zod.string(),
+  "toCoord": zod.string(),
+  "status": zod.enum(['pending', 'accepted', 'rejected', 'cancelled']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListTimelineExchangesResponse = zod.array(ListTimelineExchangesResponseItem)
+
+
+/**
+ * @summary Request a negotiated exchange with the owner of an occupied minute
+ */
+export const createTimelineExchangeBodySourceCoordRegExp = new RegExp('^\\d{12}$');
+export const createTimelineExchangeBodyTargetCoordRegExp = new RegExp('^\\d{12}$');
+
+
+export const CreateTimelineExchangeBody = zod.object({
+  "sourceCoord": zod.string().regex(createTimelineExchangeBodySourceCoordRegExp),
+  "targetCoord": zod.string().regex(createTimelineExchangeBodyTargetCoordRegExp)
+})
+
+
+/**
+ * @summary Accept, reject, or cancel a pending exchange request
+ */
+export const RespondToTimelineExchangeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RespondToTimelineExchangeBody = zod.object({
+  "action": zod.enum(['accept', 'reject', 'cancel'])
+})
+
+export const RespondToTimelineExchangeResponse = zod.object({
+  "id": zod.number(),
+  "fromCitizenId": zod.number(),
+  "toCitizenId": zod.number(),
+  "fromCitizenName": zod.string(),
+  "toCitizenName": zod.string(),
+  "fromCoord": zod.string(),
+  "toCoord": zod.string(),
+  "status": zod.enum(['pending', 'accepted', 'rejected', 'cancelled']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Get occupied timeline coordinates
  */
 export const GetTimelineOccupiedQueryParams = zod.object({

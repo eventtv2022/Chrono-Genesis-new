@@ -437,6 +437,61 @@ export interface TimelineOccupiedEntry {
   createdAt: string;
 }
 
+export interface TimelineAnchorMoveInput {
+  /** @pattern ^\d{12}$ */
+  sourceCoord: string;
+  /** @pattern ^\d{12}$ */
+  targetCoord: string;
+}
+
+export interface TimelineAnchorMoveResult {
+  sourceCoord: string;
+  targetCoord: string;
+}
+
+export interface TimelineExchangeInput {
+  /** @pattern ^\d{12}$ */
+  sourceCoord: string;
+  /** @pattern ^\d{12}$ */
+  targetCoord: string;
+}
+
+export type TimelineExchangeResponseInputAction = typeof TimelineExchangeResponseInputAction[keyof typeof TimelineExchangeResponseInputAction];
+
+
+export const TimelineExchangeResponseInputAction = {
+  accept: 'accept',
+  reject: 'reject',
+  cancel: 'cancel',
+} as const;
+
+export interface TimelineExchangeResponseInput {
+  action: TimelineExchangeResponseInputAction;
+}
+
+export type TimelineExchangeRequestStatus = typeof TimelineExchangeRequestStatus[keyof typeof TimelineExchangeRequestStatus];
+
+
+export const TimelineExchangeRequestStatus = {
+  pending: 'pending',
+  accepted: 'accepted',
+  rejected: 'rejected',
+  cancelled: 'cancelled',
+} as const;
+
+export interface TimelineExchangeRequest {
+  id: number;
+  fromCitizenId: number;
+  toCitizenId: number;
+  fromCitizenName: string;
+  toCitizenName: string;
+  fromCoord: string;
+  toCoord: string;
+  status: TimelineExchangeRequestStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EconomyStats {
   totalCitizens: number;
   activeCitizens: number;

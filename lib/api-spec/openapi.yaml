@@ -901,6 +901,138 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /timeline/anchor-move:
+    post:
+      operationId: moveTimelineAnchor
+      tags: [timeline]
+      summary: Move an authenticated citizen's anchor to a free coordinate
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineAnchorMoveInput"
+      responses:
+        "200":
+          description: Anchor moved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimelineAnchorMoveResult"
+        "400":
+          description: Invalid or protected coordinate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Source anchor is not owned by the authenticated citizen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Target coordinate is occupied or anchor cannot be moved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /timeline/exchanges:
+    get:
+      operationId: listTimelineExchanges
+      tags: [timeline]
+      summary: List exchange requests involving the authenticated citizen
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Incoming and outgoing exchange requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimelineExchangeRequest"
+    post:
+      operationId: createTimelineExchange
+      tags: [timeline]
+      summary: Request a negotiated exchange with the owner of an occupied minute
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineExchangeInput"
+      responses:
+        "201":
+          description: Exchange request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimelineExchangeRequest"
+        "400":
+          description: Invalid coordinates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Coordinates changed or an exchange is already pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /timeline/exchanges/{id}/respond:
+    post:
+      operationId: respondToTimelineExchange
+      tags: [timeline]
+      summary: Accept, reject, or cancel a pending exchange request
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineExchangeResponseInput"
+      responses:
+        "200":
+          description: Exchange request updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimelineExchangeRequest"
+        "403":
+          description: Request cannot be managed by this citizen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Request is no longer actionable or anchors changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /timeline/occupied:
     get:
       operationId: getTimelineOccupied
@@ -1975,6 +2107,52 @@ components:
         - timelineCoord
         - citizenId
         - createdAt
+
+    TimelineAnchorMoveInput:
+      type: object
+      properties:
+        sourceCoord: { type: string, pattern: "^\\d{12}$" }
+        targetCoord: { type: string, pattern: "^\\d{12}$" }
+      required: [sourceCoord, targetCoord]
+
+    TimelineAnchorMoveResult:
+      type: object
+      properties:
+        sourceCoord: { type: string }
+        targetCoord: { type: string }
+      required: [sourceCoord, targetCoord]
+
+    TimelineExchangeInput:
+      type: object
+      properties:
+        sourceCoord: { type: string, pattern: "^\\d{12}$" }
+        targetCoord: { type: string, pattern: "^\\d{12}$" }
+      required: [sourceCoord, targetCoord]
+
+    TimelineExchangeResponseInput:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [accept, reject, cancel]
+      required: [action]
+
+    TimelineExchangeRequest:
+      type: object
+      properties:
+        id: { type: integer }
+        fromCitizenId: { type: integer }
+        toCitizenId: { type: integer }
+        fromCitizenName: { type: string }
+        toCitizenName: { type: string }
+        fromCoord: { type: string }
+        toCoord: { type: string }
+        status:
+          type: string
+          enum: [pending, accepted, rejected, cancelled]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, fromCitizenId, toCitizenId, fromCitizenName, toCitizenName, fromCoord, toCoord, status, createdAt, updatedAt]
 
     EconomyStats:
       type: object

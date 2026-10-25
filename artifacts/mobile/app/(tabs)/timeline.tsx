@@ -33,6 +33,13 @@ import { useLanguage } from "@/context/LanguageContext";
 import { FOCUS_PROMPTS_I18N } from "@/lib/i18n";
 import { MEDIA_DURATION_WARNING } from "@/lib/mediaDurationWarning";
 import { LogoBrand } from "@/components/LogoBrand";
+import {
+  getListTimelineExchangesQueryKey,
+  useCreateTimelineExchange,
+  useListTimelineExchanges,
+  useMoveTimelineAnchor,
+  useRespondToTimelineExchange,
+} from "@workspace/api-client-react";
 
 // ── Century boundary guard (client-side mirror of backend centuryGuard.ts) ─────
 function isCenturyBoundaryCoord(coord: string): boolean {
@@ -633,7 +640,8 @@ export default function TimelineScreen() {
   const [showAnchorAuction, setShowAnchorAuction] = useState(false);
 
   // ── Slot (Chronopedia) state ──────────────────────────────────────────────────
-  const [myTimeTab, setMyTimeTab]             = useState<"anchors" | "slots">("anchors");
+  const [myTimeTab, setMyTimeTab]             = useState<"anchors" | "slots" | "exchanges">("anchors");
+  const [exchangeMode, setExchangeMode] = useState<"free" | "occupied" | null>(null);
   const [selectedSlot, setSelectedSlot]       = useState<MyOwnedSlot | null>(null);
   const [showSlotActions, setShowSlotActions]  = useState(false);
   const [showAttachCapsule, setShowAttachCapsule] = useState(false);
@@ -815,6 +823,10 @@ export default function TimelineScreen() {
     },
     enabled: !!citizen,
   });
+  const exchangesQuery = useListTimelineExchanges({
+    query: { queryKey: getListTimelineExchangesQueryKey(), enabled: !!citizen, refetchInterval: 20_000 },
+  });
+  const exchanges = exchangesQuery.data ?? [];
 
   // ── My chronopedia slots query ────────────────────────────────────────────────
   const { data: mySlotsData, refetch: refetchMySlots } = useQuery<{ slots: MyOwnedSlot[] }>({
@@ -919,6 +931,65 @@ export default function TimelineScreen() {
     }
   }, [citizen, selectedYear, selectedMonth, selectedDay, fetchOccupied, t]);
 
+  const moveAnchorMutation = useMoveTimelineAnchor({
+    mutation: {
+      onSuccess: async () => {
+        setExchangeMode(null); setConfirmCoord(null); setSelectedAnchor(null);
+        await refetchMyAnchors(); await fetchOccupied(selectedYear, selectedMonth, selectedDay);
+        Alert.alert("✅", lang === "ru" ? "Минута перемещена" : "Minute moved");
+      },
+      onError: (error) => Alert.alert(t.error, error.message),
+    },
+  });
+  const createExchangeMutation = useCreateTimelineExchange({
+    mutation: {
+      onSuccess: async () => {
+        setExchangeMode(null); setConfirmCoord(null); setSelectedAnchor(null);
+        await qc.invalidateQueries({ queryKey: getListTimelineExchangesQueryKey() });
+        Alert.alert("✅", lang === "ru" ? "Запрос на обмен отправлен" : "Exchange request sent");
+      },
+      onError: (error) => Alert.alert(t.error, error.message),
+    },
+  });
+  const respondExchangeMutation = useRespondToTimelineExchange({
+    mutation: {
+      onSuccess: async () => {
+        await qc.invalidateQueries({ queryKey: getListTimelineExchangesQueryKey() });
+        await refetchMyAnchors();
+        await fetchOccupied(selectedYear, selectedMonth, selectedDay);
+      },
+      onError: (error) => Alert.alert(t.error, error.message),
+    },
+  });
+
+  const startExchange = (mode: "free" | "occupied") => {
+    if (!selectedAnchor) return;
+    if (selectedAnchor.status !== "active" || isCenturyBoundaryCoord(selectedAnchor.timelineCoord)) {
+      Alert.alert(t.error, lang === "ru" ? "Этот якорь нельзя обменять" : "This anchor cannot be exchanged");
+      return;
+    }
+    const coord = selectedAnchor.timelineCoord;
+    setExchangeMode(mode);
+    setConfirmCoord(null);
+    setShowAnchorActions(false);
+    setShowMyAnchors(false);
+    setSelectedYear(Number(coord.slice(0, 4)));
+    setSelectedCentury(Math.ceil(Number(coord.slice(0, 4)) / 100));
+    setSelectedMonth(Number(coord.slice(4, 6)));
+    setSelectedDay(Number(coord.slice(6, 8)));
+    setSelectedHour(Number(coord.slice(8, 10)));
+    setZoom(5);
+  };
+
+  const confirmExchange = () => {
+    if (!selectedAnchor || !confirmCoord || !exchangeMode) return;
+    if (exchangeMode === "free") {
+      moveAnchorMutation.mutate({ data: { sourceCoord: selectedAnchor.timelineCoord, targetCoord: confirmCoord } });
+    } else {
+      createExchangeMutation.mutate({ data: { sourceCoord: selectedAnchor.timelineCoord, targetCoord: confirmCoord } });
+    }
+  };
+
   const jumpToDate = useCallback(() => {
     const y = parseInt(jumpYear, 10);
     const m = parseInt(jumpMonth || "1", 10);
@@ -1018,6 +1089,19 @@ export default function TimelineScreen() {
           {stopTimeNotice ? <Text accessibilityRole="alert" style={styles.stopTimeNotice}>{stopTimeNotice}</Text> : null}
         </View>
       </View>
+
+      {exchangeMode && (
+        <View style={{ marginHorizontal: 12, marginTop: 8, padding: 10, borderRadius: 10, backgroundColor: colors.primary + "18", flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text style={{ flex: 1, color: colors.foreground, fontSize: 12 }}>
+            {lang === "ru"
+              ? exchangeMode === "free" ? "Выберите свободную минуту для переноса якоря" : "Выберите занятую минуту другого гражданина"
+              : exchangeMode === "free" ? "Choose a free minute for your anchor" : "Choose another citizen’s occupied minute"}
+          </Text>
+          <Pressable onPress={() => { setExchangeMode(null); setSelectedAnchor(null); setConfirmCoord(null); }}>
+            <Text style={{ color: colors.primary, fontWeight: "700" }}>{lang === "ru" ? "Отмена" : "Cancel"}</Text>
+          </Pressable>
+        </View>
+      )}
 
       {loadingOccupied && (
         <View style={styles.loadingBar}>
@@ -1125,6 +1209,22 @@ export default function TimelineScreen() {
                     pressed && !ownerId && { opacity: 0.6 },
                   ]}
                   onPress={() => {
+                    if (exchangeMode) {
+                      if (isCenturyBoundaryCoord(coord)) {
+                        Alert.alert(t.error, lang === "ru" ? "Граничная минута принадлежит государству" : "This boundary minute is state property");
+                        return;
+                      }
+                      if (exchangeMode === "free" && ownerId) {
+                        Alert.alert(t.error, lang === "ru" ? "Выберите свободную минуту" : "Choose a free minute");
+                        return;
+                      }
+                      if (exchangeMode === "occupied" && (!ownerId || ownerId === citizen?.id)) {
+                        Alert.alert(t.error, lang === "ru" ? "Выберите минуту другого гражданина" : "Choose another citizen’s minute");
+                        return;
+                      }
+                      setConfirmCoord(coord);
+                      return;
+                    }
                     if (ownerId) return;
                     // 🏛️ Block century boundary minutes
                     if (isCenturyBoundaryCoord(coord)) {
@@ -1134,7 +1234,7 @@ export default function TimelineScreen() {
                     setAnchorResult(null);
                     setConfirmCoord(coord);
                   }}
-                  disabled={!!ownerId || !!anchoring}
+                  disabled={!!anchoring || (!!ownerId && !(exchangeMode === "occupied" && ownerId !== citizen?.id))}
                 >
                   {isAnchoring ? (
                     <ActivityIndicator size={10} color="#fff" />
@@ -1150,17 +1250,25 @@ export default function TimelineScreen() {
 
           {confirmCoord && (
             <View style={styles.confirmPanel}>
-              <Text style={styles.confirmTitle}>{t.tl_anchor_title}</Text>
+              <Text style={styles.confirmTitle}>
+                {exchangeMode ? (lang === "ru" ? "Подтвердить обмен" : "Confirm exchange") : t.tl_anchor_title}
+              </Text>
               <Text style={styles.confirmMsg}>
                 {`${confirmCoord.slice(6,8)}.${confirmCoord.slice(4,6)}.${parseInt(confirmCoord.slice(0,4),10)} ${confirmCoord.slice(8,10)}:${confirmCoord.slice(10,12)}`}
-                {"\n"}{t.tl_anchor_cost}
+                {"\n"}{exchangeMode
+                  ? exchangeMode === "free"
+                    ? (lang === "ru" ? "Якорь переместится без списания минут." : "Your anchor will move without spending minutes.")
+                    : (lang === "ru" ? "Владельцу будет отправлен запрос. Минуты поменяются местами только после его согласия." : "The owner will receive a request. Minutes move only after they accept.")
+                  : t.tl_anchor_cost}
               </Text>
               <View style={styles.confirmBtns}>
                 <Pressable style={[styles.confirmBtn, styles.confirmBtnCancel]} onPress={() => setConfirmCoord(null)}>
                   <Text style={styles.confirmBtnCancelText}>{t.cancel}</Text>
                 </Pressable>
-                <Pressable style={[styles.confirmBtn, styles.confirmBtnOk]} onPress={() => doAnchor(confirmCoord)}>
-                  <Text style={styles.confirmBtnOkText}>{t.tl_anchor_btn}</Text>
+                <Pressable style={[styles.confirmBtn, styles.confirmBtnOk]} disabled={moveAnchorMutation.isPending || createExchangeMutation.isPending} onPress={() => exchangeMode ? confirmExchange() : doAnchor(confirmCoord)}>
+                  <Text style={styles.confirmBtnOkText}>
+                    {exchangeMode ? (lang === "ru" ? "Подтвердить" : "Confirm") : t.tl_anchor_btn}
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -1195,6 +1303,7 @@ export default function TimelineScreen() {
             {([
               { key: "anchors", label: `⏱ ${t.tl_anchor_badge}`, count: myAnchors.length },
               { key: "slots",   label: `📍 ${t.tl_slot_badge}`,   count: mySlots.length   },
+              { key: "exchanges", label: lang === "ru" ? "⇄ Обмены" : "⇄ Swaps", count: exchanges.filter((item) => item.status === "pending" && item.toCitizenId === citizen?.id).length },
             ] as const).map(tab => (
               <Pressable
                 key={tab.key}
@@ -1321,6 +1430,57 @@ export default function TimelineScreen() {
               </ScrollView>
             )
           )}
+
+          {myTimeTab === "exchanges" && (
+            exchanges.length === 0 ? (
+              <View style={styles.maEmpty}>
+                <Feather name="repeat" size={36} color={colors.mutedForeground} />
+                <Text style={[styles.maEmptyTitle, { color: colors.foreground }]}>
+                  {lang === "ru" ? "Заявок на обмен пока нет" : "No exchange requests yet"}
+                </Text>
+                <Text style={[styles.maEmptyText, { color: colors.mutedForeground }]}>
+                  {lang === "ru" ? "Входящие и отправленные запросы появятся здесь" : "Incoming and sent requests will appear here"}
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.maList} showsVerticalScrollIndicator={false}>
+                {exchanges.map((item) => {
+                  const incoming = item.toCitizenId === citizen?.id;
+                  const otherName = incoming ? item.fromCitizenName : item.toCitizenName;
+                  const statusLabel = lang === "ru"
+                    ? ({ pending: incoming ? "Ожидает вашего ответа" : "Ожидает ответа", accepted: "Обмен выполнен", rejected: "Отклонена", cancelled: "Отменена" } as const)[item.status]
+                    : ({ pending: incoming ? "Your response needed" : "Awaiting response", accepted: "Exchange completed", rejected: "Declined", cancelled: "Cancelled" } as const)[item.status];
+                  const coordLabel = (c: string) => `${c.slice(6,8)}.${c.slice(4,6)}.${Number(c.slice(0,4))} ${c.slice(8,10)}:${c.slice(10,12)}`;
+                  return (
+                    <View key={item.id} style={[styles.maRow, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: "column", alignItems: "stretch", gap: 8 }]}>
+                      <Text style={{ color: colors.foreground, fontWeight: "700" }}>{otherName} · {statusLabel}</Text>
+                      <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
+                        {coordLabel(item.fromCoord)} ⇄ {coordLabel(item.toCoord)}
+                      </Text>
+                      {item.status === "pending" && (
+                        <View style={{ flexDirection: "row", gap: 8 }}>
+                          {incoming ? (
+                            <>
+                              <Pressable onPress={() => respondExchangeMutation.mutate({ id: item.id, data: { action: "accept" } })} style={{ flex: 1, backgroundColor: colors.primary, padding: 9, borderRadius: 8, alignItems: "center" }}>
+                                <Text style={{ color: colors.primaryForeground, fontWeight: "700" }}>{lang === "ru" ? "Принять" : "Accept"}</Text>
+                              </Pressable>
+                              <Pressable onPress={() => respondExchangeMutation.mutate({ id: item.id, data: { action: "reject" } })} style={{ flex: 1, backgroundColor: colors.muted, padding: 9, borderRadius: 8, alignItems: "center" }}>
+                                <Text style={{ color: colors.foreground, fontWeight: "700" }}>{lang === "ru" ? "Отклонить" : "Decline"}</Text>
+                              </Pressable>
+                            </>
+                          ) : (
+                            <Pressable onPress={() => respondExchangeMutation.mutate({ id: item.id, data: { action: "cancel" } })} style={{ backgroundColor: colors.muted, padding: 9, borderRadius: 8, alignItems: "center" }}>
+                              <Text style={{ color: colors.foreground, fontWeight: "700" }}>{lang === "ru" ? "Отменить запрос" : "Cancel request"}</Text>
+                            </Pressable>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )
+          )}
         </View>
       </Modal>
 
@@ -1416,7 +1576,7 @@ export default function TimelineScreen() {
               )}
             </Pressable>
 
-            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => Alert.alert(t.soon, t.tl_swap_free_sub)}>
+            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => startExchange("free")}>
               <View style={[styles.asIconBox, { backgroundColor: "#0ea5e922" }]}>
                 <Feather name="refresh-cw" size={18} color="#0ea5e9" />
               </View>
@@ -1424,10 +1584,9 @@ export default function TimelineScreen() {
                 <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_swap_free}</Text>
                 <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_swap_free_sub}</Text>
               </View>
-              <View style={styles.asSoon}><Text style={styles.asSoonText}>{t.soon}</Text></View>
             </Pressable>
 
-            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => Alert.alert(t.soon, t.tl_swap_occ_sub)}>
+            <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => startExchange("occupied")}>
               <View style={[styles.asIconBox, { backgroundColor: "#e6394622" }]}>
                 <Feather name="users" size={18} color="#e63946" />
               </View>
@@ -1435,7 +1594,6 @@ export default function TimelineScreen() {
                 <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{t.tl_swap_occ}</Text>
                 <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_swap_occ_sub}</Text>
               </View>
-              <View style={styles.asSoon}><Text style={styles.asSoonText}>{t.soon}</Text></View>
             </Pressable>
 
             {/* ── Moderation: Report Content / Block User ─────────────────── */}

@@ -73,7 +73,12 @@ import type {
   TelegramWebAppInput,
   TelegramWebAppSession,
   TimelineAnchorInput,
+  TimelineAnchorMoveInput,
+  TimelineAnchorMoveResult,
   TimelineAnchorResult,
+  TimelineExchangeInput,
+  TimelineExchangeRequest,
+  TimelineExchangeResponseInput,
   TimelineOccupiedEntry,
   Transaction,
   TvLiveSlotResponse,
@@ -2514,6 +2519,297 @@ export const useAnchorTimeline = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getAnchorTimelineMutationOptions(options));
+    }
+
+export const getMoveTimelineAnchorUrl = () => {
+
+
+
+
+  return `/api/timeline/anchor-move`
+}
+
+/**
+ * @summary Move an authenticated citizen's anchor to a free coordinate
+ */
+export const moveTimelineAnchor = async (timelineAnchorMoveInput: TimelineAnchorMoveInput, options?: RequestInit): Promise<TimelineAnchorMoveResult> => {
+
+  return customFetch<TimelineAnchorMoveResult>(getMoveTimelineAnchorUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      timelineAnchorMoveInput,)
+  }
+);}
+
+
+
+
+export const getMoveTimelineAnchorMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof moveTimelineAnchor>>, TError,{data: BodyType<TimelineAnchorMoveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof moveTimelineAnchor>>, TError,{data: BodyType<TimelineAnchorMoveInput>}, TContext> => {
+
+const mutationKey = ['moveTimelineAnchor'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof moveTimelineAnchor>>, {data: BodyType<TimelineAnchorMoveInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  moveTimelineAnchor(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MoveTimelineAnchorMutationResult = NonNullable<Awaited<ReturnType<typeof moveTimelineAnchor>>>
+    export type MoveTimelineAnchorMutationBody = BodyType<TimelineAnchorMoveInput>
+    export type MoveTimelineAnchorMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Move an authenticated citizen's anchor to a free coordinate
+ */
+export const useMoveTimelineAnchor = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof moveTimelineAnchor>>, TError,{data: BodyType<TimelineAnchorMoveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof moveTimelineAnchor>>,
+        TError,
+        {data: BodyType<TimelineAnchorMoveInput>},
+        TContext
+      > => {
+      return useMutation(getMoveTimelineAnchorMutationOptions(options));
+    }
+
+export const getListTimelineExchangesUrl = () => {
+
+
+
+
+  return `/api/timeline/exchanges`
+}
+
+/**
+ * @summary List exchange requests involving the authenticated citizen
+ */
+export const listTimelineExchanges = async ( options?: RequestInit): Promise<TimelineExchangeRequest[]> => {
+
+  return customFetch<TimelineExchangeRequest[]>(getListTimelineExchangesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTimelineExchangesQueryKey = () => {
+    return [
+    `/api/timeline/exchanges`
+    ] as const;
+    }
+
+
+export const getListTimelineExchangesQueryOptions = <TData = Awaited<ReturnType<typeof listTimelineExchanges>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTimelineExchanges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTimelineExchangesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTimelineExchanges>>> = ({ signal }) => listTimelineExchanges({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTimelineExchanges>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTimelineExchangesQueryResult = NonNullable<Awaited<ReturnType<typeof listTimelineExchanges>>>
+export type ListTimelineExchangesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List exchange requests involving the authenticated citizen
+ */
+
+export function useListTimelineExchanges<TData = Awaited<ReturnType<typeof listTimelineExchanges>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTimelineExchanges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTimelineExchangesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateTimelineExchangeUrl = () => {
+
+
+
+
+  return `/api/timeline/exchanges`
+}
+
+/**
+ * @summary Request a negotiated exchange with the owner of an occupied minute
+ */
+export const createTimelineExchange = async (timelineExchangeInput: TimelineExchangeInput, options?: RequestInit): Promise<TimelineExchangeRequest> => {
+
+  return customFetch<TimelineExchangeRequest>(getCreateTimelineExchangeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      timelineExchangeInput,)
+  }
+);}
+
+
+
+
+export const getCreateTimelineExchangeMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTimelineExchange>>, TError,{data: BodyType<TimelineExchangeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTimelineExchange>>, TError,{data: BodyType<TimelineExchangeInput>}, TContext> => {
+
+const mutationKey = ['createTimelineExchange'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTimelineExchange>>, {data: BodyType<TimelineExchangeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createTimelineExchange(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTimelineExchangeMutationResult = NonNullable<Awaited<ReturnType<typeof createTimelineExchange>>>
+    export type CreateTimelineExchangeMutationBody = BodyType<TimelineExchangeInput>
+    export type CreateTimelineExchangeMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Request a negotiated exchange with the owner of an occupied minute
+ */
+export const useCreateTimelineExchange = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTimelineExchange>>, TError,{data: BodyType<TimelineExchangeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTimelineExchange>>,
+        TError,
+        {data: BodyType<TimelineExchangeInput>},
+        TContext
+      > => {
+      return useMutation(getCreateTimelineExchangeMutationOptions(options));
+    }
+
+export const getRespondToTimelineExchangeUrl = (id: number,) => {
+
+
+
+
+  return `/api/timeline/exchanges/${id}/respond`
+}
+
+/**
+ * @summary Accept, reject, or cancel a pending exchange request
+ */
+export const respondToTimelineExchange = async (id: number,
+    timelineExchangeResponseInput: TimelineExchangeResponseInput, options?: RequestInit): Promise<TimelineExchangeRequest> => {
+
+  return customFetch<TimelineExchangeRequest>(getRespondToTimelineExchangeUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      timelineExchangeResponseInput,)
+  }
+);}
+
+
+
+
+export const getRespondToTimelineExchangeMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof respondToTimelineExchange>>, TError,{id: number;data: BodyType<TimelineExchangeResponseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof respondToTimelineExchange>>, TError,{id: number;data: BodyType<TimelineExchangeResponseInput>}, TContext> => {
+
+const mutationKey = ['respondToTimelineExchange'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof respondToTimelineExchange>>, {id: number;data: BodyType<TimelineExchangeResponseInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  respondToTimelineExchange(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RespondToTimelineExchangeMutationResult = NonNullable<Awaited<ReturnType<typeof respondToTimelineExchange>>>
+    export type RespondToTimelineExchangeMutationBody = BodyType<TimelineExchangeResponseInput>
+    export type RespondToTimelineExchangeMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Accept, reject, or cancel a pending exchange request
+ */
+export const useRespondToTimelineExchange = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof respondToTimelineExchange>>, TError,{id: number;data: BodyType<TimelineExchangeResponseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof respondToTimelineExchange>>,
+        TError,
+        {id: number;data: BodyType<TimelineExchangeResponseInput>},
+        TContext
+      > => {
+      return useMutation(getRespondToTimelineExchangeMutationOptions(options));
     }
 
 export const getGetTimelineOccupiedUrl = (params: GetTimelineOccupiedParams,) => {

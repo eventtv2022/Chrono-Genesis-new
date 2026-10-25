@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, or, desc } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -59,7 +59,7 @@ async function getFileMediaInfo(
   }
 }
 import { db } from "@workspace/db";
-import { citizensTable, timelineAnchorsTable, timelineCapsulesTable } from "@workspace/db";
+import { citizensTable, timelineAnchorsTable, timelineCapsulesTable, timelineExchangeRequestsTable } from "@workspace/db";
 import { z } from "zod";
 import { logTimelineAnchorToSheets } from "../lib/googleSheets";
 import { sendTransactionNotification } from "../services/telegramService";
@@ -269,6 +269,189 @@ router.get("/timeline/occupied", async (req, res): Promise<void> => {
       createdAt: a.createdAt.toISOString(),
     }))
   );
+});
+
+const ExchangeCoordsBody = z.object({
+  sourceCoord: z.string().regex(/^\d{12}$/),
+  targetCoord: z.string().regex(/^\d{12}$/),
+});
+
+function validateExchangeCoords(sourceCoord: string, targetCoord: string): string | null {
+  if (sourceCoord === targetCoord) return "Выберите другую минуту";
+  return validateCoord(sourceCoord) ?? validateCoord(targetCoord);
+}
+
+router.post("/timeline/anchor-move", requireAuth, async (req, res): Promise<void> => {
+  const parsed = ExchangeCoordsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Укажите исходную и целевую минуту" }); return; }
+  const { sourceCoord, targetCoord } = parsed.data;
+  const citizenId = req.citizen!.id;
+  const invalid = validateExchangeCoords(sourceCoord, targetCoord);
+  if (invalid) { res.status(400).json({ error: invalid }); return; }
+  if ([sourceCoord, targetCoord].some(isCenturyBoundaryMinute)) {
+    res.status(403).json({ error: CENTURY_STATE_PROPERTY_MSG, code: CENTURY_STATE_PROPERTY_CODE }); return;
+  }
+  if (await isStateHeritageCoord(sourceCoord) || await isStateHeritageCoord(targetCoord)) {
+    res.status(403).json({ error: HERITAGE_LOCK_MSG, code: HERITAGE_LOCK_CODE }); return;
+  }
+
+  try {
+    await db.transaction(async (tx) => {
+      const [source] = await tx.select().from(timelineAnchorsTable)
+        .where(and(eq(timelineAnchorsTable.timelineCoord, sourceCoord), eq(timelineAnchorsTable.citizenId, citizenId)))
+        .for("update").limit(1);
+      if (!source) throw Object.assign(new Error("Исходная минута вам не принадлежит"), { status: 403 });
+      if (source.status !== "active") throw Object.assign(new Error("Эту минуту нельзя переместить, пока она участвует в аукционе"), { status: 409 });
+      const [target] = await tx.select({ id: timelineAnchorsTable.id }).from(timelineAnchorsTable)
+        .where(eq(timelineAnchorsTable.timelineCoord, targetCoord)).limit(1);
+      if (target) throw Object.assign(new Error("Целевая минута уже занята"), { status: 409 });
+      const [pending] = await tx.select({ id: timelineExchangeRequestsTable.id }).from(timelineExchangeRequestsTable)
+        .where(and(eq(timelineExchangeRequestsTable.status, "pending"), or(
+          eq(timelineExchangeRequestsTable.fromCoord, sourceCoord),
+          eq(timelineExchangeRequestsTable.toCoord, sourceCoord),
+          eq(timelineExchangeRequestsTable.fromCoord, targetCoord),
+          eq(timelineExchangeRequestsTable.toCoord, targetCoord),
+        ))).limit(1);
+      if (pending) throw Object.assign(new Error("С этой минутой связан ожидающий обмен. Сначала отмените или завершите его."), { status: 409 });
+      await tx.update(timelineAnchorsTable).set({ timelineCoord: targetCoord }).where(eq(timelineAnchorsTable.id, source.id));
+      await tx.update(timelineCapsulesTable).set({ timelineCoord: targetCoord, updatedAt: new Date() })
+        .where(and(eq(timelineCapsulesTable.citizenId, citizenId), eq(timelineCapsulesTable.timelineCoord, sourceCoord)));
+    });
+    res.json({ sourceCoord, targetCoord });
+  } catch (error) {
+    const failure = error as { status?: number; message?: string; code?: string };
+    if (failure.code === "23505") { res.status(409).json({ error: "Целевая минута уже занята" }); return; }
+    if (failure.status) { res.status(failure.status).json({ error: failure.message }); return; }
+    throw error;
+  }
+});
+
+router.get("/timeline/exchanges", requireAuth, async (req, res): Promise<void> => {
+  const citizenId = req.citizen!.id;
+  const requests = await db.select().from(timelineExchangeRequestsTable)
+    .where(or(
+      eq(timelineExchangeRequestsTable.fromCitizenId, citizenId),
+      eq(timelineExchangeRequestsTable.toCitizenId, citizenId),
+    )).orderBy(desc(timelineExchangeRequestsTable.createdAt)).limit(100);
+  const ids = [...new Set(requests.flatMap((item) => [item.fromCitizenId, item.toCitizenId]))];
+  const citizens = ids.length ? await db.select({ id: citizensTable.id, name: citizensTable.name })
+    .from(citizensTable).where(inArray(citizensTable.id, ids)) : [];
+  const names = new Map(citizens.map((item) => [item.id, item.name]));
+  res.json(requests.map((item) => ({
+    ...item,
+    fromCitizenName: names.get(item.fromCitizenId) ?? "Гражданин",
+    toCitizenName: names.get(item.toCitizenId) ?? "Гражданин",
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+  })));
+});
+
+router.post("/timeline/exchanges", requireAuth, async (req, res): Promise<void> => {
+  const parsed = ExchangeCoordsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Укажите исходную и целевую минуту" }); return; }
+  const { sourceCoord, targetCoord } = parsed.data;
+  const citizenId = req.citizen!.id;
+  const invalid = validateExchangeCoords(sourceCoord, targetCoord);
+  if (invalid) { res.status(400).json({ error: invalid }); return; }
+  if ([sourceCoord, targetCoord].some(isCenturyBoundaryMinute)) {
+    res.status(403).json({ error: CENTURY_STATE_PROPERTY_MSG, code: CENTURY_STATE_PROPERTY_CODE }); return;
+  }
+  if (await isStateHeritageCoord(sourceCoord) || await isStateHeritageCoord(targetCoord)) {
+    res.status(403).json({ error: HERITAGE_LOCK_MSG, code: HERITAGE_LOCK_CODE }); return;
+  }
+
+  let result: typeof timelineExchangeRequestsTable.$inferSelect;
+  try {
+    result = await db.transaction(async (tx) => {
+      const anchors = await tx.select().from(timelineAnchorsTable)
+        .where(inArray(timelineAnchorsTable.timelineCoord, [sourceCoord, targetCoord]))
+        .orderBy(timelineAnchorsTable.timelineCoord).for("update");
+      const source = anchors.find((item) => item.timelineCoord === sourceCoord);
+      const target = anchors.find((item) => item.timelineCoord === targetCoord);
+      if (!source || source.citizenId !== citizenId || source.status !== "active") {
+        throw Object.assign(new Error("Исходный якорь не найден или недоступен"), { status: 409 });
+      }
+      if (!target || target.citizenId === citizenId || target.status !== "active") {
+        throw Object.assign(new Error("Выберите минуту, занятую другим гражданином"), { status: 409 });
+      }
+      const [pending] = await tx.select({ id: timelineExchangeRequestsTable.id }).from(timelineExchangeRequestsTable)
+        .where(and(eq(timelineExchangeRequestsTable.status, "pending"), or(
+          eq(timelineExchangeRequestsTable.fromCoord, sourceCoord),
+          eq(timelineExchangeRequestsTable.toCoord, sourceCoord),
+          eq(timelineExchangeRequestsTable.fromCoord, targetCoord),
+          eq(timelineExchangeRequestsTable.toCoord, targetCoord),
+        ))).limit(1);
+      if (pending) throw Object.assign(new Error("Для одной из минут уже ожидается обмен"), { status: 409 });
+      const [created] = await tx.insert(timelineExchangeRequestsTable).values({
+        fromCitizenId: citizenId, toCitizenId: target.citizenId, fromCoord: sourceCoord, toCoord: targetCoord,
+      }).returning();
+      return created!;
+    });
+  } catch (error) {
+    const failure = error as { status?: number; message?: string };
+    if (failure.status) { res.status(failure.status).json({ error: failure.message }); return; }
+    throw error;
+  }
+  const [from] = await db.select({ name: citizensTable.name }).from(citizensTable).where(eq(citizensTable.id, result.fromCitizenId)).limit(1);
+  const [to] = await db.select({ name: citizensTable.name }).from(citizensTable).where(eq(citizensTable.id, result.toCitizenId)).limit(1);
+  res.status(201).json({ ...result, fromCitizenName: from?.name ?? "Гражданин", toCitizenName: to?.name ?? "Гражданин", createdAt: result.createdAt.toISOString(), updatedAt: result.updatedAt.toISOString() });
+});
+
+router.post("/timeline/exchanges/:id/respond", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const parsed = z.object({ action: z.enum(["accept", "reject", "cancel"]) }).safeParse(req.body);
+  if (!Number.isSafeInteger(id) || id < 1 || !parsed.success) { res.status(400).json({ error: "Неверный запрос обмена" }); return; }
+  const citizenId = req.citizen!.id;
+  try {
+    const updated = await db.transaction(async (tx) => {
+      const [request] = await tx.select().from(timelineExchangeRequestsTable)
+        .where(eq(timelineExchangeRequestsTable.id, id)).for("update").limit(1);
+      if (!request) throw Object.assign(new Error("Заявка не найдена"), { status: 404 });
+      if (request.status !== "pending") throw Object.assign(new Error("Заявка уже обработана"), { status: 409 });
+      const action = parsed.data.action;
+      if (action === "cancel" && request.fromCitizenId !== citizenId) throw Object.assign(new Error("Отменить заявку может только её автор"), { status: 403 });
+      if (action !== "cancel" && request.toCitizenId !== citizenId) throw Object.assign(new Error("Ответить на заявку может только владелец минуты"), { status: 403 });
+      if (action !== "accept") {
+        const [row] = await tx.update(timelineExchangeRequestsTable)
+          .set({ status: action === "cancel" ? "cancelled" : "rejected", updatedAt: new Date() })
+          .where(and(eq(timelineExchangeRequestsTable.id, id), eq(timelineExchangeRequestsTable.status, "pending"))).returning();
+        if (!row) throw Object.assign(new Error("Заявка уже обработана"), { status: 409 });
+        return row;
+      }
+      if ([request.fromCoord, request.toCoord].some(isCenturyBoundaryMinute)
+        || await isStateHeritageCoord(request.fromCoord) || await isStateHeritageCoord(request.toCoord)) {
+        throw Object.assign(new Error("Обмен с этой минутой запрещён"), { status: 403 });
+      }
+      const anchors = await tx.select().from(timelineAnchorsTable)
+        .where(inArray(timelineAnchorsTable.timelineCoord, [request.fromCoord, request.toCoord]))
+        .orderBy(timelineAnchorsTable.timelineCoord).for("update");
+      const fromAnchor = anchors.find((item) => item.timelineCoord === request.fromCoord);
+      const toAnchor = anchors.find((item) => item.timelineCoord === request.toCoord);
+      if (!fromAnchor || !toAnchor || fromAnchor.citizenId !== request.fromCitizenId || toAnchor.citizenId !== request.toCitizenId || fromAnchor.status !== "active" || toAnchor.status !== "active") {
+        throw Object.assign(new Error("Один из якорей изменился и обмен больше невозможен"), { status: 409 });
+      }
+      const tempCoord = `__swap_${id}_${Date.now()}`;
+      await tx.update(timelineAnchorsTable).set({ timelineCoord: tempCoord }).where(eq(timelineAnchorsTable.id, fromAnchor.id));
+      await tx.update(timelineAnchorsTable).set({ timelineCoord: request.fromCoord }).where(eq(timelineAnchorsTable.id, toAnchor.id));
+      await tx.update(timelineAnchorsTable).set({ timelineCoord: request.toCoord }).where(eq(timelineAnchorsTable.id, fromAnchor.id));
+      await tx.update(timelineCapsulesTable).set({ timelineCoord: request.toCoord, updatedAt: new Date() })
+        .where(and(eq(timelineCapsulesTable.citizenId, request.fromCitizenId), eq(timelineCapsulesTable.timelineCoord, request.fromCoord)));
+      await tx.update(timelineCapsulesTable).set({ timelineCoord: request.fromCoord, updatedAt: new Date() })
+        .where(and(eq(timelineCapsulesTable.citizenId, request.toCitizenId), eq(timelineCapsulesTable.timelineCoord, request.toCoord)));
+      const [row] = await tx.update(timelineExchangeRequestsTable)
+        .set({ status: "accepted", updatedAt: new Date() })
+        .where(and(eq(timelineExchangeRequestsTable.id, id), eq(timelineExchangeRequestsTable.status, "pending"))).returning();
+      if (!row) throw Object.assign(new Error("Заявка уже обработана"), { status: 409 });
+      return row!;
+    });
+    const [from] = await db.select({ name: citizensTable.name }).from(citizensTable).where(eq(citizensTable.id, updated.fromCitizenId)).limit(1);
+    const [to] = await db.select({ name: citizensTable.name }).from(citizensTable).where(eq(citizensTable.id, updated.toCitizenId)).limit(1);
+    res.json({ ...updated, fromCitizenName: from?.name ?? "Гражданин", toCitizenName: to?.name ?? "Гражданин", createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
+  } catch (error) {
+    const failure = error as { status?: number; message?: string };
+    if (failure.status) { res.status(failure.status).json({ error: failure.message }); return; }
+    throw error;
+  }
 });
 
 // ── GET /timeline/my-anchors ──────────────────────────────────────────────────
