@@ -1396,7 +1396,7 @@ export default function TimelineScreen() {
           <View style={[styles.maHeader, { borderBottomColor: colors.border }]}>
             <View style={styles.maHeaderLeft}>
               <Feather name="map-pin" size={18} color={colors.primary} />
-              <Text style={[styles.maHeaderTitle, { color: colors.foreground }]}>My TIME</Text>
+              <Text style={[styles.maHeaderTitle, { color: colors.foreground }]}>My Time Points</Text>
             </View>
             <Pressable onPress={() => setShowMyAnchors(false)} style={[styles.maClose, { cursor: "pointer" as never }]}>
               <Feather name="x" size={22} color={colors.foreground} />
