@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getBaseUrl } from "@/lib/api";
 import { getStoredAuthHeaders } from "@/lib/authStorage";
-import { Platform } from "react-native";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
@@ -46,6 +45,11 @@ export default function ServiceCatalogScreen() {
   const [error, setError] = useState("");
   const [openingDocument, setOpeningDocument] = useState<string | null>(null);
   const requestKeyRef = useRef<string | null>(null);
+
+  const showNotice = (title: string, message: string) => {
+    if (Platform.OS === "web") window.alert(`${title}\n\n${message}`);
+    else Alert.alert(title, message);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -110,7 +114,7 @@ export default function ServiceCatalogScreen() {
       requestKeyRef.current = null;
       setShowForm(false);
       await load();
-      Alert.alert(
+      showNotice(
         isRu ? "Услуга опубликована" : "Service published",
         isRu
           ? `Списано 1 Д за размещение. Рекомендация аудитора: ${data.listing?.suggestedPriceDarmins ?? data.audit?.suggestedAmount ?? "—"} Д.`
@@ -167,7 +171,7 @@ export default function ServiceCatalogScreen() {
         });
       }
     } catch (err) {
-      Alert.alert(isRu ? "Документ недоступен" : "Document unavailable", err instanceof Error ? err.message : "");
+      showNotice(isRu ? "Документ недоступен" : "Document unavailable", err instanceof Error ? err.message : "");
     } finally { setOpeningDocument(null); }
   };
 
@@ -212,11 +216,20 @@ export default function ServiceCatalogScreen() {
               />
             ))}
             {!!error && <Text style={{ color: colors.destructive, fontSize: 12, marginBottom: 10 }}>{error}</Text>}
-            <TouchableOpacity disabled={publishing} onPress={() => Alert.alert(
-              isRu ? "Опубликовать за 1 Д?" : "Publish for 1 Д?",
-              isRu ? "С вашего доступного баланса будет списан 1 Д. Рекомендацию цены подготовит ИИ-аудитор." : "1 Д will be deducted from your available balance. The AI auditor will recommend a price.",
-              [{ text: isRu ? "Отмена" : "Cancel", style: "cancel" }, { text: isRu ? "Опубликовать" : "Publish", onPress: () => void publish() }],
-            )} style={[styles.publishButton, { backgroundColor: colors.primary, opacity: publishing ? 0.7 : 1 }]}>
+            <TouchableOpacity disabled={publishing} onPress={() => {
+              const confirmationTitle = isRu ? "Опубликовать за 1 Д?" : "Publish for 1 Д?";
+              const confirmationMessage = isRu
+                ? "С вашего доступного баланса будет списан 1 Д. Рекомендацию цены подготовит ИИ-аудитор."
+                : "1 Д will be deducted from your available balance. The AI auditor will recommend a price.";
+              if (Platform.OS === "web") {
+                if (window.confirm(`${confirmationTitle}\n\n${confirmationMessage}`)) void publish();
+              } else {
+                Alert.alert(confirmationTitle, confirmationMessage, [
+                  { text: isRu ? "Отмена" : "Cancel", style: "cancel" },
+                  { text: isRu ? "Опубликовать" : "Publish", onPress: () => void publish() },
+                ]);
+              }
+            }} style={[styles.publishButton, { backgroundColor: colors.primary, opacity: publishing ? 0.7 : 1 }]}>
               {publishing ? <ActivityIndicator color={colors.primaryForeground} /> : <Feather name="send" size={15} color={colors.primaryForeground} />}
               <Text style={[styles.publishText, { color: colors.primaryForeground }]}>{isRu ? "Проверить и опубликовать · 1 Д" : "Audit and publish · 1 Д"}</Text>
             </TouchableOpacity>
