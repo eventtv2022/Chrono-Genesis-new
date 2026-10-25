@@ -618,6 +618,7 @@ export default function TimelineScreen() {
   const [jumpMonth, setJumpMonth] = useState("");
   const [jumpDay, setJumpDay] = useState("");
   const [showMyAnchors, setShowMyAnchors] = useState(false);
+  const [showExchangeEntry, setShowExchangeEntry] = useState(false);
   const [selectedAnchor, setSelectedAnchor] = useState<{ timelineCoord: string; status: string; createdAt: string; capsuleText: string | null; mediaUrl: string | null; mediaType: string | null } | null>(null);
   const [showAnchorActions, setShowAnchorActions] = useState(false);
   const [showCapsule, setShowCapsule] = useState(false);
@@ -962,15 +963,17 @@ export default function TimelineScreen() {
     },
   });
 
-  const startExchange = (mode: "free" | "occupied") => {
-    if (!selectedAnchor) return;
-    if (selectedAnchor.status !== "active" || isCenturyBoundaryCoord(selectedAnchor.timelineCoord)) {
+  const startExchange = (mode: "free" | "occupied", anchor = selectedAnchor) => {
+    if (!anchor) return;
+    if (anchor.status !== "active" || isCenturyBoundaryCoord(anchor.timelineCoord)) {
       Alert.alert(t.error, lang === "ru" ? "Этот якорь нельзя обменять" : "This anchor cannot be exchanged");
       return;
     }
-    const coord = selectedAnchor.timelineCoord;
+    setSelectedAnchor(anchor);
+    const coord = anchor.timelineCoord;
     setExchangeMode(mode);
     setConfirmCoord(null);
+    setShowExchangeEntry(false);
     setShowAnchorActions(false);
     setShowMyAnchors(false);
     setSelectedYear(Number(coord.slice(0, 4)));
@@ -1086,6 +1089,27 @@ export default function TimelineScreen() {
             <Feather name="clock" size={15} color={colors.background} />
             <Text style={styles.stopTimeButtonText}>{lang === "ru" ? "Остановись мгновение" : "Stop Time"}</Text>
           </TouchableOpacity>
+          {citizen && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={lang === "ru" ? "Обмен минутами" : "Exchange minutes"}
+              style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary, borderRadius: 8, minHeight: 36, paddingHorizontal: 12 }}
+              onPress={() => {
+                setMyTimeTab("anchors");
+                setShowExchangeEntry(true);
+              }}
+            >
+              <Feather name="repeat" size={15} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" }}>{lang === "ru" ? "Обмен минутами" : "Exchange minutes"}</Text>
+              {exchanges.filter((item) => item.status === "pending" && item.toCitizenId === citizen.id).length > 0 && (
+                <View style={{ minWidth: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, backgroundColor: colors.primary }}>
+                  <Text style={{ color: colors.background, fontSize: 10, fontWeight: "800" }}>
+                    {exchanges.filter((item) => item.status === "pending" && item.toCitizenId === citizen.id).length}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
           {stopTimeNotice ? <Text accessibilityRole="alert" style={styles.stopTimeNotice}>{stopTimeNotice}</Text> : null}
         </View>
       </View>
@@ -1284,7 +1308,84 @@ export default function TimelineScreen() {
         </ScrollView>
       )}
 
-      {/* My TIME Modal — tabbed: ⏱ Анкоры / 📍 Слоты */}
+      <Modal visible={showExchangeEntry} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowExchangeEntry(false)}>
+        <View style={[styles.maModal, { backgroundColor: colors.background }]}>
+          <View style={[styles.maHeader, { borderBottomColor: colors.border }]}>
+            <View style={styles.maHeaderLeft}>
+              <Feather name="repeat" size={19} color={colors.primary} />
+              <Text style={[styles.maHeaderTitle, { color: colors.foreground }]}>{lang === "ru" ? "Обмен минутами" : "Exchange minutes"}</Text>
+            </View>
+            <Pressable accessibilityLabel={lang === "ru" ? "Закрыть" : "Close"} onPress={() => setShowExchangeEntry(false)} style={[styles.maClose, { cursor: "pointer" as never }]}>
+              <Feather name="x" size={22} color={colors.foreground} />
+            </Pressable>
+          </View>
+          <Text style={{ color: colors.mutedForeground, fontSize: 13, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 8 }}>
+            {lang === "ru" ? "Выберите свой якорь и тип обмена" : "Choose your anchor and exchange type"}
+          </Text>
+          {myAnchors.length === 0 ? (
+            <View style={styles.maEmpty}>
+              <Feather name="clock" size={36} color={colors.mutedForeground} />
+              <Text style={[styles.maEmptyTitle, { color: colors.foreground }]}>
+                {lang === "ru" ? "У вас пока нет якорей" : "You don’t have any anchors yet"}
+              </Text>
+              <Text style={[styles.maEmptyText, { color: colors.mutedForeground }]}>
+                {lang === "ru" ? "Сначала закрепите минуту на таймлайне" : "Anchor a minute on the timeline first"}
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.maList, { gap: 12 }]} showsVerticalScrollIndicator={false}>
+              {myAnchors.map((anchor) => {
+                const coord = anchor.timelineCoord;
+                const isEligible = anchor.status === "active" && !isCenturyBoundaryCoord(coord);
+                const dateLabel = `${coord.slice(6, 8)}.${coord.slice(4, 6)}.${Number(coord.slice(0, 4))} · ${coord.slice(8, 10)}:${coord.slice(10, 12)}`;
+                return (
+                  <View key={coord} style={{ padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, gap: 12 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary + "20" }}>
+                        <Feather name="clock" size={17} color={colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.foreground, fontSize: 15, fontWeight: "700" }}>{dateLabel}</Text>
+                        <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 2 }}>
+                          {anchor.status === "active" ? (lang === "ru" ? "Ваш активный якорь" : "Your active anchor") : (lang === "ru" ? "Недоступен для обмена" : "Unavailable for exchange")}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <Pressable
+                        disabled={!isEligible}
+                        accessibilityRole="button"
+                        onPress={() => startExchange("free", anchor)}
+                        style={({ pressed }) => ({ flex: 1, minHeight: 44, paddingHorizontal: 9, borderRadius: 10, borderWidth: 1, borderColor: colors.primary + "80", backgroundColor: colors.primary + "12", opacity: !isEligible ? 0.45 : pressed ? 0.7 : 1, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 })}
+                      >
+                        <Feather name="shuffle" size={15} color={colors.primary} />
+                        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" }}>{lang === "ru" ? "На свободную" : "To a free minute"}</Text>
+                      </Pressable>
+                      <Pressable
+                        disabled={!isEligible}
+                        accessibilityRole="button"
+                        onPress={() => startExchange("occupied", anchor)}
+                        style={({ pressed }) => ({ flex: 1, minHeight: 44, paddingHorizontal: 9, borderRadius: 10, borderWidth: 1, borderColor: "#e6394680", backgroundColor: "#e6394612", opacity: !isEligible ? 0.45 : pressed ? 0.7 : 1, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 })}
+                      >
+                        <Feather name="users" size={15} color="#e63946" />
+                        <Text style={{ color: "#e63946", fontSize: 12, fontWeight: "700" }}>{lang === "ru" ? "С гражданином" : "With a citizen"}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+          <View style={{ paddingHorizontal: 18, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Feather name="info" size={15} color={colors.mutedForeground} />
+            <Text style={{ flex: 1, color: colors.mutedForeground, fontSize: 11 }}>
+              {lang === "ru" ? "Обмен с гражданином состоится только после его согласия" : "A citizen-to-citizen exchange happens only after they accept"}
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* My TIME Modal — anchors, events and exchange inbox */}
       <Modal visible={showMyAnchors} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowMyAnchors(false)}>
         <View style={[styles.maModal, { backgroundColor: colors.background }]}>
           {/* Header */}
@@ -1301,9 +1402,9 @@ export default function TimelineScreen() {
           {/* Tab switcher */}
           <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}>
             {([
-              { key: "anchors", label: `⏱ ${t.tl_anchor_badge}`, count: myAnchors.length },
-              { key: "slots",   label: `📍 ${t.tl_slot_badge}`,   count: mySlots.length   },
-              { key: "exchanges", label: lang === "ru" ? "⇄ Обмены" : "⇄ Swaps", count: exchanges.filter((item) => item.status === "pending" && item.toCitizenId === citizen?.id).length },
+              { key: "anchors", icon: "clock", label: t.tl_anchor_badge, count: myAnchors.length },
+              { key: "slots", icon: "map-pin", label: t.tl_slot_badge, count: mySlots.length },
+              { key: "exchanges", icon: "repeat", label: lang === "ru" ? "Обмены" : "Exchanges", count: exchanges.filter((item) => item.status === "pending" && item.toCitizenId === citizen?.id).length },
             ] as const).map(tab => (
               <Pressable
                 key={tab.key}
@@ -1313,6 +1414,7 @@ export default function TimelineScreen() {
                   backgroundColor: myTimeTab === tab.key ? colors.primary + "18" : colors.card,
                   opacity: pressed ? 0.75 : 1, cursor: "pointer" as never })}
               >
+                <Feather name={tab.icon} size={14} color={myTimeTab === tab.key ? colors.primary : colors.mutedForeground} />
                 <Text style={{ fontSize: 13, fontWeight: "700", color: myTimeTab === tab.key ? colors.primary : colors.mutedForeground }}>{tab.label}</Text>
                 {tab.count > 0 && (
                   <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: myTimeTab === tab.key ? colors.primary : colors.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }}>
@@ -2035,13 +2137,13 @@ export default function TimelineScreen() {
       />
 
       <View style={[styles.legend, { paddingBottom: insets.bottom + 54 }]}>
-        {[
-          { color: colors.primary, label: t.tl_anchor_btn },
-          { color: "#e63946",      label: t.tl_swap_occ  },
-          { color: colors.card,    label: t.tl_swap_free },
-        ].map((item) => (
+        {([
+          { icon: "clock", color: colors.primary, label: lang === "ru" ? "Мой якорь" : "My anchor" },
+          { icon: "users", color: "#e63946", label: lang === "ru" ? "Занятая минута" : "Occupied" },
+          { icon: "circle", color: colors.mutedForeground, label: lang === "ru" ? "Свободная минута" : "Free minute" },
+        ] as const).map((item) => (
           <View key={item.label} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+            <Feather name={item.icon} size={12} color={item.color} />
             <Text style={styles.legendText}>{item.label}</Text>
           </View>
         ))}
