@@ -9,6 +9,66 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Audit a service listing before publication
+ */
+export const previewServiceCatalogListingBodyTitleMin = 4;
+export const previewServiceCatalogListingBodyTitleMax = 100;
+
+export const previewServiceCatalogListingBodyCategoryMin = 2;
+export const previewServiceCatalogListingBodyCategoryMax = 60;
+
+export const previewServiceCatalogListingBodyDescriptionMin = 20;
+export const previewServiceCatalogListingBodyDescriptionMax = 2000;
+
+export const previewServiceCatalogListingBodyRequestKeyMin = 8;
+export const previewServiceCatalogListingBodyRequestKeyMax = 100;
+
+export const previewServiceCatalogListingBodyLangMax = 10;
+
+
+
+export const PreviewServiceCatalogListingBody = zod.object({
+  "title": zod.string().min(previewServiceCatalogListingBodyTitleMin).max(previewServiceCatalogListingBodyTitleMax),
+  "category": zod.string().min(previewServiceCatalogListingBodyCategoryMin).max(previewServiceCatalogListingBodyCategoryMax),
+  "description": zod.string().min(previewServiceCatalogListingBodyDescriptionMin).max(previewServiceCatalogListingBodyDescriptionMax),
+  "requestKey": zod.string().min(previewServiceCatalogListingBodyRequestKeyMin).max(previewServiceCatalogListingBodyRequestKeyMax),
+  "lang": zod.string().max(previewServiceCatalogListingBodyLangMax).optional()
+})
+
+export const PreviewServiceCatalogListingResponse = zod.object({
+  "auditToken": zod.string(),
+  "expiresAt": zod.coerce.date(),
+  "audit": zod.object({
+  "suggestedAmount": zod.number(),
+  "minuteRate": zod.number(),
+  "summary": zod.string(),
+  "qualificationSummary": zod.string(),
+  "documentsAnalyzed": zod.number()
+})
+})
+
+
+/**
+ * @summary Audit and publish a citizen service listing
+ */
+export const publishServiceCatalogListingBodyRequestKeyMin = 8;
+export const publishServiceCatalogListingBodyRequestKeyMax = 100;
+
+export const publishServiceCatalogListingBodyAuditTokenMin = 20;
+export const publishServiceCatalogListingBodyAuditTokenMax = 5000;
+
+export const publishServiceCatalogListingBodyPriceDarminsMax = 1000;
+
+
+
+export const PublishServiceCatalogListingBody = zod.object({
+  "requestKey": zod.string().min(publishServiceCatalogListingBodyRequestKeyMin).max(publishServiceCatalogListingBodyRequestKeyMax),
+  "auditToken": zod.string().min(publishServiceCatalogListingBodyAuditTokenMin).max(publishServiceCatalogListingBodyAuditTokenMax),
+  "priceDarmins": zod.number().min(1).max(publishServiceCatalogListingBodyPriceDarminsMax)
+})
+
+
+/**
  * @summary Log in with a phone number and password
  */
 export const loginCitizenBodyPhoneMin = 5;

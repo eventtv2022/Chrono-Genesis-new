@@ -65,6 +65,10 @@ import type {
   PasswordCitizenRegistrationInput,
   PaymentCheckoutInput,
   PaymentCheckoutResult,
+  ServiceCatalogAuditPreview,
+  ServiceCatalogAuditPreviewInput,
+  ServiceCatalogPublishInput,
+  ServiceCatalogPublishResult,
   Session,
   SessionInput,
   SessionResult,
@@ -97,6 +101,148 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
+
+export const getPreviewServiceCatalogListingUrl = () => {
+
+
+
+
+  return `/api/service-catalog/preview`
+}
+
+/**
+ * @summary Audit a service listing before publication
+ */
+export const previewServiceCatalogListing = async (serviceCatalogAuditPreviewInput: ServiceCatalogAuditPreviewInput, options?: RequestInit): Promise<ServiceCatalogAuditPreview> => {
+
+  return customFetch<ServiceCatalogAuditPreview>(getPreviewServiceCatalogListingUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      serviceCatalogAuditPreviewInput,)
+  }
+);}
+
+
+
+
+export const getPreviewServiceCatalogListingMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewServiceCatalogListing>>, TError,{data: BodyType<ServiceCatalogAuditPreviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewServiceCatalogListing>>, TError,{data: BodyType<ServiceCatalogAuditPreviewInput>}, TContext> => {
+
+const mutationKey = ['previewServiceCatalogListing'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewServiceCatalogListing>>, {data: BodyType<ServiceCatalogAuditPreviewInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewServiceCatalogListing(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewServiceCatalogListingMutationResult = NonNullable<Awaited<ReturnType<typeof previewServiceCatalogListing>>>
+    export type PreviewServiceCatalogListingMutationBody = BodyType<ServiceCatalogAuditPreviewInput>
+    export type PreviewServiceCatalogListingMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Audit a service listing before publication
+ */
+export const usePreviewServiceCatalogListing = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewServiceCatalogListing>>, TError,{data: BodyType<ServiceCatalogAuditPreviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewServiceCatalogListing>>,
+        TError,
+        {data: BodyType<ServiceCatalogAuditPreviewInput>},
+        TContext
+      > => {
+      return useMutation(getPreviewServiceCatalogListingMutationOptions(options));
+    }
+
+export const getPublishServiceCatalogListingUrl = () => {
+
+
+
+
+  return `/api/service-catalog`
+}
+
+/**
+ * @summary Audit and publish a citizen service listing
+ */
+export const publishServiceCatalogListing = async (serviceCatalogPublishInput: ServiceCatalogPublishInput, options?: RequestInit): Promise<ServiceCatalogPublishResult> => {
+
+  return customFetch<ServiceCatalogPublishResult>(getPublishServiceCatalogListingUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      serviceCatalogPublishInput,)
+  }
+);}
+
+
+
+
+export const getPublishServiceCatalogListingMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishServiceCatalogListing>>, TError,{data: BodyType<ServiceCatalogPublishInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof publishServiceCatalogListing>>, TError,{data: BodyType<ServiceCatalogPublishInput>}, TContext> => {
+
+const mutationKey = ['publishServiceCatalogListing'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishServiceCatalogListing>>, {data: BodyType<ServiceCatalogPublishInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  publishServiceCatalogListing(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PublishServiceCatalogListingMutationResult = NonNullable<Awaited<ReturnType<typeof publishServiceCatalogListing>>>
+    export type PublishServiceCatalogListingMutationBody = BodyType<ServiceCatalogPublishInput>
+    export type PublishServiceCatalogListingMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Audit and publish a citizen service listing
+ */
+export const usePublishServiceCatalogListing = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishServiceCatalogListing>>, TError,{data: BodyType<ServiceCatalogPublishInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof publishServiceCatalogListing>>,
+        TError,
+        {data: BodyType<ServiceCatalogPublishInput>},
+        TContext
+      > => {
+      return useMutation(getPublishServiceCatalogListingMutationOptions(options));
+    }
 
 export const getLoginCitizenUrl = () => {
 

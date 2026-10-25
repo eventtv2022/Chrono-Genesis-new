@@ -5,6 +5,84 @@
  * TimeNation API — digital state where time is currency
  * OpenAPI spec version: 0.1.0
  */
+export interface ServiceCatalogAuditPreviewInput {
+  /**
+     * @minLength 4
+     * @maxLength 100
+     */
+  title: string;
+  /**
+     * @minLength 2
+     * @maxLength 60
+     */
+  category: string;
+  /**
+     * @minLength 20
+     * @maxLength 2000
+     */
+  description: string;
+  /**
+     * @minLength 8
+     * @maxLength 100
+     */
+  requestKey: string;
+  /** @maxLength 10 */
+  lang?: string;
+}
+
+export interface ServiceCatalogPublishInput {
+  /**
+     * @minLength 8
+     * @maxLength 100
+     */
+  requestKey: string;
+  /**
+     * @minLength 20
+     * @maxLength 5000
+     */
+  auditToken: string;
+  /**
+     * @minimum 1
+     * @maximum 1000
+     */
+  priceDarmins: number;
+}
+
+export interface ServiceCatalogAudit {
+  suggestedAmount: number;
+  minuteRate: number;
+  summary: string;
+  qualificationSummary: string;
+  documentsAnalyzed: number;
+}
+
+export interface ServiceCatalogAuditPreview {
+  auditToken: string;
+  expiresAt: string;
+  audit: ServiceCatalogAudit;
+}
+
+export interface ServiceCatalogListing {
+  id: number;
+  citizenId: number;
+  title: string;
+  category: string;
+  description: string;
+  suggestedPriceDarmins: number;
+  minuteRate: number;
+  qualificationSummary: string;
+  publicationFeeDarmins: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServiceCatalogPublishResult {
+  listing: ServiceCatalogListing;
+  audit?: ServiceCatalogAudit;
+  feeDarmins: number;
+}
+
 export type TelegramPollingStatusState = typeof TelegramPollingStatusState[keyof typeof TelegramPollingStatusState];
 
 

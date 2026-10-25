@@ -8,6 +8,7 @@ import { getStoredAuthHeaders } from "@/lib/authStorage";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
+import { previewServiceCatalogListing, publishServiceCatalogListing } from "@workspace/api-client-react";
 
 const BASE_URL = getBaseUrl();
 type Listing = {
@@ -42,6 +43,10 @@ export default function ServiceCatalogScreen() {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
+  const [priceText, setPriceText] = useState("");
+  const [auditToken, setAuditToken] = useState<string | null>(null);
+  const [auditSuggestedAmount, setAuditSuggestedAmount] = useState<number | null>(null);
+  const [auditSummary, setAuditSummary] = useState("");
   const [error, setError] = useState("");
   const [openingDocument, setOpeningDocument] = useState<string | null>(null);
   const requestKeyRef = useRef<string | null>(null);
@@ -84,7 +89,14 @@ export default function ServiceCatalogScreen() {
     return listings.filter((item) => !query || `${item.title} ${item.category} ${item.description} ${item.citizenName ?? ""}`.toLocaleLowerCase().includes(query));
   }, [listings, search]);
 
-  const publish = async () => {
+  const clearAuditPreview = () => {
+    setAuditToken(null);
+    setAuditSuggestedAmount(null);
+    setAuditSummary("");
+    setPriceText("");
+  };
+
+  const previewPrice = async () => {
     if (publishing) return;
     if (!title.trim() || !category.trim() || description.trim().length < 20) {
       setError(isRu ? "Заполните название, категорию и описание (не менее 20 символов)." : "Add a title, category, and description (at least 20 characters).");
@@ -93,34 +105,59 @@ export default function ServiceCatalogScreen() {
     setPublishing(true);
     setError("");
     try {
-      const headers = await getStoredAuthHeaders();
       requestKeyRef.current ??= `${citizen?.id ?? "guest"}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      const response = await fetch(`${BASE_URL}/api/service-catalog`, {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: title.trim(),
-          category: category.trim(),
-          description: description.trim(),
-          lang,
-          requestKey: requestKeyRef.current,
-        }),
+      const data = await previewServiceCatalogListing({
+        title: title.trim(),
+        category: category.trim(),
+        description: description.trim(),
+        lang,
+        requestKey: requestKeyRef.current,
       });
-      const data = await response.json() as { listing?: Listing; audit?: { suggestedAmount: number; qualificationSummary: string }; error?: string };
-      if (!response.ok) throw new Error(data.error ?? (isRu ? "Не удалось опубликовать услугу." : "Could not publish the service."));
+      setAuditToken(data.auditToken);
+      setAuditSuggestedAmount(data.audit.suggestedAmount);
+      setAuditSummary(data.audit.summary);
+      setPriceText(String(data.audit.suggestedAmount));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : (isRu ? "Не удалось проверить стоимость." : "Could not estimate the price."));
+    } finally { setPublishing(false); }
+  };
+
+  const publish = async () => {
+    if (publishing) return;
+    if (!auditToken) {
+      await previewPrice();
+      return;
+    }
+    const priceDarmins = Number(priceText);
+    if (!Number.isInteger(priceDarmins) || priceDarmins < 1 || priceDarmins > 1000) {
+      setError(isRu ? "Укажите целую цену от 1 до 1000 Д." : "Enter a whole-number price from 1 to 1000 Д.");
+      return;
+    }
+    setPublishing(true);
+    setError("");
+    try {
+      const data = await publishServiceCatalogListing({
+        requestKey: requestKeyRef.current!,
+        auditToken,
+        priceDarmins,
+      });
       setTitle("");
       setCategory("");
       setDescription("");
+      clearAuditPreview();
       requestKeyRef.current = null;
       setShowForm(false);
       await load();
       showNotice(
         isRu ? "Услуга опубликована" : "Service published",
         isRu
-          ? `Списано 1 Д за размещение. Рекомендация аудитора: ${data.listing?.suggestedPriceDarmins ?? data.audit?.suggestedAmount ?? "—"} Д.`
-          : `1 Д listing fee charged. Auditor recommendation: ${data.listing?.suggestedPriceDarmins ?? data.audit?.suggestedAmount ?? "—"} Д.`,
+          ? `Цена услуги: ${data.listing.suggestedPriceDarmins} Д. Списано 1 Д за размещение. Рекомендация аудитора: ${data.audit?.suggestedAmount ?? auditSuggestedAmount ?? "—"} Д.`
+          : `Service price: ${data.listing.suggestedPriceDarmins} Д. 1 Д listing fee charged. Auditor recommendation: ${data.audit?.suggestedAmount ?? auditSuggestedAmount ?? "—"} Д.`,
       );
     } catch (err) {
+      if (typeof err === "object" && err !== null && "status" in err && Number(err.status) === 400) {
+        clearAuditPreview();
+      }
       setError(err instanceof Error ? err.message : (isRu ? "Не удалось опубликовать услугу." : "Could not publish the service."));
     } finally { setPublishing(false); }
   };
@@ -207,7 +244,7 @@ export default function ServiceCatalogScreen() {
               <TextInput
                 key={field.placeholder}
                 value={field.value}
-                onChangeText={field.setter}
+                onChangeText={(value) => { field.setter(value); clearAuditPreview(); }}
                 placeholder={field.placeholder}
                 placeholderTextColor={colors.mutedForeground}
                 multiline={field.multiline}
@@ -215,12 +252,44 @@ export default function ServiceCatalogScreen() {
                 style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }, field.multiline && styles.descriptionInput]}
               />
             ))}
+            {auditToken && auditSuggestedAmount !== null && (
+              <View style={{ gap: 7, padding: 11, borderRadius: 11, backgroundColor: colors.background }}>
+                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "700" }}>
+                  {isRu ? `Рекомендация аудитора: ${auditSuggestedAmount} Д` : `Auditor recommendation: ${auditSuggestedAmount} Д`}
+                </Text>
+                {!!auditSummary && <Text style={{ color: colors.mutedForeground, fontSize: 11, lineHeight: 16 }}>{auditSummary}</Text>}
+                <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: "600" }}>
+                  {isRu ? "Стоимость вашей услуги" : "Your service price"}
+                </Text>
+                <TextInput
+                  value={priceText}
+                  onChangeText={(value) => setPriceText(value.replace(/[^0-9]/g, ""))}
+                  placeholder={`${auditSuggestedAmount}`}
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="number-pad"
+                  testID="service-price-input"
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+                />
+                <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>
+                  {isRu ? "Можно изменить на целое значение от 1 до 1000 Д." : "Edit to any whole number from 1 to 1000 Д."}
+                </Text>
+              </View>
+            )}
             {!!error && <Text style={{ color: colors.destructive, fontSize: 12, marginBottom: 10 }}>{error}</Text>}
             <TouchableOpacity disabled={publishing} onPress={() => {
+              if (!auditToken) {
+                void previewPrice();
+                return;
+              }
+              const selectedPrice = Number(priceText);
+              if (!Number.isInteger(selectedPrice) || selectedPrice < 1 || selectedPrice > 1000) {
+                setError(isRu ? "Укажите целую цену от 1 до 1000 Д." : "Enter a whole-number price from 1 to 1000 Д.");
+                return;
+              }
               const confirmationTitle = isRu ? "Опубликовать за 1 Д?" : "Publish for 1 Д?";
               const confirmationMessage = isRu
-                ? "С вашего доступного баланса будет списан 1 Д. Рекомендацию цены подготовит ИИ-аудитор."
-                : "1 Д will be deducted from your available balance. The AI auditor will recommend a price.";
+                ? `С вашего доступного баланса будет списан 1 Д. Цена услуги: ${selectedPrice} Д.`
+                : `1 Д will be deducted from your available balance. Service price: ${selectedPrice} Д.`;
               if (Platform.OS === "web") {
                 if (window.confirm(`${confirmationTitle}\n\n${confirmationMessage}`)) void publish();
               } else {
@@ -230,8 +299,14 @@ export default function ServiceCatalogScreen() {
                 ]);
               }
             }} style={[styles.publishButton, { backgroundColor: colors.primary, opacity: publishing ? 0.7 : 1 }]}>
-              {publishing ? <ActivityIndicator color={colors.primaryForeground} /> : <Feather name="send" size={15} color={colors.primaryForeground} />}
-              <Text style={[styles.publishText, { color: colors.primaryForeground }]}>{isRu ? "Проверить и опубликовать · 1 Д" : "Audit and publish · 1 Д"}</Text>
+              {publishing ? <ActivityIndicator color={colors.primaryForeground} /> : <Feather name={auditToken ? "send" : "search"} size={15} color={colors.primaryForeground} />}
+              <Text style={[styles.publishText, { color: colors.primaryForeground }]}>
+                {publishing
+                  ? (isRu ? "Проверяем…" : "Checking…")
+                  : auditToken
+                    ? (isRu ? "Опубликовать · 1 Д" : "Publish · 1 Д")
+                    : (isRu ? "Рассчитать цену" : "Get price recommendation")}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
