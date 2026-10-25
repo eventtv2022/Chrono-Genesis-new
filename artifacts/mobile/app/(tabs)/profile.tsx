@@ -321,9 +321,17 @@ export default function ProfileScreen() {
             <Feather name="grid" size={15} color={colors.primary} />
             <Text style={[styles.copyText, { color: colors.primary }]}>{isRu ? "Каталог услуг · публикация за 1 Д" : "Service catalog · publish for 1 Д"}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push("/user-guide")} style={[styles.copyButton, { borderColor: colors.border, marginTop: 8 }]}>
-            <Feather name="book-open" size={15} color={colors.primary} />
-            <Text style={[styles.copyText, { color: colors.primary }]}>{isRu ? "Руководство пользователя" : "User guide (Russian)"}</Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={isRu ? "Открыть руководство пользователя" : "Open user guide"}
+            onPress={() => router.push("/user-guide")}
+            style={[styles.copyButton, { backgroundColor: colors.primary, borderColor: colors.primary, marginTop: 10, minHeight: 48, paddingHorizontal: 13 }]}
+          >
+            <Feather name="book-open" size={17} color={colors.primaryForeground} />
+            <Text style={[styles.copyText, { color: colors.primaryForeground, flex: 1, fontSize: 14 }]}>
+              {isRu ? "Руководство пользователя" : "User guide (Russian)"}
+            </Text>
+            <Feather name="arrow-right" size={17} color={colors.primaryForeground} />
           </TouchableOpacity>
         </View>
 
