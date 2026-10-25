@@ -167,7 +167,7 @@ export function AnthemPlayer({ active }: { active: boolean }) {
 
   return (
     <>
-      <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+      <View style={[styles.footer, { borderColor: colors.border, backgroundColor: colors.background }]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Открыть плеер: Гимн (Anthem of TimeNation)"
@@ -271,16 +271,23 @@ export function AnthemPlayer({ active }: { active: boolean }) {
 const styles = StyleSheet.create({
   footer: {
     minHeight: 48,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    width: "90%",
+    maxWidth: 360,
+    alignSelf: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
     justifyContent: "center",
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
+    marginVertical: 8,
   },
   openButton: {
     minHeight: 42,
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 9,
+    paddingHorizontal: 8,
   },
   openButtonLabel: { fontSize: 12, fontWeight: "600" },
   modalBackdrop: { flex: 1, justifyContent: "center", padding: 18, backgroundColor: "rgba(0,0,0,0.58)" },

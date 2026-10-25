@@ -1876,7 +1876,7 @@ export default function TimelineScreen() {
         colors={colors}
       />
 
-      <View style={[styles.legend, { paddingBottom: insets.bottom + 80 }]}>
+      <View style={[styles.legend, { paddingBottom: insets.bottom + 112 }]}>
         {[
           { color: colors.primary, label: t.tl_anchor_btn },
           { color: "#e63946",      label: t.tl_swap_occ  },
@@ -1992,8 +1992,8 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     maRowLeft: { flex: 1 },
     maCoordLabel: { fontSize: 15, fontWeight: "600" },
     maCoordRaw: { fontSize: 11, marginTop: 2 },
-    legend: { flexDirection: "row", justifyContent: "center", gap: 20, paddingTop: 8, paddingHorizontal: 16 },
-    legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+    legend: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: 14, paddingTop: 8, paddingHorizontal: 16 },
+    legendItem: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 },
     legendDot: { width: 10, height: 10, borderRadius: 5 },
     legendText: { fontSize: 11, color: colors.mutedForeground },
   });
