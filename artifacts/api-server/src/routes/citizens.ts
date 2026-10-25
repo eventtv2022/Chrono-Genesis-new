@@ -16,7 +16,7 @@ import { z } from "zod";
 import { logger } from "../lib/logger";
 import { MEDIA_DIR } from "../services/renderService";
 import { generateIdCardSvg, loadPhotoAsDataUri } from "../services/idCardService";
-import { encrypt, encryptNullable, tryDecrypt, encryptBytes } from "../services/encryptionService";
+import { encrypt, encryptNullable, tryDecrypt, encryptBytes, decryptBytes } from "../services/encryptionService";
 import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
 import { requireAdultKyc, requireAuth } from "../middleware/auth";
@@ -1032,16 +1032,60 @@ router.get("/citizens/me/professional-documents", requireAuth, async (req: Reque
   const [documents] = await db.select({
     resumeFileName: citizenProfessionalDocumentsTable.resumeFileName,
     resumeUploadedAt: citizenProfessionalDocumentsTable.resumeUploadedAt,
+    resumeVisible: citizenProfessionalDocumentsTable.resumeVisible,
     portfolioFileName: citizenProfessionalDocumentsTable.portfolioFileName,
     portfolioUploadedAt: citizenProfessionalDocumentsTable.portfolioUploadedAt,
+    portfolioVisible: citizenProfessionalDocumentsTable.portfolioVisible,
     aiConsentAt: citizenProfessionalDocumentsTable.aiConsentAt,
   }).from(citizenProfessionalDocumentsTable)
     .where(eq(citizenProfessionalDocumentsTable.citizenId, req.citizen!.id)).limit(1);
   res.json({
-    resume: documents?.resumeFileName ? { fileName: documents.resumeFileName, uploadedAt: documents.resumeUploadedAt?.toISOString() ?? null } : null,
-    portfolio: documents?.portfolioFileName ? { fileName: documents.portfolioFileName, uploadedAt: documents.portfolioUploadedAt?.toISOString() ?? null } : null,
+    resume: documents?.resumeFileName ? { fileName: documents.resumeFileName, uploadedAt: documents.resumeUploadedAt?.toISOString() ?? null, visible: documents.resumeVisible } : null,
+    portfolio: documents?.portfolioFileName ? { fileName: documents.portfolioFileName, uploadedAt: documents.portfolioUploadedAt?.toISOString() ?? null, visible: documents.portfolioVisible } : null,
     aiConsent: !!documents?.aiConsentAt,
   });
+});
+
+router.patch("/citizens/me/professional-documents/privacy", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const parsed = z.object({ resumeVisible: z.boolean(), portfolioVisible: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Укажите видимость резюме и портфолио" }); return; }
+  const [documents] = await db.select().from(citizenProfessionalDocumentsTable)
+    .where(eq(citizenProfessionalDocumentsTable.citizenId, req.citizen!.id)).limit(1);
+  if (!documents) { res.status(404).json({ error: "Сначала загрузите документ" }); return; }
+  if ((parsed.data.resumeVisible && !documents.resumeEncryptedData) ||
+      (parsed.data.portfolioVisible && !documents.portfolioEncryptedData)) {
+    res.status(400).json({ error: "Нельзя включить видимость без загруженного файла" });
+    return;
+  }
+  await db.update(citizenProfessionalDocumentsTable).set({
+    resumeVisible: parsed.data.resumeVisible,
+    portfolioVisible: parsed.data.portfolioVisible,
+    updatedAt: new Date(),
+  }).where(eq(citizenProfessionalDocumentsTable.citizenId, req.citizen!.id));
+  res.json({ resumeVisible: parsed.data.resumeVisible, portfolioVisible: parsed.data.portfolioVisible });
+});
+
+router.get("/citizens/:id/professional-documents/:kind", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const ownerId = Number(req.params["id"]);
+  const kind = req.params["kind"];
+  if (!Number.isInteger(ownerId) || ownerId <= 0 || (kind !== "resume" && kind !== "portfolio")) {
+    res.status(400).json({ error: "Неверный гражданин или тип документа" });
+    return;
+  }
+  const [documents] = await db.select().from(citizenProfessionalDocumentsTable)
+    .where(eq(citizenProfessionalDocumentsTable.citizenId, ownerId)).limit(1);
+  if (!documents) { res.status(404).json({ error: "Документ не найден" }); return; }
+  const visible = kind === "resume" ? documents.resumeVisible : documents.portfolioVisible;
+  const encrypted = kind === "resume" ? documents.resumeEncryptedData : documents.portfolioEncryptedData;
+  const fileName = kind === "resume" ? documents.resumeFileName : documents.portfolioFileName;
+  if (req.citizen!.id !== ownerId && !visible) { res.status(403).json({ error: "Гражданин скрыл этот документ" }); return; }
+  if (!encrypted || !fileName) { res.status(404).json({ error: "Документ не найден" }); return; }
+  const bytes = decryptBytes(encrypted);
+  if (!bytes) { res.status(500).json({ error: "Не удалось открыть документ" }); return; }
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(bytes);
 });
 
 router.post(
@@ -1084,8 +1128,8 @@ router.delete("/citizens/me/professional-documents/:kind", requireAuth, async (r
     .where(eq(citizenProfessionalDocumentsTable.citizenId, req.citizen!.id)).limit(1);
   if (!existing) { res.json({ ok: true }); return; }
   const change = kind === "resume"
-    ? { resumeFileName: null, resumeEncryptedData: null, resumeUploadedAt: null }
-    : { portfolioFileName: null, portfolioEncryptedData: null, portfolioUploadedAt: null };
+    ? { resumeFileName: null, resumeEncryptedData: null, resumeUploadedAt: null, resumeVisible: false }
+    : { portfolioFileName: null, portfolioEncryptedData: null, portfolioUploadedAt: null, portfolioVisible: false };
   await db.update(citizenProfessionalDocumentsTable).set({ ...change, updatedAt: new Date() })
     .where(eq(citizenProfessionalDocumentsTable.citizenId, req.citizen!.id));
   res.json({ ok: true });

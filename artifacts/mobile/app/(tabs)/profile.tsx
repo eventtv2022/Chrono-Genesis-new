@@ -54,8 +54,8 @@ export default function ProfileScreen() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [professionalDocs, setProfessionalDocs] = useState<{
-    resume: { fileName: string; uploadedAt: string | null } | null;
-    portfolio: { fileName: string; uploadedAt: string | null } | null;
+    resume: { fileName: string; uploadedAt: string | null; visible: boolean } | null;
+    portfolio: { fileName: string; uploadedAt: string | null; visible: boolean } | null;
     aiConsent: boolean;
   } | null>(null);
   const [docConsent, setDocConsent] = useState(false);
@@ -122,6 +122,30 @@ export default function ProfileScreen() {
       await loadProfessionalDocs();
     } catch (err) {
       setDocError(err instanceof Error ? err.message : (isRu ? "Не удалось удалить файл." : "Could not remove file."));
+    } finally { setDocBusy(false); }
+  };
+
+  const setDocumentVisibility = async (kind: "resume" | "portfolio", visible: boolean) => {
+    if (!professionalDocs) return;
+    setDocBusy(true);
+    setDocError("");
+    const next = {
+      resumeVisible: kind === "resume" ? visible : !!professionalDocs.resume?.visible,
+      portfolioVisible: kind === "portfolio" ? visible : !!professionalDocs.portfolio?.visible,
+    };
+    try {
+      const token = await getStoredToken() ?? authToken;
+      if (!token) throw new Error(isRu ? "Войдите в аккаунт." : "Please sign in.");
+      const response = await fetch(`${BASE_URL}/api/citizens/me/professional-documents/privacy`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? (isRu ? "Не удалось изменить видимость." : "Could not update visibility."));
+      await loadProfessionalDocs();
+    } catch (err) {
+      setDocError(err instanceof Error ? err.message : (isRu ? "Не удалось изменить видимость." : "Could not update visibility."));
     } finally { setDocBusy(false); }
   };
 
@@ -251,8 +275,8 @@ export default function ProfileScreen() {
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{isRu ? "Резюме и портфолио" : "Resume & portfolio"}</Text>
           <Text style={[styles.programCopy, { color: colors.mutedForeground }]}>
             {isRu
-              ? "PDF-файлы до 3 МБ хранятся приватно и передаются ИИ-аудитору только при оценке предложения. Другие граждане не могут открыть ваши файлы."
-              : "PDF files stay private and are shared with the AI auditor only when assessing an offer. Other citizens cannot open them."}
+              ? "PDF-файлы до 3 МБ по умолчанию скрыты. Можно отдельно разрешить просмотр каждому авторизованному гражданину TimeNation; открытый файл можно сохранить. ИИ использует документы только после вашего согласия."
+              : "PDF files up to 3 MB are hidden by default. You can allow any signed-in TimeNation citizen to view each file; viewers can save a copy. AI uses documents only with your consent."}
           </Text>
           <TouchableOpacity onPress={() => setDocConsent((value) => !value)} style={{ flexDirection: "row", alignItems: "center", gap: 9, marginTop: 12 }}>
             <Feather name={docConsent ? "check-square" : "square"} size={18} color={colors.primary} />
@@ -271,6 +295,19 @@ export default function ProfileScreen() {
                     {item?.fileName ?? (isRu ? "Файл не загружен" : "No file uploaded")}
                   </Text>
                 </View>
+                {item && (
+                  <TouchableOpacity
+                    disabled={docBusy}
+                    onPress={() => void setDocumentVisibility(kind, !item.visible)}
+                    accessibilityLabel={isRu ? `${item.visible ? "Скрыть" : "Показать"} ${label.toLowerCase()}` : `${item.visible ? "Hide" : "Show"} ${label.toLowerCase()}`}
+                    style={[styles.copyButton, { borderColor: colors.border, marginTop: 6, paddingHorizontal: 10, opacity: docBusy ? 0.5 : 1 }]}
+                  >
+                    <Feather name={item.visible ? "eye" : "eye-off"} size={14} color={item.visible ? colors.primary : colors.mutedForeground} />
+                    <Text style={[styles.copyText, { color: item.visible ? colors.primary : colors.mutedForeground }]}>
+                      {isRu ? (item.visible ? "Виден гражданам" : "Скрыт") : (item.visible ? "Visible to citizens" : "Hidden")}
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 {item && <TouchableOpacity disabled={docBusy} onPress={() => void removeProfessionalDoc(kind)} accessibilityLabel={isRu ? "Удалить файл" : "Remove file"}><Feather name="trash-2" size={17} color={colors.destructive} /></TouchableOpacity>}
                 <TouchableOpacity disabled={docBusy || !docConsent} onPress={() => void uploadProfessionalDoc(kind)} style={[styles.copyButton, { borderColor: colors.border, marginTop: 0, paddingHorizontal: 10, opacity: docConsent ? 1 : 0.45 }]}>
                   {docBusy ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="upload" size={14} color={colors.primary} />}

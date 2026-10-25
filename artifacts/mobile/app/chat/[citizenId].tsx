@@ -1111,8 +1111,8 @@ export default function ConversationScreen() {
 
       let base64Audio = "";
       if (Platform.OS !== "web") {
-        const FS = await import("expo-file-system");
-        const readFn = (FS as unknown as { readAsStringAsync: typeof import("expo-file-system").readAsStringAsync }).readAsStringAsync;
+        const FS = await import("expo-file-system/legacy");
+        const readFn = FS.readAsStringAsync;
         base64Audio = await readFn(uri, { encoding: "base64" as "base64" });
       }
 
@@ -1139,8 +1139,8 @@ export default function ConversationScreen() {
     if (!decrypted) { Alert.alert("Ошибка", "Не удалось расшифровать"); return; }
     if (Platform.OS === "web") { Alert.alert("Недоступно", "Воспроизведение голоса доступно только в мобильном приложении"); return; }
     try {
-      const FS = await import("expo-file-system");
-      const writeFn = (FS as unknown as { writeAsStringAsync: typeof import("expo-file-system").writeAsStringAsync }).writeAsStringAsync;
+      const FS = await import("expo-file-system/legacy");
+      const writeFn = FS.writeAsStringAsync;
       const cacheDir = (FS as unknown as { cacheDirectory?: string }).cacheDirectory ?? "";
       const path = `${cacheDir}voice_${m.id}.aac`;
       await writeFn(path, decrypted, { encoding: "base64" as "base64" });

@@ -33,6 +33,16 @@ router.get("/service-catalog", async (_req, res) => {
   res.json({ listings });
 });
 
+router.get("/service-catalog/visible-documents", requireAuth, async (_req, res) => {
+  const documents = await db.select({
+    citizenId: citizenProfessionalDocumentsTable.citizenId,
+    resumeVisible: citizenProfessionalDocumentsTable.resumeVisible,
+    portfolioVisible: citizenProfessionalDocumentsTable.portfolioVisible,
+  }).from(citizenProfessionalDocumentsTable)
+    .where(sql`${citizenProfessionalDocumentsTable.resumeVisible} = true OR ${citizenProfessionalDocumentsTable.portfolioVisible} = true`);
+  res.json({ documents });
+});
+
 router.get("/service-catalog/mine", requireAuth, async (req, res) => {
   const listings = await db.select().from(serviceListingsTable)
     .where(eq(serviceListingsTable.citizenId, req.citizen!.id))

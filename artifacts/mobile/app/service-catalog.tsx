@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getBaseUrl } from "@/lib/api";
 import { getStoredAuthHeaders } from "@/lib/authStorage";
+import { Platform } from "react-native";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
@@ -20,6 +21,8 @@ type Listing = {
   suggestedPriceDarmins: number;
   minuteRate: number;
   qualificationSummary: string;
+  resumeVisible?: boolean | null;
+  portfolioVisible?: boolean | null;
   status?: string;
   createdAt: string;
 };
@@ -41,19 +44,29 @@ export default function ServiceCatalogScreen() {
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
+  const [openingDocument, setOpeningDocument] = useState<string | null>(null);
   const requestKeyRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const headers = await getStoredAuthHeaders();
-      const [publicResponse, mineResponse] = await Promise.all([
+      const [publicResponse, mineResponse, documentsResponse] = await Promise.all([
         fetch(`${BASE_URL}/api/service-catalog`),
         fetch(`${BASE_URL}/api/service-catalog/mine`, { headers }),
+        fetch(`${BASE_URL}/api/service-catalog/visible-documents`, { headers }),
       ]);
       if (!publicResponse.ok) throw new Error(isRu ? "Не удалось загрузить каталог." : "Could not load the catalog.");
       const publicData = await publicResponse.json() as { listings: Listing[] };
-      setListings(publicData.listings ?? []);
+      const visibleDocuments = documentsResponse.ok
+        ? (await documentsResponse.json() as { documents: Array<{ citizenId: number; resumeVisible: boolean; portfolioVisible: boolean }> }).documents
+        : [];
+      const visibilityByCitizen = new Map(visibleDocuments.map((document) => [document.citizenId, document]));
+      setListings((publicData.listings ?? []).map((listing) => ({
+        ...listing,
+        resumeVisible: visibilityByCitizen.get(listing.citizenId)?.resumeVisible ?? false,
+        portfolioVisible: visibilityByCitizen.get(listing.citizenId)?.portfolioVisible ?? false,
+      })));
       if (mineResponse.ok) setMine((await mineResponse.json() as { listings: Listing[] }).listings ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : (isRu ? "Ошибка загрузки." : "Loading failed."));
@@ -119,6 +132,45 @@ export default function ServiceCatalogScreen() {
     }
   };
 
+  const openProfessionalDocument = async (citizenId: number, kind: "resume" | "portfolio") => {
+    const key = `${citizenId}-${kind}`;
+    setOpeningDocument(key);
+    try {
+      const headers = await getStoredAuthHeaders();
+      const documentUrl = `${BASE_URL}/api/citizens/${citizenId}/professional-documents/${kind}`;
+      if (Platform.OS === "web") {
+        const response = await fetch(documentUrl, { headers });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({})) as { error?: string };
+          throw new Error(data.error ?? (isRu ? "Не удалось открыть документ." : "Could not open document."));
+        }
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement("a");
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } else {
+        const [{ cacheDirectory }, { shareAsync }] = await Promise.all([
+          import("expo-file-system/legacy"),
+          import("expo-sharing"),
+        ]);
+        if (!cacheDirectory) throw new Error(isRu ? "Нет временного хранилища." : "Temporary storage is unavailable.");
+        const fileUri = `${cacheDirectory}citizen-${citizenId}-${kind}-${Date.now()}.pdf`;
+        const { downloadAsync } = await import("expo-file-system/legacy");
+        const download = await downloadAsync(documentUrl, fileUri, { headers });
+        if (download.status < 200 || download.status >= 300) throw new Error(isRu ? "Документ скрыт или недоступен." : "This document is hidden or unavailable.");
+        await shareAsync(download.uri, {
+          mimeType: "application/pdf",
+          dialogTitle: isRu ? "Открыть PDF" : "Open PDF",
+        });
+      }
+    } catch (err) {
+      Alert.alert(isRu ? "Документ недоступен" : "Document unavailable", err instanceof Error ? err.message : "");
+    } finally { setOpeningDocument(null); }
+  };
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 16) + 8 }]}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -136,8 +188,8 @@ export default function ServiceCatalogScreen() {
         </View>
         <Text style={[styles.intro, { color: colors.mutedForeground }]}>
           {isRu
-            ? "Публикация стоит 1 Д. Для размещения загрузите в профиле хотя бы резюме или портфолио и согласитесь на анализ. Аудитор предложит стоимость; файлы не видны посетителям."
-            : "Publishing costs 1 Д. Upload at least a resume or portfolio in your profile and consent to analysis. The auditor will recommend a price; visitors cannot see your files."}
+            ? "Публикация стоит 1 Д. Для размещения загрузите в профиле хотя бы резюме или портфолио и согласитесь на анализ. Аудитор предложит стоимость. Файлы скрыты, пока вы не разрешите просмотр гражданам TimeNation."
+            : "Publishing costs 1 Д. Upload at least a resume or portfolio in your profile and consent to analysis. The auditor will recommend a price. Files stay hidden until you allow signed-in TimeNation citizens to view them."}
         </Text>
 
         {showForm && (
@@ -186,6 +238,22 @@ export default function ServiceCatalogScreen() {
             </View>
             <Text style={[styles.listingDescription, { color: colors.foreground }]}>{item.description}</Text>
             <Text style={[styles.qualification, { color: colors.mutedForeground }]}>{item.qualificationSummary}</Text>
+            {citizen && (item.resumeVisible || item.portfolioVisible) && (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {item.resumeVisible && (
+                  <TouchableOpacity disabled={!!openingDocument} onPress={() => void openProfessionalDocument(item.citizenId, "resume")} style={[styles.closeButton, { alignSelf: "auto", borderColor: colors.border, borderWidth: 1, borderRadius: 9 }]}>
+                    <Feather name="file-text" size={14} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontSize: 12 }}>{openingDocument === `${item.citizenId}-resume` ? (isRu ? "Открываем…" : "Opening…") : (isRu ? "Резюме" : "Resume")}</Text>
+                  </TouchableOpacity>
+                )}
+                {item.portfolioVisible && (
+                  <TouchableOpacity disabled={!!openingDocument} onPress={() => void openProfessionalDocument(item.citizenId, "portfolio")} style={[styles.closeButton, { alignSelf: "auto", borderColor: colors.border, borderWidth: 1, borderRadius: 9 }]}>
+                    <Feather name="briefcase" size={14} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontSize: 12 }}>{openingDocument === `${item.citizenId}-portfolio` ? (isRu ? "Открываем…" : "Opening…") : (isRu ? "Портфолио" : "Portfolio")}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
             {item.citizenId === citizen?.id && (
               <TouchableOpacity onPress={() => void closeListing(item.id)} style={styles.closeButton}>
                 <Feather name="archive" size={14} color={colors.destructive} />

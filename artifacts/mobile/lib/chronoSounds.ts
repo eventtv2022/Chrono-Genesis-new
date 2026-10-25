@@ -93,7 +93,7 @@ async function playNativeTip(): Promise<void> {
   try {
     const [{ Audio }, fsRaw] = await Promise.all([
       import("expo-av"),
-      import("expo-file-system"),
+      import("expo-file-system/legacy"),
     ]);
     const FS = fsRaw as unknown as FsModule;
     const cacheFile = (FS.cacheDirectory ?? "") + "tn_sfx_tip.wav";

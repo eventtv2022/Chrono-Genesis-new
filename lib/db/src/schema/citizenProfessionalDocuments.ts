@@ -1,4 +1,4 @@
-import { pgTable, integer, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, integer, text, timestamp, boolean } from "drizzle-orm/pg-core";
 import { citizensTable } from "./citizens";
 
 /**
@@ -13,6 +13,8 @@ export const citizenProfessionalDocumentsTable = pgTable("citizen_professional_d
   portfolioFileName: text("portfolio_file_name"),
   portfolioEncryptedData: text("portfolio_encrypted_data"),
   portfolioUploadedAt: timestamp("portfolio_uploaded_at", { withTimezone: true }),
+  resumeVisible: boolean("resume_visible").notNull().default(false),
+  portfolioVisible: boolean("portfolio_visible").notNull().default(false),
   aiConsentAt: timestamp("ai_consent_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
