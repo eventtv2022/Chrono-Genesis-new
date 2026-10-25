@@ -872,10 +872,11 @@ export default function ChronopediaScreen() {
   }, []);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const bottomMenuInset = Math.max(56, 42 + insets.bottom);
   const isSaving = createSlotMutation.isPending || addEventMutation.isPending;
 
   return (
-    <View style={[st.root, { backgroundColor: colors.background }]}>
+    <View style={[st.root, { backgroundColor: colors.background, paddingBottom: bottomMenuInset }]}>
       {/* Header */}
       <View style={[st.header, { paddingTop: topPad + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <LogoBrand size={20} />
@@ -1059,7 +1060,7 @@ export default function ChronopediaScreen() {
                 colors={colors}
               />
             )}
-            contentContainerStyle={[st.feedList, { paddingBottom: insets.bottom + 80 }]}
+            contentContainerStyle={[st.feedList, { paddingBottom: 16 }]}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <View style={st.feedEmpty}>
@@ -1074,7 +1075,7 @@ export default function ChronopediaScreen() {
       )}
 
       {/* FAB */}
-      {viewMode === "map" && (
+      {viewMode === "map" && !selectedSlotId && (
         <TouchableOpacity
           style={[st.fab, { backgroundColor: colors.primary, bottom: insets.bottom + 90 }]}
           onPress={handleNewSlot}
