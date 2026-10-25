@@ -32,7 +32,6 @@ import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { FOCUS_PROMPTS_I18N } from "@/lib/i18n";
 import { MEDIA_DURATION_WARNING } from "@/lib/mediaDurationWarning";
-import { LogoBrand } from "@/components/LogoBrand";
 import {
   getListTimelineExchangesQueryKey,
   useCreateTimelineExchange,
@@ -1054,8 +1053,13 @@ export default function TimelineScreen() {
               <Feather name="arrow-left" size={18} color={colors.primary} />
             </TouchableOpacity>
           )}
-          <LogoBrand size={24} />
-          <Text style={styles.headerTitle}>{t.tab_timeline.toUpperCase()}</Text>
+          <Feather
+            name="clock"
+            size={22}
+            color={colors.primary}
+            accessibilityLabel={lang === "ru" ? "Таймнейминг" : "TimeNaming"}
+          />
+          <Text style={styles.headerTitle}>{lang === "ru" ? "ТАЙМНЕЙМИНГ" : "TIMENAMING"}</Text>
           <Text style={styles.breadcrumb}>{getBreadcrumb()}</Text>
           {citizen && (
             <TouchableOpacity
