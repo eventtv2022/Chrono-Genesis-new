@@ -6,15 +6,32 @@ id = "q2pY3Mamjio1uXqjjeX6E"
 uri = "file://assets/id_card_template_perfect.png"
 type = "image"
 title = "TimeNation ID Card — чистый бланк"
+logical_id = "39de5dae-258f-4690-b9bf-759afb0b363e"
 
 [[outputs]]
 id = "tlsQgrbfhLJhDw0Af0pb1"
 uri = "file://project_snapshot.txt"
 type = "text"
 title = "TimeNation — Full Project Snapshot (для аудита)"
+logical_id = "02ddbf3a-f54d-4d45-bac9-ef0e151074f4"
 
 [[outputs]]
 id = "g7D7GO-TCys85Ueib8htz"
 uri = "file://CODEBASE_AUDIT.md"
 type = "text"
 title = "TimeNation — Полный кодовый дайджест для аудита"
+logical_id = "7420bb13-2957-4391-b9b5-4f4c260de589"
+
+[[outputs]]
+id = "v2vE8HLrxErnQ_Oa21aap"
+uri = "file://artifacts/mobile/USER_GUIDE_RU.md"
+type = "text"
+title = "Руководство пользователя TimeNation"
+description = "Простое руководство по основным экранам и функциям мобильного приложения."
+logical_id = "bbe64255-c5f2-4d09-8461-a11db94d0e92"
+content_hash = "sha256:df204661185ef68ddafb7161a9ef79b5c6cabb97b34e58e9cd239cc814741585"
+size = 16832
+mtime_ms = 1792934477358
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:c683d011-eb44-4e71-bc0d-350ee613e0ca/bbe64255-c5f2-4d09-8461-a11db94d0e92/567fec13-63e3-4c21-bdc0-16d3ef56ef87"
+storage_version_token = "1792934487359281"
+content_type = "text/markdown"
