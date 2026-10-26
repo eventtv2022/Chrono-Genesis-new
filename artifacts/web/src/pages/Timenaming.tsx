@@ -13,6 +13,7 @@ type Config = {
   royaltyBps: number;
   royaltyRecipient: string;
   contractConfigured: boolean;
+  ipfsPinningConfigured: boolean;
   legalTextStatus: string;
 };
 
@@ -29,6 +30,8 @@ type License = {
   transactionHash?: string | null;
   tokenId?: string | number | null;
   explorerUrl?: string | null;
+  metadataUri?: string | null;
+  certificateIpfsUri?: string | null;
   [key: string]: unknown;
 };
 
@@ -73,6 +76,11 @@ function prettyMinute(value?: string) {
 
 function recordId(license: License) {
   return license.certificateId ?? license.id ?? "";
+}
+
+function ipfsGatewayUrl(uri?: string | null) {
+  if (!uri?.startsWith("ipfs://")) return "";
+  return `https://ipfs.io/ipfs/${encodeURIComponent(uri.slice("ipfs://".length))}`;
 }
 
 export function Timenaming() {
@@ -388,9 +396,9 @@ export function Timenaming() {
                       <input type="radio" name="purchaseType" checked={purchaseType === "TIMELINE_ONLY"} onChange={() => setPurchaseType("TIMELINE_ONLY")} />
                       <span><strong>Reserve for your family</strong><small>Timeline claim only</small></span><b>1 Д</b>
                     </label>
-                    <label className={`tn-package-option ${purchaseType === "ALL_INCLUSIVE" ? "selected" : ""} ${!config?.contractConfigured ? "disabled" : ""}`}>
-                      <input type="radio" name="purchaseType" checked={purchaseType === "ALL_INCLUSIVE"} disabled={!config?.contractConfigured} onChange={() => setPurchaseType("ALL_INCLUSIVE")} />
-                      <span><strong>All-inclusive NFT license</strong><small>{config?.contractConfigured ? "Timeline + license + PDF + Sepolia NFT" : "Unavailable until Sepolia minting is configured"}</small></span><b>2 Д</b>
+                    <label className={`tn-package-option ${purchaseType === "ALL_INCLUSIVE" ? "selected" : ""} ${!config?.contractConfigured || !config?.ipfsPinningConfigured ? "disabled" : ""}`}>
+                      <input type="radio" name="purchaseType" checked={purchaseType === "ALL_INCLUSIVE"} disabled={!config?.contractConfigured || !config?.ipfsPinningConfigured} onChange={() => setPurchaseType("ALL_INCLUSIVE")} />
+                      <span><strong>All-inclusive NFT license</strong><small>{config?.contractConfigured && config?.ipfsPinningConfigured ? "Timeline + license + PDF + Sepolia NFT" : "Unavailable until Sepolia and IPFS pinning are configured"}</small></span><b>2 Д</b>
                     </label>
                   </div>
                 )}
@@ -408,7 +416,7 @@ export function Timenaming() {
                 {citizen && !enoughBalance && <p className="tn-form-hint">You need {purchaseCost} Д beyond the protected ancestral minute.</p>}
                 <div className="tn-cost-confirm"><span><strong>{purchaseCost} Д</strong> will be deducted from your transferable balance.</span><span>ANCESTRAL MINUTE IS PROTECTED</span></div>
                 {reserveError && <div className="tn-inline-message tn-inline-error" role="alert" data-testid="error-reservation"><AlertCircle size={17} />{reserveError}</div>}
-                <button className="tn-button tn-button-primary" type="submit" disabled={reserving || !citizen || !enoughBalance || (((availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && !walletAddress) || ((availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && !config?.contractConfigured))} data-testid="button-reserve-minute">
+                <button className="tn-button tn-button-primary" type="submit" disabled={reserving || !citizen || !enoughBalance || (((availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && !walletAddress) || ((availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && (!config?.contractConfigured || !config?.ipfsPinningConfigured)))} data-testid="button-reserve-minute">
                   {reserving ? <LoaderCircle size={16} className="tn-spin" /> : <Fingerprint size={17} />}
                   {reserving ? "Processing purchase…" : availability.ownedByMe ? "Upgrade to NFT license · +2 Д" : purchaseType === "ALL_INCLUSIVE" ? "Buy all-inclusive · 2 Д" : "Reserve for your family · 1 Д"}
                   {!reserving && <ArrowUpRight size={16} />}
@@ -470,8 +478,10 @@ export function Timenaming() {
                       <button className="tn-outline-button" type="button" onClick={() => void generateCertificate(license)} disabled={working !== null || !recordId(license)} data-testid={`button-certificate-${id}`}>
                         {working === `certificate-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Download size={14} />} Certificate
                       </button>
+                       {license.certificateIpfsUri && <a className="tn-tx-link" href={ipfsGatewayUrl(license.certificateIpfsUri)} target="_blank" rel="noreferrer" data-testid={`link-ipfs-certificate-${id}`}>IPFS certificate <ArrowUpRight size={13} /></a>}
+                       {license.metadataUri && <a className="tn-tx-link" href={ipfsGatewayUrl(license.metadataUri)} target="_blank" rel="noreferrer" data-testid={`link-ipfs-metadata-${id}`}>NFT metadata <ArrowUpRight size={13} /></a>}
                       {!nftComplete && (
-                        <button className="tn-mint-button" type="button" onClick={() => void mintNft(license)} disabled={working !== null || !config?.contractConfigured || !recordId(license) || nftPending} title={!config?.contractConfigured ? "The relayer is not configured." : "Upgrade and mint on Sepolia for 2 Д"} data-testid={`button-mint-${id}`}>
+                         <button className="tn-mint-button" type="button" onClick={() => void mintNft(license)} disabled={working !== null || !config?.contractConfigured || !config?.ipfsPinningConfigured || !recordId(license) || nftPending} title={!config?.contractConfigured ? "The relayer is not configured." : !config?.ipfsPinningConfigured ? "IPFS pinning is not configured." : "Upgrade and mint on Sepolia for 2 Д"} data-testid={`button-mint-${id}`}>
                           {working === `mint-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Sparkles size={14} />} {nftPending ? "Mint pending" : "Upgrade / mint · +2 Д"}
                         </button>
                       )}

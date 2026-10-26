@@ -65,6 +65,57 @@ function isSepoliaMintConfigured(): boolean {
   );
 }
 
+function isIpfsPinningConfigured(): boolean {
+  return Boolean(process.env.PINATA_JWT);
+}
+
+type PinataResponse = { IpfsHash?: unknown };
+
+function readPinnedCid(payload: PinataResponse): string {
+  const cid = payload.IpfsHash;
+  if (typeof cid !== "string" || !/^(bafy[a-z2-7]{20,}|Qm[1-9A-HJ-NP-Za-km-z]{40,})$/.test(cid)) {
+    throw new Error("Pinata returned an invalid content identifier");
+  }
+  return cid;
+}
+
+async function pinFileToIpfs(bytes: Buffer, filename: string, contentType: string): Promise<string> {
+  const jwt = process.env.PINATA_JWT;
+  if (!jwt) throw new Error("IPFS pinning is not configured");
+
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(bytes)], { type: contentType }), filename);
+  form.append("pinataMetadata", JSON.stringify({ name: filename }));
+  form.append("pinataOptions", JSON.stringify({ cidVersion: 1 }));
+
+  const response = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${jwt}` },
+    body: form,
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) throw new Error(`IPFS file pin failed (${response.status})`);
+  return readPinnedCid(await response.json() as PinataResponse);
+}
+
+async function pinJsonToIpfs(value: unknown, name: string): Promise<string> {
+  const jwt = process.env.PINATA_JWT;
+  if (!jwt) throw new Error("IPFS pinning is not configured");
+
+  const response = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      pinataContent: value,
+      pinataMetadata: { name },
+      pinataOptions: { cidVersion: 1 },
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) throw new Error(`IPFS metadata pin failed (${response.status})`);
+  return readPinnedCid(await response.json() as PinataResponse);
+}
+
 function xmlEscape(value: string): string {
   return value.replace(/[<>&'"]/g, (char) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", "\"": "&quot;" })[char]!);
 }
@@ -81,7 +132,12 @@ async function finishPaidMint(
   try {
     const certificate = await renderCertificate(license);
     const certificatePath = await savePrivatePdf(license.certificateId, certificate);
-    await db.update(minuteLicensesTable).set({ status: "MINT_PENDING", certificatePath }).where(eq(minuteLicensesTable.id, license.id));
+    const certificateCid = await pinFileToIpfs(
+      certificate,
+      `timenation-license-${license.certificateId}.pdf`,
+      "application/pdf",
+    );
+    const certificateIpfsUri = `ipfs://${certificateCid}`;
 
     const epochMinute = Math.floor(Date.UTC(
       Number(license.timelineCoord.slice(0, 4)),
@@ -101,8 +157,22 @@ async function finishPaidMint(
         { trait_type: "Royalty", value: "2%" },
         { trait_type: "Royalty recipient", value: ROYALTY_RECIPIENT },
       ],
+      properties: {
+        certificate: {
+          name: `TimeNation placement license ${license.certificateId}`,
+          type: "application/pdf",
+          uri: certificateIpfsUri,
+        },
+      },
     };
-    const uri = `data:application/json;base64,${Buffer.from(JSON.stringify(metadata)).toString("base64")}`;
+    const metadataCid = await pinJsonToIpfs(metadata, `timenation-minute-${license.certificateId}.json`);
+    const uri = `ipfs://${metadataCid}`;
+    await db.update(minuteLicensesTable).set({
+      status: "MINT_PENDING",
+      certificatePath,
+      certificateIpfsUri,
+      metadataUri: uri,
+    }).where(eq(minuteLicensesTable.id, license.id));
     const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC_URL, 11155111);
     const signer = new Wallet(process.env.SEPOLIA_RELAYER_PRIVATE_KEY!, provider);
     const contract = new Contract(process.env.TIMENAMING_CONTRACT_ADDRESS!, NFT_ABI, signer);
@@ -210,6 +280,7 @@ router.get("/timenaming/config", (_req, res): void => {
     royaltyBps: 200,
     royaltyRecipient: ROYALTY_RECIPIENT,
     contractConfigured: isSepoliaMintConfigured(),
+    ipfsPinningConfigured: isIpfsPinningConfigured(),
     legalTextStatus: "DRAFT_PENDING_REVIEW",
   });
 });
@@ -313,6 +384,10 @@ router.post("/timenaming/upgrade", requireAuth, async (req, res): Promise<void> 
   }
   if (!isSepoliaMintConfigured()) {
     res.status(503).json({ code: "SEPOLIA_RELAYER_NOT_CONFIGURED", error: "Sepolia minting is not configured. No DarMin was charged." });
+    return;
+  }
+  if (!isIpfsPinningConfigured()) {
+    res.status(503).json({ code: "IPFS_PINNING_NOT_CONFIGURED", error: "IPFS pinning is not configured. No DarMin was charged." });
     return;
   }
   const citizenId = req.citizen!.id;
@@ -443,6 +518,10 @@ async function handleMintNft(req: import("express").Request, res: import("expres
   if (license.status === "MINT_PENDING") { res.status(409).json({ error: "This minute already has a mint transaction pending", transactionHash: license.transactionHash }); return; }
   if (!isSepoliaMintConfigured()) {
     res.status(503).json({ code: "SEPOLIA_RELAYER_NOT_CONFIGURED", error: "Sepolia minting is not enabled. No DarMin was charged." });
+    return;
+  }
+  if (!isIpfsPinningConfigured()) {
+    res.status(503).json({ code: "IPFS_PINNING_NOT_CONFIGURED", error: "IPFS pinning is not configured. No DarMin was charged." });
     return;
   }
   try {

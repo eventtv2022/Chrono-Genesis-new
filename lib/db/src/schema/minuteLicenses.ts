@@ -14,6 +14,8 @@ export const minuteLicensesTable = pgTable("minute_licenses", {
   walletAddress: text("wallet_address").notNull(),
   status: text("status").notNull().default("PENDING_PAYMENT_OR_MINT"),
   certificatePath: text("certificate_path"),
+  certificateIpfsUri: text("certificate_ipfs_uri"),
+  metadataUri: text("metadata_uri"),
   transactionHash: text("transaction_hash"),
   tokenId: text("token_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
