@@ -10,6 +10,8 @@ const require = createRequire(import.meta.url);
 const sourcePath = path.join(apiRoot, "contracts", "TimeNationMinuteNFT.sol");
 const treasury = getAddress("0x4a290953E0A4c9374901939D5612AFDAAf99312b");
 
+class SafeDeploymentError extends Error {}
+
 function compileContract() {
   const source = fs.readFileSync(sourcePath, "utf8");
   const input = {
@@ -47,16 +49,37 @@ if (process.argv.includes("--compile-only")) {
 const rpcUrl = process.env.SEPOLIA_RPC_URL;
 const privateKey = process.env.SEPOLIA_RELAYER_PRIVATE_KEY;
 if (!rpcUrl || !privateKey) {
-  throw new Error("Set SEPOLIA_RPC_URL and SEPOLIA_RELAYER_PRIVATE_KEY in Replit Secrets.");
+  throw new SafeDeploymentError("Set SEPOLIA_RPC_URL and SEPOLIA_RELAYER_PRIVATE_KEY in Replit Secrets.");
+}
+
+const trimmedKey = privateKey.trim();
+const normalizedPrivateKey = trimmedKey.startsWith("0x") ? trimmedKey : `0x${trimmedKey}`;
+if (!/^0x[0-9a-fA-F]{64}$/.test(normalizedPrivateKey)) {
+  throw new SafeDeploymentError("SEPOLIA_RELAYER_PRIVATE_KEY must be a 32-byte hexadecimal private key.");
 }
 
 const provider = new JsonRpcProvider(rpcUrl, 11155111);
 try {
-  const network = await provider.getNetwork();
-  if (network.chainId !== 11155111n) throw new Error(`RPC connected to unexpected chain ID ${network.chainId}.`);
+  let network;
+  try {
+    network = await provider.getNetwork();
+  } catch {
+    throw new SafeDeploymentError("Could not connect to the configured Sepolia RPC endpoint.");
+  }
+  if (network.chainId !== 11155111n) throw new SafeDeploymentError(`RPC connected to unexpected chain ID ${network.chainId}.`);
 
-  const signer = new Wallet(privateKey, provider);
-  const balance = await provider.getBalance(signer.address);
+  let signer;
+  try {
+    signer = new Wallet(normalizedPrivateKey, provider);
+  } catch {
+    throw new SafeDeploymentError("SEPOLIA_RELAYER_PRIVATE_KEY is not a valid secp256k1 private key.");
+  }
+  let balance;
+  try {
+    balance = await provider.getBalance(signer.address);
+  } catch {
+    throw new SafeDeploymentError("Could not read the Sepolia deployer balance from the configured RPC endpoint.");
+  }
   console.log(JSON.stringify({
     mode: process.argv.includes("--deploy") ? "deploy" : "dry-run",
     chainId: Number(network.chainId),
@@ -69,11 +92,19 @@ try {
     console.log("Dry run only. Pass --deploy to broadcast the Sepolia deployment transaction.");
   } else {
     const factory = new ContractFactory(compiled.abi, `0x${compiled.evm.bytecode.object}`, signer);
-    const contract = await factory.deploy(treasury);
-    await contract.waitForDeployment();
-    const contractAddress = await contract.getAddress();
-    const transaction = contract.deploymentTransaction();
-    const receipt = await transaction?.wait(1);
+    let contract;
+    let receipt;
+    let contractAddress;
+    let transaction;
+    try {
+      contract = await factory.deploy(treasury);
+      await contract.waitForDeployment();
+      contractAddress = await contract.getAddress();
+      transaction = contract.deploymentTransaction();
+      receipt = await transaction?.wait(1);
+    } catch {
+      throw new SafeDeploymentError("Sepolia deployment failed; provider and signer details were suppressed.");
+    }
 
     const [owner, deployedTreasury, royalty] = await Promise.all([
       contract.getFunction("owner")(),
@@ -81,7 +112,7 @@ try {
       contract.getFunction("royaltyInfo")(1n, 10_000n),
     ]);
     if (getAddress(owner) !== getAddress(signer.address) || getAddress(deployedTreasury) !== treasury || royalty[1] !== 200n) {
-      throw new Error(`Deployment completed at ${contractAddress}, but on-chain ownership or royalty verification failed.`);
+      throw new SafeDeploymentError(`Deployment completed at ${contractAddress}, but on-chain ownership or royalty verification failed.`);
     }
 
     console.log(JSON.stringify({
@@ -96,6 +127,13 @@ try {
       explorerUrl: `https://sepolia.etherscan.io/address/${contractAddress}`,
     }));
   }
+} catch (error) {
+  if (error instanceof SafeDeploymentError) {
+    console.error(error.message);
+  } else {
+    console.error("Sepolia operation failed. Provider and signer details were suppressed to protect secrets.");
+  }
+  process.exitCode = 1;
 } finally {
   await provider.destroy();
 }
