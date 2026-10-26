@@ -5,6 +5,7 @@ import fs from "fs";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import twaRouter from "./routes/twa";
+import timenamingRouter from "./routes/timenaming";
 import { logger } from "./lib/logger";
 import { MEDIA_DIR } from "./services/renderService";
 
@@ -70,6 +71,7 @@ app.use("/api", router);
 
 // /api/v1 alias — exposes /api/v1/auth/telegram-webapp etc. per TWA spec
 app.use("/api/v1", twaRouter);
+app.use("/api/v1", timenamingRouter);
 
 // NOTE: citizen photos are stored in secure_vault/ (NOT served statically — privacy compliance)
 

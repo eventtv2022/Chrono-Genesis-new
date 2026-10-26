@@ -30,6 +30,7 @@ import moderationRouter from "./moderation";
 import trc20Router from "./trc20";
 import referralsRouter from "./referrals";
 import serviceCatalogRouter from "./serviceCatalog";
+import timenamingRouter from "./timenaming";
 
 const router: IRouter = Router();
 
@@ -64,5 +65,6 @@ router.use(moderationRouter);
 router.use(trc20Router);
 router.use(referralsRouter);
 router.use(serviceCatalogRouter);
+router.use(timenamingRouter);
 
 export default router;

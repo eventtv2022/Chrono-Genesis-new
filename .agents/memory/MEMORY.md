@@ -21,3 +21,4 @@
 - [Focus timer rewards](focus-timer-rewards.md) — 1 Д per 1,800 typed characters after 12 focus minutes; quiz pays 1 Д per 12 correct answers.
 - [Professional documents & service catalog](professional-documents-and-service-catalog.md) — CV/portfolio stay private; AI analysis requires consent; catalog publication costs 1 Д.
 - [In-app user guide](user-guide.md) — keep the full mobile manual accessible from the Profile section.
+- [Timenaming license legal status](timenaming-license.md) — keep the contradictory disclaimer visibly marked as draft until legal review.

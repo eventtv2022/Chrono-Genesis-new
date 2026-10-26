@@ -35,3 +35,4 @@ export * from "./focusSessions";
 export * from "./timelineExchangeRequests";
 export * from "./citizenProfessionalDocuments";
 export * from "./serviceListings";
+export * from "./minuteLicenses";
