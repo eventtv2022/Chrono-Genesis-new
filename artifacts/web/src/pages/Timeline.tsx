@@ -11,6 +11,7 @@ import { ChevronLeft, ChevronRight, MapPin, X, Clock, CheckCircle, XCircle } fro
 import { Button } from "@/components/ui/button";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useLocation } from "wouter";
 
 const MONTHS_RU = [
   "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
@@ -26,6 +27,7 @@ function padYear(n: number) { return String(n).padStart(4, "0"); }
 
 export function Timeline() {
   const { citizen, refreshCitizen } = useCitizen();
+  const [, setLocation] = useLocation();
   const { t, lang } = useLanguage();
   const queryClient = useQueryClient();
 
@@ -410,6 +412,16 @@ export function Timeline() {
                     <div className="text-muted-foreground text-[10px] mt-0.5">
                       {formatCoord(entry.timelineCoord)}
                     </div>
+                    {(entry as { citizenId?: number }).citizenId === citizen?.id && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2 w-full text-[10px]"
+                        onClick={() => setLocation(`/timenaming?minute=${entry.timelineCoord}`)}
+                      >
+                        {lang === "ru" ? "Оформить NFT-лицензию · +2 Д" : "Upgrade to NFT license · +2 Д"}
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>

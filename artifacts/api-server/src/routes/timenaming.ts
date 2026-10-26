@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
 import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -24,6 +24,18 @@ const CERTIFICATE_FONT_CANDIDATES = [
 ];
 const CERTIFICATE_FONT = CERTIFICATE_FONT_CANDIDATES.find((candidate) => fs.existsSync(candidate));
 
+async function attachOptionalCitizen(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) { next(); return; }
+  try {
+    const [citizen] = await db.select().from(citizensTable).where(eq(citizensTable.authToken, header.slice(7).trim())).limit(1);
+    if (citizen) req.citizen = citizen;
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
 function validateCoord(coord: string): boolean {
   if (!/^\d{12}$/.test(coord)) return false;
   const y = Number(coord.slice(0, 4)), m = Number(coord.slice(4, 6)), d = Number(coord.slice(6, 8));
@@ -42,6 +54,99 @@ function coordFromInput(value: unknown): string | null {
 
 function formatCoord(coord: string): string {
   return `${coord.slice(0, 4)}-${coord.slice(4, 6)}-${coord.slice(6, 8)} ${coord.slice(8, 10)}:${coord.slice(10, 12)} UTC`;
+}
+
+function isSepoliaMintConfigured(): boolean {
+  return Boolean(
+    process.env.TIMENAMING_CONTRACT_ADDRESS &&
+    process.env.SEPOLIA_RPC_URL &&
+    process.env.SEPOLIA_RELAYER_PRIVATE_KEY &&
+    isAddress(process.env.TIMENAMING_CONTRACT_ADDRESS),
+  );
+}
+
+function xmlEscape(value: string): string {
+  return value.replace(/[<>&'"]/g, (char) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", "\"": "&quot;" })[char]!);
+}
+
+async function finishPaidMint(
+  req: import("express").Request,
+  res: import("express").Response,
+  license: typeof minuteLicensesTable.$inferSelect,
+  directBundle: boolean,
+  balanceAfterCharge: number,
+): Promise<void> {
+  let txHash: string | null = null;
+  let receiptFailed = false;
+  try {
+    const certificate = await renderCertificate(license);
+    const certificatePath = await savePrivatePdf(license.certificateId, certificate);
+    await db.update(minuteLicensesTable).set({ status: "MINT_PENDING", certificatePath }).where(eq(minuteLicensesTable.id, license.id));
+
+    const epochMinute = Math.floor(Date.UTC(
+      Number(license.timelineCoord.slice(0, 4)),
+      Number(license.timelineCoord.slice(4, 6)) - 1,
+      Number(license.timelineCoord.slice(6, 8)),
+      Number(license.timelineCoord.slice(8, 10)),
+      Number(license.timelineCoord.slice(10, 12)),
+    ) / 60_000);
+    const imageSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600"><rect width="100%" height="100%" fill="#101d34"/><text x="50%" y="42%" fill="#dbc58e" font-family="sans-serif" font-size="42" text-anchor="middle">${xmlEscape(license.customTitle)}</text><text x="50%" y="58%" fill="#f4f1e9" font-family="sans-serif" font-size="26" text-anchor="middle">${xmlEscape(formatCoord(license.timelineCoord))}</text><text x="50%" y="82%" fill="#c6a55e" font-family="sans-serif" font-size="20" text-anchor="middle">TIMENATION · MINUTE LICENSE</text></svg>`;
+    const metadata = {
+      name: license.customTitle,
+      description: license.customDescription || `TimeNation placement license for ${formatCoord(license.timelineCoord)}.`,
+      image: `data:image/svg+xml;base64,${Buffer.from(imageSvg).toString("base64")}`,
+      attributes: [
+        { trait_type: "Timeline minute", value: formatCoord(license.timelineCoord) },
+        { trait_type: "Licensee", value: license.ownerName },
+        { trait_type: "Royalty", value: "2%" },
+        { trait_type: "Royalty recipient", value: ROYALTY_RECIPIENT },
+      ],
+    };
+    const uri = `data:application/json;base64,${Buffer.from(JSON.stringify(metadata)).toString("base64")}`;
+    const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC_URL, 11155111);
+    const signer = new Wallet(process.env.SEPOLIA_RELAYER_PRIVATE_KEY!, provider);
+    const contract = new Contract(process.env.TIMENAMING_CONTRACT_ADDRESS!, NFT_ABI, signer);
+    const tx = await contract.mintMinute(license.walletAddress, epochMinute, uri);
+    txHash = tx.hash;
+    const receipt = await tx.wait();
+    if (!receipt || receipt.status !== 1) {
+      receiptFailed = true;
+      throw new Error("Mint transaction did not succeed");
+    }
+    await db.transaction(async (txDb) => {
+      await txDb.update(minuteLicensesTable).set({
+        status: "MINTED", transactionHash: tx.hash, tokenId: String(epochMinute), certificatePath,
+      }).where(eq(minuteLicensesTable.id, license.id));
+      await txDb.update(timelineAnchorsTable).set({ status: "MINTED" }).where(eq(timelineAnchorsTable.id, license.timelineAnchorId));
+    });
+    res.status(201).json({
+      status: "MINTED", transactionHash: tx.hash, tokenId: String(epochMinute),
+      explorerUrl: `https://sepolia.etherscan.io/tx/${tx.hash}`,
+      certificateId: license.certificateId, newBalance: balanceAfterCharge,
+    });
+  } catch (error) {
+    req.log.error({ err: error, certificateId: license.certificateId, txHash }, "Paid Sepolia mint failed");
+    if (txHash && !receiptFailed) {
+      await db.update(minuteLicensesTable).set({ status: "MINT_PENDING", transactionHash: txHash }).where(eq(minuteLicensesTable.id, license.id));
+      res.status(202).json({ status: "MINT_PENDING", transactionHash: txHash, certificateId: license.certificateId, message: "Transaction submitted; its final status is being confirmed." });
+      return;
+    }
+    await db.transaction(async (txDb) => {
+      const [citizen] = await txDb.select({ balance: citizensTable.balanceMinutes })
+        .from(citizensTable).where(eq(citizensTable.id, license.citizenId)).for("update").limit(1);
+      if (citizen) {
+        await txDb.update(citizensTable).set({ balanceMinutes: citizen.balance + 2 }).where(eq(citizensTable.id, license.citizenId));
+      }
+      if (directBundle) {
+        await txDb.delete(minuteLicensesTable).where(eq(minuteLicensesTable.id, license.id));
+        await txDb.delete(timelineAnchorsTable).where(eq(timelineAnchorsTable.id, license.timelineAnchorId));
+      } else {
+        await txDb.update(minuteLicensesTable).set({ status: "CLAIMED", transactionHash: null, tokenId: null })
+          .where(eq(minuteLicensesTable.id, license.id));
+      }
+    });
+    res.status(502).json({ error: "Mint failed; 2 Д were refunded. Your original Timeline claim remains if this was an upgrade." });
+  }
 }
 
 async function renderCertificate(license: typeof minuteLicensesTable.$inferSelect): Promise<Buffer> {
@@ -104,12 +209,12 @@ router.get("/timenaming/config", (_req, res): void => {
     chainId: 11155111,
     royaltyBps: 200,
     royaltyRecipient: ROYALTY_RECIPIENT,
-    contractConfigured: Boolean(process.env.TIMENAMING_CONTRACT_ADDRESS && process.env.SEPOLIA_RPC_URL && process.env.SEPOLIA_RELAYER_PRIVATE_KEY),
+    contractConfigured: isSepoliaMintConfigured(),
     legalTextStatus: "DRAFT_PENDING_REVIEW",
   });
 });
 
-router.get("/timenaming/check/:timestamp", async (req, res): Promise<void> => {
+router.get("/timenaming/check/:timestamp", attachOptionalCitizen, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.timestamp) ? req.params.timestamp[0] : req.params.timestamp;
   const coord = raw?.replaceAll("-", "").replaceAll(":", "").replace("T", "").replace(" ", "");
   if (!coord || !validateCoord(coord)) {
@@ -117,23 +222,33 @@ router.get("/timenaming/check/:timestamp", async (req, res): Promise<void> => {
     return;
   }
   const [license] = await db.select().from(minuteLicensesTable).where(eq(minuteLicensesTable.timelineCoord, coord)).limit(1);
-  const [anchor] = license ? [] : await db.select({ id: timelineAnchorsTable.id }).from(timelineAnchorsTable).where(eq(timelineAnchorsTable.timelineCoord, coord)).limit(1);
+  const [anchor] = await db.select().from(timelineAnchorsTable).where(eq(timelineAnchorsTable.timelineCoord, coord)).limit(1);
+  const ownedByMe = Boolean(anchor && req.citizen?.id === anchor.citizenId);
+  const minted = license?.status === "MINTED" || license?.status === "ACTIVE_NFT" || anchor?.status === "MINTED";
+  const pending = license?.status === "MINT_PENDING";
   res.json({
     timestamp: coord,
-    available: !license && !anchor && !isCenturyBoundaryMinute(coord) && !(await isStateHeritageCoord(coord)),
+    available: !anchor && !license && !isCenturyBoundaryMinute(coord) && !(await isStateHeritageCoord(coord)),
     reserved: Boolean(anchor || license),
+    ownedByMe,
+    minuteStatus: minted ? "MINTED" : pending ? "MINT_PENDING" : anchor ? "CLAIMED" : "FREE",
     ...(license ? { license: { ownerName: license.ownerName, customTitle: license.customTitle, status: license.status, certificateId: license.certificateId } } : {}),
   });
 });
 
 router.post("/timenaming/reserve", requireAuth, async (req, res): Promise<void> => {
-  const { ownerName, customTitle, customDescription = "", walletAddress } = req.body ?? {};
+  const { ownerName = "", customTitle = "", customDescription = "", walletAddress = "", purchaseType = "TIMELINE_ONLY" } = req.body ?? {};
   const coord = coordFromInput(req.body?.minuteTimestamp);
-  if (!coord || typeof ownerName !== "string" || !ownerName.trim() || ownerName.length > 120 ||
+  if (!coord || !["TIMELINE_ONLY", "ALL_INCLUSIVE"].includes(purchaseType) ||
+      (purchaseType === "ALL_INCLUSIVE" && (typeof ownerName !== "string" || !ownerName.trim() || ownerName.length > 120 ||
       typeof customTitle !== "string" || !customTitle.trim() || customTitle.length > 160 ||
       typeof customDescription !== "string" || customDescription.length > 2000 ||
-      typeof walletAddress !== "string" || !isAddress(walletAddress)) {
+      typeof walletAddress !== "string" || !isAddress(walletAddress)))) {
     res.status(400).json({ error: "Invalid minute, licensee, content details, or EVM wallet address" });
+    return;
+  }
+  if (purchaseType === "ALL_INCLUSIVE" && !isSepoliaMintConfigured()) {
+    res.status(503).json({ code: "SEPOLIA_RELAYER_NOT_CONFIGURED", error: "The all-inclusive package is unavailable until Sepolia minting is configured. No DarMin was charged." });
     return;
   }
   if (isCenturyBoundaryMinute(coord)) {
@@ -149,20 +264,28 @@ router.post("/timenaming/reserve", requireAuth, async (req, res): Promise<void> 
   try {
     const reserved = await db.transaction(async (tx) => {
       const [lockedCitizen] = await tx.select().from(citizensTable).where(eq(citizensTable.id, citizen.id)).for("update").limit(1);
-      if (!lockedCitizen || lockedCitizen.balanceMinutes - 1 <= 0) throw new Error("INSUFFICIENT_MINUTES");
+      const cost = purchaseType === "ALL_INCLUSIVE" ? 2 : 1;
+      if (!lockedCitizen || lockedCitizen.balanceMinutes - cost < 1) throw new Error("INSUFFICIENT_MINUTES");
       const [existingAnchor] = await tx.select({ id: timelineAnchorsTable.id }).from(timelineAnchorsTable).where(eq(timelineAnchorsTable.timelineCoord, coord)).limit(1);
       if (existingAnchor) throw new Error("MINUTE_TAKEN");
       const [anchor] = await tx.insert(timelineAnchorsTable).values({ timelineCoord: coord, citizenId: citizen.id, status: "active" }).returning();
-      const certificateId = randomUUID();
-      const [created] = await tx.insert(minuteLicensesTable).values({
-        certificateId, timelineAnchorId: anchor!.id, timelineCoord: coord, citizenId: citizen.id,
-        ownerName: ownerName.trim(), customTitle: customTitle.trim(), customDescription: customDescription.trim(),
-        walletAddress,
-      }).returning();
-      await tx.update(citizensTable).set({ balanceMinutes: lockedCitizen.balanceMinutes - 1 }).where(eq(citizensTable.id, citizen.id));
-      return { license: created!, newBalance: lockedCitizen.balanceMinutes - 1 };
+      let license: typeof minuteLicensesTable.$inferSelect | null = null;
+      if (purchaseType === "ALL_INCLUSIVE") {
+        const [created] = await tx.insert(minuteLicensesTable).values({
+          certificateId: randomUUID(), timelineAnchorId: anchor!.id, timelineCoord: coord, citizenId: citizen.id,
+          ownerName: ownerName.trim(), customTitle: customTitle.trim(), customDescription: customDescription.trim(),
+          walletAddress, status: "CLAIMED",
+        }).returning();
+        license = created!;
+      }
+      await tx.update(citizensTable).set({ balanceMinutes: lockedCitizen.balanceMinutes - cost }).where(eq(citizensTable.id, citizen.id));
+      return { license, anchor: anchor!, newBalance: lockedCitizen.balanceMinutes - cost, purchaseType };
     });
-    res.status(201).json(reserved);
+    if (reserved.purchaseType === "ALL_INCLUSIVE" && reserved.license) {
+      await finishPaidMint(req, res, reserved.license, true, reserved.newBalance);
+      return;
+    }
+    res.status(201).json({ ...reserved, status: "CLAIMED" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message === "MINUTE_TAKEN" || (error as { code?: string })?.code === "23505") {
@@ -178,8 +301,106 @@ router.post("/timenaming/reserve", requireAuth, async (req, res): Promise<void> 
   }
 });
 
+router.post("/timenaming/upgrade", requireAuth, async (req, res): Promise<void> => {
+  const { ownerName, customTitle, customDescription = "", walletAddress } = req.body ?? {};
+  const coord = coordFromInput(req.body?.minuteTimestamp);
+  if (!coord || typeof ownerName !== "string" || !ownerName.trim() || ownerName.length > 120 ||
+      typeof customTitle !== "string" || !customTitle.trim() || customTitle.length > 160 ||
+      typeof customDescription !== "string" || customDescription.length > 2000 ||
+      typeof walletAddress !== "string" || !isAddress(walletAddress)) {
+    res.status(400).json({ error: "Invalid minute, licensee, content details, or EVM wallet address" });
+    return;
+  }
+  if (!isSepoliaMintConfigured()) {
+    res.status(503).json({ code: "SEPOLIA_RELAYER_NOT_CONFIGURED", error: "Sepolia minting is not configured. No DarMin was charged." });
+    return;
+  }
+  const citizenId = req.citizen!.id;
+  try {
+    const purchase = await db.transaction(async (tx) => {
+      const [citizen] = await tx.select().from(citizensTable).where(eq(citizensTable.id, citizenId)).for("update").limit(1);
+      if (!citizen || citizen.balanceMinutes - 2 < 1) throw new Error("INSUFFICIENT_MINUTES");
+      const [anchor] = await tx.select().from(timelineAnchorsTable).where(eq(timelineAnchorsTable.timelineCoord, coord)).for("update").limit(1);
+      if (!anchor) throw new Error("MINUTE_NOT_CLAIMED");
+      if (anchor.citizenId !== citizenId) throw new Error("MINUTE_TAKEN");
+      const [existing] = await tx.select().from(minuteLicensesTable).where(eq(minuteLicensesTable.timelineCoord, coord)).for("update").limit(1);
+      if (existing?.status === "MINTED" || existing?.status === "ACTIVE_NFT") throw new Error("ALREADY_MINTED");
+      if (existing?.status === "MINT_PENDING") throw new Error("MINT_IN_PROGRESS");
+      const licenseValues = {
+        ownerName: ownerName.trim(), customTitle: customTitle.trim(), customDescription: customDescription.trim(),
+        walletAddress, status: "CLAIMED",
+      };
+      const [license] = existing
+        ? await tx.update(minuteLicensesTable).set(licenseValues).where(eq(minuteLicensesTable.id, existing.id)).returning()
+        : await tx.insert(minuteLicensesTable).values({
+            ...licenseValues, certificateId: randomUUID(), timelineAnchorId: anchor.id,
+            timelineCoord: coord, citizenId,
+          }).returning();
+      const newBalance = citizen.balanceMinutes - 2;
+      await tx.update(citizensTable).set({ balanceMinutes: newBalance }).where(eq(citizensTable.id, citizenId));
+      return { license: license!, newBalance };
+    });
+    await finishPaidMint(req, res, purchase.license, false, purchase.newBalance);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const conflicts: Record<string, string> = {
+      INSUFFICIENT_MINUTES: "You need 2 transferable Д in addition to the protected ancestral minute.",
+      MINUTE_NOT_CLAIMED: "Reserve this minute on Timeline before upgrading it.",
+      MINUTE_TAKEN: "This minute is reserved by another citizen.",
+      ALREADY_MINTED: "This minute has already been minted.",
+      MINT_IN_PROGRESS: "The NFT transaction is still being confirmed.",
+    };
+    if (conflicts[message]) {
+      const status = message === "INSUFFICIENT_MINUTES" ? 402 : message === "MINUTE_NOT_CLAIMED" ? 409 : 409;
+      res.status(status).json({ code: message, error: conflicts[message] });
+      return;
+    }
+    req.log.error({ err: error, citizenId, coord }, "Could not upgrade Timeline minute");
+    res.status(500).json({ error: "Could not upgrade this minute" });
+  }
+});
+
+async function reconcilePendingMint(license: typeof minuteLicensesTable.$inferSelect): Promise<void> {
+  if (license.status !== "MINT_PENDING" || !license.transactionHash || !process.env.SEPOLIA_RPC_URL) return;
+  try {
+    const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC_URL, 11155111);
+    const receipt = await provider.getTransactionReceipt(license.transactionHash);
+    if (!receipt) return;
+    const epochMinute = Math.floor(Date.UTC(
+      Number(license.timelineCoord.slice(0, 4)),
+      Number(license.timelineCoord.slice(4, 6)) - 1,
+      Number(license.timelineCoord.slice(6, 8)),
+      Number(license.timelineCoord.slice(8, 10)),
+      Number(license.timelineCoord.slice(10, 12)),
+    ) / 60_000);
+    await db.transaction(async (tx) => {
+      const [current] = await tx.select().from(minuteLicensesTable).where(eq(minuteLicensesTable.id, license.id)).for("update").limit(1);
+      if (!current || current.status !== "MINT_PENDING") return;
+      if (receipt.status === 1) {
+        await tx.update(minuteLicensesTable).set({ status: "MINTED", tokenId: String(epochMinute) }).where(eq(minuteLicensesTable.id, license.id));
+        await tx.update(timelineAnchorsTable).set({ status: "MINTED" }).where(eq(timelineAnchorsTable.id, license.timelineAnchorId));
+        return;
+      }
+      const [anchor] = await tx.select().from(timelineAnchorsTable).where(eq(timelineAnchorsTable.id, license.timelineAnchorId)).limit(1);
+      const isDirectBundle = Boolean(anchor && anchor.createdAt.getTime() === current.createdAt.getTime());
+      const [citizen] = await tx.select({ balance: citizensTable.balanceMinutes }).from(citizensTable).where(eq(citizensTable.id, current.citizenId)).for("update").limit(1);
+      if (citizen) await tx.update(citizensTable).set({ balanceMinutes: citizen.balance + 2 }).where(eq(citizensTable.id, current.citizenId));
+      if (isDirectBundle) {
+        await tx.delete(minuteLicensesTable).where(eq(minuteLicensesTable.id, current.id));
+        await tx.delete(timelineAnchorsTable).where(eq(timelineAnchorsTable.id, current.timelineAnchorId));
+      } else {
+        await tx.update(minuteLicensesTable).set({ status: "CLAIMED", transactionHash: null, tokenId: null }).where(eq(minuteLicensesTable.id, current.id));
+      }
+    });
+  } catch {
+    // The transaction state remains pending until the RPC can confirm its receipt.
+  }
+}
+
 router.get("/timenaming/mine", requireAuth, async (req, res): Promise<void> => {
-  const licenses = await db.select().from(minuteLicensesTable).where(eq(minuteLicensesTable.citizenId, req.citizen!.id)).orderBy(minuteLicensesTable.createdAt);
+  let licenses = await db.select().from(minuteLicensesTable).where(eq(minuteLicensesTable.citizenId, req.citizen!.id)).orderBy(minuteLicensesTable.createdAt);
+  for (const license of licenses) await reconcilePendingMint(license);
+  licenses = await db.select().from(minuteLicensesTable).where(eq(minuteLicensesTable.citizenId, req.citizen!.id)).orderBy(minuteLicensesTable.createdAt);
   res.json({ licenses });
 });
 
@@ -218,38 +439,31 @@ async function handleMintNft(req: import("express").Request, res: import("expres
   const certificateId = String(req.params.certificateId ?? req.body?.certificateId ?? "");
   const [license] = await db.select().from(minuteLicensesTable).where(and(eq(minuteLicensesTable.certificateId, certificateId), eq(minuteLicensesTable.citizenId, req.citizen!.id))).limit(1);
   if (!license) { res.status(404).json({ error: "License not found" }); return; }
-  if (license.status === "ACTIVE_NFT") { res.status(409).json({ error: "This minute has already been minted", transactionHash: license.transactionHash }); return; }
-  const rpcUrl = process.env.SEPOLIA_RPC_URL;
-  const privateKey = process.env.SEPOLIA_RELAYER_PRIVATE_KEY;
-  const contractAddress = process.env.TIMENAMING_CONTRACT_ADDRESS;
-  if (!rpcUrl || !privateKey || !contractAddress || !isAddress(contractAddress)) {
-    res.status(503).json({ code: "SEPOLIA_RELAYER_NOT_CONFIGURED", error: "Sepolia minting is not enabled yet. Reservation and PDF certificate remain available." });
+  if (license.status === "MINTED" || license.status === "ACTIVE_NFT") { res.status(409).json({ error: "This minute has already been minted", transactionHash: license.transactionHash }); return; }
+  if (license.status === "MINT_PENDING") { res.status(409).json({ error: "This minute already has a mint transaction pending", transactionHash: license.transactionHash }); return; }
+  if (!isSepoliaMintConfigured()) {
+    res.status(503).json({ code: "SEPOLIA_RELAYER_NOT_CONFIGURED", error: "Sepolia minting is not enabled. No DarMin was charged." });
     return;
   }
   try {
-    const epochMinute = Math.floor(Date.UTC(Number(license.timelineCoord.slice(0, 4)), Number(license.timelineCoord.slice(4, 6)) - 1, Number(license.timelineCoord.slice(6, 8)), Number(license.timelineCoord.slice(8, 10)), Number(license.timelineCoord.slice(10, 12))) / 60_000);
-    const metadata = {
-      name: license.customTitle, description: license.customDescription || `TimeNation placement license for ${formatCoord(license.timelineCoord)}.`,
-      image: "", external_url: `/api/timenaming/${license.certificateId}/certificate`,
-      attributes: [
-        { trait_type: "Timeline minute", value: formatCoord(license.timelineCoord) },
-        { trait_type: "Licensee", value: license.ownerName },
-        { trait_type: "Royalty", value: "2%" },
-        { trait_type: "Royalty recipient", value: ROYALTY_RECIPIENT },
-      ],
-    };
-    const uri = `data:application/json;base64,${Buffer.from(JSON.stringify(metadata)).toString("base64")}`;
-    const provider = new JsonRpcProvider(rpcUrl, 11155111);
-    const signer = new Wallet(privateKey, provider);
-    const contract = new Contract(contractAddress, NFT_ABI, signer);
-    const tx = await contract.mintMinute(license.walletAddress, epochMinute, uri);
-    const receipt = await tx.wait();
-    if (!receipt || receipt.status !== 1) throw new Error("Mint transaction did not succeed");
-    await db.update(minuteLicensesTable).set({ status: "ACTIVE_NFT", transactionHash: tx.hash, tokenId: String(epochMinute) }).where(eq(minuteLicensesTable.id, license.id));
-    res.json({ status: "ACTIVE_NFT", transactionHash: tx.hash, tokenId: String(epochMinute), explorerUrl: `https://sepolia.etherscan.io/tx/${tx.hash}` });
+    const purchase = await db.transaction(async (txDb) => {
+      const [citizen] = await txDb.select().from(citizensTable).where(eq(citizensTable.id, req.citizen!.id)).for("update").limit(1);
+      if (!citizen || citizen.balanceMinutes - 2 < 1) throw new Error("INSUFFICIENT_MINUTES");
+      const [current] = await txDb.select().from(minuteLicensesTable).where(eq(minuteLicensesTable.id, license.id)).for("update").limit(1);
+      if (!current || current.status === "MINTED" || current.status === "ACTIVE_NFT") throw new Error("ALREADY_MINTED");
+      if (current.status === "MINT_PENDING") throw new Error("MINT_IN_PROGRESS");
+      const newBalance = citizen.balanceMinutes - 2;
+      await txDb.update(citizensTable).set({ balanceMinutes: newBalance }).where(eq(citizensTable.id, citizen.id));
+      await txDb.update(minuteLicensesTable).set({ status: "CLAIMED" }).where(eq(minuteLicensesTable.id, license.id));
+      return newBalance;
+    });
+    await finishPaidMint(req, res, { ...license, status: "CLAIMED" }, false, purchase);
   } catch (error) {
-    req.log.error({ err: error, certificateId: license.certificateId }, "Sepolia mint failed");
-    res.status(502).json({ error: "Sepolia mint transaction failed; the license remains reserved and can be retried" });
+    const message = error instanceof Error ? error.message : "";
+    if (message === "INSUFFICIENT_MINUTES") { res.status(402).json({ error: "Upgrade requires 2 Д beyond the protected ancestral minute." }); return; }
+    if (message === "ALREADY_MINTED" || message === "MINT_IN_PROGRESS") { res.status(409).json({ error: "This minute is already minted or a mint is pending." }); return; }
+    req.log.error({ err: error, certificateId: license.certificateId }, "Paid Sepolia mint failed");
+    res.status(500).json({ error: "Could not start the paid upgrade." });
   }
 }
 

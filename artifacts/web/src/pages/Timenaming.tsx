@@ -36,6 +36,8 @@ type Availability = {
   timestamp: string;
   available: boolean;
   reserved: boolean;
+  ownedByMe?: boolean;
+  minuteStatus?: "FREE" | "CLAIMED" | "MINT_PENDING" | "MINTED";
   license?: License;
 };
 
@@ -93,6 +95,7 @@ export function Timenaming() {
   const [reserveSuccess, setReserveSuccess] = useState("");
   const [reserving, setReserving] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
+  const [purchaseType, setPurchaseType] = useState<"TIMELINE_ONLY" | "ALL_INCLUSIVE">("TIMELINE_ONLY");
 
   const authHeaders = useMemo<Record<string, string>>(
     () => authToken ? { Authorization: `Bearer ${authToken}` } : {} as Record<string, string>,
@@ -101,7 +104,8 @@ export function Timenaming() {
   const minuteValue = date && time ? toMinuteValue(date, time) : "";
   const [walletAddress, setWalletAddress] = useState("");
   const [walletError, setWalletError] = useState("");
-  const enoughBalance = (citizen?.balanceMinutes ?? 0) > 1;
+  const purchaseCost = availability?.ownedByMe || purchaseType === "ALL_INCLUSIVE" ? 2 : 1;
+  const enoughBalance = (citizen?.balanceMinutes ?? 0) - purchaseCost >= 1;
 
   useEffect(() => {
     if (!walletAddress && citizen?.walletAddress && /^0x[a-fA-F0-9]{40}$/.test(citizen.walletAddress)) {
@@ -165,6 +169,21 @@ export function Timenaming() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    const coord = new URLSearchParams(window.location.search).get("minute");
+    if (!coord || !/^\d{12}$/.test(coord)) return;
+    const nextDate = `${coord.slice(0, 4)}-${coord.slice(4, 6)}-${coord.slice(6, 8)}`;
+    const nextTime = `${coord.slice(8, 10)}:${coord.slice(10, 12)}`;
+    setDate(nextDate);
+    setTime(nextTime);
+    setChecking(true);
+    fetch(`/api/v1/timenaming/check/${coord}`, { headers: authHeaders })
+      .then(readJson<Availability>)
+      .then(setAvailability)
+      .catch(error => setCheckError(error instanceof Error ? error.message : "Availability could not be checked."))
+      .finally(() => setChecking(false));
+  }, [authHeaders]);
+
   useEffect(() => { void loadMine(); }, [loadMine]);
   useEffect(() => {
     if (citizen?.name) setOwnerName(citizen.name);
@@ -183,7 +202,7 @@ export function Timenaming() {
     try {
       const coord = asCoordinate(date, time);
       const result = await readJson<Availability>(
-        await fetch(`/api/v1/timenaming/check/${coord}`),
+        await fetch(`/api/v1/timenaming/check/${coord}`, { headers: authHeaders }),
       );
       setAvailability(result);
     } catch (error) {
@@ -201,33 +220,35 @@ export function Timenaming() {
       setReserveError("Sign in as a citizen to reserve a minute.");
       return;
     }
-    if (!availability?.available || availability.reserved || !minuteValue) {
+    const isUpgrade = Boolean(availability?.ownedByMe);
+    if ((!isUpgrade && (!availability?.available || availability.reserved)) || !minuteValue) {
       setReserveError("Check an available minute before continuing.");
       return;
     }
-    if (!walletAddress) {
+    const needsLicense = isUpgrade || purchaseType === "ALL_INCLUSIVE";
+    if (needsLicense && !walletAddress) {
       setReserveError("A wallet address is not connected to this citizen profile.");
       return;
     }
     setReserving(true);
     try {
-      const result = await readJson<{ license: License; newBalance: number }>(
-        await fetch("/api/v1/timenaming/reserve", {
+      const endpoint = isUpgrade ? "/api/v1/timenaming/upgrade" : "/api/v1/timenaming/reserve";
+      const result = await readJson<{ license?: License; newBalance: number; status?: string; transactionHash?: string }>(
+        await fetch(endpoint, {
           method: "POST",
           headers: { ...authHeaders, "Content-Type": "application/json" },
           body: JSON.stringify({
             minuteTimestamp: minuteValue,
-            ownerName: ownerName.trim(),
-            customTitle: customTitle.trim(),
-            customDescription: customDescription.trim(),
-            walletAddress,
+            purchaseType: isUpgrade ? "UPGRADE" : purchaseType,
+            ...(needsLicense ? { ownerName: ownerName.trim(), customTitle: customTitle.trim(), customDescription: customDescription.trim(), walletAddress } : {}),
           }),
         }),
       );
-      setAvailability({ timestamp: asCoordinate(date, time), available: false, reserved: true, license: result.license });
-      setReserveSuccess(`Placement license issued. Balance: ${result.newBalance} Д.`);
-      setCustomTitle("");
-      setCustomDescription("");
+      const isMinted = result.status === "MINTED";
+      const isPending = result.status === "MINT_PENDING";
+      setAvailability({ timestamp: asCoordinate(date, time), available: false, reserved: true, ownedByMe: true, minuteStatus: isMinted ? "MINTED" : isPending ? "MINT_PENDING" : "CLAIMED", ...(result.license ? { license: result.license } : {}) });
+      setReserveSuccess(isMinted ? `NFT minted on Sepolia. Balance: ${result.newBalance} Д.` : isPending ? "Mint transaction submitted and awaiting confirmation." : `Minute reserved for your family. Balance: ${result.newBalance} Д.`);
+      if (needsLicense) { setCustomTitle(""); setCustomDescription(""); }
       void refreshCitizen();
       void loadMine();
     } catch (error) {
@@ -310,7 +331,7 @@ export function Timenaming() {
         </header>
 
         <section className="tn-facts" aria-label="Reservation facts">
-          <div className="tn-fact"><span className="tn-fact-label">RESERVATION COST</span><strong>1 <i>Д</i></strong><small>Transferable time currency</small></div>
+          <div className="tn-fact"><span className="tn-fact-label">PRICING OPTIONS</span><strong>1 / 2 <i>Д</i></strong><small>Timeline · all-inclusive; upgrade +2 Д</small></div>
           <div className="tn-fact"><span className="tn-fact-label">NETWORK</span><strong>{configLoading ? "…" : config?.network || "Sepolia"}</strong><small>{configLoading ? "Checking configuration" : `Chain ID ${config?.chainId ?? 11155111}`}</small></div>
           <div className="tn-fact"><span className="tn-fact-label">NFT ROYALTY</span><strong>2<span className="tn-percent">%</span></strong><small>Paid to the stated treasury</small></div>
           <div className="tn-fact tn-fact-status"><span className="tn-fact-label">PLACEMENT STATUS</span><strong><span className="tn-status-dot" /> {citizen ? "Citizen session" : "Sign-in required"}</strong><small>{citizen ? "Your record is private to your account" : "A profile is needed to reserve"}</small></div>
@@ -352,48 +373,49 @@ export function Timenaming() {
             {availability && (
               <div className={`tn-availability ${availability.available && !availability.reserved ? "is-available" : "is-reserved"}`} role="status" data-testid="status-minute-availability">
                 <div className="tn-availability-icon">{availability.available && !availability.reserved ? <Check size={20} /> : <LockKeyhole size={18} />}</div>
-                <div><strong>{availability.available && !availability.reserved ? "This minute is available" : "This minute is already reserved"}</strong><span>{prettyMinute(minuteValue)}</span></div>
-                <span className="tn-availability-tag">{availability.available && !availability.reserved ? "AVAILABLE" : "RESERVED"}</span>
+                <div><strong>{availability.available && !availability.reserved ? "This minute is available" : availability.ownedByMe ? (availability.minuteStatus === "MINTED" ? "Your minute is already minted" : "This minute is reserved by you") : "This minute is already reserved"}</strong><span>{prettyMinute(minuteValue)}</span></div>
+                <span className="tn-availability-tag">{availability.available && !availability.reserved ? "AVAILABLE" : availability.ownedByMe ? availability.minuteStatus : "RESERVED"}</span>
               </div>
             )}
             {reserveSuccess && <div className="tn-inline-message tn-inline-success" role="status" data-testid="success-reservation"><BadgeCheck size={18} />{reserveSuccess}</div>}
 
-            {availability?.available && !availability.reserved && (
+            {((availability?.available && !availability.reserved) || (availability?.ownedByMe && availability.minuteStatus !== "MINTED" && availability.minuteStatus !== "MINT_PENDING")) && (
               <form className="tn-license-form" onSubmit={reserveMinute} data-testid="form-reservation">
-                <div className="tn-form-divider"><span>PLACEMENT LICENSE DETAILS</span><span>02 / 03</span></div>
-                <label className="tn-field">
-                  <span>Name on the record</span>
-                  <input value={ownerName} onChange={event => setOwnerName(event.target.value)} required maxLength={120} data-testid="input-owner-name" />
-                </label>
-                <label className="tn-field">
-                  <span>Minute title</span>
-                  <input value={customTitle} onChange={event => setCustomTitle(event.target.value)} required maxLength={160} placeholder="Name this moment" data-testid="input-minute-title" />
-                </label>
-                <label className="tn-field">
-                  <span>Historical note <small>Optional</small></span>
-                  <textarea value={customDescription} onChange={event => setCustomDescription(event.target.value)} rows={3} maxLength={2000} placeholder="Add context that should accompany this placement." data-testid="input-minute-description" />
-                </label>
-                <div className="tn-wallet-line">
-                  <WalletCards size={16} />
-                  <div><span>Sepolia EVM wallet</span><strong>{walletAddress ? `${walletAddress.slice(0, 7)}…${walletAddress.slice(-5)}` : "Not connected"}</strong></div>
-                  <button type="button" className="tn-outline-button" onClick={() => void connectEvmWallet()} data-testid="button-connect-evm-wallet">Connect MetaMask</button>
-                </div>
-                <label className="tn-field">
-                  <span>Or enter a public EVM address</span>
-                  <input value={walletAddress} onChange={event => setWalletAddress(event.target.value.trim())} placeholder="0x…" maxLength={42} data-testid="input-evm-wallet-address" />
-                </label>
-                {walletError && <div className="tn-inline-message tn-inline-error" role="alert" data-testid="error-wallet">{walletError}</div>}
-                {!citizen && <p className="tn-form-hint">Sign in to reserve. No private key or secret is requested.</p>}
-                {citizen && !walletAddress && <p className="tn-form-hint">Connect MetaMask on Sepolia or enter the public EVM address that should receive the NFT.</p>}
-                {citizen && !enoughBalance && <p className="tn-form-hint">Your balance must be greater than 1 Д so the inherited minute stays protected.</p>}
-                <div className="tn-cost-confirm"><span><strong>1 Д</strong> will be deducted from your transferable balance.</span><span>INHERITED MINUTES ARE PROTECTED</span></div>
+                <div className="tn-form-divider"><span>{availability.ownedByMe ? "UPGRADE YOUR TIMELINE MINUTE" : "CHOOSE A PACKAGE"}</span><span>02 / 03</span></div>
+                {!availability.ownedByMe && (
+                  <div className="tn-package-options" role="radiogroup" aria-label="Choose a minute package">
+                    <label className={`tn-package-option ${purchaseType === "TIMELINE_ONLY" ? "selected" : ""}`}>
+                      <input type="radio" name="purchaseType" checked={purchaseType === "TIMELINE_ONLY"} onChange={() => setPurchaseType("TIMELINE_ONLY")} />
+                      <span><strong>Reserve for your family</strong><small>Timeline claim only</small></span><b>1 Д</b>
+                    </label>
+                    <label className={`tn-package-option ${purchaseType === "ALL_INCLUSIVE" ? "selected" : ""} ${!config?.contractConfigured ? "disabled" : ""}`}>
+                      <input type="radio" name="purchaseType" checked={purchaseType === "ALL_INCLUSIVE"} disabled={!config?.contractConfigured} onChange={() => setPurchaseType("ALL_INCLUSIVE")} />
+                      <span><strong>All-inclusive NFT license</strong><small>{config?.contractConfigured ? "Timeline + license + PDF + Sepolia NFT" : "Unavailable until Sepolia minting is configured"}</small></span><b>2 Д</b>
+                    </label>
+                  </div>
+                )}
+                {(availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && <>
+                  <div className="tn-public-warning" role="note">NFT name and description are public and permanent on the blockchain. Do not include information you do not want public.</div>
+                  <label className="tn-field"><span>Name on the record</span><input value={ownerName} onChange={event => setOwnerName(event.target.value)} required maxLength={120} data-testid="input-owner-name" /></label>
+                  <label className="tn-field"><span>Minute title</span><input value={customTitle} onChange={event => setCustomTitle(event.target.value)} required maxLength={160} placeholder="Name this moment" data-testid="input-minute-title" /></label>
+                  <label className="tn-field"><span>Historical note <small>Optional</small></span><textarea value={customDescription} onChange={event => setCustomDescription(event.target.value)} rows={3} maxLength={2000} placeholder="Add context that should accompany this placement." data-testid="input-minute-description" /></label>
+                  <div className="tn-wallet-line"><WalletCards size={16} /><div><span>Sepolia EVM wallet</span><strong>{walletAddress ? `${walletAddress.slice(0, 7)}…${walletAddress.slice(-5)}` : "Not connected"}</strong></div><button type="button" className="tn-outline-button" onClick={() => void connectEvmWallet()} data-testid="button-connect-evm-wallet">Connect MetaMask</button></div>
+                  <label className="tn-field"><span>Or enter a public EVM address</span><input value={walletAddress} onChange={event => setWalletAddress(event.target.value.trim())} placeholder="0x…" maxLength={42} data-testid="input-evm-wallet-address" /></label>
+                  {walletError && <div className="tn-inline-message tn-inline-error" role="alert" data-testid="error-wallet">{walletError}</div>}
+                  {!walletAddress && <p className="tn-form-hint">Connect MetaMask on Sepolia or enter the public EVM address that should receive the NFT.</p>}
+                </>}
+                {!citizen && <p className="tn-form-hint">Sign in as a citizen to purchase. No private key or secret is requested.</p>}
+                {citizen && !enoughBalance && <p className="tn-form-hint">You need {purchaseCost} Д beyond the protected ancestral minute.</p>}
+                <div className="tn-cost-confirm"><span><strong>{purchaseCost} Д</strong> will be deducted from your transferable balance.</span><span>ANCESTRAL MINUTE IS PROTECTED</span></div>
                 {reserveError && <div className="tn-inline-message tn-inline-error" role="alert" data-testid="error-reservation"><AlertCircle size={17} />{reserveError}</div>}
-                <button className="tn-button tn-button-primary" type="submit" disabled={reserving || !citizen || !walletAddress || !enoughBalance} data-testid="button-reserve-minute">
+                <button className="tn-button tn-button-primary" type="submit" disabled={reserving || !citizen || !enoughBalance || (((availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && !walletAddress) || ((availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && !config?.contractConfigured))} data-testid="button-reserve-minute">
                   {reserving ? <LoaderCircle size={16} className="tn-spin" /> : <Fingerprint size={17} />}
-                  {reserving ? "Issuing placement license…" : "Reserve this minute"}
+                  {reserving ? "Processing purchase…" : availability.ownedByMe ? "Upgrade to NFT license · +2 Д" : purchaseType === "ALL_INCLUSIVE" ? "Buy all-inclusive · 2 Д" : "Reserve for your family · 1 Д"}
                   {!reserving && <ArrowUpRight size={16} />}
                 </button>
-                <p className="tn-draft-copy" data-testid="status-terms-draft"><CircleHelp size={14} /> Terms are a draft pending legal review. This reservation is not an NFT.</p>
+                {purchaseType === "ALL_INCLUSIVE" || availability.ownedByMe
+                  ? <p className="tn-draft-copy" data-testid="status-terms-draft"><CircleHelp size={14} /> License terms remain a draft pending legal review. NFT minting requires Sepolia configuration.</p>
+                  : <p className="tn-draft-copy">A Timeline reservation can be upgraded later for +2 Д.</p>}
               </form>
             )}
           </section>
@@ -402,7 +424,7 @@ export function Timenaming() {
             <section className="tn-process-card">
               <span className="tn-overline">A CLEAR DISTINCTION</span>
               <h3>Record first.<br />Chain, if available.</h3>
-              <div className="tn-process-step"><span className="tn-process-number">01</span><div><strong>Reserve</strong><p>Spend 1 transferable Д to request a historical minute.</p></div><span className="tn-process-state">CITIZEN RECORD</span></div>
+              <div className="tn-process-step"><span className="tn-process-number">01</span><div><strong>Reserve</strong><p>Timeline 1 Д · all-inclusive 2 Д · upgrade +2 Д.</p></div><span className="tn-process-state">CITIZEN RECORD</span></div>
               <div className="tn-process-step"><span className="tn-process-number">02</span><div><strong>Document</strong><p>Generate a placement license PDF for your record.</p></div><span className="tn-process-state">LICENSE</span></div>
               <div className="tn-process-step"><span className="tn-process-number">03</span><div><strong>Mint, if configured</strong><p>NFT issuance is a separate action on Sepolia, not part of reservation.</p></div><span className="tn-process-state tn-process-pending">SEPOLIA</span></div>
               <div className="tn-process-foot"><Shield size={16} /><span>One-minute placements are bound to a unique historical minute. Inherited minutes are protected.</span></div>
@@ -436,20 +458,21 @@ export function Timenaming() {
             <div className="tn-license-list">
               {licenses.map((license, index) => {
                 const id = recordId(license) || `record-${index}`;
-                const nftComplete = !!(license.transactionHash || license.tokenId || license.nftStatus === "minted");
+                const nftComplete = license.status === "MINTED" || license.status === "ACTIVE_NFT" || !!license.tokenId || license.nftStatus === "minted";
+                const nftPending = license.status === "MINT_PENDING";
                 return (
                   <article className="tn-license-row" key={String(id)} data-testid={`card-placement-${id}`}>
                     <div className="tn-record-date"><span>HISTORICAL MINUTE</span><strong>{prettyMinute(license.minuteTimestamp ?? license.timelineCoord)}</strong></div>
                     <div className="tn-record-title"><strong>{license.customTitle || "Untitled placement"}</strong><span>{license.ownerName || "Citizen"} · License {String(id)}</span></div>
-                    <div className="tn-record-badges"><span className="tn-license-badge"><BadgeCheck size={13} /> LICENSED</span><span className={nftComplete ? "tn-nft-badge minted" : "tn-nft-badge"}>{nftComplete ? "ON-CHAIN" : "DRAFT / NOT ON-CHAIN"}</span></div>
+                    <div className="tn-record-badges"><span className="tn-license-badge"><BadgeCheck size={13} /> LICENSED</span><span className={nftComplete ? "tn-nft-badge minted" : "tn-nft-badge"}>{nftComplete ? "MINTED" : nftPending ? "MINT PENDING" : "CLAIMED / NOT MINTED"}</span></div>
                     {license.transactionHash && <a href={typeof license.explorerUrl === "string" ? license.explorerUrl : `https://sepolia.etherscan.io/tx/${license.transactionHash}`} target="_blank" rel="noreferrer" className="tn-tx-link" data-testid={`link-transaction-${id}`}>Transaction <ArrowUpRight size={13} /></a>}
                     <div className="tn-record-actions">
                       <button className="tn-outline-button" type="button" onClick={() => void generateCertificate(license)} disabled={working !== null || !recordId(license)} data-testid={`button-certificate-${id}`}>
                         {working === `certificate-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Download size={14} />} Certificate
                       </button>
                       {!nftComplete && (
-                        <button className="tn-mint-button" type="button" onClick={() => void mintNft(license)} disabled={working !== null || !config?.contractConfigured || !recordId(license)} title={!config?.contractConfigured ? "The relayer is not configured." : "Attempt NFT minting on Sepolia"} data-testid={`button-mint-${id}`}>
-                          {working === `mint-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Sparkles size={14} />} Mint NFT
+                        <button className="tn-mint-button" type="button" onClick={() => void mintNft(license)} disabled={working !== null || !config?.contractConfigured || !recordId(license) || nftPending} title={!config?.contractConfigured ? "The relayer is not configured." : "Upgrade and mint on Sepolia for 2 Д"} data-testid={`button-mint-${id}`}>
+                          {working === `mint-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Sparkles size={14} />} {nftPending ? "Mint pending" : "Upgrade / mint · +2 Д"}
                         </button>
                       )}
                     </div>
@@ -515,7 +538,7 @@ const styles = `
 .tn-checking{margin-top:14px;display:flex;align-items:center;gap:10px;font:10px var(--app-font-mono),monospace;color:#718094}.tn-skeleton-line{height:7px;width:40px;background:linear-gradient(90deg,#e5e1d7,#f4f1e9,#e5e1d7);background-size:180% 100%;animation:tnShimmer 1.3s infinite}
 .tn-availability{display:flex;align-items:center;gap:12px;margin-top:16px;padding:13px;border:1px solid}.tn-availability.is-available{background:#f1f5ef;border-color:#d4e0d2}.tn-availability.is-reserved{background:#f7f0ec;border-color:#e9d7d0}.tn-availability-icon{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:50%;background:#fffefa;color:#53785e}.is-reserved .tn-availability-icon{color:#925d4e}.tn-availability>div:nth-child(2){display:flex;flex-direction:column;gap:3px}.tn-availability strong{font-size:12px;color:#243448}.tn-availability>div span{font:10px var(--app-font-mono),monospace;color:#798394}.tn-availability-tag{margin-left:auto;font:8px var(--app-font-mono),monospace;letter-spacing:.1em;color:#52785d}.is-reserved .tn-availability-tag{color:#996253}
 .tn-inline-message{display:flex;align-items:center;gap:9px;margin-top:12px;padding:11px 12px;font-size:11px;line-height:1.45}.tn-inline-error{background:#fbf0ed;border:1px solid #ead4cc;color:#8e493e}.tn-inline-success{background:#eff5ef;border:1px solid #d5e3d5;color:#466b52}.tn-license-form{margin-top:22px;display:flex;flex-direction:column;gap:14px;animation:tnReveal .28s ease-out}
-.tn-form-divider{display:flex;justify-content:space-between;border-top:1px solid var(--tn-line);padding-top:17px;font:8px var(--app-font-mono),monospace;letter-spacing:.12em;color:#9a824d}.tn-form-divider span:last-child{color:#929aa5}
+.tn-form-divider{display:flex;justify-content:space-between;border-top:1px solid var(--tn-line);padding-top:17px;font:8px var(--app-font-mono),monospace;letter-spacing:.12em;color:#9a824d}.tn-form-divider span:last-child{color:#929aa5}.tn-package-options{display:grid;gap:8px}.tn-package-option{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--tn-line);background:#fffefa;cursor:pointer}.tn-package-option.selected{border-color:var(--tn-gold);background:#f7f2e6}.tn-package-option input{accent-color:#a88432}.tn-package-option>span{display:grid;gap:4px;flex:1}.tn-package-option strong{font-size:12px;color:var(--tn-ink)}.tn-package-option small{font-size:10px;color:var(--tn-muted)}.tn-package-option b{font-size:14px;color:#967a3d}.tn-package-option.disabled{opacity:.58;cursor:not-allowed}.tn-public-warning{padding:10px 12px;border:1px solid #ead4cc;background:#fbf0ed;color:#8e493e;font-size:10px;line-height:1.5}
 .tn-wallet-line{border:1px solid var(--tn-line);background:#f8f7f2;padding:11px;display:flex;align-items:center;gap:10px;color:#657286}.tn-wallet-line>div{display:flex;flex-direction:column;gap:3px;min-width:0}.tn-wallet-line>div span{font:8px var(--app-font-mono),monospace;text-transform:uppercase;letter-spacing:.08em;color:#8993a0}.tn-wallet-line strong{font:10px var(--app-font-mono),monospace;color:#25344a}.tn-linked,.tn-unlinked{margin-left:auto;font:8px var(--app-font-mono),monospace;letter-spacing:.08em;color:#557b5f}.tn-unlinked{color:#a56a53}.tn-form-hint{font-size:10px;line-height:1.4;color:#927051;margin:-6px 0 0}
 .tn-cost-confirm{display:flex;justify-content:space-between;gap:12px;align-items:center;background:#f5f1e6;border-left:2px solid var(--tn-gold);padding:11px 12px;font-size:10px;color:#687487}.tn-cost-confirm strong{color:#967a3d;font-size:13px}.tn-cost-confirm span:last-child{font:8px var(--app-font-mono),monospace;letter-spacing:.06em;color:#627465;text-align:right}
 .tn-button-primary{background:var(--tn-ink);color:#f3ead7}.tn-button-primary:hover:not(:disabled){background:#1d304e}.tn-draft-copy{font-size:10px;line-height:1.45;color:#94764a;display:flex;align-items:flex-start;gap:7px;margin:0}.tn-draft-copy svg{flex:none;margin-top:1px}

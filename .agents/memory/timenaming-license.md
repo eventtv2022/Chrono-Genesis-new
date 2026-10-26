@@ -8,3 +8,9 @@ The supplied disclaimer says “exclusive non-exclusive,” which is contradicto
 **Why:** the user approved implementing the service while explicitly deferring this wording as draft text.
 
 **How to apply:** Keep draft status visible in the Timenaming UI and certificate until the user supplies legally reviewed replacement wording.
+
+Pricing and upgrade rules: a Timeline family-minute claim costs 1 Д; a direct all-inclusive Timeline + Timenaming + PDF + Sepolia NFT purchase costs 2 Д; upgrading an already-owned Timeline minute costs an additional 2 Д, for 3 Д total. Always leave the ancestral minute protected. Only the owner may upgrade; another citizen's claim is unavailable. A minute can be upgraded only once.
+
+**Why:** the user confirmed that a Timenaming license should upgrade an existing Timeline claim rather than require a second reservation.
+
+**How to apply:** Keep Timeline as the shared unique-coordinate registry. Direct bundle purchase must be gated on mint readiness, and an upgrade must validate ownership and charge atomically before issuing the license and NFT.
