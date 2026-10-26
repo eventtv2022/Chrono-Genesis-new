@@ -3,6 +3,8 @@ import { Layout } from "@/components/Layout";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { timenamingCopy, timenamingContinuityQualifier, timenamingIsMachineTranslation, timenamingTranslationNotice, type HelpCategory } from "@/i18n/timenaming";
+import { timenamingPageRu, type TimenamingPageRuKey } from "@/i18n/timenamingPageRu";
+import type { LangCode } from "@/i18n/ui";
 import {
   AlertCircle, ArrowUpRight, BadgeCheck, CalendarClock, Check, ChevronRight, ChevronDown, Search, X,
   CircleHelp, Clock3, Download, FileText, Fingerprint, LoaderCircle, LockKeyhole,
@@ -63,17 +65,28 @@ function asCoordinate(date: string, time: string) {
   return `${date.replaceAll("-", "")}${time.replace(":", "")}`;
 }
 
-function prettyMinute(value?: string) {
-  if (!value) return "Minute not supplied";
+function prettyMinute(value: string | undefined, lang: LangCode) {
+  if (!value) return lang === "ru" ? timenamingPageRu.minuteNotSupplied : "Minute not supplied";
   if (/^\d{12}$/.test(value)) {
     return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)} ${value.slice(8, 10)}:${value.slice(10, 12)} UTC`;
   }
   const parsed = new Date(value.replace(" ", "T"));
   return Number.isNaN(parsed.getTime())
     ? value
-    : new Intl.DateTimeFormat(undefined, {
+    : new Intl.DateTimeFormat(lang === "ru" ? "ru-RU" : undefined, {
         year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
       }).format(parsed);
+}
+
+function errorMessage(error: unknown, fallback: string, lang: LangCode) {
+  if (lang === "ru") return fallback;
+  return error instanceof Error ? error.message : fallback;
+}
+
+function formatRussianDate(isoDate: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(isoDate)
+    ? `${isoDate.slice(8, 10)}.${isoDate.slice(5, 7)}.${isoDate.slice(0, 4)}`
+    : isoDate;
 }
 
 function recordId(license: License) {
@@ -89,6 +102,7 @@ export function Timenaming() {
   const { citizen, authToken, refreshCitizen } = useCitizen();
   const { lang } = useLanguage();
   const help = timenamingCopy[lang];
+  const tx = (key: TimenamingPageRuKey, english: string) => lang === "ru" ? timenamingPageRu[key] : english;
   const [config, setConfig] = useState<Config | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState("");
@@ -96,6 +110,7 @@ export function Timenaming() {
   const [mineLoading, setMineLoading] = useState(false);
   const [mineError, setMineError] = useState("");
   const [date, setDate] = useState("");
+  const [dateInput, setDateInput] = useState("");
   const [time, setTime] = useState("");
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [checking, setChecking] = useState(false);
@@ -129,6 +144,35 @@ export function Timenaming() {
   const purchaseCost = availability?.ownedByMe || purchaseType === "ALL_INCLUSIVE" ? 2 : 1;
   const enoughBalance = (citizen?.balanceMinutes ?? 0) - purchaseCost >= 1;
 
+  function changeDateInput(value: string) {
+    setAvailability(null);
+    setCheckError("");
+    setReserveSuccess("");
+    if (lang !== "ru") {
+      setDateInput(value);
+      setDate(value);
+      return;
+    }
+    const digits = value.replace(/\D/g, "").slice(0, 8);
+    const formatted = digits.length > 4
+      ? `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`
+      : digits.length > 2
+        ? `${digits.slice(0, 2)}.${digits.slice(2)}`
+        : digits;
+    setDateInput(formatted);
+    if (digits.length !== 8) {
+      setDate("");
+      return;
+    }
+    const day = Number(digits.slice(0, 2));
+    const month = Number(digits.slice(2, 4));
+    const year = Number(digits.slice(4, 8));
+    const maxDay = month >= 1 && month <= 12 ? new Date(Date.UTC(year, month, 0)).getUTCDate() : 0;
+    setDate(year > 0 && day > 0 && day <= maxDay
+      ? `${digits.slice(4, 8)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`
+      : "");
+  }
+
   useEffect(() => {
     if (!walletAddress && citizen?.walletAddress && /^0x[a-fA-F0-9]{40}$/.test(citizen.walletAddress)) {
       setWalletAddress(citizen.walletAddress);
@@ -141,7 +185,7 @@ export function Timenaming() {
       ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
     }).ethereum;
     if (!ethereum) {
-      setWalletError("No EVM wallet was detected. Install MetaMask or enter a public address.");
+      setWalletError(tx("noEvmWallet", "No EVM wallet was detected. Install MetaMask or enter a public address."));
       return;
     }
     try {
@@ -152,11 +196,13 @@ export function Timenaming() {
       const accounts = await ethereum.request({ method: "eth_requestAccounts" });
       const address = Array.isArray(accounts) ? accounts[0] : null;
       if (typeof address !== "string" || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
-        throw new Error("The connected wallet did not return a valid EVM address.");
+        throw new Error(tx("invalidAddress", "The connected wallet did not return a valid EVM address."));
       }
       setWalletAddress(address);
     } catch (error) {
-      setWalletError(error instanceof Error ? error.message : "Wallet connection was declined.");
+      const message = error instanceof Error ? error.message : "";
+      const invalidAddress = tx("invalidAddress", "The connected wallet did not return a valid EVM address.");
+      setWalletError(message === invalidAddress ? invalidAddress : errorMessage(error, tx("walletDeclined", "Wallet connection was declined."), lang));
     }
   }
 
@@ -174,11 +220,11 @@ export function Timenaming() {
       );
       setLicenses(Array.isArray(result.licenses) ? result.licenses : []);
     } catch (error) {
-      setMineError(error instanceof Error ? error.message : "Could not load your placements.");
+      setMineError(errorMessage(error, tx("cannotLoadPlacements", "Could not load your placements."), lang));
     } finally {
       setMineLoading(false);
     }
-  }, [authHeaders, authToken]);
+  }, [authHeaders, authToken, lang]);
 
   useEffect(() => {
     let active = true;
@@ -186,10 +232,10 @@ export function Timenaming() {
     fetch("/api/v1/timenaming/config")
       .then(readJson<Config>)
       .then(value => { if (active) { setConfig(value); setConfigError(""); } })
-      .catch(error => { if (active) setConfigError(error instanceof Error ? error.message : "Configuration could not be loaded."); })
+      .catch(error => { if (active) setConfigError(errorMessage(error, tx("cannotLoadConfig", "Configuration could not be loaded."), lang)); })
       .finally(() => { if (active) setConfigLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [lang]);
 
   useEffect(() => {
     const coord = new URLSearchParams(window.location.search).get("minute");
@@ -197,14 +243,23 @@ export function Timenaming() {
     const nextDate = `${coord.slice(0, 4)}-${coord.slice(4, 6)}-${coord.slice(6, 8)}`;
     const nextTime = `${coord.slice(8, 10)}:${coord.slice(10, 12)}`;
     setDate(nextDate);
+    setDateInput(lang === "ru" ? formatRussianDate(nextDate) : nextDate);
     setTime(nextTime);
     setChecking(true);
     fetch(`/api/v1/timenaming/check/${coord}`, { headers: authHeaders })
       .then(readJson<Availability>)
       .then(setAvailability)
-      .catch(error => setCheckError(error instanceof Error ? error.message : "Availability could not be checked."))
+      .catch(error => setCheckError(errorMessage(error, tx("cannotCheckAvailability", "Availability could not be checked."), lang)))
       .finally(() => setChecking(false));
-  }, [authHeaders]);
+  }, [authHeaders, lang]);
+
+  useEffect(() => {
+    setDateInput(current => {
+      if (lang === "ru") return /^\d{4}-\d{2}-\d{2}$/.test(current) ? formatRussianDate(current) : current;
+      const match = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(current);
+      return match ? `${match[3]}-${match[2]}-${match[1]}` : current;
+    });
+  }, [lang]);
 
   useEffect(() => { void loadMine(); }, [loadMine]);
   useEffect(() => {
@@ -226,7 +281,7 @@ export function Timenaming() {
     setAvailability(null);
     setReserveSuccess("");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
-      setCheckError("Choose a valid date and minute before checking.");
+      setCheckError(tx("chooseValidMinute", "Choose a valid date and minute before checking."));
       return;
     }
     setChecking(true);
@@ -237,7 +292,7 @@ export function Timenaming() {
       );
       setAvailability(result);
     } catch (error) {
-      setCheckError(error instanceof Error ? error.message : "Availability could not be checked.");
+      setCheckError(errorMessage(error, tx("cannotCheckAvailability", "Availability could not be checked."), lang));
     } finally {
       setChecking(false);
     }
@@ -248,17 +303,17 @@ export function Timenaming() {
     setReserveError("");
     setReserveSuccess("");
     if (!authToken || !citizen) {
-      setReserveError("Sign in as a citizen to reserve a minute.");
+      setReserveError(tx("signInToReserve", "Sign in as a citizen to reserve a minute."));
       return;
     }
     const isUpgrade = Boolean(availability?.ownedByMe);
     if ((!isUpgrade && (!availability?.available || availability.reserved)) || !minuteValue) {
-      setReserveError("Check an available minute before continuing.");
+      setReserveError(tx("checkAvailableMinute", "Check an available minute before continuing."));
       return;
     }
     const needsLicense = isUpgrade || purchaseType === "ALL_INCLUSIVE";
     if (needsLicense && !walletAddress) {
-      setReserveError("A wallet address is not connected to this citizen profile.");
+      setReserveError(tx("walletRequired", "A wallet address is not connected to this citizen profile."));
       return;
     }
     setReserving(true);
@@ -278,12 +333,12 @@ export function Timenaming() {
       const isMinted = result.status === "MINTED";
       const isPending = result.status === "MINT_PENDING";
       setAvailability({ timestamp: asCoordinate(date, time), available: false, reserved: true, ownedByMe: true, minuteStatus: isMinted ? "MINTED" : isPending ? "MINT_PENDING" : "CLAIMED", ...(result.license ? { license: result.license } : {}) });
-      setReserveSuccess(isMinted ? `NFT minted on Sepolia. Balance: ${result.newBalance} Д.` : isPending ? "Mint transaction submitted and awaiting confirmation." : `Minute reserved for your family. Balance: ${result.newBalance} Д.`);
+      setReserveSuccess(isMinted ? tx("nftMintedBalance", `NFT minted on Sepolia. Balance: ${result.newBalance} Д.`).replace("{balance}", String(result.newBalance)) : isPending ? tx("mintSubmitted", "Mint transaction submitted and awaiting confirmation.") : tx("minuteReservedBalance", `Minute reserved for your family. Balance: ${result.newBalance} Д.`).replace("{balance}", String(result.newBalance)));
       if (needsLicense) { setCustomTitle(""); setCustomDescription(""); }
       void refreshCitizen();
       void loadMine();
     } catch (error) {
-      setReserveError(error instanceof Error ? error.message : "Reservation could not be completed.");
+      setReserveError(errorMessage(error, tx("reservationFailed", "Reservation could not be completed."), lang));
     } finally {
       setReserving(false);
     }
@@ -300,7 +355,7 @@ export function Timenaming() {
         }),
       );
       const response = await fetch(result.downloadUrl, { headers: authHeaders });
-      if (!response.ok) throw new Error("Certificate download failed. Generate it again and retry.");
+      if (!response.ok) throw new Error(tx("certificateDownloadFailed", "Certificate download failed. Generate it again and retry."));
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -312,7 +367,7 @@ export function Timenaming() {
       URL.revokeObjectURL(objectUrl);
       setMineError("");
     } catch (error) {
-      setMineError(error instanceof Error ? error.message : "Certificate could not be generated.");
+      setMineError(errorMessage(error, tx("certificateGenerateFailed", "Certificate could not be generated."), lang));
     } finally {
       setWorking(null);
     }
@@ -331,7 +386,7 @@ export function Timenaming() {
       );
       await loadMine();
     } catch (error) {
-      setMineError(error instanceof Error ? error.message : "NFT minting is currently unavailable.");
+      setMineError(errorMessage(error, tx("mintUnavailable", "NFT minting is currently unavailable."), lang));
     } finally {
       setWorking(null);
     }
@@ -339,114 +394,124 @@ export function Timenaming() {
 
   return (
     <Layout>
-      <div className="tn-page" data-testid="page-timenaming">
+      <div className="tn-page" lang={lang} data-testid="page-timenaming">
         <header className="tn-hero">
           <div className="tn-hero-copy">
-            <div className="tn-kicker"><span className="tn-kicker-mark" /> CITIZEN RECORD · TIME NATION</div>
-            <h1>Give one minute<br /><em>a place in history.</em></h1>
-            <p>Reserve a historical minute, receive its documented placement license, and follow the separate path toward a Sepolia NFT.</p>
-            <div className="tn-hero-note"><LockKeyhole size={15} /> A reservation is a citizen record. It is not an on-chain token.</div>
+            <div className="tn-kicker"><span className="tn-kicker-mark" /> {tx("heroKicker", "CITIZEN RECORD · TIME NATION")}</div>
+            <h1>{tx("heroTitle", "Give one minute")}<br /><em>{tx("heroEmphasis", "a place in history.")}</em></h1>
+            <p>{tx("heroDescription", "Reserve a historical minute, receive its documented placement license, and follow the separate path toward a Sepolia NFT.")}</p>
+            <div className="tn-hero-note"><LockKeyhole size={15} /> {tx("heroNote", "A reservation is a citizen record. It is not an on-chain token.")}</div>
           </div>
-          <div className="tn-dial" aria-label="A minute marked on a circular timeline" data-testid="visual-minute-dial">
+          <div className="tn-dial" aria-label={tx("dialAria", "A minute marked on a circular timeline")} data-testid="visual-minute-dial">
             <div className="tn-dial-ring tn-ring-one" />
             <div className="tn-dial-ring tn-ring-two" />
             <div className="tn-dial-tick tn-tick-a" /><div className="tn-dial-tick tn-tick-b" />
             <div className="tn-dial-tick tn-tick-c" /><div className="tn-dial-tick tn-tick-d" />
-            <div className="tn-dial-center"><span>ONE</span><strong>MINUTE</strong><small>IN TIME</small></div>
+            <div className="tn-dial-center"><span>{tx("dialOne", "ONE")}</span><strong>{tx("dialMinute", "MINUTE")}</strong><small>{tx("dialInTime", "IN TIME")}</small></div>
             <span className="tn-dial-label tn-label-top">00</span>
             <span className="tn-dial-label tn-label-right">15</span>
             <span className="tn-dial-label tn-label-bottom">30</span>
             <span className="tn-dial-label tn-label-left">45</span>
           </div>
-          <div className="tn-hero-index"><span>01</span><span>THE RECORDING OF TIME</span></div>
+          <div className="tn-hero-index"><span>01</span><span>{tx("heroIndex", "THE RECORDING OF TIME")}</span></div>
         </header>
 
-        <section className="tn-facts" aria-label="Reservation facts">
-          <div className="tn-fact"><span className="tn-fact-label">PRICING OPTIONS</span><strong>1 / 2 <i>Д</i></strong><small>Timeline · all-inclusive; upgrade +2 Д</small></div>
-          <div className="tn-fact"><span className="tn-fact-label">NETWORK</span><strong>{configLoading ? "…" : config?.network || "Sepolia"}</strong><small>{configLoading ? "Checking configuration" : `Chain ID ${config?.chainId ?? 11155111}`}</small></div>
-          <div className="tn-fact"><span className="tn-fact-label">NFT ROYALTY</span><strong>2<span className="tn-percent">%</span></strong><small>Paid to the stated treasury</small></div>
-          <div className="tn-fact tn-fact-status"><span className="tn-fact-label">PLACEMENT STATUS</span><strong><span className="tn-status-dot" /> {citizen ? "Citizen session" : "Sign-in required"}</strong><small>{citizen ? "Your record is private to your account" : "A profile is needed to reserve"}</small></div>
+        <section className="tn-facts" aria-label={tx("factsAria", "Reservation facts")}>
+          <div className="tn-fact"><span className="tn-fact-label">{tx("pricingOptions", "PRICING OPTIONS")}</span><strong>1 / 2 <i>Д</i></strong><small>{tx("pricingDetail", "Timeline · all-inclusive; upgrade +2 Д")}</small></div>
+          <div className="tn-fact"><span className="tn-fact-label">{tx("network", "NETWORK")}</span><strong>{configLoading ? "…" : config?.network || tx("sepolia", "Sepolia")}</strong><small>{configLoading ? tx("checkingConfig", "Checking configuration") : `${tx("chainId", "Chain ID")} ${config?.chainId ?? 11155111}`}</small></div>
+          <div className="tn-fact"><span className="tn-fact-label">{tx("nftRoyalty", "NFT ROYALTY")}</span><strong>2<span className="tn-percent">%</span></strong><small>{tx("royaltyPaid", "Paid to the stated treasury")}</small></div>
+          <div className="tn-fact tn-fact-status"><span className="tn-fact-label">{tx("placementStatus", "PLACEMENT STATUS")}</span><strong><span className="tn-status-dot" /> {citizen ? tx("citizenSession", "Citizen session") : tx("signInRequired", "Sign-in required")}</strong><small>{citizen ? tx("privateRecord", "Your record is private to your account") : tx("profileRequired", "A profile is needed to reserve")}</small></div>
         </section>
 
         {configError && (
           <div className="tn-alert tn-alert-error" role="alert" data-testid="error-config">
             <AlertCircle size={17} /><span>{configError}</span>
-            <button type="button" onClick={() => { setConfigError(""); setConfigLoading(true); fetch("/api/v1/timenaming/config").then(readJson<Config>).then(setConfig).catch(error => setConfigError(error instanceof Error ? error.message : "Configuration could not be loaded.")).finally(() => setConfigLoading(false)); }} data-testid="button-retry-config">Retry</button>
+            <button type="button" onClick={() => { setConfigError(""); setConfigLoading(true); fetch("/api/v1/timenaming/config").then(readJson<Config>).then(setConfig).catch(error => setConfigError(errorMessage(error, tx("cannotLoadConfig", "Configuration could not be loaded."), lang))).finally(() => setConfigLoading(false)); }} data-testid="button-retry-config">{tx("retry", "Retry")}</button>
           </div>
         )}
 
         <div className="tn-main-grid">
           <section className="tn-reserve-panel" data-testid="section-reservation">
             <div className="tn-section-heading">
-              <div><span className="tn-overline">THE MINUTE REGISTER</span><h2>Choose your minute</h2></div>
+              <div><span className="tn-overline">{tx("minuteRegister", "THE MINUTE REGISTER")}</span><h2>{tx("chooseMinute", "Choose your minute")}</h2></div>
               <span className="tn-step-badge">01 / 03</span>
             </div>
-            <p className="tn-section-intro">Check a date and minute first. Availability is verified before a placement can be submitted.</p>
+            <p className="tn-section-intro">{tx("checkBeforeReservation", "Check a date and minute first. Availability is verified before a placement can be submitted.")}</p>
 
             <form onSubmit={checkMinute} className="tn-check-form">
               <label className="tn-field">
-                <span>Historical date</span>
-                <input aria-label="Historical date" type="date" value={date} onChange={event => { setDate(event.target.value); setAvailability(null); setCheckError(""); setReserveSuccess(""); }} data-testid="input-minute-date" />
+                <span>{tx("historicalDate", "Historical date")}</span>
+                <input
+                  aria-label={tx("historicalDate", "Historical date")}
+                  lang={lang === "ru" ? "ru-RU" : lang}
+                  type={lang === "ru" ? "text" : "date"}
+                  inputMode={lang === "ru" ? "numeric" : undefined}
+                  maxLength={lang === "ru" ? 10 : undefined}
+                  placeholder={lang === "ru" ? tx("datePlaceholder", "ДД.ММ.ГГГГ") : undefined}
+                  value={dateInput}
+                  onChange={event => changeDateInput(event.target.value)}
+                  data-testid="input-minute-date"
+                />
               </label>
               <label className="tn-field">
-                <span>Minute · UTC</span>
-                <input aria-label="Minute" type="time" step="60" value={time} onChange={event => { setTime(event.target.value); setAvailability(null); setCheckError(""); setReserveSuccess(""); }} data-testid="input-minute-time" />
+                <span>{tx("minuteUtc", "Minute · UTC")}</span>
+                <input aria-label={tx("minuteUtc", "Minute")} type="time" step="60" value={time} onChange={event => { setTime(event.target.value); setAvailability(null); setCheckError(""); setReserveSuccess(""); }} data-testid="input-minute-time" />
               </label>
               <button className="tn-button tn-button-check" type="submit" disabled={checking || !date || !time} data-testid="button-check-minute">
                 {checking ? <LoaderCircle size={16} className="tn-spin" /> : <CalendarClock size={16} />}
-                {checking ? "Checking minute" : "Check minute"}
+                {checking ? tx("checkingMinute", "Checking minute") : tx("checkMinute", "Check minute")}
                 {!checking && <ChevronRight size={16} />}
               </button>
             </form>
 
-            {checking && <div className="tn-checking" role="status" data-testid="loading-minute-check"><span className="tn-skeleton-line" /><span>Checking the historical register…</span></div>}
+            {checking && <div className="tn-checking" role="status" data-testid="loading-minute-check"><span className="tn-skeleton-line" /><span>{tx("checkingRegister", "Checking the historical register…")}</span></div>}
             {checkError && <div className="tn-inline-message tn-inline-error" role="alert" data-testid="error-minute-check"><AlertCircle size={17} />{checkError}</div>}
             {availability && (
               <div className={`tn-availability ${availability.available && !availability.reserved ? "is-available" : "is-reserved"}`} role="status" data-testid="status-minute-availability">
                 <div className="tn-availability-icon">{availability.available && !availability.reserved ? <Check size={20} /> : <LockKeyhole size={18} />}</div>
-                <div><strong>{availability.available && !availability.reserved ? "This minute is available" : availability.ownedByMe ? (availability.minuteStatus === "MINTED" ? "Your minute is already minted" : "This minute is reserved by you") : "This minute is already reserved"}</strong><span>{prettyMinute(minuteValue)}</span></div>
-                <span className="tn-availability-tag">{availability.available && !availability.reserved ? "AVAILABLE" : availability.ownedByMe ? availability.minuteStatus : "RESERVED"}</span>
+                <div><strong>{availability.available && !availability.reserved ? tx("minuteAvailable", "This minute is available") : availability.ownedByMe ? (availability.minuteStatus === "MINTED" ? tx("minuteAlreadyMinted", "Your minute is already minted") : tx("minuteReservedByYou", "This minute is reserved by you")) : tx("minuteAlreadyReserved", "This minute is already reserved")}</strong><span>{prettyMinute(minuteValue, lang)}</span></div>
+                <span className="tn-availability-tag">{availability.available && !availability.reserved ? tx("available", "AVAILABLE") : availability.ownedByMe ? availability.minuteStatus === "MINTED" ? tx("minted", "MINTED") : availability.minuteStatus === "MINT_PENDING" ? tx("mintPending", "MINT PENDING") : tx("reserved", "RESERVED") : tx("reserved", "RESERVED")}</span>
               </div>
             )}
             {reserveSuccess && <div className="tn-inline-message tn-inline-success" role="status" data-testid="success-reservation"><BadgeCheck size={18} />{reserveSuccess}</div>}
 
             {((availability?.available && !availability.reserved) || (availability?.ownedByMe && availability.minuteStatus !== "MINTED" && availability.minuteStatus !== "MINT_PENDING")) && (
               <form className="tn-license-form" onSubmit={reserveMinute} data-testid="form-reservation">
-                <div className="tn-form-divider"><span>{availability.ownedByMe ? "UPGRADE YOUR TIMELINE MINUTE" : "CHOOSE A PACKAGE"}</span><span>02 / 03</span></div>
+                <div className="tn-form-divider"><span>{availability.ownedByMe ? tx("upgradeYourMinute", "UPGRADE YOUR TIMELINE MINUTE") : tx("choosePackage", "CHOOSE A PACKAGE")}</span><span>02 / 03</span></div>
                 {!availability.ownedByMe && (
-                  <div className="tn-package-options" role="radiogroup" aria-label="Choose a minute package">
+                  <div className="tn-package-options" role="radiogroup" aria-label={tx("choosePackageAria", "Choose a minute package")}>
                     <label className={`tn-package-option ${purchaseType === "TIMELINE_ONLY" ? "selected" : ""}`}>
                       <input type="radio" name="purchaseType" checked={purchaseType === "TIMELINE_ONLY"} onChange={() => setPurchaseType("TIMELINE_ONLY")} />
-                      <span><strong>Reserve for your family</strong><small>Timeline claim only</small></span><b>1 Д</b>
+                      <span><strong>{tx("reserveForFamily", "Reserve for your family")}</strong><small>{tx("timelineOnly", "Timeline claim only")}</small></span><b>1 Д</b>
                     </label>
                     <label className={`tn-package-option ${purchaseType === "ALL_INCLUSIVE" ? "selected" : ""} ${!config?.contractConfigured || !config?.ipfsPinningConfigured ? "disabled" : ""}`}>
                       <input type="radio" name="purchaseType" checked={purchaseType === "ALL_INCLUSIVE"} disabled={!config?.contractConfigured || !config?.ipfsPinningConfigured} onChange={() => setPurchaseType("ALL_INCLUSIVE")} />
-                      <span><strong>All-inclusive license</strong><small>{config?.contractConfigured && config?.ipfsPinningConfigured ? "Timeline + license + PDF · NFT mint depends on configuration and confirmation" : "NFT mint unavailable until Sepolia and IPFS pinning are configured"}</small></span><b>2 Д</b>
+                      <span><strong>{tx("allInclusive", "All-inclusive license")}</strong><small>{config?.contractConfigured && config?.ipfsPinningConfigured ? tx("bundleReady", "Timeline + license + PDF · NFT mint depends on configuration and confirmation") : tx("bundleUnavailable", "NFT mint unavailable until Sepolia and IPFS pinning are configured")}</small></span><b>2 Д</b>
                     </label>
                   </div>
                 )}
                 {(availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && <>
-                  <div className="tn-public-warning" role="note">NFT name and description may be publicly accessible. Do not include information you do not want public.</div>
-                  <label className="tn-field"><span>Name on the record</span><input value={ownerName} onChange={event => setOwnerName(event.target.value)} required maxLength={120} data-testid="input-owner-name" /></label>
-                  <label className="tn-field"><span>Minute title</span><input value={customTitle} onChange={event => setCustomTitle(event.target.value)} required maxLength={160} placeholder="Name this moment" data-testid="input-minute-title" /></label>
-                  <label className="tn-field"><span>Historical note <small>Optional</small></span><textarea value={customDescription} onChange={event => setCustomDescription(event.target.value)} rows={3} maxLength={2000} placeholder="Add context that should accompany this placement." data-testid="input-minute-description" /></label>
-                  <div className="tn-wallet-line"><WalletCards size={16} /><div><span>Sepolia EVM wallet</span><strong>{walletAddress ? `${walletAddress.slice(0, 7)}…${walletAddress.slice(-5)}` : "Not connected"}</strong></div><button type="button" className="tn-outline-button" onClick={() => void connectEvmWallet()} data-testid="button-connect-evm-wallet">Connect MetaMask</button></div>
-                  <label className="tn-field"><span>Or enter a public EVM address</span><input value={walletAddress} onChange={event => setWalletAddress(event.target.value.trim())} placeholder="0x…" maxLength={42} data-testid="input-evm-wallet-address" /></label>
+                  <div className="tn-public-warning" role="note">{tx("publicWarning", "NFT name and description may be publicly accessible. Do not include information you do not want public.")}</div>
+                  <label className="tn-field"><span>{tx("nameOnRecord", "Name on the record")}</span><input value={ownerName} onChange={event => setOwnerName(event.target.value)} required maxLength={120} data-testid="input-owner-name" /></label>
+                  <label className="tn-field"><span>{tx("minuteTitle", "Minute title")}</span><input value={customTitle} onChange={event => setCustomTitle(event.target.value)} required maxLength={160} placeholder={tx("nameMoment", "Name this moment")} data-testid="input-minute-title" /></label>
+                  <label className="tn-field"><span>{tx("historicalNote", "Historical note")} <small>{tx("optional", "Optional")}</small></span><textarea value={customDescription} onChange={event => setCustomDescription(event.target.value)} rows={3} maxLength={2000} placeholder={tx("notePlaceholder", "Add context that should accompany this placement.")} data-testid="input-minute-description" /></label>
+                  <div className="tn-wallet-line"><WalletCards size={16} /><div><span>{tx("sepoliaWallet", "Sepolia EVM wallet")}</span><strong>{walletAddress ? `${walletAddress.slice(0, 7)}…${walletAddress.slice(-5)}` : tx("notConnected", "Not connected")}</strong></div><button type="button" className="tn-outline-button" onClick={() => void connectEvmWallet()} data-testid="button-connect-evm-wallet">{tx("connectMetaMask", "Connect MetaMask")}</button></div>
+                  <label className="tn-field"><span>{tx("orEnterAddress", "Or enter a public EVM address")}</span><input value={walletAddress} onChange={event => setWalletAddress(event.target.value.trim())} placeholder="0x…" maxLength={42} data-testid="input-evm-wallet-address" /></label>
                   {walletError && <div className="tn-inline-message tn-inline-error" role="alert" data-testid="error-wallet">{walletError}</div>}
-                  {!walletAddress && <p className="tn-form-hint">Connect MetaMask on Sepolia or enter the public EVM address that should receive the NFT.</p>}
+                  {!walletAddress && <p className="tn-form-hint">{tx("connectWalletHint", "Connect MetaMask on Sepolia or enter the public EVM address that should receive the NFT.")}</p>}
                 </>}
-                {!citizen && <p className="tn-form-hint">Sign in as a citizen to purchase. No private key or secret is requested.</p>}
-                {citizen && !enoughBalance && <p className="tn-form-hint">You need {purchaseCost} Д beyond the protected ancestral minute.</p>}
-                <div className="tn-cost-confirm"><span><strong>{purchaseCost} Д</strong> will be deducted from your transferable balance.</span><span>ANCESTRAL MINUTE IS PROTECTED</span></div>
+                {!citizen && <p className="tn-form-hint">{tx("signInToPurchase", "Sign in as a citizen to purchase. No private key or secret is requested.")}</p>}
+                {citizen && !enoughBalance && <p className="tn-form-hint">{tx("needBalance", "You need {amount} Д beyond the protected ancestral minute.").replace("{amount}", String(purchaseCost))}</p>}
+                <div className="tn-cost-confirm"><span><strong>{purchaseCost} Д</strong> {tx("deductedFromBalance", "will be deducted from your transferable balance.")}</span><span>{tx("ancestralProtected", "ANCESTRAL MINUTE IS PROTECTED")}</span></div>
                 {reserveError && <div className="tn-inline-message tn-inline-error" role="alert" data-testid="error-reservation"><AlertCircle size={17} />{reserveError}</div>}
                 <button className="tn-button tn-button-primary" type="submit" disabled={reserving || !citizen || !enoughBalance || (((availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && !walletAddress) || ((availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && (!config?.contractConfigured || !config?.ipfsPinningConfigured)))} data-testid="button-reserve-minute">
                   {reserving ? <LoaderCircle size={16} className="tn-spin" /> : <Fingerprint size={17} />}
-                  {reserving ? "Processing purchase…" : availability.ownedByMe ? "Upgrade to NFT license · +2 Д" : purchaseType === "ALL_INCLUSIVE" ? "Buy all-inclusive · 2 Д" : "Reserve for your family · 1 Д"}
+                  {reserving ? tx("processingPurchase", "Processing purchase…") : availability.ownedByMe ? tx("upgradeToNft", "Upgrade to NFT license · +2 Д") : purchaseType === "ALL_INCLUSIVE" ? tx("buyBundle", "Buy all-inclusive · 2 Д") : tx("reserveFamilyButton", "Reserve for your family · 1 Д")}
                   {!reserving && <ArrowUpRight size={16} />}
                 </button>
                 {purchaseType === "ALL_INCLUSIVE" || availability.ownedByMe
-                  ? <p className="tn-draft-copy" data-testid="status-terms-review"><CircleHelp size={14} />{help.reviewNote} NFT minting requires Sepolia configuration.</p>
-                  : <p className="tn-draft-copy">A Timeline reservation can be upgraded later for +2 Д.</p>}
+                  ? <p className="tn-draft-copy" data-testid="status-terms-review"><CircleHelp size={14} />{help.reviewNote} {tx("mintRequiresConfiguration", "NFT minting requires Sepolia configuration.")}</p>
+                  : <p className="tn-draft-copy">{tx("upgradeLater", "A Timeline reservation can be upgraded later for +2 Д.")}</p>}
                 <a className="tn-form-learn" href="#legal-help"><CircleHelp size={14} />{help.learnMore}<ArrowUpRight size={13} /></a>
               </form>
             )}
@@ -454,38 +519,38 @@ export function Timenaming() {
 
           <aside className="tn-aside">
             <section className="tn-process-card">
-              <span className="tn-overline">A CLEAR DISTINCTION</span>
-              <h3>Record first.<br />Chain, if available.</h3>
-              <div className="tn-process-step"><span className="tn-process-number">01</span><div><strong>Reserve</strong><p>Timeline 1 Д · all-inclusive 2 Д · upgrade +2 Д.</p></div><span className="tn-process-state">CITIZEN RECORD</span></div>
-              <div className="tn-process-step"><span className="tn-process-number">02</span><div><strong>Document</strong><p>Generate a placement license PDF for your record.</p></div><span className="tn-process-state">LICENSE</span></div>
-              <div className="tn-process-step"><span className="tn-process-number">03</span><div><strong>Mint, if configured</strong><p>NFT issuance is a separate action on Sepolia, not part of reservation.</p></div><span className="tn-process-state tn-process-pending">SEPOLIA</span></div>
-              <div className="tn-process-foot"><Shield size={16} /><span>One-minute placements are bound to a unique historical minute. Inherited minutes are protected.</span></div>
+              <span className="tn-overline">{tx("clearDistinction", "A CLEAR DISTINCTION")}</span>
+              <h3>{tx("recordFirst", "Record first.")}<br />{tx("chainIfAvailable", "Chain, if available.")}</h3>
+              <div className="tn-process-step"><span className="tn-process-number">01</span><div><strong>{tx("reserve", "Reserve")}</strong><p>{tx("timelineCost", "Timeline 1 Д · all-inclusive 2 Д · upgrade +2 Д.")}</p></div><span className="tn-process-state">{tx("citizenRecord", "CITIZEN RECORD")}</span></div>
+              <div className="tn-process-step"><span className="tn-process-number">02</span><div><strong>{tx("document", "Document")}</strong><p>{tx("generateLicense", "Generate a placement license PDF for your record.")}</p></div><span className="tn-process-state">{tx("license", "LICENSE")}</span></div>
+              <div className="tn-process-step"><span className="tn-process-number">03</span><div><strong>{tx("mintIfConfigured", "Mint, if configured")}</strong><p>{tx("nftSeparate", "NFT issuance is a separate action on Sepolia, not part of reservation.")}</p></div><span className="tn-process-state tn-process-pending">{tx("sepolia", "SEPOLIA")}</span></div>
+              <div className="tn-process-foot"><Shield size={16} /><span>{tx("uniqueMinute", "One-minute placements are bound to a unique historical minute. Inherited minutes are protected.")}</span></div>
             </section>
             <section className="tn-network-card">
               <div className="tn-network-icon"><Network size={18} /></div>
-              <div><span className="tn-overline">NETWORK DETAILS</span><strong>{configLoading ? "Loading configuration" : config?.network || "Sepolia"}</strong><small>Royalty · 2% <span>({config?.royaltyBps ?? 200} bps)</span></small></div>
-              <span className={`tn-contract-dot ${config?.contractConfigured ? "configured" : ""}`} title={config?.contractConfigured ? "Contract configured" : "Contract not configured"} />
-              <div className="tn-treasury"><span>ROYALTY TREASURY</span><code>{config?.royaltyRecipient || TREASURY}</code></div>
-              {config && config.royaltyRecipient && config.royaltyRecipient.toLowerCase() !== TREASURY.toLowerCase() && <div className="tn-config-note">The configured royalty recipient differs from the published treasury reference.</div>}
+              <div><span className="tn-overline">{tx("networkDetails", "NETWORK DETAILS")}</span><strong>{configLoading ? tx("loadingConfiguration", "Loading configuration") : config?.network || tx("sepolia", "Sepolia")}</strong><small>{tx("royalty", "Royalty")} · 2% <span>({config?.royaltyBps ?? 200} {tx("basisPoints", "bps")})</span></small></div>
+              <span className={`tn-contract-dot ${config?.contractConfigured ? "configured" : ""}`} title={config?.contractConfigured ? tx("contractConfigured", "Contract configured") : tx("contractNotConfigured", "Contract not configured")} />
+              <div className="tn-treasury"><span>{tx("royaltyTreasury", "ROYALTY TREASURY")}</span><code>{config?.royaltyRecipient || TREASURY}</code></div>
+              {config && config.royaltyRecipient && config.royaltyRecipient.toLowerCase() !== TREASURY.toLowerCase() && <div className="tn-config-note">{tx("recipientDiffers", "The configured royalty recipient differs from the published treasury reference.")}</div>}
             </section>
           </aside>
         </div>
 
         <section className="tn-records" data-testid="section-my-placements">
           <div className="tn-records-heading">
-            <div><span className="tn-overline">YOUR CITIZEN RECORD</span><h2>My placements <span>{licenses.length}</span></h2></div>
+            <div><span className="tn-overline">{tx("yourCitizenRecord", "YOUR CITIZEN RECORD")}</span><h2>{tx("myPlacements", "My placements")} <span>{licenses.length}</span></h2></div>
             <button type="button" className="tn-refresh-button" onClick={() => void loadMine()} disabled={!authToken || mineLoading} data-testid="button-refresh-placements">
-              {mineLoading ? <LoaderCircle size={15} className="tn-spin" /> : <Sparkles size={15} />} Refresh record
+              {mineLoading ? <LoaderCircle size={15} className="tn-spin" /> : <Sparkles size={15} />} {tx("refreshRecord", "Refresh record")}
             </button>
           </div>
           {!authToken ? (
-            <div className="tn-empty-state" data-testid="empty-placements"><div className="tn-empty-icon"><FileText size={21} /></div><div><strong>Your placements will appear here</strong><p>Sign in as a citizen to view issued placement licenses.</p></div></div>
+            <div className="tn-empty-state" data-testid="empty-placements"><div className="tn-empty-icon"><FileText size={21} /></div><div><strong>{tx("placementsWillAppear", "Your placements will appear here")}</strong><p>{tx("signInToView", "Sign in as a citizen to view issued placement licenses.")}</p></div></div>
           ) : mineLoading ? (
             <div className="tn-record-skeleton" data-testid="loading-placements"><span /><span /><span /></div>
           ) : mineError ? (
-            <div className="tn-empty-state tn-error-state" role="alert" data-testid="error-placements"><AlertCircle size={20} /><div><strong>Record unavailable</strong><p>{mineError}</p></div><button onClick={() => void loadMine()} data-testid="button-retry-placements">Try again</button></div>
+            <div className="tn-empty-state tn-error-state" role="alert" data-testid="error-placements"><AlertCircle size={20} /><div><strong>{tx("recordUnavailable", "Record unavailable")}</strong><p>{mineError}</p></div><button onClick={() => void loadMine()} data-testid="button-retry-placements">{tx("tryAgain", "Try again")}</button></div>
           ) : licenses.length === 0 ? (
-            <div className="tn-empty-state" data-testid="empty-placements"><div className="tn-empty-icon"><Clock3 size={21} /></div><div><strong>No placements yet</strong><p>When you reserve a minute, its license and NFT status will be shown here.</p></div></div>
+            <div className="tn-empty-state" data-testid="empty-placements"><div className="tn-empty-icon"><Clock3 size={21} /></div><div><strong>{tx("noPlacements", "No placements yet")}</strong><p>{tx("noPlacementsDescription", "When you reserve a minute, its license and NFT status will be shown here.")}</p></div></div>
           ) : (
             <div className="tn-license-list">
               {licenses.map((license, index) => {
@@ -494,19 +559,19 @@ export function Timenaming() {
                 const nftPending = license.status === "MINT_PENDING";
                 return (
                   <article className="tn-license-row" key={String(id)} data-testid={`card-placement-${id}`}>
-                    <div className="tn-record-date"><span>HISTORICAL MINUTE</span><strong>{prettyMinute(license.minuteTimestamp ?? license.timelineCoord)}</strong></div>
-                    <div className="tn-record-title"><strong>{license.customTitle || "Untitled placement"}</strong><span>{license.ownerName || "Citizen"} · License {String(id)}</span></div>
-                    <div className="tn-record-badges"><span className="tn-license-badge"><BadgeCheck size={13} /> LICENSED</span><span className={nftComplete ? "tn-nft-badge minted" : "tn-nft-badge"}>{nftComplete ? "MINTED" : nftPending ? "MINT PENDING" : "CLAIMED / NOT MINTED"}</span></div>
-                    {license.transactionHash && <a href={typeof license.explorerUrl === "string" ? license.explorerUrl : `https://sepolia.etherscan.io/tx/${license.transactionHash}`} target="_blank" rel="noreferrer" className="tn-tx-link" data-testid={`link-transaction-${id}`}>Transaction <ArrowUpRight size={13} /></a>}
+                    <div className="tn-record-date"><span>{tx("historicalMinute", "HISTORICAL MINUTE")}</span><strong>{prettyMinute(license.minuteTimestamp ?? license.timelineCoord, lang)}</strong></div>
+                    <div className="tn-record-title"><strong>{license.customTitle || tx("untitledPlacement", "Untitled placement")}</strong><span>{license.ownerName || tx("citizen", "Citizen")} · {tx("license", "License")} {String(id)}</span></div>
+                    <div className="tn-record-badges"><span className="tn-license-badge"><BadgeCheck size={13} /> {tx("licensed", "LICENSED")}</span><span className={nftComplete ? "tn-nft-badge minted" : "tn-nft-badge"}>{nftComplete ? tx("minted", "MINTED") : nftPending ? tx("mintPending", "MINT PENDING") : tx("claimedNotMinted", "CLAIMED / NOT MINTED")}</span></div>
+                    {license.transactionHash && <a href={typeof license.explorerUrl === "string" ? license.explorerUrl : `https://sepolia.etherscan.io/tx/${license.transactionHash}`} target="_blank" rel="noreferrer" className="tn-tx-link" data-testid={`link-transaction-${id}`}>{tx("transaction", "Transaction")} <ArrowUpRight size={13} /></a>}
                     <div className="tn-record-actions">
                       <button className="tn-outline-button" type="button" onClick={() => void generateCertificate(license)} disabled={working !== null || !recordId(license)} data-testid={`button-certificate-${id}`}>
                         {working === `certificate-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Download size={14} />} Certificate
                       </button>
-                       {license.certificateIpfsUri && <a className="tn-tx-link" href={ipfsGatewayUrl(license.certificateIpfsUri)} target="_blank" rel="noreferrer" data-testid={`link-ipfs-certificate-${id}`}>IPFS certificate <ArrowUpRight size={13} /></a>}
-                       {license.metadataUri && <a className="tn-tx-link" href={ipfsGatewayUrl(license.metadataUri)} target="_blank" rel="noreferrer" data-testid={`link-ipfs-metadata-${id}`}>NFT metadata <ArrowUpRight size={13} /></a>}
+                        {license.certificateIpfsUri && <a className="tn-tx-link" href={ipfsGatewayUrl(license.certificateIpfsUri)} target="_blank" rel="noreferrer" data-testid={`link-ipfs-certificate-${id}`}>{tx("ipfsCertificate", "IPFS certificate")} <ArrowUpRight size={13} /></a>}
+                        {license.metadataUri && <a className="tn-tx-link" href={ipfsGatewayUrl(license.metadataUri)} target="_blank" rel="noreferrer" data-testid={`link-ipfs-metadata-${id}`}>{tx("nftMetadata", "NFT metadata")} <ArrowUpRight size={13} /></a>}
                       {!nftComplete && (
-                         <button className="tn-mint-button" type="button" onClick={() => void mintNft(license)} disabled={working !== null || !config?.contractConfigured || !config?.ipfsPinningConfigured || !recordId(license) || nftPending} title={!config?.contractConfigured ? "The relayer is not configured." : !config?.ipfsPinningConfigured ? "IPFS pinning is not configured." : "Upgrade and mint on Sepolia for 2 Д"} data-testid={`button-mint-${id}`}>
-                          {working === `mint-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Sparkles size={14} />} {nftPending ? "Mint pending" : "Upgrade / mint · +2 Д"}
+                          <button className="tn-mint-button" type="button" onClick={() => void mintNft(license)} disabled={working !== null || !config?.contractConfigured || !config?.ipfsPinningConfigured || !recordId(license) || nftPending} title={!config?.contractConfigured ? tx("contractNotConfigured", "The relayer is not configured.") : !config?.ipfsPinningConfigured ? tx("ipfsPinningNotConfigured", "IPFS pinning is not configured.") : tx("upgradeSepoliaHint", "Upgrade and mint on Sepolia for 2 Д")} data-testid={`button-mint-${id}`}>
+                           {working === `mint-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Sparkles size={14} />} {nftPending ? tx("mintPendingButton", "Mint pending") : tx("upgradeMint", "Upgrade / mint · +2 Д")}
                         </button>
                       )}
                     </div>
@@ -516,12 +581,12 @@ export function Timenaming() {
             </div>
           )}
           {mineError && licenses.length > 0 && <div className="tn-inline-message tn-inline-error" role="alert" data-testid="error-record-action"><AlertCircle size={17} />{mineError}</div>}
-          <p className="tn-record-footnote"><span className="tn-legend-dot" /> “On-chain” appears only after a mint response is reflected in the license record. A generated PDF documents the placement; it does not mint an NFT.</p>
+          <p className="tn-record-footnote"><span className="tn-legend-dot" /> {tx("onChainNote", "“On-chain” appears only after a mint response is reflected in the license record. A generated PDF documents the placement; it does not mint an NFT.")}</p>
         </section>
 
         <section id="legal-help" className="tn-help-section" aria-labelledby="tn-help-title" tabIndex={-1}>
           <div className="tn-help-heading">
-            <div><span className="tn-overline">TIMENAMING / REFERENCE</span><h2 id="tn-help-title">{help.title}</h2><p>{help.subtitle}</p></div>
+            <div><span className="tn-overline">{tx("reference", "TIMENAMING / REFERENCE")}</span><h2 id="tn-help-title">{help.title}</h2><p>{help.subtitle}</p></div>
             <a href="#tn-contract" className="tn-help-contract-link">{help.contractTitle}<ChevronDown size={15} /></a>
           </div>
           <section id="tn-contract" className="tn-contract-panel" aria-labelledby="tn-contract-title">
@@ -548,7 +613,7 @@ export function Timenaming() {
         </section>
 
         <footer className="tn-foot">
-          <span>TIMENAMING / PLACEMENT LICENSE</span><a href="#legal-help">{help.helpNav}<ArrowUpRight size={13} /></a><span><span className="tn-foot-dot" /> {config?.contractConfigured ? "RELAYER CONFIGURED" : "NFT RELAYER STATUS IS CONFIGURATION-DEPENDENT"}</span>
+          <span>{tx("placementLicense", "TIMENAMING / PLACEMENT LICENSE")}</span><a href="#legal-help">{help.helpNav}<ArrowUpRight size={13} /></a><span><span className="tn-foot-dot" /> {config?.contractConfigured ? tx("relayerConfigured", "RELAYER CONFIGURED") : tx("relayerConfigurationDependent", "NFT RELAYER STATUS IS CONFIGURATION-DEPENDENT")}</span>
         </footer>
       </div>
       <style>{styles}</style>

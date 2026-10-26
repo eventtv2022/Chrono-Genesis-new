@@ -9,6 +9,12 @@ The user supplied five Russian clauses for the Timenaming placement license. The
 
 **How to apply:** Preserve the Russian source wording in legal materials, label translations as requiring legal review, and keep public FAQ claims aligned with the actual Sepolia and IPFS implementation.
 
+When Russian is selected, localize the entire Timenaming page, including its hero, form controls, status messages, empty states, help section, and footer. Keep product names and technical standards such as TimeNation, Sepolia, NFT, and IPFS in their established forms.
+
+**Why:** the user explicitly requested that the Russian version of the page be fully Russian after seeing English interface copy.
+
+**How to apply:** Check all visible copy and accessible labels in the Russian experience; do not assume that translating only the legal section is sufficient.
+
 Pricing and upgrade rules: a Timeline family-minute claim costs 1 Д; a direct all-inclusive Timeline + Timenaming + PDF + Sepolia NFT purchase costs 2 Д; upgrading an already-owned Timeline minute costs an additional 2 Д, for 3 Д total. Always leave the ancestral minute protected. Only the owner may upgrade; another citizen's claim is unavailable. A minute can be upgraded only once.
 
 **Why:** the user confirmed that a Timenaming license should upgrade an existing Timeline claim rather than require a second reservation.
