@@ -14,7 +14,13 @@ import { objectStorageClient, ObjectStorageService } from "../lib/objectStorage"
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
 const ROYALTY_RECIPIENT = "0x4a290953E0A4c9374901939D5612AFDAAf99312b";
-const LEGAL_DRAFT = "DRAFT — pending legal review. “exclusive non-exclusive” content indexing rights on the TimeNation platform. This license does not constitute financial equity, currency emission, or ownership of real-world physical time.";
+const LEGAL_TERMS_RU = [
+  "1. Правовой статус и предмет: Настоящий документ подтверждает приобретение неисключительного права на размещение и индексацию цифрового контента (информационной метки времени) в рамках программного обеспечения как услуги (SaaS) платформы TimeNation.",
+  "2. Отказ от финансовых гарантий: Данная лицензия является исключительно утилитарным цифровым правом доступа к функционалу платформы. Она не является ценной бумагой, долей в уставном капитале, финансовым инструментом, инвестиционным контрактом, средством платежа, цифровой валютой или обязательством по обратному выкупу (buyback).",
+  "3. Отсутствие прав на физические объекты: Лицензия не предоставляет никаких прав собственности, владения или распоряжения реальным физическим временем, астрономическими объектами или материальными активами в реальном мире.",
+  "4. Условия возврата и прекращения: Все платежи за лицензии и внутренние расчетные единицы (DarMin) являются окончательными, невозвратными (non-refundable) и направляются на покрытие операционных расходов по поддержанию SaaS-инфраструктуры.",
+  "5. Ограничение ответственности: Администрация платформы не несет ответственности за изменение рыночной стоимости прав на индексацию или действия третьих лиц на вторичном рынке. Документ носит информационный характер и не является юридической, финансовой или инвестиционной консультацией.",
+].join("\n\n");
 const NFT_ABI = [
   "function mintMinute(address to, uint256 minuteTimestamp, string uri) external",
 ];
@@ -256,7 +262,7 @@ async function renderCertificate(license: typeof minuteLicensesTable.$inferSelec
   doc.fillColor("#182337").fontSize(10).text("Issuer: TimeNation SaaS Framework");
   doc.text(`EVM wallet: ${license.walletAddress}`);
   doc.moveDown(2);
-  doc.fillColor("#a33b32").fontSize(8).text(LEGAL_DRAFT, { width: 455 });
+  doc.fillColor("#334155").fontSize(7).text(LEGAL_TERMS_RU, { width: 455, lineGap: 2 });
   doc.moveDown();
   doc.fillColor("#687386").fontSize(8).text("SaaS utility content license. Non-refundable. This certificate records a platform placement license and is not legal advice.", { width: 455 });
   doc.end();
@@ -281,7 +287,7 @@ router.get("/timenaming/config", (_req, res): void => {
     royaltyRecipient: ROYALTY_RECIPIENT,
     contractConfigured: isSepoliaMintConfigured(),
     ipfsPinningConfigured: isIpfsPinningConfigured(),
-    legalTextStatus: "DRAFT_PENDING_REVIEW",
+    legalTextStatus: "SOURCE_PROVIDED_MACHINE_TRANSLATIONS_REVIEW_REQUIRED",
   });
 });
 

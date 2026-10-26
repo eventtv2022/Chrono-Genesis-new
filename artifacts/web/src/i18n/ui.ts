@@ -1528,3 +1528,6 @@ export const RTL_LANGS: LangCode[] = ["ar", "ur", "he", "fa"];
 export function isRTL(code: LangCode): boolean {
   return RTL_LANGS.includes(code);
 }
+
+// Timenaming legal and help content is kept as a dedicated locale bundle.
+export { timenamingCopy as TIMENAMING, timenamingIsMachineTranslation } from "./timenaming";

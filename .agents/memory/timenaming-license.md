@@ -3,11 +3,11 @@ name: Timenaming license legal status
 description: Legal wording decision for the TimeNation minute-placement license
 ---
 
-The supplied disclaimer says “exclusive non-exclusive,” which is contradictory. Keep this phrase clearly marked as a draft pending legal review; do not present it as finalized terms.
+The user supplied five Russian clauses for the Timenaming placement license. The license is explicitly non-exclusive; do not add exclusivity, investment, ownership, or permanence guarantees beyond the provided terms. Localized translations are machine translations and need qualified legal review.
 
-**Why:** the user approved implementing the service while explicitly deferring this wording as draft text.
+**Why:** the user replaced the contradictory draft with a specific Russian agreement and requested platform-wide localization.
 
-**How to apply:** Keep draft status visible in the Timenaming UI and certificate until the user supplies legally reviewed replacement wording.
+**How to apply:** Preserve the Russian source wording in legal materials, label translations as requiring legal review, and keep public FAQ claims aligned with the actual Sepolia and IPFS implementation.
 
 Pricing and upgrade rules: a Timeline family-minute claim costs 1 Д; a direct all-inclusive Timeline + Timenaming + PDF + Sepolia NFT purchase costs 2 Д; upgrading an already-owned Timeline minute costs an additional 2 Д, for 3 Д total. Always leave the ancestral minute protected. Only the owner may upgrade; another citizen's claim is unavailable. A minute can be upgraded only once.
 
@@ -15,7 +15,7 @@ Pricing and upgrade rules: a Timeline family-minute claim costs 1 Д; a direct a
 
 **How to apply:** Keep Timeline as the shared unique-coordinate registry. Direct bundle purchase must be gated on mint readiness, and an upgrade must validate ownership and charge atomically before issuing the license and NFT.
 
-The user chose Pinata for IPFS pinning. The mint flow must pin the certificate PDF and metadata before sending the transaction, then pass an `ipfs://` metadata URI to the contract. Describe availability as dependent on continued pinning or independent replicas; do not promise permanent access. Sepolia is a test network, not mainnet.
+The user chose Pinata for IPFS pinning. Only the successfully minted NFT flow pins its certificate PDF and metadata before sending the transaction, then passes an `ipfs://` metadata URI to the contract; ordinary placement certificates are not automatically IPFS-pinned. Describe availability as dependent on continued pinning or independent replicas; do not promise permanent access. Sepolia is a test network, not mainnet.
 
 **Why:** the user asked to implement IPFS before adding FAQ claims about decentralized storage and shutdown resilience.
 

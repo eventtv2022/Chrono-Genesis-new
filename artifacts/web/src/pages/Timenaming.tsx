@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { useCitizen } from "@/context/CitizenContext";
+import { useLanguage } from "@/context/LanguageContext";
+import { timenamingCopy, timenamingContinuityQualifier, timenamingIsMachineTranslation, timenamingTranslationNotice, type HelpCategory } from "@/i18n/timenaming";
 import {
-  AlertCircle, ArrowUpRight, BadgeCheck, CalendarClock, Check, ChevronRight,
+  AlertCircle, ArrowUpRight, BadgeCheck, CalendarClock, Check, ChevronRight, ChevronDown, Search, X,
   CircleHelp, Clock3, Download, FileText, Fingerprint, LoaderCircle, LockKeyhole,
   Network, Shield, Sparkles, WalletCards,
 } from "lucide-react";
@@ -85,6 +87,8 @@ function ipfsGatewayUrl(uri?: string | null) {
 
 export function Timenaming() {
   const { citizen, authToken, refreshCitizen } = useCitizen();
+  const { lang } = useLanguage();
+  const help = timenamingCopy[lang];
   const [config, setConfig] = useState<Config | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState("");
@@ -104,6 +108,16 @@ export function Timenaming() {
   const [reserving, setReserving] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
   const [purchaseType, setPurchaseType] = useState<"TIMELINE_ONLY" | "ALL_INCLUSIVE">("TIMELINE_ONLY");
+  const [faqQuery, setFaqQuery] = useState("");
+  const [faqCategory, setFaqCategory] = useState<HelpCategory | "all">("all");
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const visibleFaqs = useMemo(() => {
+    const query = faqQuery.trim().toLocaleLowerCase(lang);
+    return help.questions.map((item, index) => ({ ...item, index })).filter(item =>
+      (faqCategory === "all" || item.category === faqCategory) &&
+      (!query || `${item.question} ${item.answer}`.toLocaleLowerCase(lang).includes(query)),
+    );
+  }, [faqCategory, faqQuery, help, lang]);
 
   const authHeaders = useMemo<Record<string, string>>(
     () => authToken ? { Authorization: `Bearer ${authToken}` } : {} as Record<string, string>,
@@ -193,6 +207,15 @@ export function Timenaming() {
   }, [authHeaders]);
 
   useEffect(() => { void loadMine(); }, [loadMine]);
+  useEffect(() => {
+    if (window.location.hash !== "#legal-help") return;
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById("legal-help");
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+      target?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
   useEffect(() => {
     if (citizen?.name) setOwnerName(citizen.name);
   }, [citizen?.name]);
@@ -398,12 +421,12 @@ export function Timenaming() {
                     </label>
                     <label className={`tn-package-option ${purchaseType === "ALL_INCLUSIVE" ? "selected" : ""} ${!config?.contractConfigured || !config?.ipfsPinningConfigured ? "disabled" : ""}`}>
                       <input type="radio" name="purchaseType" checked={purchaseType === "ALL_INCLUSIVE"} disabled={!config?.contractConfigured || !config?.ipfsPinningConfigured} onChange={() => setPurchaseType("ALL_INCLUSIVE")} />
-                      <span><strong>All-inclusive NFT license</strong><small>{config?.contractConfigured && config?.ipfsPinningConfigured ? "Timeline + license + PDF + Sepolia NFT" : "Unavailable until Sepolia and IPFS pinning are configured"}</small></span><b>2 Д</b>
+                      <span><strong>All-inclusive license</strong><small>{config?.contractConfigured && config?.ipfsPinningConfigured ? "Timeline + license + PDF · NFT mint depends on configuration and confirmation" : "NFT mint unavailable until Sepolia and IPFS pinning are configured"}</small></span><b>2 Д</b>
                     </label>
                   </div>
                 )}
                 {(availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && <>
-                  <div className="tn-public-warning" role="note">NFT name and description are public and permanent on the blockchain. Do not include information you do not want public.</div>
+                  <div className="tn-public-warning" role="note">NFT name and description may be publicly accessible. Do not include information you do not want public.</div>
                   <label className="tn-field"><span>Name on the record</span><input value={ownerName} onChange={event => setOwnerName(event.target.value)} required maxLength={120} data-testid="input-owner-name" /></label>
                   <label className="tn-field"><span>Minute title</span><input value={customTitle} onChange={event => setCustomTitle(event.target.value)} required maxLength={160} placeholder="Name this moment" data-testid="input-minute-title" /></label>
                   <label className="tn-field"><span>Historical note <small>Optional</small></span><textarea value={customDescription} onChange={event => setCustomDescription(event.target.value)} rows={3} maxLength={2000} placeholder="Add context that should accompany this placement." data-testid="input-minute-description" /></label>
@@ -422,8 +445,9 @@ export function Timenaming() {
                   {!reserving && <ArrowUpRight size={16} />}
                 </button>
                 {purchaseType === "ALL_INCLUSIVE" || availability.ownedByMe
-                  ? <p className="tn-draft-copy" data-testid="status-terms-draft"><CircleHelp size={14} /> License terms remain a draft pending legal review. NFT minting requires Sepolia configuration.</p>
+                  ? <p className="tn-draft-copy" data-testid="status-terms-review"><CircleHelp size={14} />{help.reviewNote} NFT minting requires Sepolia configuration.</p>
                   : <p className="tn-draft-copy">A Timeline reservation can be upgraded later for +2 Д.</p>}
+                <a className="tn-form-learn" href="#legal-help"><CircleHelp size={14} />{help.learnMore}<ArrowUpRight size={13} /></a>
               </form>
             )}
           </section>
@@ -495,8 +519,36 @@ export function Timenaming() {
           <p className="tn-record-footnote"><span className="tn-legend-dot" /> “On-chain” appears only after a mint response is reflected in the license record. A generated PDF documents the placement; it does not mint an NFT.</p>
         </section>
 
+        <section id="legal-help" className="tn-help-section" aria-labelledby="tn-help-title" tabIndex={-1}>
+          <div className="tn-help-heading">
+            <div><span className="tn-overline">TIMENAMING / REFERENCE</span><h2 id="tn-help-title">{help.title}</h2><p>{help.subtitle}</p></div>
+            <a href="#tn-contract" className="tn-help-contract-link">{help.contractTitle}<ChevronDown size={15} /></a>
+          </div>
+          <section id="tn-contract" className="tn-contract-panel" aria-labelledby="tn-contract-title">
+            <div className="tn-help-subheading"><span className="tn-help-index">01</span><h3 id="tn-contract-title">{help.contractTitle}</h3></div>
+            {timenamingIsMachineTranslation(lang) && <p className="tn-translation-notice" role="note">{timenamingTranslationNotice(lang)}</p>}
+            <ol className="tn-clause-list">{help.clauses.map((clause, index) => <li key={index}><span>{String(index + 1).padStart(2, "0")}</span><p>{clause}</p></li>)}</ol>
+            <p className="tn-legal-disclaimer">{help.reviewNote}</p>
+          </section>
+          <section className="tn-faq-panel" aria-labelledby="tn-faq-title">
+            <div className="tn-help-subheading"><span className="tn-help-index">02</span><div><h3 id="tn-faq-title">{help.faqTitle}</h3></div></div>
+            <div className="tn-faq-controls">
+              <label className="tn-faq-search"><span>{help.searchLabel}</span><div><Search size={17} /><input value={faqQuery} onChange={event => { setFaqQuery(event.target.value); setOpenFaq(null); }} placeholder={help.searchPlaceholder} type="search" aria-controls="tn-faq-list" /><button type="button" aria-label={help.searchLabel} onClick={() => setFaqQuery("")} disabled={!faqQuery}><X size={15} /></button></div></label>
+              <div className="tn-faq-filters" role="group" aria-label={help.faqTitle}>
+                {(["all", "license", "continuity", "payments"] as const).map(category => <button key={category} type="button" onClick={() => { setFaqCategory(category); setOpenFaq(null); }} aria-pressed={faqCategory === category} className={faqCategory === category ? "active" : ""}>{category === "all" ? help.all : help.categories[category]}</button>)}
+              </div>
+            </div>
+            <div id="tn-faq-list" className="tn-faq-list">
+              {visibleFaqs.length ? visibleFaqs.map(item => <article className={`tn-faq-item ${openFaq === item.index ? "is-open" : ""}`} key={item.index}>
+                <h4><button type="button" aria-expanded={openFaq === item.index} aria-controls={`tn-faq-answer-${item.index}`} onClick={() => setOpenFaq(openFaq === item.index ? null : item.index)}><span>{item.question}</span><ChevronDown size={17} /></button></h4>
+                {openFaq === item.index && <div id={`tn-faq-answer-${item.index}`} className="tn-faq-answer"><p>{item.category === "continuity" && `${timenamingContinuityQualifier(lang)} `}{item.answer}</p></div>}
+              </article>) : <div className="tn-faq-empty" role="status"><Search size={19} /><p>{help.noResults}</p></div>}
+            </div>
+          </section>
+        </section>
+
         <footer className="tn-foot">
-          <span>TIMENAMING / PLACEMENT LICENSE</span><span><span className="tn-foot-dot" /> {config?.contractConfigured ? "RELAYER CONFIGURED" : "NFT RELAYER STATUS IS CONFIGURATION-DEPENDENT"}</span>
+          <span>TIMENAMING / PLACEMENT LICENSE</span><a href="#legal-help">{help.helpNav}<ArrowUpRight size={13} /></a><span><span className="tn-foot-dot" /> {config?.contractConfigured ? "RELAYER CONFIGURED" : "NFT RELAYER STATUS IS CONFIGURATION-DEPENDENT"}</span>
         </footer>
       </div>
       <style>{styles}</style>
@@ -564,5 +616,16 @@ const styles = `
 .tn-spin{animation:tnSpin 1s linear infinite}@keyframes tnSpin{to{transform:rotate(360deg)}}@keyframes tnShimmer{to{background-position:-180% 0}}@keyframes tnReveal{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:900px){.tn-dial{right:5%;width:194px;height:194px;opacity:.65}.tn-dial-center{inset:55px}.tn-tick-a{transform:rotate(0deg) translateY(-88px)}.tn-tick-b{transform:rotate(90deg) translateY(-88px)}.tn-tick-c{transform:rotate(180deg) translateY(-88px)}.tn-tick-d{transform:rotate(270deg) translateY(-88px)}.tn-main-grid{grid-template-columns:1fr}.tn-aside{display:grid;grid-template-columns:1.15fr .85fr}.tn-license-row{grid-template-columns:1fr 1fr auto}.tn-record-actions{grid-column:1/-1;justify-content:flex-start}.tn-tx-link{grid-column:3;grid-row:1}}
 @media(max-width:640px){.tn-hero{min-height:330px;padding:36px 23px;align-items:flex-start}.tn-hero-copy{max-width:100%}.tn-hero h1{font-size:41px;max-width:360px}.tn-hero-copy>p{font-size:12px;max-width:340px}.tn-dial{right:-60px;top:55%;width:176px;height:176px;opacity:.27}.tn-dial-center{inset:50px}.tn-tick-a{transform:rotate(0deg) translateY(-80px)}.tn-tick-b{transform:rotate(90deg) translateY(-80px)}.tn-tick-c{transform:rotate(180deg) translateY(-80px)}.tn-tick-d{transform:rotate(270deg) translateY(-80px)}.tn-hero-index{right:14px;bottom:12px;font-size:7px}.tn-facts{grid-template-columns:1fr 1fr}.tn-fact{min-height:83px;padding:14px 15px;border-bottom:1px solid var(--tn-line)}.tn-fact:nth-child(2){border-right:0}.tn-fact:nth-child(3),.tn-fact:nth-child(4){border-bottom:0}.tn-main-grid{gap:13px;margin-top:15px}.tn-reserve-panel{padding:21px 16px}.tn-section-heading h2{font-size:21px}.tn-check-form{grid-template-columns:1fr}.tn-button-check{grid-column:auto}.tn-aside{grid-template-columns:1fr}.tn-process-card{padding:20px}.tn-records{padding:21px 16px;margin-top:15px}.tn-records-heading{align-items:flex-start}.tn-records-heading h2{font-size:19px}.tn-refresh-button{font-size:8px;padding:7px}.tn-license-row{grid-template-columns:1fr auto;gap:8px}.tn-record-title{grid-column:1}.tn-record-badges{grid-column:2;grid-row:1 / 3}.tn-record-actions{grid-column:1/-1}.tn-tx-link{grid-column:1/-1;grid-row:auto;justify-self:start}.tn-cost-confirm{align-items:flex-start;flex-direction:column}.tn-cost-confirm span:last-child{text-align:left}.tn-foot{font-size:7px;line-height:1.5}.tn-foot>span:last-child{max-width:190px;justify-content:flex-end}.tn-dial-label{font-size:8px}}
+.tn-form-learn{display:inline-flex;align-items:center;gap:7px;margin-top:10px;color:#725b2c;font-size:11px;font-weight:650;text-decoration:none;border-bottom:1px solid #c6a55e;padding-bottom:3px}.tn-form-learn:hover,.tn-foot a:hover{color:#9a7330}
+.tn-help-section{margin-top:22px;color:var(--tn-ink);scroll-margin-top:24px}.tn-help-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:22px;padding:28px 30px;background:#e9e7df;border:1px solid var(--tn-line)}.tn-help-heading h2{font-size:clamp(24px,3vw,34px);letter-spacing:-.035em;margin:8px 0 4px}.tn-help-heading p{color:#697487;font-size:13px;margin:0}.tn-help-contract-link{display:flex;align-items:center;gap:8px;white-space:nowrap;color:#725b2c;font-size:12px;font-weight:650;text-decoration:none}
+.tn-contract-panel,.tn-faq-panel{background:var(--tn-white);border:1px solid var(--tn-line);padding:26px 30px}.tn-contract-panel{border-top:0}.tn-help-subheading{display:flex;align-items:center;gap:13px;margin-bottom:20px}.tn-help-index{font-family:var(--app-font-mono),monospace;font-size:11px;color:#a07e3e;letter-spacing:.1em}.tn-help-subheading h3{font-size:18px;line-height:1.25;margin:0;font-weight:650;letter-spacing:-.02em}.tn-help-subheading p{font-size:11px;color:var(--tn-muted);margin:4px 0 0}
+.tn-translation-notice{margin:0 0 18px;padding:10px 13px;background:#f7f0df;border-left:2px solid var(--tn-gold);color:#65552f;font-size:11px;font-weight:650}.tn-clause-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;column-gap:28px;row-gap:0}.tn-clause-list li{display:grid;grid-template-columns:27px 1fr;gap:8px;padding:14px 0;border-top:1px solid #e7e4dc}.tn-clause-list li>span{font-family:var(--app-font-mono),monospace;font-size:10px;color:#a07e3e;padding-top:2px}.tn-clause-list p,.tn-faq-answer p{font-size:12px;line-height:1.75;color:#46546a;margin:0}.tn-legal-disclaimer{border-top:1px solid #e7e4dc;padding-top:14px;margin:14px 0 0;color:#788295;font-size:10px;line-height:1.6}.tn-faq-panel{border-top:0;background:#f0eee7}
+.tn-faq-controls{display:grid;grid-template-columns:minmax(200px,1fr) auto;align-items:end;gap:16px;margin-bottom:15px}.tn-faq-search{display:grid;gap:6px}.tn-faq-search>span{font-size:10px;font-weight:700;color:#58667b}.tn-faq-search>div{display:flex;align-items:center;gap:8px;height:42px;padding:0 11px;background:#fffefa;border:1px solid #d9d6cc;color:#788295}.tn-faq-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--tn-ink);font:inherit;font-size:12px}.tn-faq-search input:focus-visible{outline:2px solid #b89550;outline-offset:3px}.tn-faq-search button{display:grid;place-items:center;background:none;border:0;padding:4px;color:#6e7888;cursor:pointer}.tn-faq-search button:disabled{opacity:.35;cursor:default}
+.tn-faq-filters{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.tn-faq-filters button{border:1px solid #d9d6cc;background:transparent;padding:8px 10px;color:#687487;font-size:10px;font-weight:600;cursor:pointer;transition:color .15s,background .15s,border-color .15s}.tn-faq-filters button:hover,.tn-faq-filters button.active{background:var(--tn-ink);border-color:var(--tn-ink);color:#f5f3ed}.tn-faq-filters button:focus-visible,.tn-faq-item button:focus-visible,.tn-form-learn:focus-visible,.tn-foot a:focus-visible{outline:2px solid #a7833f;outline-offset:3px}
+.tn-faq-item{border-top:1px solid #dcd9d0}.tn-faq-item:last-child{border-bottom:1px solid #dcd9d0}.tn-faq-item h4{margin:0}.tn-faq-item h4 button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:15px;padding:17px 3px;border:0;background:transparent;text-align:left;color:var(--tn-ink);font:inherit;font-size:13px;font-weight:650;cursor:pointer}.tn-faq-item h4 button svg{flex:none;color:#9a7d47;transition:transform .18s}.tn-faq-item.is-open h4 button svg{transform:rotate(180deg)}.tn-faq-answer{padding:0 30px 19px 3px;animation:tn-faq-in .18s ease-out}.tn-faq-empty{min-height:100px;display:flex;align-items:center;justify-content:center;gap:10px;color:#788295;font-size:12px;border-top:1px solid #dcd9d0}.tn-faq-empty p{margin:0}.tn-foot a{display:inline-flex;align-items:center;gap:4px;color:#725b2c;text-decoration:none}
+@keyframes tn-faq-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:900px){.tn-faq-controls{grid-template-columns:1fr}.tn-faq-filters{justify-content:flex-start}}
+@media(max-width:767px){.tn-clause-list{grid-template-columns:1fr}}
+@media(max-width:640px){.tn-help-heading{align-items:flex-start;flex-direction:column;padding:23px 18px}.tn-contract-panel,.tn-faq-panel{padding:21px 18px}.tn-clause-list{grid-template-columns:1fr}.tn-faq-filters{display:grid;grid-template-columns:1fr 1fr;width:100%}.tn-faq-filters button{min-height:38px}.tn-faq-item h4 button{font-size:12px}.tn-faq-answer{padding-right:4px}.tn-foot{display:flex;flex-wrap:wrap;gap:8px 12px}.tn-foot>span:last-child{max-width:none}}
 @media(prefers-reduced-motion:reduce){.tn-page *{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
 `;
