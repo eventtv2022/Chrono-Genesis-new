@@ -42,6 +42,7 @@ import { Login } from "./pages/Login";
 import { OnboardingGame } from "./pages/OnboardingGame";
 import { SignatureRequest } from "./pages/SignatureRequest";
 import { Referrals } from "./pages/Referrals";
+import { Profile } from "./pages/Profile";
 import { AnthemPlayer } from "./components/AnthemPlayer";
 import { Timenaming } from "./pages/Timenaming";
 
@@ -80,7 +81,7 @@ function TgGuard({ children }: { children: React.ReactNode }) {
       }
 
       if (!citizen) {
-        const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/reset-password", "/qr-login", "/signature-request", "/referrals", "/timenaming"];
+        const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/reset-password", "/qr-login", "/signature-request", "/referrals", "/profile", "/timenaming"];
         if (!guestRoutes.includes(location)) navigate("/welcome");
         else if (location === "/") navigate("/welcome");
       }
@@ -176,6 +177,7 @@ function Router() {
           <Route path="/timenaming" component={Timenaming} />
           <Route path="/shop" component={Shop} />
           <Route path="/referrals" component={Referrals} />
+          <Route path="/profile" component={Profile} />
           <Route path="/register" component={Register} />
           <Route path="/login" component={Login} />
           <Route path="/onboarding" component={OnboardingGame} />

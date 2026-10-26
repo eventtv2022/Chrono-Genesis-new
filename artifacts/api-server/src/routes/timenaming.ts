@@ -1,18 +1,22 @@
 import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
 import { Contract, JsonRpcProvider, Wallet, isAddress } from "ethers";
 import PDFDocument from "pdfkit";
-import { db, citizensTable, minuteLicensesTable, timelineAnchorsTable } from "@workspace/db";
+import { db, citizensTable, minuteLicensesTable, stateTaxLogsTable, timelineAnchorsTable } from "@workspace/db";
 import { requireAuth } from "../middleware/auth";
 import { isCenturyBoundaryMinute, CENTURY_STATE_PROPERTY_CODE, CENTURY_STATE_PROPERTY_MSG } from "../lib/centuryGuard";
 import { isStateHeritageCoord, HERITAGE_LOCK_CODE, HERITAGE_LOCK_TITLE, HERITAGE_LOCK_MSG } from "../lib/heritageGuard";
 import { objectStorageClient, ObjectStorageService } from "../lib/objectStorage";
+import { calcTreasuryTax, TREASURY_CITIZEN_ID } from "../services/videoStorage";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
+const NFT_LICENSE_BASE_PRICE = 2;
+const NFT_TAX_SOURCE = "TIMENAMING_NFT_TAX";
+const NFT_TAX_REFUND_SOURCE = "TIMENAMING_NFT_TAX_REFUND";
 const ROYALTY_RECIPIENT = "0x4a290953E0A4c9374901939D5612AFDAAf99312b";
 const LEGAL_TERMS_RU = [
   "1. Правовой статус и предмет: Настоящий документ подтверждает приобретение неисключительного права на размещение и индексацию цифрового контента (информационной метки времени) в рамках программного обеспечения как услуги (SaaS) платформы TimeNation.",
@@ -160,8 +164,8 @@ async function finishPaidMint(
       attributes: [
         { trait_type: "Timeline minute", value: formatCoord(license.timelineCoord) },
         { trait_type: "Licensee", value: license.ownerName },
-        { trait_type: "Royalty", value: "2%" },
-        { trait_type: "Royalty recipient", value: ROYALTY_RECIPIENT },
+        { trait_type: "Secondary sale royalty", value: "2%" },
+        { trait_type: "Secondary sale royalty recipient", value: ROYALTY_RECIPIENT },
       ],
       properties: {
         certificate: {
@@ -199,19 +203,48 @@ async function finishPaidMint(
       status: "MINTED", transactionHash: tx.hash, tokenId: String(epochMinute),
       explorerUrl: `https://sepolia.etherscan.io/tx/${tx.hash}`,
       certificateId: license.certificateId, newBalance: balanceAfterCharge,
+      baseCost: NFT_LICENSE_BASE_PRICE, treasuryFee: calcTreasuryTax(NFT_LICENSE_BASE_PRICE),
+      totalCost: NFT_LICENSE_BASE_PRICE + calcTreasuryTax(NFT_LICENSE_BASE_PRICE),
     });
   } catch (error) {
     req.log.error({ err: error, certificateId: license.certificateId, txHash }, "Paid Sepolia mint failed");
     if (txHash && !receiptFailed) {
       await db.update(minuteLicensesTable).set({ status: "MINT_PENDING", transactionHash: txHash }).where(eq(minuteLicensesTable.id, license.id));
-      res.status(202).json({ status: "MINT_PENDING", transactionHash: txHash, certificateId: license.certificateId, message: "Transaction submitted; its final status is being confirmed." });
+       res.status(202).json({
+         status: "MINT_PENDING", transactionHash: txHash, certificateId: license.certificateId,
+         baseCost: NFT_LICENSE_BASE_PRICE, treasuryFee: calcTreasuryTax(NFT_LICENSE_BASE_PRICE),
+         totalCost: NFT_LICENSE_BASE_PRICE + calcTreasuryTax(NFT_LICENSE_BASE_PRICE),
+         message: "Transaction submitted; its final status is being confirmed.",
+       });
       return;
     }
     await db.transaction(async (txDb) => {
+      const feeLogs = await txDb.select({
+        sourceType: stateTaxLogsTable.sourceType,
+        amount: stateTaxLogsTable.amount,
+      }).from(stateTaxLogsTable).where(and(
+        eq(stateTaxLogsTable.referenceId, license.id),
+        inArray(stateTaxLogsTable.sourceType, [NFT_TAX_SOURCE, NFT_TAX_REFUND_SOURCE]),
+      ));
+      const outstandingFee = Math.max(0, feeLogs.reduce((sum, item) => sum + item.amount, 0));
       const [citizen] = await txDb.select({ balance: citizensTable.balanceMinutes })
         .from(citizensTable).where(eq(citizensTable.id, license.citizenId)).for("update").limit(1);
       if (citizen) {
-        await txDb.update(citizensTable).set({ balanceMinutes: citizen.balance + 2 }).where(eq(citizensTable.id, license.citizenId));
+        await txDb.update(citizensTable).set({ balanceMinutes: citizen.balance + NFT_LICENSE_BASE_PRICE + outstandingFee }).where(eq(citizensTable.id, license.citizenId));
+      }
+      if (outstandingFee > 0) {
+        const [treasury] = await txDb.select({ balance: citizensTable.balanceMinutes })
+          .from(citizensTable).where(eq(citizensTable.id, TREASURY_CITIZEN_ID)).for("update").limit(1);
+        if (!treasury) throw new Error("Cannot refund Timenaming fee because the treasury account is unavailable");
+        await txDb.update(citizensTable)
+          .set({ balanceMinutes: treasury.balance - outstandingFee })
+          .where(eq(citizensTable.id, TREASURY_CITIZEN_ID));
+        await txDb.insert(stateTaxLogsTable).values({
+          sourceType: NFT_TAX_REFUND_SOURCE,
+          amount: -outstandingFee,
+          fromCitizenId: license.citizenId,
+          referenceId: license.id,
+        });
       }
       if (directBundle) {
         await txDb.delete(minuteLicensesTable).where(eq(minuteLicensesTable.id, license.id));
@@ -221,7 +254,7 @@ async function finishPaidMint(
           .where(eq(minuteLicensesTable.id, license.id));
       }
     });
-    res.status(502).json({ error: "Mint failed; 2 Д were refunded. Your original Timeline claim remains if this was an upgrade." });
+    res.status(502).json({ error: "Mint failed; the full purchase amount, including the TimeNation fee, was refunded. Your original Timeline claim remains if this was an upgrade." });
   }
 }
 
@@ -341,8 +374,17 @@ router.post("/timenaming/reserve", requireAuth, async (req, res): Promise<void> 
   try {
     const reserved = await db.transaction(async (tx) => {
       const [lockedCitizen] = await tx.select().from(citizensTable).where(eq(citizensTable.id, citizen.id)).for("update").limit(1);
-      const cost = purchaseType === "ALL_INCLUSIVE" ? 2 : 1;
-      if (!lockedCitizen || lockedCitizen.balanceMinutes - cost < 1) throw new Error("INSUFFICIENT_MINUTES");
+      const baseCost = purchaseType === "ALL_INCLUSIVE" ? NFT_LICENSE_BASE_PRICE : 1;
+      const treasuryFee = purchaseType === "ALL_INCLUSIVE" && citizen.id !== TREASURY_CITIZEN_ID ? calcTreasuryTax(baseCost) : 0;
+      const totalCost = baseCost + treasuryFee;
+      if (!lockedCitizen || lockedCitizen.balanceMinutes - totalCost < 1) throw new Error("INSUFFICIENT_MINUTES");
+      let treasuryBalance: number | null = null;
+      if (treasuryFee > 0) {
+        const [treasury] = await tx.select({ balance: citizensTable.balanceMinutes }).from(citizensTable)
+          .where(eq(citizensTable.id, TREASURY_CITIZEN_ID)).for("update").limit(1);
+        if (!treasury) throw new Error("TREASURY_NOT_CONFIGURED");
+        treasuryBalance = treasury.balance;
+      }
       const [existingAnchor] = await tx.select({ id: timelineAnchorsTable.id }).from(timelineAnchorsTable).where(eq(timelineAnchorsTable.timelineCoord, coord)).limit(1);
       if (existingAnchor) throw new Error("MINUTE_TAKEN");
       const [anchor] = await tx.insert(timelineAnchorsTable).values({ timelineCoord: coord, citizenId: citizen.id, status: "active" }).returning();
@@ -355,8 +397,19 @@ router.post("/timenaming/reserve", requireAuth, async (req, res): Promise<void> 
         }).returning();
         license = created!;
       }
-      await tx.update(citizensTable).set({ balanceMinutes: lockedCitizen.balanceMinutes - cost }).where(eq(citizensTable.id, citizen.id));
-      return { license, anchor: anchor!, newBalance: lockedCitizen.balanceMinutes - cost, purchaseType };
+      await tx.update(citizensTable).set({ balanceMinutes: lockedCitizen.balanceMinutes - totalCost }).where(eq(citizensTable.id, citizen.id));
+      if (treasuryFee > 0 && license && treasuryBalance !== null) {
+        await tx.update(citizensTable)
+          .set({ balanceMinutes: treasuryBalance + treasuryFee })
+          .where(eq(citizensTable.id, TREASURY_CITIZEN_ID));
+        await tx.insert(stateTaxLogsTable).values({
+          sourceType: NFT_TAX_SOURCE,
+          amount: treasuryFee,
+          fromCitizenId: citizen.id,
+          referenceId: license.id,
+        });
+      }
+      return { license, anchor: anchor!, newBalance: lockedCitizen.balanceMinutes - totalCost, purchaseType, treasuryFee, baseCost, totalCost };
     });
     if (reserved.purchaseType === "ALL_INCLUSIVE" && reserved.license) {
       await finishPaidMint(req, res, reserved.license, true, reserved.newBalance);
@@ -370,7 +423,11 @@ router.post("/timenaming/reserve", requireAuth, async (req, res): Promise<void> 
       return;
     }
     if (message === "INSUFFICIENT_MINUTES") {
-      res.status(402).json({ error: "Reserve requires 1 Darmin beyond the protected ancestral minute" });
+      res.status(402).json({ error: "Not enough transferable Darmins for the package and 2% TimeNation fee." });
+      return;
+    }
+    if (message === "TREASURY_NOT_CONFIGURED") {
+      res.status(503).json({ error: "TimeNation treasury is unavailable. No DarMin was charged." });
       return;
     }
     req.log.error({ err: error, citizenId: citizen.id, coord }, "Could not reserve Timenaming minute");
@@ -400,7 +457,17 @@ router.post("/timenaming/upgrade", requireAuth, async (req, res): Promise<void> 
   try {
     const purchase = await db.transaction(async (tx) => {
       const [citizen] = await tx.select().from(citizensTable).where(eq(citizensTable.id, citizenId)).for("update").limit(1);
-      if (!citizen || citizen.balanceMinutes - 2 < 1) throw new Error("INSUFFICIENT_MINUTES");
+      const baseCost = NFT_LICENSE_BASE_PRICE;
+      const treasuryFee = citizenId === TREASURY_CITIZEN_ID ? 0 : calcTreasuryTax(baseCost);
+      const totalCost = baseCost + treasuryFee;
+      if (!citizen || citizen.balanceMinutes - totalCost < 1) throw new Error("INSUFFICIENT_MINUTES");
+      let treasuryBalance: number | null = null;
+      if (treasuryFee > 0) {
+        const [treasury] = await tx.select({ balance: citizensTable.balanceMinutes }).from(citizensTable)
+          .where(eq(citizensTable.id, TREASURY_CITIZEN_ID)).for("update").limit(1);
+        if (!treasury) throw new Error("TREASURY_NOT_CONFIGURED");
+        treasuryBalance = treasury.balance;
+      }
       const [anchor] = await tx.select().from(timelineAnchorsTable).where(eq(timelineAnchorsTable.timelineCoord, coord)).for("update").limit(1);
       if (!anchor) throw new Error("MINUTE_NOT_CLAIMED");
       if (anchor.citizenId !== citizenId) throw new Error("MINUTE_TAKEN");
@@ -417,22 +484,34 @@ router.post("/timenaming/upgrade", requireAuth, async (req, res): Promise<void> 
             ...licenseValues, certificateId: randomUUID(), timelineAnchorId: anchor.id,
             timelineCoord: coord, citizenId,
           }).returning();
-      const newBalance = citizen.balanceMinutes - 2;
+      const newBalance = citizen.balanceMinutes - totalCost;
       await tx.update(citizensTable).set({ balanceMinutes: newBalance }).where(eq(citizensTable.id, citizenId));
-      return { license: license!, newBalance };
+      if (treasuryFee > 0 && treasuryBalance !== null) {
+        await tx.update(citizensTable)
+          .set({ balanceMinutes: treasuryBalance + treasuryFee })
+          .where(eq(citizensTable.id, TREASURY_CITIZEN_ID));
+        await tx.insert(stateTaxLogsTable).values({
+          sourceType: NFT_TAX_SOURCE,
+          amount: treasuryFee,
+          fromCitizenId: citizenId,
+          referenceId: license!.id,
+        });
+      }
+      return { license: license!, newBalance, baseCost, treasuryFee, totalCost };
     });
     await finishPaidMint(req, res, purchase.license, false, purchase.newBalance);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     const conflicts: Record<string, string> = {
-      INSUFFICIENT_MINUTES: "You need 2 transferable Д in addition to the protected ancestral minute.",
+      INSUFFICIENT_MINUTES: "You need 2.04 transferable Д in addition to the protected ancestral minute (including the 2% TimeNation fee).",
+      TREASURY_NOT_CONFIGURED: "TimeNation treasury is unavailable. No DarMin was charged.",
       MINUTE_NOT_CLAIMED: "Reserve this minute on Timeline before upgrading it.",
       MINUTE_TAKEN: "This minute is reserved by another citizen.",
       ALREADY_MINTED: "This minute has already been minted.",
       MINT_IN_PROGRESS: "The NFT transaction is still being confirmed.",
     };
     if (conflicts[message]) {
-      const status = message === "INSUFFICIENT_MINUTES" ? 402 : message === "MINUTE_NOT_CLAIMED" ? 409 : 409;
+      const status = message === "INSUFFICIENT_MINUTES" ? 402 : message === "TREASURY_NOT_CONFIGURED" ? 503 : 409;
       res.status(status).json({ code: message, error: conflicts[message] });
       return;
     }
@@ -464,8 +543,30 @@ async function reconcilePendingMint(license: typeof minuteLicensesTable.$inferSe
       }
       const [anchor] = await tx.select().from(timelineAnchorsTable).where(eq(timelineAnchorsTable.id, license.timelineAnchorId)).limit(1);
       const isDirectBundle = Boolean(anchor && anchor.createdAt.getTime() === current.createdAt.getTime());
+      const feeLogs = await tx.select({
+        sourceType: stateTaxLogsTable.sourceType,
+        amount: stateTaxLogsTable.amount,
+      }).from(stateTaxLogsTable).where(and(
+        eq(stateTaxLogsTable.referenceId, current.id),
+        inArray(stateTaxLogsTable.sourceType, [NFT_TAX_SOURCE, NFT_TAX_REFUND_SOURCE]),
+      ));
+      const outstandingFee = Math.max(0, feeLogs.reduce((sum, item) => sum + item.amount, 0));
       const [citizen] = await tx.select({ balance: citizensTable.balanceMinutes }).from(citizensTable).where(eq(citizensTable.id, current.citizenId)).for("update").limit(1);
-      if (citizen) await tx.update(citizensTable).set({ balanceMinutes: citizen.balance + 2 }).where(eq(citizensTable.id, current.citizenId));
+      if (citizen) await tx.update(citizensTable).set({ balanceMinutes: citizen.balance + NFT_LICENSE_BASE_PRICE + outstandingFee }).where(eq(citizensTable.id, current.citizenId));
+      if (outstandingFee > 0) {
+        const [treasury] = await tx.select({ balance: citizensTable.balanceMinutes })
+          .from(citizensTable).where(eq(citizensTable.id, TREASURY_CITIZEN_ID)).for("update").limit(1);
+        if (!treasury) throw new Error("Cannot refund Timenaming fee because the treasury account is unavailable");
+        await tx.update(citizensTable)
+          .set({ balanceMinutes: treasury.balance - outstandingFee })
+          .where(eq(citizensTable.id, TREASURY_CITIZEN_ID));
+        await tx.insert(stateTaxLogsTable).values({
+          sourceType: NFT_TAX_REFUND_SOURCE,
+          amount: -outstandingFee,
+          fromCitizenId: current.citizenId,
+          referenceId: current.id,
+        });
+      }
       if (isDirectBundle) {
         await tx.delete(minuteLicensesTable).where(eq(minuteLicensesTable.id, current.id));
         await tx.delete(timelineAnchorsTable).where(eq(timelineAnchorsTable.id, current.timelineAnchorId));
@@ -533,19 +634,41 @@ async function handleMintNft(req: import("express").Request, res: import("expres
   try {
     const purchase = await db.transaction(async (txDb) => {
       const [citizen] = await txDb.select().from(citizensTable).where(eq(citizensTable.id, req.citizen!.id)).for("update").limit(1);
-      if (!citizen || citizen.balanceMinutes - 2 < 1) throw new Error("INSUFFICIENT_MINUTES");
+      const baseCost = NFT_LICENSE_BASE_PRICE;
+      const treasuryFee = citizen?.id === TREASURY_CITIZEN_ID ? 0 : calcTreasuryTax(baseCost);
+      const totalCost = baseCost + treasuryFee;
+      if (!citizen || citizen.balanceMinutes - totalCost < 1) throw new Error("INSUFFICIENT_MINUTES");
+      let treasuryBalance: number | null = null;
+      if (treasuryFee > 0) {
+        const [treasury] = await txDb.select({ balance: citizensTable.balanceMinutes }).from(citizensTable)
+          .where(eq(citizensTable.id, TREASURY_CITIZEN_ID)).for("update").limit(1);
+        if (!treasury) throw new Error("TREASURY_NOT_CONFIGURED");
+        treasuryBalance = treasury.balance;
+      }
       const [current] = await txDb.select().from(minuteLicensesTable).where(eq(minuteLicensesTable.id, license.id)).for("update").limit(1);
       if (!current || current.status === "MINTED" || current.status === "ACTIVE_NFT") throw new Error("ALREADY_MINTED");
       if (current.status === "MINT_PENDING") throw new Error("MINT_IN_PROGRESS");
-      const newBalance = citizen.balanceMinutes - 2;
+      const newBalance = citizen.balanceMinutes - totalCost;
       await txDb.update(citizensTable).set({ balanceMinutes: newBalance }).where(eq(citizensTable.id, citizen.id));
       await txDb.update(minuteLicensesTable).set({ status: "CLAIMED" }).where(eq(minuteLicensesTable.id, license.id));
+      if (treasuryFee > 0 && treasuryBalance !== null) {
+        await txDb.update(citizensTable)
+          .set({ balanceMinutes: treasuryBalance + treasuryFee })
+          .where(eq(citizensTable.id, TREASURY_CITIZEN_ID));
+        await txDb.insert(stateTaxLogsTable).values({
+          sourceType: NFT_TAX_SOURCE,
+          amount: treasuryFee,
+          fromCitizenId: citizen.id,
+          referenceId: license.id,
+        });
+      }
       return newBalance;
     });
     await finishPaidMint(req, res, { ...license, status: "CLAIMED" }, false, purchase);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (message === "INSUFFICIENT_MINUTES") { res.status(402).json({ error: "Upgrade requires 2 Д beyond the protected ancestral minute." }); return; }
+    if (message === "TREASURY_NOT_CONFIGURED") { res.status(503).json({ error: "TimeNation treasury is unavailable. No DarMin was charged." }); return; }
+    if (message === "INSUFFICIENT_MINUTES") { res.status(402).json({ error: "Upgrade requires 2.04 Д beyond the protected ancestral minute, including the 2% TimeNation fee." }); return; }
     if (message === "ALREADY_MINTED" || message === "MINT_IN_PROGRESS") { res.status(409).json({ error: "This minute is already minted or a mint is pending." }); return; }
     req.log.error({ err: error, certificateId: license.certificateId }, "Paid Sepolia mint failed");
     res.status(500).json({ error: "Could not start the paid upgrade." });

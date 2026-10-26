@@ -20,6 +20,13 @@ Same applies to auctions.ts `tax = finalPrice * 0.02`.
 
 **Why:** 1 Д transaction was charging 100% tax when Math.ceil(1 * 0.02) = Math.ceil(0.02) = 1. Now 1 Д → 0.02 Д tax.
 
+## Timenaming NFT purchase fee
+Apply the standard 2% treasury fee to the 2 Д NFT license purchase and upgrade (0.04 Д); plain 1 Д timeline reservations are not NFT purchases. Credit treasury citizen #1 and keep the fee auditable. If a mint fails, reverse the fee and refund the full 2.04 Д while preserving a pre-existing timeline claim.
+
+**Why:** the user confirmed that TimeNation's 2% fee must apply to primary NFT-minute purchases as well as the separate ERC-2981 resale royalty.
+
+**How to apply:** Keep primary purchase fees distinct from secondary-sale royalties; use the standard decimal tax calculation and make all failed-mint refund paths reverse the treasury credit.
+
 ## UI convention
 Darmin amounts generally use `.toFixed(2)`. Exception: the mobile “D in circulation” KPI uses `.toFixed(3)` to fit its stat card while avoiding floating-point tails. Calculations and stored amounts retain full precision.
 

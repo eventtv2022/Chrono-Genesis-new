@@ -26,6 +26,7 @@ export interface CitizenProfile {
   walletAddress: string | null;
   walletVerified: number;
   ageVerified: number;
+  photoUrl?: string | null;
   isAdmin?: number;
   govRole?: string | null;
   hasSignature?: boolean;

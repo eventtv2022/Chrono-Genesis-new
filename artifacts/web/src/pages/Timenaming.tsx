@@ -89,6 +89,13 @@ function formatRussianDate(isoDate: string) {
     : isoDate;
 }
 
+function formatDarmins(value: number, lang: LangCode) {
+  return new Intl.NumberFormat(lang === "ru" ? "ru-RU" : undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 function recordId(license: License) {
   return license.certificateId ?? license.id ?? "";
 }
@@ -141,7 +148,10 @@ export function Timenaming() {
   const minuteValue = date && time ? toMinuteValue(date, time) : "";
   const [walletAddress, setWalletAddress] = useState("");
   const [walletError, setWalletError] = useState("");
-  const purchaseCost = availability?.ownedByMe || purchaseType === "ALL_INCLUSIVE" ? 2 : 1;
+  const isNftPurchase = Boolean(availability?.ownedByMe || purchaseType === "ALL_INCLUSIVE");
+  const purchaseBaseCost = isNftPurchase ? 2 : 1;
+  const purchaseFee = isNftPurchase ? purchaseBaseCost * 0.02 : 0;
+  const purchaseCost = purchaseBaseCost + purchaseFee;
   const enoughBalance = (citizen?.balanceMinutes ?? 0) - purchaseCost >= 1;
 
   function changeDateInput(value: string) {
@@ -417,9 +427,9 @@ export function Timenaming() {
         </header>
 
         <section className="tn-facts" aria-label={tx("factsAria", "Reservation facts")}>
-          <div className="tn-fact"><span className="tn-fact-label">{tx("pricingOptions", "PRICING OPTIONS")}</span><strong>1 / 2 <i>Д</i></strong><small>{tx("pricingDetail", "Timeline · all-inclusive; upgrade +2 Д")}</small></div>
+          <div className="tn-fact"><span className="tn-fact-label">{tx("pricingOptions", "PRICING OPTIONS")}</span><strong>1 / {formatDarmins(2.04, lang)} <i>Д</i></strong><small>{tx("pricingDetail", "Timeline reservation: 1 Д; NFT package or upgrade: 2.04 Д including 2% fee.")}</small></div>
           <div className="tn-fact"><span className="tn-fact-label">{tx("network", "NETWORK")}</span><strong>{configLoading ? "…" : config?.network || tx("sepolia", "Sepolia")}</strong><small>{configLoading ? tx("checkingConfig", "Checking configuration") : `${tx("chainId", "Chain ID")} ${config?.chainId ?? 11155111}`}</small></div>
-          <div className="tn-fact"><span className="tn-fact-label">{tx("nftRoyalty", "NFT ROYALTY")}</span><strong>2<span className="tn-percent">%</span></strong><small>{tx("royaltyPaid", "Paid to the stated treasury")}</small></div>
+          <div className="tn-fact"><span className="tn-fact-label">{tx("nftRoyalty", "NFT RESALE ROYALTY")}</span><strong>2<span className="tn-percent">%</span></strong><small>{tx("royaltyPaid", "Payable on marketplaces that support ERC-2981")}</small></div>
           <div className="tn-fact tn-fact-status"><span className="tn-fact-label">{tx("placementStatus", "PLACEMENT STATUS")}</span><strong><span className="tn-status-dot" /> {citizen ? tx("citizenSession", "Citizen session") : tx("signInRequired", "Sign-in required")}</strong><small>{citizen ? tx("privateRecord", "Your record is private to your account") : tx("profileRequired", "A profile is needed to reserve")}</small></div>
         </section>
 
@@ -486,7 +496,7 @@ export function Timenaming() {
                     </label>
                     <label className={`tn-package-option ${purchaseType === "ALL_INCLUSIVE" ? "selected" : ""} ${!config?.contractConfigured || !config?.ipfsPinningConfigured ? "disabled" : ""}`}>
                       <input type="radio" name="purchaseType" checked={purchaseType === "ALL_INCLUSIVE"} disabled={!config?.contractConfigured || !config?.ipfsPinningConfigured} onChange={() => setPurchaseType("ALL_INCLUSIVE")} />
-                      <span><strong>{tx("allInclusive", "All-inclusive license")}</strong><small>{config?.contractConfigured && config?.ipfsPinningConfigured ? tx("bundleReady", "Timeline + license + PDF · NFT mint depends on configuration and confirmation") : tx("bundleUnavailable", "NFT mint unavailable until Sepolia and IPFS pinning are configured")}</small></span><b>2 Д</b>
+                      <span><strong>{tx("allInclusive", "All-inclusive license")}</strong><small>{config?.contractConfigured && config?.ipfsPinningConfigured ? tx("bundleReady", "Timeline + license + PDF · NFT mint depends on configuration and confirmation") : tx("bundleUnavailable", "NFT mint unavailable until Sepolia and IPFS pinning are configured")}</small></span><b>{formatDarmins(2.04, lang)} Д</b>
                     </label>
                   </div>
                 )}
@@ -501,17 +511,17 @@ export function Timenaming() {
                   {!walletAddress && <p className="tn-form-hint">{tx("connectWalletHint", "Connect MetaMask on Sepolia or enter the public EVM address that should receive the NFT.")}</p>}
                 </>}
                 {!citizen && <p className="tn-form-hint">{tx("signInToPurchase", "Sign in as a citizen to purchase. No private key or secret is requested.")}</p>}
-                {citizen && !enoughBalance && <p className="tn-form-hint">{tx("needBalance", "You need {amount} Д beyond the protected ancestral minute.").replace("{amount}", String(purchaseCost))}</p>}
-                <div className="tn-cost-confirm"><span><strong>{purchaseCost} Д</strong> {tx("deductedFromBalance", "will be deducted from your transferable balance.")}</span><span>{tx("ancestralProtected", "ANCESTRAL MINUTE IS PROTECTED")}</span></div>
+                {citizen && !enoughBalance && <p className="tn-form-hint">{tx("needBalance", "You need {amount} Д beyond the protected ancestral minute.").replace("{amount}", formatDarmins(purchaseCost, lang))}</p>}
+                <div className="tn-cost-confirm"><span><strong>{formatDarmins(purchaseCost, lang)} Д</strong> {tx("deductedFromBalance", "will be deducted from your transferable balance.")}</span><span>{purchaseFee > 0 ? tx("commissionAndProtected", "Includes {fee} Д (2%) for the TimeNation treasury. Ancestral minute remains protected.").replace("{fee}", formatDarmins(purchaseFee, lang)) : tx("ancestralProtected", "ANCESTRAL MINUTE IS PROTECTED")}</span></div>
                 {reserveError && <div className="tn-inline-message tn-inline-error" role="alert" data-testid="error-reservation"><AlertCircle size={17} />{reserveError}</div>}
                 <button className="tn-button tn-button-primary" type="submit" disabled={reserving || !citizen || !enoughBalance || (((availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && !walletAddress) || ((availability.ownedByMe || purchaseType === "ALL_INCLUSIVE") && (!config?.contractConfigured || !config?.ipfsPinningConfigured)))} data-testid="button-reserve-minute">
                   {reserving ? <LoaderCircle size={16} className="tn-spin" /> : <Fingerprint size={17} />}
-                  {reserving ? tx("processingPurchase", "Processing purchase…") : availability.ownedByMe ? tx("upgradeToNft", "Upgrade to NFT license · +2 Д") : purchaseType === "ALL_INCLUSIVE" ? tx("buyBundle", "Buy all-inclusive · 2 Д") : tx("reserveFamilyButton", "Reserve for your family · 1 Д")}
+                  {reserving ? tx("processingPurchase", "Processing purchase…") : availability.ownedByMe ? tx("upgradeToNft", "Upgrade to NFT license · +2.04 Д") : purchaseType === "ALL_INCLUSIVE" ? tx("buyBundle", "Buy all-inclusive · 2.04 Д") : tx("reserveFamilyButton", "Reserve for your family · 1 Д")}
                   {!reserving && <ArrowUpRight size={16} />}
                 </button>
                 {purchaseType === "ALL_INCLUSIVE" || availability.ownedByMe
                   ? <p className="tn-draft-copy" data-testid="status-terms-review"><CircleHelp size={14} />{help.reviewNote} {tx("mintRequiresConfiguration", "NFT minting requires Sepolia configuration.")}</p>
-                  : <p className="tn-draft-copy">{tx("upgradeLater", "A Timeline reservation can be upgraded later for +2 Д.")}</p>}
+                  : <p className="tn-draft-copy">{tx("upgradeLater", "A Timeline reservation can be upgraded later for 2.04 Д including the 2% TimeNation fee.")}</p>}
                 <a className="tn-form-learn" href="#legal-help"><CircleHelp size={14} />{help.learnMore}<ArrowUpRight size={13} /></a>
               </form>
             )}
@@ -521,7 +531,7 @@ export function Timenaming() {
             <section className="tn-process-card">
               <span className="tn-overline">{tx("clearDistinction", "A CLEAR DISTINCTION")}</span>
               <h3>{tx("recordFirst", "Record first.")}<br />{tx("chainIfAvailable", "Chain, if available.")}</h3>
-              <div className="tn-process-step"><span className="tn-process-number">01</span><div><strong>{tx("reserve", "Reserve")}</strong><p>{tx("timelineCost", "Timeline 1 Д · all-inclusive 2 Д · upgrade +2 Д.")}</p></div><span className="tn-process-state">{tx("citizenRecord", "CITIZEN RECORD")}</span></div>
+              <div className="tn-process-step"><span className="tn-process-number">01</span><div><strong>{tx("reserve", "Reserve")}</strong><p>{tx("timelineCost", "Timeline 1 Д · all-inclusive and upgrade 2.04 Д including the 2% TimeNation fee.")}</p></div><span className="tn-process-state">{tx("citizenRecord", "CITIZEN RECORD")}</span></div>
               <div className="tn-process-step"><span className="tn-process-number">02</span><div><strong>{tx("document", "Document")}</strong><p>{tx("generateLicense", "Generate a placement license PDF for your record.")}</p></div><span className="tn-process-state">{tx("license", "LICENSE")}</span></div>
               <div className="tn-process-step"><span className="tn-process-number">03</span><div><strong>{tx("mintIfConfigured", "Mint, if configured")}</strong><p>{tx("nftSeparate", "NFT issuance is a separate action on Sepolia, not part of reservation.")}</p></div><span className="tn-process-state tn-process-pending">{tx("sepolia", "SEPOLIA")}</span></div>
               <div className="tn-process-foot"><Shield size={16} /><span>{tx("uniqueMinute", "One-minute placements are bound to a unique historical minute. Inherited minutes are protected.")}</span></div>
@@ -570,8 +580,8 @@ export function Timenaming() {
                         {license.certificateIpfsUri && <a className="tn-tx-link" href={ipfsGatewayUrl(license.certificateIpfsUri)} target="_blank" rel="noreferrer" data-testid={`link-ipfs-certificate-${id}`}>{tx("ipfsCertificate", "IPFS certificate")} <ArrowUpRight size={13} /></a>}
                         {license.metadataUri && <a className="tn-tx-link" href={ipfsGatewayUrl(license.metadataUri)} target="_blank" rel="noreferrer" data-testid={`link-ipfs-metadata-${id}`}>{tx("nftMetadata", "NFT metadata")} <ArrowUpRight size={13} /></a>}
                       {!nftComplete && (
-                          <button className="tn-mint-button" type="button" onClick={() => void mintNft(license)} disabled={working !== null || !config?.contractConfigured || !config?.ipfsPinningConfigured || !recordId(license) || nftPending} title={!config?.contractConfigured ? tx("contractNotConfigured", "The relayer is not configured.") : !config?.ipfsPinningConfigured ? tx("ipfsPinningNotConfigured", "IPFS pinning is not configured.") : tx("upgradeSepoliaHint", "Upgrade and mint on Sepolia for 2 Д")} data-testid={`button-mint-${id}`}>
-                           {working === `mint-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Sparkles size={14} />} {nftPending ? tx("mintPendingButton", "Mint pending") : tx("upgradeMint", "Upgrade / mint · +2 Д")}
+                          <button className="tn-mint-button" type="button" onClick={() => void mintNft(license)} disabled={working !== null || !config?.contractConfigured || !config?.ipfsPinningConfigured || !recordId(license) || nftPending} title={!config?.contractConfigured ? tx("contractNotConfigured", "The relayer is not configured.") : !config?.ipfsPinningConfigured ? tx("ipfsPinningNotConfigured", "IPFS pinning is not configured.") : tx("upgradeSepoliaHint", "Upgrade and mint on Sepolia for 2.04 Д including the 2% TimeNation fee.")} data-testid={`button-mint-${id}`}>
+                           {working === `mint-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Sparkles size={14} />} {nftPending ? tx("mintPendingButton", "Mint pending") : tx("upgradeMint", "Upgrade / mint · +2.04 Д")}
                         </button>
                       )}
                     </div>

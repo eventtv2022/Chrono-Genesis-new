@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Tv, Users, History, ShoppingCart, UserPlus, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X, ShieldCheck, QrCode, Database, CalendarClock, CircleHelp } from "lucide-react";
+import { Activity, Tv, Users, History, ShoppingCart, UserPlus, UserRound, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X, ShieldCheck, QrCode, Database, CalendarClock, CircleHelp } from "lucide-react";
 import { SystemClock } from "./SystemClock";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -177,6 +177,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/timenaming", label: lang === "ru" ? "Именование времени" : "Timenaming", icon: CalendarClock },
     { href: "/timenaming#legal-help", label: timenamingCopy[lang].helpNav, icon: CircleHelp },
     { href: "/shop",      label: t.nav_treasury,        icon: ShoppingCart },
+    ...(citizen && authToken
+      ? [{ href: "/profile", label: lang === "ru" ? "Профиль" : "Profile", icon: UserRound }]
+      : []),
     ...(citizen && authToken
       ? [{ href: "/referrals", label: lang === "ru" ? "Рефералы" : "Referrals", icon: UserPlus }]
       : []),
