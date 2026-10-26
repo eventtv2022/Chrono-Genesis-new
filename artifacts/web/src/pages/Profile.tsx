@@ -39,6 +39,7 @@ export function Profile() {
   const [consent, setConsent] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+  const [passportPhotoUrl, setPassportPhotoUrl] = useState<string | null>(null);
   const fileInputs = useRef<Record<"resume" | "portfolio", HTMLInputElement | null>>({ resume: null, portfolio: null });
   const t = isRu ? {
     eyebrow: "ЛИЧНЫЙ КАБИНЕТ", title: "Профиль", docs: "Резюме и портфолио",
@@ -104,6 +105,39 @@ export function Profile() {
     return () => controller.abort();
   }, [loadProfileData]);
 
+  useEffect(() => {
+    if (!citizen?.id || !citizen.photoUrl || !authToken) {
+      setPassportPhotoUrl(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    setPassportPhotoUrl(null);
+
+    void fetch(`/api/citizens/${citizen.id}/photo`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Passport photo unavailable");
+        return response.blob();
+      })
+      .then((photo) => {
+        if (controller.signal.aborted) return;
+        objectUrl = URL.createObjectURL(photo);
+        setPassportPhotoUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setPassportPhotoUrl(null);
+      });
+
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [citizen?.id, citizen?.photoUrl, authToken]);
+
   const mutateDocument = async (request: () => Promise<Response>) => {
     setBusy(true); setError("");
     try {
@@ -157,7 +191,7 @@ export function Profile() {
       <header className="flex items-center justify-between">
         <div><p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">{t.eyebrow}</p><h1 className="mt-1 text-3xl font-bold tracking-tight">{t.title}</h1></div>
         <div className="grid h-14 w-14 place-items-center overflow-hidden rounded-full border border-primary/30 bg-primary/10 text-xl font-bold text-primary" aria-label={isRu ? "Аватар гражданина" : "Citizen avatar"}>
-          {citizen?.photoUrl ? <img src={citizen.photoUrl} alt="" className="h-full w-full object-cover" /> : citizen?.name?.trim().charAt(0).toLocaleUpperCase() || "?"}
+          {passportPhotoUrl ? <img src={passportPhotoUrl} alt="" className="h-full w-full object-cover" /> : citizen?.name?.trim().charAt(0).toLocaleUpperCase() || "?"}
         </div>
       </header>
       {!authToken ? <section className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">{t.signIn}<Link className="ml-3 font-semibold text-primary hover:underline" href="/login?returnTo=%2Fprofile">{t.signInButton}</Link></section> : <>

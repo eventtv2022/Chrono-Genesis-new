@@ -180,9 +180,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ...(citizen && authToken
       ? [{ href: "/profile", label: lang === "ru" ? "Профиль" : "Profile", icon: UserRound }]
       : []),
-    ...(citizen && authToken
-      ? [{ href: "/referrals", label: lang === "ru" ? "Рефералы" : "Referrals", icon: UserPlus }]
-      : []),
     { href: "/register",  label: t.nav_become_citizen,  icon: UserPlus  },
     { href: "/passport-lookup", label: t.nav_passport,  icon: Search    },
     { href: "/time",      label: t.nav_time,            icon: Clock     },
