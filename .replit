@@ -23,6 +23,7 @@ timeoutMs = 120000
 
 [userenv.shared]
 GOV_ACCESS_PASSWORD = "7137"
+TIMENAMING_CONTRACT_ADDRESS = "0x717B7f28D256C70302fe238c4DEdf7F5dDCF8864"
 
 [nix]
 channel = "stable-25_05"
