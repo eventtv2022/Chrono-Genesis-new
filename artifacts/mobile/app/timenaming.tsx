@@ -33,7 +33,10 @@ function minuteCoord(date: string, time: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date.trim());
   if (!match || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time.trim())) return "";
   const [, year, month, day] = match;
-  const parsed = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  // Date.UTC treats years 0–99 as 1900–1999. setUTCFullYear preserves
+  // four-digit historical years such as 0001 shown for early Timeline minutes.
+  const parsed = new Date(0);
+  parsed.setUTCFullYear(Number(year), Number(month) - 1, Number(day));
   if (parsed.getUTCFullYear() !== Number(year) || parsed.getUTCMonth() !== Number(month) - 1 || parsed.getUTCDate() !== Number(day)) return "";
   return `${year}${month}${day}${time.slice(0, 2)}${time.slice(3, 5)}`;
 }
@@ -146,11 +149,15 @@ export default function TimenamingScreen() {
   };
 
   const check = async () => {
-    setError(""); setSuccess(""); setCheckedCoord("");
+    setError(""); setSuccess("");
     const coord = minuteCoord(date, time);
     if (!coord) { setError(text.dateInvalid); return; }
+    if (coord === checkedCoord) {
+      const result = await checkQuery.refetch();
+      if (result.error) setError(result.error instanceof Error ? result.error.message : text.error);
+      return;
+    }
     setCheckedCoord(coord);
-    void queryClient.invalidateQueries({ queryKey: getCheckTimenamingMinuteQueryKey(coord), exact: true });
   };
 
   const submit = async () => {
@@ -308,7 +315,7 @@ export default function TimenamingScreen() {
             {!citizen && <Text style={[styles.notice, { color: colors.mutedForeground }]}>{text.signIn}</Text>}
             {citizen && !enoughBalance && <Text style={[styles.notice, { color: colors.destructive }]}>{ru ? `Нужно ${purchaseCost.toLocaleString("ru-RU")} Д сверх защищённой родовой минуты.` : `You need ${purchaseCost} Д beyond the protected ancestral minute.`}</Text>}
             {button(
-              busy === "reserve" ? (ru ? "Обрабатываем…" : "Processing…") : text.reserve,
+              busy === "reserve" ? (ru ? "Обрабатываем…" : "Processing…") : availability?.ownedByMe ? text.upgrade : text.reserve,
               () => void submit(),
               busy !== "" || !citizen || !enoughBalance || (needsNft && (!config?.contractConfigured || !config?.ipfsPinningConfigured)),
               "shield",

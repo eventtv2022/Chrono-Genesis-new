@@ -21,6 +21,12 @@ Pricing and upgrade rules: a Timeline family-minute claim costs 1 Д; a direct a
 
 **How to apply:** Keep Timeline as the shared unique-coordinate registry. Direct bundle purchase must be gated on mint readiness, and an upgrade must validate ownership and charge atomically before issuing the license and NFT.
 
+When a citizen checks a minute they already captured, take them straight to the NFT-upgrade flow instead of asking them to reserve it again.
+
+**Why:** the user requested this behavior for previously captured minutes.
+
+**How to apply:** Resolve minute ownership through the authenticated availability check, show the NFT details and confirmation action for the citizen's own reservation, and never offer an upgrade for another citizen's reservation.
+
 The user chose Pinata for IPFS pinning. Only the successfully minted NFT flow pins its certificate PDF and metadata before sending the transaction, then passes an `ipfs://` metadata URI to the contract; ordinary placement certificates are not automatically IPFS-pinned. Describe availability as dependent on continued pinning or independent replicas; do not promise permanent access. Sepolia is a test network, not mainnet.
 
 **Why:** the user asked to implement IPFS before adding FAQ claims about decentralized storage and shutdown resilience.
