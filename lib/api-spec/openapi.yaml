@@ -1134,6 +1134,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /timeline/my-anchors:
+    get:
+      operationId: listMyTimelineAnchors
+      tags: [timeline]
+      summary: List the authenticated citizen's timeline reservations
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Timeline anchors owned by the authenticated citizen
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimelineMyAnchor"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /timeline/anchor:
     post:
       operationId: anchorTimeline
@@ -2536,6 +2559,25 @@ components:
         - citizenId
         - status
         - createdAt
+
+    TimelineMyAnchor:
+      type: object
+      properties:
+        timelineCoord:
+          type: string
+          pattern: "^\\d{12}$"
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        capsuleText:
+          type: ["string", "null"]
+        mediaUrl:
+          type: ["string", "null"]
+        mediaType:
+          type: ["string", "null"]
+      required: [timelineCoord, status, createdAt, capsuleText, mediaUrl, mediaType]
 
     TimelineAnchorResult:
       type: object

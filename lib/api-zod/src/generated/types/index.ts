@@ -91,6 +91,7 @@ export * from './timelineExchangeRequest';
 export * from './timelineExchangeRequestStatus';
 export * from './timelineExchangeResponseInput';
 export * from './timelineExchangeResponseInputAction';
+export * from './timelineMyAnchor';
 export * from './timelineOccupiedEntry';
 export * from './timenamingAvailability';
 export * from './timenamingCertificateResult';

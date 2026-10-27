@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Alert, Linking, Platform, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
@@ -13,15 +13,18 @@ import { useCitizen } from "@/context/CitizenContext";
 import {
   downloadTimenamingCertificate,
   getCheckTimenamingMinuteQueryKey,
+  getListMyTimelineAnchorsQueryKey,
   getListMyTimenamingLicensesQueryKey,
   useCheckTimenamingMinute,
   useGenerateTimenamingCertificate,
   useGetTimenamingConfig,
+  useListMyTimelineAnchors,
   useListMyTimenamingLicenses,
   useMintTimenamingNft,
   useReserveTimenamingMinute,
   useUpgradeTimenamingMinute,
   type TimenamingLicense,
+  type TimelineMyAnchor,
   type TimenamingReservationInput,
   type TimenamingUpgradeInput,
 } from "@workspace/api-client-react";
@@ -47,6 +50,9 @@ export default function TimenamingScreen() {
   const { lang } = useLanguage();
   const { citizen, authToken, refreshCitizen } = useCitizen();
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
+  const { coord: routeCoord } = useLocalSearchParams<{ coord?: string | string[] }>();
+  const initialCoord = Array.isArray(routeCoord) ? routeCoord[0] : routeCoord;
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const ru = lang === "ru";
@@ -62,21 +68,32 @@ export default function TimenamingScreen() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const configQuery = useGetTimenamingConfig();
-  const mineQuery = useListMyTimenamingLicenses({ query: { queryKey: getListMyTimenamingLicensesQueryKey(), enabled: Boolean(authToken), retry: false } });
-  const checkQuery = useCheckTimenamingMinute(checkedCoord, { query: { queryKey: getCheckTimenamingMinuteQueryKey(checkedCoord), enabled: Boolean(checkedCoord), retry: false } });
+  const mineQuery = useListMyTimenamingLicenses({ query: { queryKey: [...getListMyTimenamingLicensesQueryKey(), citizen?.id], enabled: Boolean(authToken), retry: false } });
+  const anchorsQuery = useListMyTimelineAnchors({ query: { queryKey: [...getListMyTimelineAnchorsQueryKey(), citizen?.id], enabled: Boolean(authToken), retry: false } });
+  const checkQuery = useCheckTimenamingMinute(checkedCoord, { query: { queryKey: [...getCheckTimenamingMinuteQueryKey(checkedCoord), citizen?.id], enabled: Boolean(checkedCoord), retry: false } });
   const reserveMutation = useReserveTimenamingMinute();
   const upgradeMutation = useUpgradeTimenamingMinute();
   const mintMutation = useMintTimenamingNft();
   const certificateMutation = useGenerateTimenamingCertificate();
   const config = configQuery.data ?? null;
   const licenses = mineQuery.data?.licenses ?? [];
+  const anchors: TimelineMyAnchor[] = anchorsQuery.data ?? [];
+  const anchorByCoord = new Map(anchors.map((anchor) => [anchor.timelineCoord, anchor]));
+  const minuteCoords = [...new Set([
+    ...anchors.map((anchor) => anchor.timelineCoord),
+    ...licenses.map((license) => license.timelineCoord).filter((coord): coord is string => Boolean(coord)),
+  ])].sort((a, b) => b.localeCompare(a));
   const availability = checkQuery.data ?? null;
   const loadingConfig = configQuery.isLoading;
   const loadingMine = mineQuery.isLoading;
   const checking = checkQuery.isFetching;
   const configError = configQuery.error instanceof Error ? configQuery.error.message : "";
   const mineError = mineQuery.error instanceof Error ? mineQuery.error.message : "";
+  const anchorsError = anchorsQuery.error instanceof Error ? anchorsQuery.error.message : "";
   const checkError = checkQuery.error instanceof Error ? checkQuery.error.message : "";
+  const minuteIsMinted = availability?.minuteStatus === "MINTED";
+  const minuteMintIsPending = availability?.minuteStatus === "MINT_PENDING";
+  const minuteHasLicense = Boolean(availability?.license);
   const needsNft = Boolean(availability?.ownedByMe || purchaseType === "ALL_INCLUSIVE");
   const purchaseCost = needsNft ? 2.04 : 1;
   const enoughBalance = (citizen?.balanceMinutes ?? 0) - purchaseCost >= 1;
@@ -95,9 +112,13 @@ export default function TimenamingScreen() {
     note: ru ? "Описание · необязательно" : "Description · optional", wallet: ru ? "Публичный EVM-адрес получателя" : "Public EVM recipient address",
     publicNote: ru ? "Название, описание и адрес кошелька могут быть публичными. Не вводите секреты или личные данные." : "The title, description, and wallet address may be public. Do not enter secrets or private information.",
     reserve: ru ? "Оформить" : "Continue",
-    placements: ru ? "Мои минуты" : "My minutes", empty: ru ? "Пока нет оформленных минут." : "No minutes yet.",
+    placements: ru ? "Мои минуты" : "My minutes", empty: ru ? "Пока нет закреплённых минут." : "No reserved minutes yet.",
+    reservedOnly: ru ? "Забронирована в истории · без NFT" : "Reserved in Timeline · no NFT",
+    onAuction: ru ? "На аукционе" : "On auction",
+    upgrade: ru ? "Оформить NFT" : "Create NFT",
     certificate: ru ? "Скачать лицензию" : "Download license", mint: ru ? "Выпустить NFT · 2,04 Д" : "Mint NFT · 2.04 Д",
     minted: ru ? "NFT выпущен" : "NFT minted", pending: ru ? "Ожидает подтверждения" : "Pending confirmation",
+    licenseExists: ru ? "Лицензия уже оформлена. Продолжите выпуск NFT в списке «Мои минуты»." : "A license already exists. Continue minting from My minutes below.",
     claimed: ru ? "Запись оформлена" : "Reserved", signIn: ru ? "Войдите в аккаунт гражданина, чтобы оформить минуту." : "Sign in as a citizen to reserve a minute.",
     retry: ru ? "Повторить" : "Retry", error: ru ? "Не удалось выполнить запрос." : "Request failed.",
     dateInvalid: ru ? "Укажите дату и время UTC." : "Enter a valid date and UTC time.",
@@ -106,6 +127,23 @@ export default function TimenamingScreen() {
 
   useEffect(() => { if (citizen?.name) setOwnerName(citizen.name); }, [citizen?.name]);
   useEffect(() => { if (citizen?.walletAddress) setWallet(citizen.walletAddress); }, [citizen?.walletAddress]);
+  useEffect(() => {
+    if (!initialCoord || !/^\d{12}$/.test(initialCoord)) return;
+    setDate(`${initialCoord.slice(0, 4)}-${initialCoord.slice(4, 6)}-${initialCoord.slice(6, 8)}`);
+    setTime(`${initialCoord.slice(8, 10)}:${initialCoord.slice(10, 12)}`);
+    setCheckedCoord(initialCoord);
+  }, [initialCoord]);
+
+  const prepareNftUpgrade = (coord: string) => {
+    if (!/^\d{12}$/.test(coord)) return;
+    setDate(`${coord.slice(0, 4)}-${coord.slice(4, 6)}-${coord.slice(6, 8)}`);
+    setTime(`${coord.slice(8, 10)}:${coord.slice(10, 12)}`);
+    setCheckedCoord(coord);
+    setPurchaseType("TIMELINE_ONLY");
+    setError("");
+    setSuccess("");
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  };
 
   const check = async () => {
     setError(""); setSuccess(""); setCheckedCoord("");
@@ -137,6 +175,8 @@ export default function TimenamingScreen() {
       setCheckedCoord(""); setDate(""); setTime(""); setTitle(""); setDescription("");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getListMyTimenamingLicensesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getListMyTimelineAnchorsQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: ["myAnchors"] }),
         refreshCitizen(),
       ]);
     } catch (cause) { setError(cause instanceof Error ? cause.message : text.error); }
@@ -151,6 +191,8 @@ export default function TimenamingScreen() {
       await mintMutation.mutateAsync({ certificateId: String(id) });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getListMyTimenamingLicensesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getListMyTimelineAnchorsQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: ["myAnchors"] }),
         refreshCitizen(),
       ]);
     } catch (cause) { setError(cause instanceof Error ? cause.message : text.error); }
@@ -194,7 +236,7 @@ export default function TimenamingScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={{ padding: 18, paddingTop: Math.max(insets.top, 16) + 12, paddingBottom: insets.bottom + 36, gap: 14 }}>
+      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 18, paddingTop: Math.max(insets.top, 16) + 12, paddingBottom: insets.bottom + 36, gap: 14 }}>
         <View style={styles.topRow}>
           <TouchableOpacity accessibilityRole="button" accessibilityLabel={ru ? "Назад" : "Back"} onPress={() => router.back()} style={[styles.back, { borderColor: colors.border }]}>
             <Feather name="arrow-left" size={19} color={colors.foreground} />
@@ -239,10 +281,13 @@ export default function TimenamingScreen() {
           {!!checkError && <Text style={[styles.notice, { color: colors.destructive }]}>{checkError}</Text>}
           {availability && <View style={[styles.status, { borderColor: availability.available && !availability.reserved ? colors.success : colors.border }]}>
             <Feather name={availability.available && !availability.reserved ? "check-circle" : "lock"} size={18} color={availability.available && !availability.reserved ? colors.success : colors.primary} />
-            <Text style={[styles.statusText, { color: colors.foreground }]}>{availability.ownedByMe ? text.myMinute : availability.available && !availability.reserved ? text.available : text.taken}{` · ${formatMinute(minuteCoord(date, time))}`}</Text>
+            <Text style={[styles.statusText, { color: colors.foreground }]}>{minuteIsMinted ? text.minted : minuteMintIsPending ? text.pending : minuteHasLicense ? text.claimed : availability.ownedByMe ? text.myMinute : availability.available && !availability.reserved ? text.available : text.taken}{` · ${formatMinute(minuteCoord(date, time))}`}</Text>
           </View>}
+          {minuteHasLicense && !minuteIsMinted && !minuteMintIsPending && (
+            <Text style={[styles.notice, { color: colors.mutedForeground }]}>{text.licenseExists}</Text>
+          )}
           {!!success && <Text style={[styles.notice, { color: colors.success }]}>{success}</Text>}
-          {availability && (availability.ownedByMe || (availability.available && !availability.reserved)) && <>
+          {availability && (availability.ownedByMe || (availability.available && !availability.reserved)) && !minuteHasLicense && !minuteIsMinted && !minuteMintIsPending && <>
             {!availability.ownedByMe && <>
               <Text style={[styles.label, { color: colors.mutedForeground, marginTop: 8 }]}>{text.choose}</Text>
               {(["TIMELINE_ONLY", "ALL_INCLUSIVE"] as const).map((option) => (
@@ -272,29 +317,50 @@ export default function TimenamingScreen() {
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.listHeader}>{heading(text.placements)}<TouchableOpacity onPress={() => void mineQuery.refetch()} disabled={!authToken || loadingMine}><Feather name="refresh-cw" size={17} color={colors.primary} /></TouchableOpacity></View>
-          {loadingMine ? <ActivityIndicator color={colors.primary} /> : !authToken ? <Text style={[styles.copy, { color: colors.mutedForeground }]}>{text.signIn}</Text> : mineError ? <Text style={[styles.copy, { color: colors.destructive }]}>{mineError}</Text> : licenses.length === 0 ? <Text style={[styles.copy, { color: colors.mutedForeground }]}>{text.empty}</Text> : licenses.map((license, index) => {
-            const id = license.certificateId ?? license.id ?? index;
-            const minted = license.status === "MINTED" || license.status === "ACTIVE_NFT" || !!license.tokenId;
-            const pending = license.status === "MINT_PENDING";
+          <View style={styles.listHeader}>{heading(text.placements)}<TouchableOpacity onPress={() => { void mineQuery.refetch(); void anchorsQuery.refetch(); }} disabled={!authToken || loadingMine || anchorsQuery.isLoading}><Feather name="refresh-cw" size={17} color={colors.primary} /></TouchableOpacity></View>
+          {loadingMine || anchorsQuery.isLoading ? <ActivityIndicator color={colors.primary} /> : !authToken ? <Text style={[styles.copy, { color: colors.mutedForeground }]}>{text.signIn}</Text> : mineError || anchorsError ? <View style={styles.errorBox}><Text style={{ color: colors.destructive, flex: 1 }}>{mineError || anchorsError}</Text><TouchableOpacity onPress={() => { void mineQuery.refetch(); void anchorsQuery.refetch(); }}><Text style={[styles.smallText, { color: colors.destructive }]}>{text.retry}</Text></TouchableOpacity></View> : minuteCoords.length === 0 ? <Text style={[styles.copy, { color: colors.mutedForeground }]}>{text.empty}</Text> : minuteCoords.map((coord, index) => {
+            const license = licenses.find((item) => item.timelineCoord === coord);
+            const anchor = anchorByCoord.get(coord);
+            const id = license?.certificateId ?? license?.id ?? coord ?? index;
+            const minted = license?.status === "MINTED" || license?.status === "ACTIVE_NFT" || !!license?.tokenId;
+            const pending = license?.status === "MINT_PENDING";
+            const anchorStatus = anchor?.status.toLowerCase();
+            const anchorStatusLabel = anchorStatus === "on_auction"
+              ? text.onAuction
+              : anchorStatus === "minted"
+                ? text.minted
+                : text.reservedOnly;
+            const canUpgrade = Boolean(anchor) && !license && anchorStatus !== "on_auction" && anchorStatus !== "minted" && anchorStatus !== "mint_pending";
             return <View key={String(id)} style={[styles.license, { borderTopColor: colors.border }]}>
-              <Text style={[styles.label, { color: colors.mutedForeground }]}>{formatMinute(license.timelineCoord)}</Text>
-              <Text style={[styles.licenseTitle, { color: colors.foreground }]}>{license.customTitle || (ru ? "Запись без названия" : "Untitled minute")}</Text>
-              <Text style={[styles.caption, { color: colors.mutedForeground }]}>{license.ownerName ?? ""} · {minted ? text.minted : pending ? text.pending : text.claimed}</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>{formatMinute(coord)}</Text>
+              <Text style={[styles.licenseTitle, { color: colors.foreground }]}>{license?.customTitle || (ru ? "Минута в истории" : "Timeline minute")}</Text>
+              <Text style={[styles.caption, { color: colors.mutedForeground }]}>
+                {license?.ownerName ?? (anchor ? anchorStatusLabel : text.reservedOnly)}
+                {license ? ` · ${minted ? text.minted : pending ? text.pending : text.claimed}` : ""}
+              </Text>
               <View style={styles.actions}>
-                <TouchableOpacity disabled={busy !== ""} onPress={() => void downloadCertificate(license)} style={[styles.smallButton, { borderColor: colors.border }]}>
-                  {busy === `pdf-${id}` ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="download" size={15} color={colors.primary} />}
-                  <Text style={[styles.smallText, { color: colors.primary }]}>{text.certificate}</Text>
-                </TouchableOpacity>
-                {!minted && !pending && <TouchableOpacity disabled={busy !== "" || !config?.contractConfigured || !config?.ipfsPinningConfigured} onPress={() => void mint(license)} style={[styles.smallButton, { borderColor: colors.primary, opacity: config?.contractConfigured && config.ipfsPinningConfigured ? 1 : 0.5 }]}>
-                  {busy === `mint-${id}` ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="zap" size={15} color={colors.primary} />}
-                  <Text style={[styles.smallText, { color: colors.primary }]}>{text.mint}</Text>
+                {license ? <>
+                  <TouchableOpacity disabled={busy !== ""} onPress={() => void downloadCertificate(license)} style={[styles.smallButton, { borderColor: colors.border }]}>
+                    {busy === `pdf-${id}` ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="download" size={15} color={colors.primary} />}
+                    <Text style={[styles.smallText, { color: colors.primary }]}>{text.certificate}</Text>
+                  </TouchableOpacity>
+                  {!minted && !pending && <TouchableOpacity disabled={busy !== "" || !config?.contractConfigured || !config?.ipfsPinningConfigured} onPress={() => void mint(license)} style={[styles.smallButton, { borderColor: colors.primary, opacity: config?.contractConfigured && config.ipfsPinningConfigured ? 1 : 0.5 }]}>
+                    {busy === `mint-${id}` ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="zap" size={15} color={colors.primary} />}
+                    <Text style={[styles.smallText, { color: colors.primary }]}>{text.mint}</Text>
+                  </TouchableOpacity>}
+                </> : <TouchableOpacity
+                  disabled={busy !== "" || !canUpgrade}
+                  onPress={() => prepareNftUpgrade(coord)}
+                  style={[styles.smallButton, { borderColor: colors.primary, opacity: canUpgrade ? 1 : 0.5 }]}
+                >
+                  <Feather name="award" size={15} color={colors.primary} />
+                  <Text style={[styles.smallText, { color: colors.primary }]}>{text.upgrade}</Text>
                 </TouchableOpacity>}
               </View>
-              {!!license.transactionHash && <TouchableOpacity onPress={() => void Linking.openURL(license.explorerUrl ?? `https://sepolia.etherscan.io/tx/${license.transactionHash}`)}>
+              {!!license?.transactionHash && <TouchableOpacity onPress={() => void Linking.openURL(license.explorerUrl ?? `https://sepolia.etherscan.io/tx/${license.transactionHash}`)}>
                 <Text style={[styles.link, { color: colors.primary }]}>{ru ? "Открыть транзакцию в Sepolia Explorer" : "View transaction in Sepolia Explorer"}</Text>
               </TouchableOpacity>}
-              {!!license.certificateIpfsUri && <Text style={[styles.caption, { color: colors.mutedForeground }]}>{license.certificateIpfsUri}</Text>}
+              {!!license?.certificateIpfsUri && <Text style={[styles.caption, { color: colors.mutedForeground }]}>{license.certificateIpfsUri}</Text>}
             </View>;
           })}
         </View>

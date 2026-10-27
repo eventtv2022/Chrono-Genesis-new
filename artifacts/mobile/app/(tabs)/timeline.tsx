@@ -1114,6 +1114,18 @@ export default function TimelineScreen() {
               )}
             </TouchableOpacity>
           )}
+          {citizen && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={lang === "ru" ? "Оформить NFT-минуту" : "Create an NFT minute"}
+              testID="button-timeline-nft-minute"
+              style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary, borderRadius: 8, minHeight: 36, paddingHorizontal: 12 }}
+              onPress={() => router.push("/timenaming")}
+            >
+              <Feather name="award" size={15} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" }}>{lang === "ru" ? "NFT-минуты" : "NFT minutes"}</Text>
+            </TouchableOpacity>
+          )}
           {stopTimeNotice ? <Text accessibilityRole="alert" style={styles.stopTimeNotice}>{stopTimeNotice}</Text> : null}
         </View>
       </View>
@@ -1631,6 +1643,33 @@ export default function TimelineScreen() {
                 <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{t.tl_open_timeline}</Text>
               </View>
             </Pressable>
+
+            {selectedAnchor
+              && myAnchors.some((anchor) => anchor.timelineCoord === selectedAnchor.timelineCoord)
+              && !["on_auction", "minted", "mint_pending"].includes(selectedAnchor.status.toLowerCase())
+              && (
+              <Pressable
+                testID="button-timeline-anchor-nft"
+                accessibilityRole="button"
+                accessibilityLabel={lang === "ru" ? "Оформить NFT для этой минуты" : "Create an NFT for this minute"}
+                style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]}
+                onPress={() => {
+                  if (!selectedAnchor) return;
+                  const coord = selectedAnchor.timelineCoord;
+                  setShowAnchorActions(false);
+                  setShowMyAnchors(false);
+                  router.push({ pathname: "/timenaming", params: { coord } });
+                }}
+              >
+                <View style={[styles.asIconBox, { backgroundColor: colors.primary + "22" }]}>
+                  <Feather name="award" size={18} color={colors.primary} />
+                </View>
+                <View style={styles.asRowText}>
+                  <Text style={[styles.asRowTitle, { color: colors.foreground }]}>{lang === "ru" ? "Оформить NFT-минуту" : "Create NFT minute"}</Text>
+                  <Text style={[styles.asRowSub, { color: colors.mutedForeground }]}>{lang === "ru" ? "Выпустить NFT для этого якоря" : "Mint an NFT for this anchor"}</Text>
+                </View>
+              </Pressable>
+            )}
 
             <Pressable style={({ pressed }) => [styles.asRow, { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, cursor: "pointer" as never }]} onPress={() => {
               setShowAnchorActions(false);

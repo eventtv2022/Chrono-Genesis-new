@@ -625,6 +625,19 @@ export interface TimelineAnchor {
   createdAt: string;
 }
 
+export interface TimelineMyAnchor {
+  /** @pattern ^\d{12}$ */
+  timelineCoord: string;
+  status: string;
+  createdAt: string;
+  /** @nullable */
+  capsuleText: string | null;
+  /** @nullable */
+  mediaUrl: string | null;
+  /** @nullable */
+  mediaType: string | null;
+}
+
 export interface TimelineAnchorResult {
   anchor: TimelineAnchor;
   newBalance: number;

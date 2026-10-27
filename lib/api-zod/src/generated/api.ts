@@ -939,6 +939,23 @@ export const LinkWalletResponse = zod.object({
 
 
 /**
+ * @summary List the authenticated citizen's timeline reservations
+ */
+export const listMyTimelineAnchorsResponseTimelineCoordRegExp = new RegExp('^\\d{12}$');
+
+
+export const ListMyTimelineAnchorsResponseItem = zod.object({
+  "timelineCoord": zod.string().regex(listMyTimelineAnchorsResponseTimelineCoordRegExp),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "capsuleText": zod.string().nullable(),
+  "mediaUrl": zod.string().nullable(),
+  "mediaType": zod.string().nullable()
+})
+export const ListMyTimelineAnchorsResponse = zod.array(ListMyTimelineAnchorsResponseItem)
+
+
+/**
  * @summary Anchor a timeline minute coordinate
  */
 export const anchorTimelineBodyTimelineCoordRegExp = new RegExp('^\\d{12}$');

@@ -83,6 +83,7 @@ import type {
   TimelineExchangeInput,
   TimelineExchangeRequest,
   TimelineExchangeResponseInput,
+  TimelineMyAnchor,
   TimelineOccupiedEntry,
   TimenamingAvailability,
   TimenamingCertificateResult,
@@ -3192,6 +3193,83 @@ export const useLinkWallet = <TError = ErrorType<ErrorResponse>,
       > => {
       return useMutation(getLinkWalletMutationOptions(options));
     }
+
+export const getListMyTimelineAnchorsUrl = () => {
+
+
+
+
+  return `/api/timeline/my-anchors`
+}
+
+/**
+ * @summary List the authenticated citizen's timeline reservations
+ */
+export const listMyTimelineAnchors = async ( options?: RequestInit): Promise<TimelineMyAnchor[]> => {
+
+  return customFetch<TimelineMyAnchor[]>(getListMyTimelineAnchorsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMyTimelineAnchorsQueryKey = () => {
+    return [
+    `/api/timeline/my-anchors`
+    ] as const;
+    }
+
+
+export const getListMyTimelineAnchorsQueryOptions = <TData = Awaited<ReturnType<typeof listMyTimelineAnchors>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyTimelineAnchors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMyTimelineAnchorsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyTimelineAnchors>>> = ({ signal }) => listMyTimelineAnchors({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMyTimelineAnchors>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMyTimelineAnchorsQueryResult = NonNullable<Awaited<ReturnType<typeof listMyTimelineAnchors>>>
+export type ListMyTimelineAnchorsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List the authenticated citizen's timeline reservations
+ */
+
+export function useListMyTimelineAnchors<TData = Awaited<ReturnType<typeof listMyTimelineAnchors>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyTimelineAnchors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMyTimelineAnchorsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getAnchorTimelineUrl = () => {
 
