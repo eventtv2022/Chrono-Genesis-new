@@ -271,6 +271,23 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => router.push("/timenaming")}
+          style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Feather name="clock" size={19} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{isRu ? "Именование времени · NFT минут" : "Timenaming · NFT minutes"}</Text>
+              <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 4 }]}>
+                {isRu ? "Проверьте минуту, оформите лицензию и выпустите NFT в Sepolia." : "Check a minute, create a license, and mint an NFT on Sepolia."}
+              </Text>
+            </View>
+            <Feather name="arrow-right" size={18} color={colors.primary} />
+          </View>
+        </TouchableOpacity>
+
         <View style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{isRu ? "Резюме и портфолио" : "Resume & portfolio"}</Text>
           <Text style={[styles.programCopy, { color: colors.mutedForeground }]}>

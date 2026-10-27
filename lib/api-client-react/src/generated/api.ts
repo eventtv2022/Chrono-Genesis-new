@@ -84,6 +84,13 @@ import type {
   TimelineExchangeRequest,
   TimelineExchangeResponseInput,
   TimelineOccupiedEntry,
+  TimenamingAvailability,
+  TimenamingCertificateResult,
+  TimenamingConfig,
+  TimenamingLicenseList,
+  TimenamingMutationResult,
+  TimenamingReservationInput,
+  TimenamingUpgradeInput,
   Transaction,
   TvLiveSlotResponse,
   TvScheduleResponse,
@@ -101,6 +108,596 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
+
+export const getGetTimenamingConfigUrl = () => {
+
+
+
+
+  return `/api/timenaming/config`
+}
+
+/**
+ * @summary Get public Timenaming network and mint configuration
+ */
+export const getTimenamingConfig = async ( options?: RequestInit): Promise<TimenamingConfig> => {
+
+  return customFetch<TimenamingConfig>(getGetTimenamingConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTimenamingConfigQueryKey = () => {
+    return [
+    `/api/timenaming/config`
+    ] as const;
+    }
+
+
+export const getGetTimenamingConfigQueryOptions = <TData = Awaited<ReturnType<typeof getTimenamingConfig>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTimenamingConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTimenamingConfigQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTimenamingConfig>>> = ({ signal }) => getTimenamingConfig({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTimenamingConfig>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTimenamingConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getTimenamingConfig>>>
+export type GetTimenamingConfigQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get public Timenaming network and mint configuration
+ */
+
+export function useGetTimenamingConfig<TData = Awaited<ReturnType<typeof getTimenamingConfig>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTimenamingConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTimenamingConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCheckTimenamingMinuteUrl = (timestamp: string,) => {
+
+
+
+
+  return `/api/timenaming/check/${timestamp}`
+}
+
+/**
+ * @summary Check historical minute availability
+ */
+export const checkTimenamingMinute = async (timestamp: string, options?: RequestInit): Promise<TimenamingAvailability> => {
+
+  return customFetch<TimenamingAvailability>(getCheckTimenamingMinuteUrl(timestamp),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getCheckTimenamingMinuteQueryKey = (timestamp: string,) => {
+    return [
+    `/api/timenaming/check/${timestamp}`
+    ] as const;
+    }
+
+
+export const getCheckTimenamingMinuteQueryOptions = <TData = Awaited<ReturnType<typeof checkTimenamingMinute>>, TError = ErrorType<ErrorResponse>>(timestamp: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof checkTimenamingMinute>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getCheckTimenamingMinuteQueryKey(timestamp);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof checkTimenamingMinute>>> = ({ signal }) => checkTimenamingMinute(timestamp, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(timestamp), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof checkTimenamingMinute>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type CheckTimenamingMinuteQueryResult = NonNullable<Awaited<ReturnType<typeof checkTimenamingMinute>>>
+export type CheckTimenamingMinuteQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Check historical minute availability
+ */
+
+export function useCheckTimenamingMinute<TData = Awaited<ReturnType<typeof checkTimenamingMinute>>, TError = ErrorType<ErrorResponse>>(
+ timestamp: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof checkTimenamingMinute>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getCheckTimenamingMinuteQueryOptions(timestamp,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListMyTimenamingLicensesUrl = () => {
+
+
+
+
+  return `/api/timenaming/mine`
+}
+
+/**
+ * @summary List the authenticated citizen's minute licenses
+ */
+export const listMyTimenamingLicenses = async ( options?: RequestInit): Promise<TimenamingLicenseList> => {
+
+  return customFetch<TimenamingLicenseList>(getListMyTimenamingLicensesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMyTimenamingLicensesQueryKey = () => {
+    return [
+    `/api/timenaming/mine`
+    ] as const;
+    }
+
+
+export const getListMyTimenamingLicensesQueryOptions = <TData = Awaited<ReturnType<typeof listMyTimenamingLicenses>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyTimenamingLicenses>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMyTimenamingLicensesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyTimenamingLicenses>>> = ({ signal }) => listMyTimenamingLicenses({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMyTimenamingLicenses>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMyTimenamingLicensesQueryResult = NonNullable<Awaited<ReturnType<typeof listMyTimenamingLicenses>>>
+export type ListMyTimenamingLicensesQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List the authenticated citizen's minute licenses
+ */
+
+export function useListMyTimenamingLicenses<TData = Awaited<ReturnType<typeof listMyTimenamingLicenses>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyTimenamingLicenses>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMyTimenamingLicensesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getReserveTimenamingMinuteUrl = () => {
+
+
+
+
+  return `/api/timenaming/reserve`
+}
+
+/**
+ * @summary Reserve a historical minute or purchase its NFT package
+ */
+export const reserveTimenamingMinute = async (timenamingReservationInput: TimenamingReservationInput, options?: RequestInit): Promise<TimenamingMutationResult> => {
+
+  return customFetch<TimenamingMutationResult>(getReserveTimenamingMinuteUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      timenamingReservationInput,)
+  }
+);}
+
+
+
+
+export const getReserveTimenamingMinuteMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reserveTimenamingMinute>>, TError,{data: BodyType<TimenamingReservationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reserveTimenamingMinute>>, TError,{data: BodyType<TimenamingReservationInput>}, TContext> => {
+
+const mutationKey = ['reserveTimenamingMinute'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reserveTimenamingMinute>>, {data: BodyType<TimenamingReservationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reserveTimenamingMinute(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReserveTimenamingMinuteMutationResult = NonNullable<Awaited<ReturnType<typeof reserveTimenamingMinute>>>
+    export type ReserveTimenamingMinuteMutationBody = BodyType<TimenamingReservationInput>
+    export type ReserveTimenamingMinuteMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Reserve a historical minute or purchase its NFT package
+ */
+export const useReserveTimenamingMinute = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reserveTimenamingMinute>>, TError,{data: BodyType<TimenamingReservationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reserveTimenamingMinute>>,
+        TError,
+        {data: BodyType<TimenamingReservationInput>},
+        TContext
+      > => {
+      return useMutation(getReserveTimenamingMinuteMutationOptions(options));
+    }
+
+export const getUpgradeTimenamingMinuteUrl = () => {
+
+
+
+
+  return `/api/timenaming/upgrade`
+}
+
+/**
+ * @summary Upgrade the citizen's reserved minute to an NFT license
+ */
+export const upgradeTimenamingMinute = async (timenamingUpgradeInput: TimenamingUpgradeInput, options?: RequestInit): Promise<TimenamingMutationResult> => {
+
+  return customFetch<TimenamingMutationResult>(getUpgradeTimenamingMinuteUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      timenamingUpgradeInput,)
+  }
+);}
+
+
+
+
+export const getUpgradeTimenamingMinuteMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upgradeTimenamingMinute>>, TError,{data: BodyType<TimenamingUpgradeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upgradeTimenamingMinute>>, TError,{data: BodyType<TimenamingUpgradeInput>}, TContext> => {
+
+const mutationKey = ['upgradeTimenamingMinute'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upgradeTimenamingMinute>>, {data: BodyType<TimenamingUpgradeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  upgradeTimenamingMinute(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpgradeTimenamingMinuteMutationResult = NonNullable<Awaited<ReturnType<typeof upgradeTimenamingMinute>>>
+    export type UpgradeTimenamingMinuteMutationBody = BodyType<TimenamingUpgradeInput>
+    export type UpgradeTimenamingMinuteMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Upgrade the citizen's reserved minute to an NFT license
+ */
+export const useUpgradeTimenamingMinute = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upgradeTimenamingMinute>>, TError,{data: BodyType<TimenamingUpgradeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upgradeTimenamingMinute>>,
+        TError,
+        {data: BodyType<TimenamingUpgradeInput>},
+        TContext
+      > => {
+      return useMutation(getUpgradeTimenamingMinuteMutationOptions(options));
+    }
+
+export const getGenerateTimenamingCertificateUrl = (certificateId: string,) => {
+
+
+
+
+  return `/api/timenaming/${certificateId}/generate-certificate`
+}
+
+/**
+ * @summary Generate the citizen's PDF license certificate
+ */
+export const generateTimenamingCertificate = async (certificateId: string, options?: RequestInit): Promise<TimenamingCertificateResult> => {
+
+  return customFetch<TimenamingCertificateResult>(getGenerateTimenamingCertificateUrl(certificateId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getGenerateTimenamingCertificateMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateTimenamingCertificate>>, TError,{certificateId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateTimenamingCertificate>>, TError,{certificateId: string}, TContext> => {
+
+const mutationKey = ['generateTimenamingCertificate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateTimenamingCertificate>>, {certificateId: string}> = (props) => {
+          const {certificateId} = props ?? {};
+
+          return  generateTimenamingCertificate(certificateId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateTimenamingCertificateMutationResult = NonNullable<Awaited<ReturnType<typeof generateTimenamingCertificate>>>
+
+    export type GenerateTimenamingCertificateMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Generate the citizen's PDF license certificate
+ */
+export const useGenerateTimenamingCertificate = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateTimenamingCertificate>>, TError,{certificateId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateTimenamingCertificate>>,
+        TError,
+        {certificateId: string},
+        TContext
+      > => {
+      return useMutation(getGenerateTimenamingCertificateMutationOptions(options));
+    }
+
+export const getDownloadTimenamingCertificateUrl = (certificateId: string,) => {
+
+
+
+
+  return `/api/timenaming/${certificateId}/certificate`
+}
+
+/**
+ * @summary Download the authenticated citizen's PDF license certificate
+ */
+export const downloadTimenamingCertificate = async (certificateId: string, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadTimenamingCertificateUrl(certificateId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadTimenamingCertificateQueryKey = (certificateId: string,) => {
+    return [
+    `/api/timenaming/${certificateId}/certificate`
+    ] as const;
+    }
+
+
+export const getDownloadTimenamingCertificateQueryOptions = <TData = Awaited<ReturnType<typeof downloadTimenamingCertificate>>, TError = ErrorType<ErrorResponse>>(certificateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadTimenamingCertificate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadTimenamingCertificateQueryKey(certificateId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadTimenamingCertificate>>> = ({ signal }) => downloadTimenamingCertificate(certificateId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(certificateId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadTimenamingCertificate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadTimenamingCertificateQueryResult = NonNullable<Awaited<ReturnType<typeof downloadTimenamingCertificate>>>
+export type DownloadTimenamingCertificateQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Download the authenticated citizen's PDF license certificate
+ */
+
+export function useDownloadTimenamingCertificate<TData = Awaited<ReturnType<typeof downloadTimenamingCertificate>>, TError = ErrorType<ErrorResponse>>(
+ certificateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadTimenamingCertificate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadTimenamingCertificateQueryOptions(certificateId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getMintTimenamingNftUrl = (certificateId: string,) => {
+
+
+
+
+  return `/api/timenaming/${certificateId}/mint-nft`
+}
+
+/**
+ * @summary Mint an NFT for the citizen's minute license
+ */
+export const mintTimenamingNft = async (certificateId: string, options?: RequestInit): Promise<TimenamingMutationResult> => {
+
+  return customFetch<TimenamingMutationResult>(getMintTimenamingNftUrl(certificateId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getMintTimenamingNftMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mintTimenamingNft>>, TError,{certificateId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof mintTimenamingNft>>, TError,{certificateId: string}, TContext> => {
+
+const mutationKey = ['mintTimenamingNft'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof mintTimenamingNft>>, {certificateId: string}> = (props) => {
+          const {certificateId} = props ?? {};
+
+          return  mintTimenamingNft(certificateId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MintTimenamingNftMutationResult = NonNullable<Awaited<ReturnType<typeof mintTimenamingNft>>>
+
+    export type MintTimenamingNftMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Mint an NFT for the citizen's minute license
+ */
+export const useMintTimenamingNft = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mintTimenamingNft>>, TError,{certificateId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof mintTimenamingNft>>,
+        TError,
+        {certificateId: string},
+        TContext
+      > => {
+      return useMutation(getMintTimenamingNftMutationOptions(options));
+    }
 
 export const getPreviewServiceCatalogListingUrl = () => {
 

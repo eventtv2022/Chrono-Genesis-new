@@ -48,7 +48,7 @@ function RootLayoutNav() {
       router.replace("/");
       return;
     }
-    const guestRoutes = ["onboarding", "register", "login", "passport-lookup"];
+    const guestRoutes = ["onboarding", "register", "login", "passport-lookup", "timenaming"];
     const guestLanding = route === "(tabs)" && (segments.length === 1 || String(segments[1]) === "index");
     if (!citizen && !guestRoutes.includes(route ?? "") && !guestLanding) {
       router.replace("/");
@@ -66,6 +66,7 @@ function RootLayoutNav() {
         <Stack.Screen name="shop" options={{ headerShown: false, presentation: "modal" }} />
         <Stack.Screen name="citizens" options={{ headerShown: false }} />
         <Stack.Screen name="passport-lookup" options={{ headerShown: false }} />
+        <Stack.Screen name="timenaming" options={{ headerShown: false }} />
         <Stack.Screen name="broadcast" options={{ headerShown: false }} />
         <Stack.Screen name="chat" options={{ headerShown: false }} />
         <Stack.Screen name="chat/[citizenId]" options={{ headerShown: false }} />

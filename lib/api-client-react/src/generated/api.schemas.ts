@@ -5,6 +5,114 @@
  * TimeNation API — digital state where time is currency
  * OpenAPI spec version: 0.1.0
  */
+export interface TimenamingConfig {
+  network: string;
+  chainId: number;
+  royaltyBps: number;
+  royaltyRecipient: string;
+  contractConfigured: boolean;
+  ipfsPinningConfigured: boolean;
+  legalTextStatus: string;
+}
+
+export interface TimenamingLicense {
+  id?: number;
+  certificateId?: string;
+  timelineAnchorId?: number;
+  timelineCoord?: string;
+  citizenId?: number;
+  ownerName?: string;
+  customTitle?: string;
+  customDescription?: string;
+  walletAddress?: string;
+  status?: string;
+  /** @nullable */
+  transactionHash?: string | null;
+  /** @nullable */
+  tokenId?: string | null;
+  /** @nullable */
+  explorerUrl?: string | null;
+  /** @nullable */
+  metadataUri?: string | null;
+  /** @nullable */
+  certificateIpfsUri?: string | null;
+  /** @nullable */
+  createdAt?: string | null;
+  [key: string]: unknown;
+ }
+
+export interface TimenamingAvailability {
+  timestamp: string;
+  available: boolean;
+  reserved: boolean;
+  ownedByMe?: boolean;
+  minuteStatus?: string;
+  license?: TimenamingLicense;
+}
+
+export interface TimenamingLicenseList {
+  licenses: TimenamingLicense[];
+}
+
+export type TimenamingReservationInputPurchaseType = typeof TimenamingReservationInputPurchaseType[keyof typeof TimenamingReservationInputPurchaseType];
+
+
+export const TimenamingReservationInputPurchaseType = {
+  TIMELINE_ONLY: 'TIMELINE_ONLY',
+  ALL_INCLUSIVE: 'ALL_INCLUSIVE',
+} as const;
+
+export interface TimenamingReservationInput {
+  minuteTimestamp: string;
+  purchaseType?: TimenamingReservationInputPurchaseType;
+  /** @maxLength 120 */
+  ownerName?: string;
+  /** @maxLength 160 */
+  customTitle?: string;
+  /** @maxLength 2000 */
+  customDescription?: string;
+  /** @pattern ^0x[a-fA-F0-9]{40}$ */
+  walletAddress?: string;
+}
+
+export interface TimenamingUpgradeInput {
+  minuteTimestamp: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  ownerName: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  customTitle: string;
+  /** @maxLength 2000 */
+  customDescription?: string;
+  /** @pattern ^0x[a-fA-F0-9]{40}$ */
+  walletAddress: string;
+}
+
+export interface TimenamingMutationResult {
+  status?: string;
+  newBalance?: number;
+  /** @nullable */
+  transactionHash?: string | null;
+  /** @nullable */
+  tokenId?: string | number | null;
+  /** @nullable */
+  explorerUrl?: string | null;
+  /** @nullable */
+  certificateId?: string | null;
+  license?: TimenamingLicense;
+  [key: string]: unknown;
+ }
+
+export interface TimenamingCertificateResult {
+  downloadUrl: string;
+  certificateId: string;
+}
+
 export interface ServiceCatalogAuditPreviewInput {
   /**
      * @minLength 4

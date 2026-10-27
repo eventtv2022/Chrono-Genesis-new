@@ -9,6 +9,208 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Get public Timenaming network and mint configuration
+ */
+export const GetTimenamingConfigResponse = zod.object({
+  "network": zod.string(),
+  "chainId": zod.number(),
+  "royaltyBps": zod.number(),
+  "royaltyRecipient": zod.string(),
+  "contractConfigured": zod.boolean(),
+  "ipfsPinningConfigured": zod.boolean(),
+  "legalTextStatus": zod.string()
+})
+
+
+/**
+ * @summary Check historical minute availability
+ */
+export const checkTimenamingMinutePathTimestampRegExp = new RegExp('^\\d{12}$');
+
+
+export const CheckTimenamingMinuteParams = zod.object({
+  "timestamp": zod.coerce.string().regex(checkTimenamingMinutePathTimestampRegExp)
+})
+
+export const CheckTimenamingMinuteResponse = zod.object({
+  "timestamp": zod.string(),
+  "available": zod.boolean(),
+  "reserved": zod.boolean(),
+  "ownedByMe": zod.boolean().optional(),
+  "minuteStatus": zod.string().optional(),
+  "license": zod.object({
+  "id": zod.number().optional(),
+  "certificateId": zod.string().optional(),
+  "timelineAnchorId": zod.number().optional(),
+  "timelineCoord": zod.string().optional(),
+  "citizenId": zod.number().optional(),
+  "ownerName": zod.string().optional(),
+  "customTitle": zod.string().optional(),
+  "customDescription": zod.string().optional(),
+  "walletAddress": zod.string().optional(),
+  "status": zod.string().optional(),
+  "transactionHash": zod.string().nullish(),
+  "tokenId": zod.string().nullish(),
+  "explorerUrl": zod.string().nullish(),
+  "metadataUri": zod.string().nullish(),
+  "certificateIpfsUri": zod.string().nullish(),
+  "createdAt": zod.coerce.date().nullish()
+}).optional()
+})
+
+
+/**
+ * @summary List the authenticated citizen's minute licenses
+ */
+export const ListMyTimenamingLicensesResponse = zod.object({
+  "licenses": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "certificateId": zod.string().optional(),
+  "timelineAnchorId": zod.number().optional(),
+  "timelineCoord": zod.string().optional(),
+  "citizenId": zod.number().optional(),
+  "ownerName": zod.string().optional(),
+  "customTitle": zod.string().optional(),
+  "customDescription": zod.string().optional(),
+  "walletAddress": zod.string().optional(),
+  "status": zod.string().optional(),
+  "transactionHash": zod.string().nullish(),
+  "tokenId": zod.string().nullish(),
+  "explorerUrl": zod.string().nullish(),
+  "metadataUri": zod.string().nullish(),
+  "certificateIpfsUri": zod.string().nullish(),
+  "createdAt": zod.coerce.date().nullish()
+}))
+})
+
+
+/**
+ * @summary Reserve a historical minute or purchase its NFT package
+ */
+export const reserveTimenamingMinuteBodyOwnerNameMax = 120;
+
+export const reserveTimenamingMinuteBodyCustomTitleMax = 160;
+
+export const reserveTimenamingMinuteBodyCustomDescriptionMax = 2000;
+
+export const reserveTimenamingMinuteBodyWalletAddressRegExp = new RegExp('^0x[a-fA-F0-9]{40}$');
+
+
+export const ReserveTimenamingMinuteBody = zod.object({
+  "minuteTimestamp": zod.string(),
+  "purchaseType": zod.enum(['TIMELINE_ONLY', 'ALL_INCLUSIVE']).optional(),
+  "ownerName": zod.string().max(reserveTimenamingMinuteBodyOwnerNameMax).optional(),
+  "customTitle": zod.string().max(reserveTimenamingMinuteBodyCustomTitleMax).optional(),
+  "customDescription": zod.string().max(reserveTimenamingMinuteBodyCustomDescriptionMax).optional(),
+  "walletAddress": zod.string().regex(reserveTimenamingMinuteBodyWalletAddressRegExp).optional()
+})
+
+
+/**
+ * @summary Upgrade the citizen's reserved minute to an NFT license
+ */
+export const upgradeTimenamingMinuteBodyOwnerNameMax = 120;
+
+export const upgradeTimenamingMinuteBodyCustomTitleMax = 160;
+
+export const upgradeTimenamingMinuteBodyCustomDescriptionMax = 2000;
+
+export const upgradeTimenamingMinuteBodyWalletAddressRegExp = new RegExp('^0x[a-fA-F0-9]{40}$');
+
+
+export const UpgradeTimenamingMinuteBody = zod.object({
+  "minuteTimestamp": zod.string(),
+  "ownerName": zod.string().min(1).max(upgradeTimenamingMinuteBodyOwnerNameMax),
+  "customTitle": zod.string().min(1).max(upgradeTimenamingMinuteBodyCustomTitleMax),
+  "customDescription": zod.string().max(upgradeTimenamingMinuteBodyCustomDescriptionMax).optional(),
+  "walletAddress": zod.string().regex(upgradeTimenamingMinuteBodyWalletAddressRegExp)
+})
+
+export const UpgradeTimenamingMinuteResponse = zod.object({
+  "status": zod.string().optional(),
+  "newBalance": zod.number().optional(),
+  "transactionHash": zod.string().nullish(),
+  "tokenId": zod.union([zod.string(),zod.number()]).nullish(),
+  "explorerUrl": zod.string().nullish(),
+  "certificateId": zod.string().nullish(),
+  "license": zod.object({
+  "id": zod.number().optional(),
+  "certificateId": zod.string().optional(),
+  "timelineAnchorId": zod.number().optional(),
+  "timelineCoord": zod.string().optional(),
+  "citizenId": zod.number().optional(),
+  "ownerName": zod.string().optional(),
+  "customTitle": zod.string().optional(),
+  "customDescription": zod.string().optional(),
+  "walletAddress": zod.string().optional(),
+  "status": zod.string().optional(),
+  "transactionHash": zod.string().nullish(),
+  "tokenId": zod.string().nullish(),
+  "explorerUrl": zod.string().nullish(),
+  "metadataUri": zod.string().nullish(),
+  "certificateIpfsUri": zod.string().nullish(),
+  "createdAt": zod.coerce.date().nullish()
+}).optional()
+})
+
+
+/**
+ * @summary Generate the citizen's PDF license certificate
+ */
+export const GenerateTimenamingCertificateParams = zod.object({
+  "certificateId": zod.coerce.string()
+})
+
+export const GenerateTimenamingCertificateResponse = zod.object({
+  "downloadUrl": zod.string(),
+  "certificateId": zod.string()
+})
+
+
+/**
+ * @summary Download the authenticated citizen's PDF license certificate
+ */
+export const DownloadTimenamingCertificateParams = zod.object({
+  "certificateId": zod.coerce.string()
+})
+
+
+/**
+ * @summary Mint an NFT for the citizen's minute license
+ */
+export const MintTimenamingNftParams = zod.object({
+  "certificateId": zod.coerce.string()
+})
+
+export const MintTimenamingNftResponse = zod.object({
+  "status": zod.string().optional(),
+  "newBalance": zod.number().optional(),
+  "transactionHash": zod.string().nullish(),
+  "tokenId": zod.union([zod.string(),zod.number()]).nullish(),
+  "explorerUrl": zod.string().nullish(),
+  "certificateId": zod.string().nullish(),
+  "license": zod.object({
+  "id": zod.number().optional(),
+  "certificateId": zod.string().optional(),
+  "timelineAnchorId": zod.number().optional(),
+  "timelineCoord": zod.string().optional(),
+  "citizenId": zod.number().optional(),
+  "ownerName": zod.string().optional(),
+  "customTitle": zod.string().optional(),
+  "customDescription": zod.string().optional(),
+  "walletAddress": zod.string().optional(),
+  "status": zod.string().optional(),
+  "transactionHash": zod.string().nullish(),
+  "tokenId": zod.string().nullish(),
+  "explorerUrl": zod.string().nullish(),
+  "metadataUri": zod.string().nullish(),
+  "certificateIpfsUri": zod.string().nullish(),
+  "createdAt": zod.coerce.date().nullish()
+}).optional()
+})
+
+
+/**
  * @summary Audit a service listing before publication
  */
 export const previewServiceCatalogListingBodyTitleMin = 4;
