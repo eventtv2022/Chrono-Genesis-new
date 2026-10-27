@@ -116,6 +116,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /timenaming/media:
+    post:
+      operationId: uploadTimenamingMedia
+      tags: [timenaming]
+      summary: Upload media for a Timenaming NFT
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/TimenamingMediaUploadInput"
+      responses:
+        "201":
+          description: Media pinned to IPFS and optionally attached to a claimed license
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimenamingMediaResult"
+        "400":
+          description: Unsupported media, invalid duration, or file too large
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: License does not belong to the authenticated citizen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: License has already been minted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /timenaming/upgrade:
     post:
       operationId: upgradeTimenamingMinute
@@ -1705,6 +1744,13 @@ components:
         legalTextStatus: { type: string }
       required: [network, chainId, royaltyBps, royaltyRecipient, contractConfigured, ipfsPinningConfigured, legalTextStatus]
 
+    TimenamingMediaUploadInput:
+      type: object
+      properties:
+        file: { type: string, format: binary }
+        certificateId: { type: string }
+      required: [file]
+
     TimenamingAvailability:
       type: object
       properties:
@@ -1736,6 +1782,9 @@ components:
         explorerUrl: { type: ["string", "null"] }
         metadataUri: { type: ["string", "null"] }
         certificateIpfsUri: { type: ["string", "null"] }
+        mediaIpfsUri: { type: ["string", "null"] }
+        mediaType: { type: ["string", "null"], enum: [image, audio, video, null] }
+        mediaDurationSeconds: { type: ["integer", "null"] }
         createdAt: { type: ["string", "null"], format: date-time }
 
     TimenamingLicenseList:
@@ -1758,6 +1807,9 @@ components:
         customTitle: { type: string, maxLength: 160 }
         customDescription: { type: string, maxLength: 2000 }
         walletAddress: { type: string, pattern: "^0x[a-fA-F0-9]{40}$" }
+        mediaIpfsUri: { type: string, pattern: "^ipfs://(bafy[a-z2-7]{20,}|Qm[1-9A-HJ-NP-Za-km-z]{40,})$" }
+        mediaType: { type: string, enum: [image, audio, video] }
+        mediaDurationSeconds: { type: ["integer", "null"], minimum: 1, maximum: 60 }
       required: [minuteTimestamp]
 
     TimenamingUpgradeInput:
@@ -1768,7 +1820,19 @@ components:
         customTitle: { type: string, minLength: 1, maxLength: 160 }
         customDescription: { type: string, maxLength: 2000 }
         walletAddress: { type: string, pattern: "^0x[a-fA-F0-9]{40}$" }
+        mediaIpfsUri: { type: string, pattern: "^ipfs://(bafy[a-z2-7]{20,}|Qm[1-9A-HJ-NP-Za-km-z]{40,})$" }
+        mediaType: { type: string, enum: [image, audio, video] }
+        mediaDurationSeconds: { type: ["integer", "null"], minimum: 1, maximum: 60 }
       required: [minuteTimestamp, ownerName, customTitle, walletAddress]
+
+    TimenamingMediaResult:
+      type: object
+      properties:
+        mediaIpfsUri: { type: string }
+        mediaType: { type: string, enum: [image, audio, video] }
+        mediaDurationSeconds: { type: ["integer", "null"] }
+        certificateId: { type: ["string", "null"] }
+      required: [mediaIpfsUri, mediaType, mediaDurationSeconds]
 
     TimenamingMutationResult:
       type: object

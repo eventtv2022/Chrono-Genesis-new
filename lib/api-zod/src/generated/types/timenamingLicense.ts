@@ -5,6 +5,7 @@
  * TimeNation API — digital state where time is currency
  * OpenAPI spec version: 0.1.0
  */
+import type { TimenamingLicenseMediaType } from './timenamingLicenseMediaType';
 
 export interface TimenamingLicense {
   id?: number;
@@ -27,6 +28,12 @@ export interface TimenamingLicense {
   metadataUri?: string | null;
   /** @nullable */
   certificateIpfsUri?: string | null;
+  /** @nullable */
+  mediaIpfsUri?: string | null;
+  /** @nullable */
+  mediaType?: TimenamingLicenseMediaType;
+  /** @nullable */
+  mediaDurationSeconds?: number | null;
   /** @nullable */
   createdAt?: Date | null;
   [key: string]: unknown;

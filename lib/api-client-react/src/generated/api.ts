@@ -89,6 +89,8 @@ import type {
   TimenamingCertificateResult,
   TimenamingConfig,
   TimenamingLicenseList,
+  TimenamingMediaResult,
+  TimenamingMediaUploadInput,
   TimenamingMutationResult,
   TimenamingReservationInput,
   TimenamingUpgradeInput,
@@ -410,6 +412,82 @@ export const useReserveTimenamingMinute = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getReserveTimenamingMinuteMutationOptions(options));
+    }
+
+export const getUploadTimenamingMediaUrl = () => {
+
+
+
+
+  return `/api/timenaming/media`
+}
+
+/**
+ * @summary Upload media for a Timenaming NFT
+ */
+export const uploadTimenamingMedia = async (timenamingMediaUploadInput: TimenamingMediaUploadInput, options?: RequestInit): Promise<TimenamingMediaResult> => {
+    const formData = new FormData();
+formData.append(`file`, timenamingMediaUploadInput.file);
+if(timenamingMediaUploadInput.certificateId !== undefined) {
+ formData.append(`certificateId`, timenamingMediaUploadInput.certificateId);
+ }
+
+  return customFetch<TimenamingMediaResult>(getUploadTimenamingMediaUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body:
+      formData,
+  }
+);}
+
+
+
+
+export const getUploadTimenamingMediaMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadTimenamingMedia>>, TError,{data: BodyType<TimenamingMediaUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadTimenamingMedia>>, TError,{data: BodyType<TimenamingMediaUploadInput>}, TContext> => {
+
+const mutationKey = ['uploadTimenamingMedia'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadTimenamingMedia>>, {data: BodyType<TimenamingMediaUploadInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadTimenamingMedia(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadTimenamingMediaMutationResult = NonNullable<Awaited<ReturnType<typeof uploadTimenamingMedia>>>
+    export type UploadTimenamingMediaMutationBody = BodyType<TimenamingMediaUploadInput>
+    export type UploadTimenamingMediaMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Upload media for a Timenaming NFT
+ */
+export const useUploadTimenamingMedia = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadTimenamingMedia>>, TError,{data: BodyType<TimenamingMediaUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadTimenamingMedia>>,
+        TError,
+        {data: BodyType<TimenamingMediaUploadInput>},
+        TContext
+      > => {
+      return useMutation(getUploadTimenamingMediaMutationOptions(options));
     }
 
 export const getUpgradeTimenamingMinuteUrl = () => {

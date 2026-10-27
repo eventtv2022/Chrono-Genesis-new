@@ -7,6 +7,9 @@ import { Feather } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import { File as ExpoFile } from "expo-file-system";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/context/LanguageContext";
 import { useCitizen } from "@/context/CitizenContext";
@@ -23,11 +26,15 @@ import {
   useMintTimenamingNft,
   useReserveTimenamingMinute,
   useUpgradeTimenamingMinute,
+  useUploadTimenamingMedia,
   type TimenamingLicense,
   type TimelineMyAnchor,
   type TimenamingReservationInput,
   type TimenamingUpgradeInput,
 } from "@workspace/api-client-react";
+
+type SelectedTimenamingMedia = { uri: string; name: string; kind: "image" | "audio" | "video"; durationMs?: number | null };
+type PinnedTimenamingMedia = { mediaIpfsUri: string; mediaType: "image" | "audio" | "video"; mediaDurationSeconds: number | null };
 
 function minuteCoord(date: string, time: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date.trim());
@@ -67,6 +74,8 @@ export default function TimenamingScreen() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [wallet, setWallet] = useState(citizen?.walletAddress ?? "");
+  const [selectedMedia, setSelectedMedia] = useState<SelectedTimenamingMedia | null>(null);
+  const [uploadedMedia, setUploadedMedia] = useState<PinnedTimenamingMedia | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -77,6 +86,7 @@ export default function TimenamingScreen() {
   const reserveMutation = useReserveTimenamingMinute();
   const upgradeMutation = useUpgradeTimenamingMinute();
   const mintMutation = useMintTimenamingNft();
+  const mediaUploadMutation = useUploadTimenamingMedia();
   const certificateMutation = useGenerateTimenamingCertificate();
   const config = configQuery.data ?? null;
   const licenses = mineQuery.data?.licenses ?? [];
@@ -122,6 +132,16 @@ export default function TimenamingScreen() {
     certificate: ru ? "Скачать лицензию" : "Download license", mint: ru ? "Выпустить NFT · 2,04 Д" : "Mint NFT · 2.04 Д",
     minted: ru ? "NFT выпущен" : "NFT minted", pending: ru ? "Ожидает подтверждения" : "Pending confirmation",
     licenseExists: ru ? "Лицензия уже оформлена. Продолжите выпуск NFT в списке «Мои минуты»." : "A license already exists. Continue minting from My minutes below.",
+    media: ru ? "Медиа для NFT" : "NFT media",
+    mediaHelp: ru ? "Фото или аудио/видео до 60 секунд, до 25 МБ. Медиа будет публичным в IPFS." : "Photo or audio/video up to 60 seconds, max 25 MB. NFT media is public on IPFS.",
+    photoVideo: ru ? "Выбрать фото или видео" : "Choose photo or video",
+    audio: ru ? "Выбрать аудио" : "Choose audio",
+    removeMedia: ru ? "Убрать" : "Remove",
+    attachMedia: ru ? "Добавить медиа" : "Add media",
+    replaceMedia: ru ? "Заменить медиа" : "Replace media",
+    uploadingMedia: ru ? "Загружаем медиа…" : "Uploading media…",
+    mediaAttached: ru ? "Медиа добавлено в IPFS." : "Media added to IPFS.",
+    mediaNeedsNft: ru ? "Для добавления медиа выберите пакет «Лицензия и выпуск NFT»." : "Choose the License and NFT package to attach media.",
     claimed: ru ? "Запись оформлена" : "Reserved", signIn: ru ? "Войдите в аккаунт гражданина, чтобы оформить минуту." : "Sign in as a citizen to reserve a minute.",
     retry: ru ? "Повторить" : "Retry", error: ru ? "Не удалось выполнить запрос." : "Request failed.",
     dateInvalid: ru ? "Укажите дату и время UTC." : "Enter a valid date and UTC time.",
@@ -148,6 +168,85 @@ export default function TimenamingScreen() {
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
 
+  const acceptMedia = (asset: { uri: string; name?: string | null; mimeType?: string | null; duration?: number | null }, kind: SelectedTimenamingMedia["kind"]) => {
+    if (kind === "video" && asset.duration != null && asset.duration > 60_000) {
+      setError(ru ? "Видео должно быть не длиннее 60 секунд." : "Video must be no longer than 60 seconds.");
+      return;
+    }
+    setSelectedMedia({
+      uri: asset.uri,
+      name: asset.name || (kind === "audio" ? "audio" : kind === "video" ? "video" : "photo"),
+      kind,
+      durationMs: asset.duration,
+    });
+    setUploadedMedia(null);
+    setError("");
+    if (!availability?.ownedByMe) setPurchaseType("ALL_INCLUSIVE");
+  };
+
+  const uploadMediaForLicense = async (certificateId: string, media: SelectedTimenamingMedia) => {
+    setBusy(`media-${certificateId}`);
+    setError("");
+    try {
+      await uploadSelectedMedia(certificateId, media);
+      setSuccess(text.mediaAttached);
+      await queryClient.invalidateQueries({ queryKey: getListMyTimenamingLicensesQueryKey() });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : text.error);
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const choosePhotoOrVideo = async (certificateId?: string) => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images", "videos"],
+        allowsMultipleSelection: false,
+        videoMaxDuration: 60,
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      const kind = asset.type === "video" ? "video" : "image";
+      if (certificateId) {
+        await uploadMediaForLicense(certificateId, { uri: asset.uri, name: asset.fileName ?? kind, kind, durationMs: asset.duration });
+      } else {
+        acceptMedia(asset, kind);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : text.error);
+    }
+  };
+
+  const chooseAudio = async (certificateId?: string) => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true, multiple: false });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      const media = { uri: asset.uri, name: asset.name, kind: "audio" as const };
+      if (certificateId) await uploadMediaForLicense(certificateId, media);
+      else acceptMedia({ ...media, mimeType: asset.mimeType, duration: null }, "audio");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : text.error);
+    }
+  };
+
+  const uploadSelectedMedia = async (certificateId?: string, media = selectedMedia): Promise<PinnedTimenamingMedia> => {
+    if (!media) throw new Error(text.error);
+    const file = new ExpoFile(media.uri);
+    const uploaded = await mediaUploadMutation.mutateAsync({
+      data: { file, ...(certificateId ? { certificateId } : {}) },
+    });
+    const pinned: PinnedTimenamingMedia = {
+      mediaIpfsUri: uploaded.mediaIpfsUri,
+      mediaType: uploaded.mediaType,
+      mediaDurationSeconds: uploaded.mediaDurationSeconds,
+    };
+    if (!certificateId) setUploadedMedia(pinned);
+    return pinned;
+  };
+
   const check = async () => {
     setError(""); setSuccess("");
     const coord = minuteCoord(date, time);
@@ -164,22 +263,25 @@ export default function TimenamingScreen() {
     const coord = minuteCoord(date, time);
     if (!authToken || !citizen) { setError(text.signIn); return; }
     if (!coord || !availability || (!availability.ownedByMe && (!availability.available || availability.reserved))) { setError(text.dateInvalid); return; }
+    if (selectedMedia && !availability.ownedByMe && purchaseType !== "ALL_INCLUSIVE") { setError(text.mediaNeedsNft); return; }
     const needsLicense = availability.ownedByMe || purchaseType === "ALL_INCLUSIVE";
     if (needsLicense && (!/^0x[a-fA-F0-9]{40}$/.test(wallet) || !title.trim() || !ownerName.trim())) { setError(text.walletInvalid); return; }
     setBusy("reserve"); setError(""); setSuccess("");
     try {
+      const mediaFields = selectedMedia ? (uploadedMedia ?? await uploadSelectedMedia()) : null;
       const upgrade = Boolean(availability.ownedByMe);
       const details = needsLicense ? {
         ownerName: ownerName.trim(),
         customTitle: title.trim(),
         customDescription: description.trim(),
         walletAddress: wallet.trim(),
+        ...(mediaFields ?? {}),
       } : {};
       const result = upgrade
         ? await upgradeMutation.mutateAsync({ data: { minuteTimestamp: `${date.trim()} ${time.trim()}`, ...details } as TimenamingUpgradeInput })
         : await reserveMutation.mutateAsync({ data: { minuteTimestamp: `${date.trim()} ${time.trim()}`, purchaseType, ...details } as TimenamingReservationInput });
       setSuccess(result.status === "MINTED" ? text.minted : result.status === "MINT_PENDING" ? text.pending : text.claimed);
-      setCheckedCoord(""); setDate(""); setTime(""); setTitle(""); setDescription("");
+      setCheckedCoord(""); setDate(""); setTime(""); setTitle(""); setDescription(""); setSelectedMedia(null); setUploadedMedia(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getListMyTimenamingLicensesQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getListMyTimelineAnchorsQueryKey() }),
@@ -311,6 +413,24 @@ export default function TimenamingScreen() {
               <TextInput value={description} onChangeText={setDescription} placeholder={text.note} placeholderTextColor={colors.mutedForeground} maxLength={2000} multiline style={[styles.input, styles.multiline, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]} />
               <TextInput value={wallet} onChangeText={setWallet} placeholder="0x…" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" maxLength={42} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]} />
               <Text style={[styles.caption, { color: colors.mutedForeground }]}>{text.wallet}</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>{text.media}</Text>
+              <Text style={[styles.caption, { color: colors.mutedForeground }]}>{text.mediaHelp}</Text>
+              {!!selectedMedia && <View style={styles.actions}>
+                <Text style={[styles.caption, { color: colors.foreground, flex: 1 }]} numberOfLines={1}>{uploadedMedia ? uploadedMedia.mediaType : selectedMedia.name}</Text>
+                <TouchableOpacity onPress={() => { setSelectedMedia(null); setUploadedMedia(null); }}>
+                  <Text style={[styles.smallText, { color: colors.destructive }]}>{text.removeMedia}</Text>
+                </TouchableOpacity>
+              </View>}
+              <View style={styles.actions}>
+                <TouchableOpacity disabled={busy !== ""} onPress={() => void choosePhotoOrVideo()} style={[styles.smallButton, { borderColor: colors.border }]}>
+                  <Feather name="image" size={15} color={colors.primary} />
+                  <Text style={[styles.smallText, { color: colors.primary }]}>{text.photoVideo}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity disabled={busy !== ""} onPress={() => void chooseAudio()} style={[styles.smallButton, { borderColor: colors.border }]}>
+                  <Feather name="music" size={15} color={colors.primary} />
+                  <Text style={[styles.smallText, { color: colors.primary }]}>{text.audio}</Text>
+                </TouchableOpacity>
+              </View>
             </>}
             {!citizen && <Text style={[styles.notice, { color: colors.mutedForeground }]}>{text.signIn}</Text>}
             {citizen && !enoughBalance && <Text style={[styles.notice, { color: colors.destructive }]}>{ru ? `Нужно ${purchaseCost.toLocaleString("ru-RU")} Д сверх защищённой родовой минуты.` : `You need ${purchaseCost} Д beyond the protected ancestral minute.`}</Text>}
@@ -347,6 +467,16 @@ export default function TimenamingScreen() {
               </Text>
               <View style={styles.actions}>
                 {license ? <>
+                  {!minted && !pending && <>
+                    <TouchableOpacity disabled={busy !== ""} onPress={() => void choosePhotoOrVideo(String(license.certificateId ?? license.id))} style={[styles.smallButton, { borderColor: colors.border }]}>
+                      {busy === `media-${license.certificateId ?? license.id}` ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="image" size={15} color={colors.primary} />}
+                      <Text style={[styles.smallText, { color: colors.primary }]}>{license.mediaIpfsUri ? text.replaceMedia : text.photoVideo}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity disabled={busy !== ""} onPress={() => void chooseAudio(String(license.certificateId ?? license.id))} style={[styles.smallButton, { borderColor: colors.border }]}>
+                      <Feather name="music" size={15} color={colors.primary} />
+                      <Text style={[styles.smallText, { color: colors.primary }]}>{text.audio}</Text>
+                    </TouchableOpacity>
+                  </>}
                   <TouchableOpacity disabled={busy !== ""} onPress={() => void downloadCertificate(license)} style={[styles.smallButton, { borderColor: colors.border }]}>
                     {busy === `pdf-${id}` ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="download" size={15} color={colors.primary} />}
                     <Text style={[styles.smallText, { color: colors.primary }]}>{text.certificate}</Text>

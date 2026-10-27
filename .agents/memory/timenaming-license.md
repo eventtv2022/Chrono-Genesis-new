@@ -32,3 +32,9 @@ The user chose Pinata for IPFS pinning. Only the successfully minted NFT flow pi
 **Why:** the user asked to implement IPFS before adding FAQ claims about decentralized storage and shutdown resilience.
 
 **How to apply:** Gate minting on Pinata configuration and make the PDF/metadata CIDs visible after issuance. Keep Pinata credentials in Replit Secrets and never expose them to the client.
+
+NFT minutes may include one public photo or audio/video file; audio and video must be no longer than 60 seconds.
+
+**Why:** the user requested uploading photo, audio, or video to an NFT minute.
+
+**How to apply:** Validate actual media bytes and duration on the server, pin the media and metadata to IPFS, and make the public nature clear before upload.

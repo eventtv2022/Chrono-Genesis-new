@@ -54,6 +54,9 @@ export const CheckTimenamingMinuteResponse = zod.object({
   "explorerUrl": zod.string().nullish(),
   "metadataUri": zod.string().nullish(),
   "certificateIpfsUri": zod.string().nullish(),
+  "mediaIpfsUri": zod.string().nullish(),
+  "mediaType": zod.union([zod.literal('image'),zod.literal('audio'),zod.literal('video'),zod.literal(null)]).nullish(),
+  "mediaDurationSeconds": zod.number().nullish(),
   "createdAt": zod.coerce.date().nullish()
 }).optional()
 })
@@ -79,6 +82,9 @@ export const ListMyTimenamingLicensesResponse = zod.object({
   "explorerUrl": zod.string().nullish(),
   "metadataUri": zod.string().nullish(),
   "certificateIpfsUri": zod.string().nullish(),
+  "mediaIpfsUri": zod.string().nullish(),
+  "mediaType": zod.union([zod.literal('image'),zod.literal('audio'),zod.literal('video'),zod.literal(null)]).nullish(),
+  "mediaDurationSeconds": zod.number().nullish(),
   "createdAt": zod.coerce.date().nullish()
 }))
 })
@@ -94,6 +100,9 @@ export const reserveTimenamingMinuteBodyCustomTitleMax = 160;
 export const reserveTimenamingMinuteBodyCustomDescriptionMax = 2000;
 
 export const reserveTimenamingMinuteBodyWalletAddressRegExp = new RegExp('^0x[a-fA-F0-9]{40}$');
+export const reserveTimenamingMinuteBodyMediaIpfsUriRegExp = new RegExp('^ipfs:\/\/(bafy[a-z2-7]{20,}|Qm[1-9A-HJ-NP-Za-km-z]{40,})$');
+export const reserveTimenamingMinuteBodyMediaDurationSecondsMax = 60;
+
 
 
 export const ReserveTimenamingMinuteBody = zod.object({
@@ -102,7 +111,19 @@ export const ReserveTimenamingMinuteBody = zod.object({
   "ownerName": zod.string().max(reserveTimenamingMinuteBodyOwnerNameMax).optional(),
   "customTitle": zod.string().max(reserveTimenamingMinuteBodyCustomTitleMax).optional(),
   "customDescription": zod.string().max(reserveTimenamingMinuteBodyCustomDescriptionMax).optional(),
-  "walletAddress": zod.string().regex(reserveTimenamingMinuteBodyWalletAddressRegExp).optional()
+  "walletAddress": zod.string().regex(reserveTimenamingMinuteBodyWalletAddressRegExp).optional(),
+  "mediaIpfsUri": zod.string().regex(reserveTimenamingMinuteBodyMediaIpfsUriRegExp).optional(),
+  "mediaType": zod.enum(['image', 'audio', 'video']).optional(),
+  "mediaDurationSeconds": zod.number().min(1).max(reserveTimenamingMinuteBodyMediaDurationSecondsMax).nullish()
+})
+
+
+/**
+ * @summary Upload media for a Timenaming NFT
+ */
+export const UploadTimenamingMediaBody = zod.object({
+  "file": zod.instanceof(File),
+  "certificateId": zod.string().optional()
 })
 
 
@@ -116,6 +137,9 @@ export const upgradeTimenamingMinuteBodyCustomTitleMax = 160;
 export const upgradeTimenamingMinuteBodyCustomDescriptionMax = 2000;
 
 export const upgradeTimenamingMinuteBodyWalletAddressRegExp = new RegExp('^0x[a-fA-F0-9]{40}$');
+export const upgradeTimenamingMinuteBodyMediaIpfsUriRegExp = new RegExp('^ipfs:\/\/(bafy[a-z2-7]{20,}|Qm[1-9A-HJ-NP-Za-km-z]{40,})$');
+export const upgradeTimenamingMinuteBodyMediaDurationSecondsMax = 60;
+
 
 
 export const UpgradeTimenamingMinuteBody = zod.object({
@@ -123,7 +147,10 @@ export const UpgradeTimenamingMinuteBody = zod.object({
   "ownerName": zod.string().min(1).max(upgradeTimenamingMinuteBodyOwnerNameMax),
   "customTitle": zod.string().min(1).max(upgradeTimenamingMinuteBodyCustomTitleMax),
   "customDescription": zod.string().max(upgradeTimenamingMinuteBodyCustomDescriptionMax).optional(),
-  "walletAddress": zod.string().regex(upgradeTimenamingMinuteBodyWalletAddressRegExp)
+  "walletAddress": zod.string().regex(upgradeTimenamingMinuteBodyWalletAddressRegExp),
+  "mediaIpfsUri": zod.string().regex(upgradeTimenamingMinuteBodyMediaIpfsUriRegExp).optional(),
+  "mediaType": zod.enum(['image', 'audio', 'video']).optional(),
+  "mediaDurationSeconds": zod.number().min(1).max(upgradeTimenamingMinuteBodyMediaDurationSecondsMax).nullish()
 })
 
 export const UpgradeTimenamingMinuteResponse = zod.object({
@@ -149,6 +176,9 @@ export const UpgradeTimenamingMinuteResponse = zod.object({
   "explorerUrl": zod.string().nullish(),
   "metadataUri": zod.string().nullish(),
   "certificateIpfsUri": zod.string().nullish(),
+  "mediaIpfsUri": zod.string().nullish(),
+  "mediaType": zod.union([zod.literal('image'),zod.literal('audio'),zod.literal('video'),zod.literal(null)]).nullish(),
+  "mediaDurationSeconds": zod.number().nullish(),
   "createdAt": zod.coerce.date().nullish()
 }).optional()
 })
@@ -205,6 +235,9 @@ export const MintTimenamingNftResponse = zod.object({
   "explorerUrl": zod.string().nullish(),
   "metadataUri": zod.string().nullish(),
   "certificateIpfsUri": zod.string().nullish(),
+  "mediaIpfsUri": zod.string().nullish(),
+  "mediaType": zod.union([zod.literal('image'),zod.literal('audio'),zod.literal('video'),zod.literal(null)]).nullish(),
+  "mediaDurationSeconds": zod.number().nullish(),
   "createdAt": zod.coerce.date().nullish()
 }).optional()
 })

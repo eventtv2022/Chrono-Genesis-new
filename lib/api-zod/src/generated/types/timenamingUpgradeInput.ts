@@ -5,6 +5,7 @@
  * TimeNation API — digital state where time is currency
  * OpenAPI spec version: 0.1.0
  */
+import type { TimenamingUpgradeInputMediaType } from './timenamingUpgradeInputMediaType';
 
 export interface TimenamingUpgradeInput {
   minuteTimestamp: string;
@@ -22,4 +23,13 @@ export interface TimenamingUpgradeInput {
   customDescription?: string;
   /** @pattern ^0x[a-fA-F0-9]{40}$ */
   walletAddress: string;
+  /** @pattern ^ipfs://(bafy[a-z2-7]{20,}|Qm[1-9A-HJ-NP-Za-km-z]{40,})$ */
+  mediaIpfsUri?: string;
+  mediaType?: TimenamingUpgradeInputMediaType;
+  /**
+     * @minimum 1
+     * @maximum 60
+     * @nullable
+     */
+  mediaDurationSeconds?: number | null;
 }

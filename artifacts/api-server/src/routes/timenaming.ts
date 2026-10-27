@@ -3,6 +3,11 @@ import { and, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
+import multer from "multer";
+import { fileTypeFromFile } from "file-type";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { Contract, JsonRpcProvider, Wallet, isAddress } from "ethers";
 import PDFDocument from "pdfkit";
 import { db, citizensTable, minuteLicensesTable, stateTaxLogsTable, timelineAnchorsTable } from "@workspace/db";
@@ -13,6 +18,16 @@ import { objectStorageClient, ObjectStorageService } from "../lib/objectStorage"
 import { calcTreasuryTax, TREASURY_CITIZEN_ID } from "../services/videoStorage";
 
 const router: IRouter = Router();
+const execFileAsync = promisify(execFile);
+const NFT_MEDIA_DIR = path.join(os.tmpdir(), "timenaming-nft-media");
+fs.mkdirSync(NFT_MEDIA_DIR, { recursive: true });
+const nftMediaUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, NFT_MEDIA_DIR),
+    filename: (_req, _file, cb) => cb(null, randomUUID()),
+  }),
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
 const storage = new ObjectStorageService();
 const NFT_LICENSE_BASE_PRICE = 2;
 const NFT_TAX_SOURCE = "TIMENAMING_NFT_TAX";
@@ -33,6 +48,52 @@ const CERTIFICATE_FONT_CANDIDATES = [
   path.join(process.cwd(), "artifacts", "api-server", "assets", "fonts", "DejaVuSans.ttf"),
 ];
 const CERTIFICATE_FONT = CERTIFICATE_FONT_CANDIDATES.find((candidate) => fs.existsSync(candidate));
+type NftMediaType = "image" | "audio" | "video";
+type NftMediaFields = {
+  mediaIpfsUri: string;
+  mediaType: NftMediaType;
+  mediaDurationSeconds: number | null;
+};
+
+function parseNftMediaFields(body: Record<string, unknown>): NftMediaFields | null | undefined {
+  const uri = body.mediaIpfsUri;
+  const type = body.mediaType;
+  const duration = body.mediaDurationSeconds;
+  if (uri === undefined && type === undefined && duration === undefined) return null;
+  if (typeof uri !== "string" ||
+      !/^ipfs:\/\/(?:bafy[a-z2-7]{20,}|Qm[1-9A-HJ-NP-Za-km-z]{40,})$/.test(uri) ||
+      !["image", "audio", "video"].includes(String(type))) return undefined;
+  if (type === "image") {
+    if (duration !== null && duration !== undefined) return undefined;
+    return { mediaIpfsUri: uri, mediaType: type, mediaDurationSeconds: null };
+  }
+  if (!Number.isInteger(duration) || Number(duration) < 1 || Number(duration) > 60) return undefined;
+  return { mediaIpfsUri: uri, mediaType: type as NftMediaType, mediaDurationSeconds: Number(duration) };
+}
+
+async function inspectNftMedia(filePath: string): Promise<{ mediaType: NftMediaType; durationSeconds: number | null; mimeType: string }> {
+  const detected = await fileTypeFromFile(filePath);
+  const mimeType = detected?.mime ?? "";
+  if (mimeType.startsWith("image/")) return { mediaType: "image", durationSeconds: null, mimeType };
+  if (!mimeType.startsWith("audio/") && !mimeType.startsWith("video/")) {
+    throw new Error("Upload a supported photo, audio, or video file.");
+  }
+  const { stdout } = await execFileAsync("ffprobe", [
+    "-v", "quiet", "-protocol_whitelist", "file,pipe", "-print_format", "json",
+    "-show_format", "-show_streams", filePath,
+  ], { timeout: 10_000, maxBuffer: 1024 * 1024 });
+  const data = JSON.parse(stdout) as {
+    format?: { duration?: string };
+    streams?: { codec_type?: string; disposition?: { attached_pic?: number } }[];
+  };
+  const hasVideo = data.streams?.some((stream) => stream.codec_type === "video" && !stream.disposition?.attached_pic);
+  const hasAudio = data.streams?.some((stream) => stream.codec_type === "audio");
+  const mediaType: NftMediaType = hasVideo ? "video" : hasAudio ? "audio" : mimeType.startsWith("video/") ? "video" : "audio";
+  const duration = Number(data.format?.duration);
+  if (!Number.isFinite(duration) || duration <= 0) throw new Error("Could not verify the audio or video duration.");
+  if (duration > 60) throw new Error("Audio and video must be no longer than 60 seconds.");
+  return { mediaType, durationSeconds: Math.ceil(duration), mimeType };
+}
 
 async function attachOptionalCitizen(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
@@ -161,11 +222,19 @@ async function finishPaidMint(
       name: license.customTitle,
       description: license.customDescription || `TimeNation placement license for ${formatCoord(license.timelineCoord)}.`,
       image: `data:image/svg+xml;base64,${Buffer.from(imageSvg).toString("base64")}`,
+      ...(license.mediaType && license.mediaType !== "image" && license.mediaIpfsUri
+        ? { animation_url: license.mediaIpfsUri }
+        : {}),
+      ...(license.mediaType === "image" && license.mediaIpfsUri
+        ? { image: license.mediaIpfsUri }
+        : {}),
       attributes: [
         { trait_type: "Timeline minute", value: formatCoord(license.timelineCoord) },
         { trait_type: "Licensee", value: license.ownerName },
         { trait_type: "Secondary sale royalty", value: "2%" },
         { trait_type: "Secondary sale royalty recipient", value: ROYALTY_RECIPIENT },
+        ...(license.mediaType ? [{ trait_type: "Attached media", value: license.mediaType }] : []),
+        ...(license.mediaDurationSeconds ? [{ trait_type: "Media duration seconds", value: license.mediaDurationSeconds }] : []),
       ],
       properties: {
         certificate: {
@@ -173,6 +242,15 @@ async function finishPaidMint(
           type: "application/pdf",
           uri: certificateIpfsUri,
         },
+        ...(license.mediaIpfsUri && license.mediaType
+          ? {
+              media: {
+                type: license.mediaType,
+                uri: license.mediaIpfsUri,
+                ...(license.mediaDurationSeconds ? { durationSeconds: license.mediaDurationSeconds } : {}),
+              },
+            }
+          : {}),
       },
     };
     const metadataCid = await pinJsonToIpfs(metadata, `timenation-minute-${license.certificateId}.json`);
@@ -324,6 +402,74 @@ router.get("/timenaming/config", (_req, res): void => {
   });
 });
 
+router.post(
+  "/timenaming/media",
+  requireAuth,
+  (req, res, next) => {
+    nftMediaUpload.single("file")(req, res, (error: unknown) => {
+      if (error) {
+        const message = error instanceof Error && error.message.includes("File too large")
+          ? "Media files must be 25 MB or smaller."
+          : "Could not receive the media file.";
+        res.status(400).json({ error: message });
+        return;
+      }
+      next();
+    });
+  },
+  async (req, res): Promise<void> => {
+    if (!req.file) {
+      res.status(400).json({ error: "Choose a photo, audio, or video file." });
+      return;
+    }
+    const certificateId = typeof req.body?.certificateId === "string" ? req.body.certificateId.trim() : "";
+    try {
+      if (certificateId) {
+        const [license] = await db.select().from(minuteLicensesTable).where(and(
+          eq(minuteLicensesTable.certificateId, certificateId),
+          eq(minuteLicensesTable.citizenId, req.citizen!.id),
+        )).limit(1);
+        if (!license) {
+          res.status(403).json({ error: "This license does not belong to you." });
+          return;
+        }
+        if (license.status !== "CLAIMED") {
+          res.status(409).json({ error: "Media can only be changed before NFT minting." });
+          return;
+        }
+      }
+
+      const inspected = await inspectNftMedia(req.file.path);
+      const bytes = await fs.promises.readFile(req.file.path);
+      const cid = await pinFileToIpfs(bytes, `timenation-media-${randomUUID()}`, inspected.mimeType);
+      const media = {
+        mediaIpfsUri: `ipfs://${cid}`,
+        mediaType: inspected.mediaType,
+        mediaDurationSeconds: inspected.durationSeconds,
+        ...(certificateId ? { certificateId } : {}),
+      };
+      if (certificateId) {
+        await db.update(minuteLicensesTable).set({
+          mediaIpfsUri: media.mediaIpfsUri,
+          mediaType: media.mediaType,
+          mediaDurationSeconds: media.mediaDurationSeconds,
+        }).where(and(
+          eq(minuteLicensesTable.certificateId, certificateId),
+          eq(minuteLicensesTable.citizenId, req.citizen!.id),
+          eq(minuteLicensesTable.status, "CLAIMED"),
+        ));
+      }
+      res.status(201).json(media);
+    } catch (error) {
+      req.log.error({ err: error, citizenId: req.citizen!.id }, "Timenaming media upload failed");
+      const message = error instanceof Error ? error.message : "Media upload failed.";
+      res.status(400).json({ error: message });
+    } finally {
+      await fs.promises.unlink(req.file.path).catch(() => undefined);
+    }
+  },
+);
+
 router.get("/timenaming/check/:timestamp", attachOptionalCitizen, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.timestamp) ? req.params.timestamp[0] : req.params.timestamp;
   const coord = raw?.replaceAll("-", "").replaceAll(":", "").replace("T", "").replace(" ", "");
@@ -349,7 +495,9 @@ router.get("/timenaming/check/:timestamp", attachOptionalCitizen, async (req, re
 router.post("/timenaming/reserve", requireAuth, async (req, res): Promise<void> => {
   const { ownerName = "", customTitle = "", customDescription = "", walletAddress = "", purchaseType = "TIMELINE_ONLY" } = req.body ?? {};
   const coord = coordFromInput(req.body?.minuteTimestamp);
-  if (!coord || !["TIMELINE_ONLY", "ALL_INCLUSIVE"].includes(purchaseType) ||
+  const mediaFields = parseNftMediaFields(req.body ?? {});
+  if (!coord || mediaFields === undefined || (mediaFields && purchaseType !== "ALL_INCLUSIVE") ||
+      !["TIMELINE_ONLY", "ALL_INCLUSIVE"].includes(purchaseType) ||
       (purchaseType === "ALL_INCLUSIVE" && (typeof ownerName !== "string" || !ownerName.trim() || ownerName.length > 120 ||
       typeof customTitle !== "string" || !customTitle.trim() || customTitle.length > 160 ||
       typeof customDescription !== "string" || customDescription.length > 2000 ||
@@ -393,7 +541,7 @@ router.post("/timenaming/reserve", requireAuth, async (req, res): Promise<void> 
         const [created] = await tx.insert(minuteLicensesTable).values({
           certificateId: randomUUID(), timelineAnchorId: anchor!.id, timelineCoord: coord, citizenId: citizen.id,
           ownerName: ownerName.trim(), customTitle: customTitle.trim(), customDescription: customDescription.trim(),
-          walletAddress, status: "CLAIMED",
+          walletAddress, status: "CLAIMED", ...(mediaFields ?? {}),
         }).returning();
         license = created!;
       }
@@ -438,7 +586,8 @@ router.post("/timenaming/reserve", requireAuth, async (req, res): Promise<void> 
 router.post("/timenaming/upgrade", requireAuth, async (req, res): Promise<void> => {
   const { ownerName, customTitle, customDescription = "", walletAddress } = req.body ?? {};
   const coord = coordFromInput(req.body?.minuteTimestamp);
-  if (!coord || typeof ownerName !== "string" || !ownerName.trim() || ownerName.length > 120 ||
+  const mediaFields = parseNftMediaFields(req.body ?? {});
+  if (!coord || mediaFields === undefined || typeof ownerName !== "string" || !ownerName.trim() || ownerName.length > 120 ||
       typeof customTitle !== "string" || !customTitle.trim() || customTitle.length > 160 ||
       typeof customDescription !== "string" || customDescription.length > 2000 ||
       typeof walletAddress !== "string" || !isAddress(walletAddress)) {
@@ -476,7 +625,7 @@ router.post("/timenaming/upgrade", requireAuth, async (req, res): Promise<void> 
       if (existing?.status === "MINT_PENDING") throw new Error("MINT_IN_PROGRESS");
       const licenseValues = {
         ownerName: ownerName.trim(), customTitle: customTitle.trim(), customDescription: customDescription.trim(),
-        walletAddress, status: "CLAIMED",
+        walletAddress, status: "CLAIMED", ...(mediaFields ?? {}),
       };
       const [license] = existing
         ? await tx.update(minuteLicensesTable).set(licenseValues).where(eq(minuteLicensesTable.id, existing.id)).returning()

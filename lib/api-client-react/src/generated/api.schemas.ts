@@ -15,6 +15,23 @@ export interface TimenamingConfig {
   legalTextStatus: string;
 }
 
+export interface TimenamingMediaUploadInput {
+  file: Blob;
+  certificateId?: string;
+}
+
+/**
+ * @nullable
+ */
+export type TimenamingLicenseMediaType = typeof TimenamingLicenseMediaType[keyof typeof TimenamingLicenseMediaType] | null;
+
+
+export const TimenamingLicenseMediaType = {
+  image: 'image',
+  audio: 'audio',
+  video: 'video',
+} as const;
+
 export interface TimenamingLicense {
   id?: number;
   certificateId?: string;
@@ -36,6 +53,12 @@ export interface TimenamingLicense {
   metadataUri?: string | null;
   /** @nullable */
   certificateIpfsUri?: string | null;
+  /** @nullable */
+  mediaIpfsUri?: string | null;
+  /** @nullable */
+  mediaType?: TimenamingLicenseMediaType;
+  /** @nullable */
+  mediaDurationSeconds?: number | null;
   /** @nullable */
   createdAt?: string | null;
   [key: string]: unknown;
@@ -62,6 +85,15 @@ export const TimenamingReservationInputPurchaseType = {
   ALL_INCLUSIVE: 'ALL_INCLUSIVE',
 } as const;
 
+export type TimenamingReservationInputMediaType = typeof TimenamingReservationInputMediaType[keyof typeof TimenamingReservationInputMediaType];
+
+
+export const TimenamingReservationInputMediaType = {
+  image: 'image',
+  audio: 'audio',
+  video: 'video',
+} as const;
+
 export interface TimenamingReservationInput {
   minuteTimestamp: string;
   purchaseType?: TimenamingReservationInputPurchaseType;
@@ -73,7 +105,25 @@ export interface TimenamingReservationInput {
   customDescription?: string;
   /** @pattern ^0x[a-fA-F0-9]{40}$ */
   walletAddress?: string;
+  /** @pattern ^ipfs://(bafy[a-z2-7]{20,}|Qm[1-9A-HJ-NP-Za-km-z]{40,})$ */
+  mediaIpfsUri?: string;
+  mediaType?: TimenamingReservationInputMediaType;
+  /**
+     * @minimum 1
+     * @maximum 60
+     * @nullable
+     */
+  mediaDurationSeconds?: number | null;
 }
+
+export type TimenamingUpgradeInputMediaType = typeof TimenamingUpgradeInputMediaType[keyof typeof TimenamingUpgradeInputMediaType];
+
+
+export const TimenamingUpgradeInputMediaType = {
+  image: 'image',
+  audio: 'audio',
+  video: 'video',
+} as const;
 
 export interface TimenamingUpgradeInput {
   minuteTimestamp: string;
@@ -91,6 +141,33 @@ export interface TimenamingUpgradeInput {
   customDescription?: string;
   /** @pattern ^0x[a-fA-F0-9]{40}$ */
   walletAddress: string;
+  /** @pattern ^ipfs://(bafy[a-z2-7]{20,}|Qm[1-9A-HJ-NP-Za-km-z]{40,})$ */
+  mediaIpfsUri?: string;
+  mediaType?: TimenamingUpgradeInputMediaType;
+  /**
+     * @minimum 1
+     * @maximum 60
+     * @nullable
+     */
+  mediaDurationSeconds?: number | null;
+}
+
+export type TimenamingMediaResultMediaType = typeof TimenamingMediaResultMediaType[keyof typeof TimenamingMediaResultMediaType];
+
+
+export const TimenamingMediaResultMediaType = {
+  image: 'image',
+  audio: 'audio',
+  video: 'video',
+} as const;
+
+export interface TimenamingMediaResult {
+  mediaIpfsUri: string;
+  mediaType: TimenamingMediaResultMediaType;
+  /** @nullable */
+  mediaDurationSeconds: number | null;
+  /** @nullable */
+  certificateId?: string | null;
 }
 
 export interface TimenamingMutationResult {
