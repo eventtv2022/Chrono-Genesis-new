@@ -1,10 +1,12 @@
 const fs = require("fs");
+const net = require("net");
 const path = require("path");
 const { spawn } = require("child_process");
 const { Readable } = require("stream");
 const { pipeline } = require("stream/promises");
 
 let metroProcess = null;
+let metroPort = null;
 
 const projectRoot = path.resolve(__dirname, "..");
 
@@ -112,9 +114,34 @@ function clearMetroCache() {
   console.log("Cache cleared");
 }
 
-async function checkMetroHealth() {
+function getMetroBaseUrl(port = metroPort) {
+  if (!port) {
+    throw new Error("Metro port has not been selected");
+  }
+  return `http://localhost:${port}`;
+}
+
+async function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once("error", () => resolve(false));
+    server.listen(port, "127.0.0.1", () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+async function findAvailablePort(preferredPort) {
+  for (let port = preferredPort; port < preferredPort + 50; port++) {
+    if (await isPortAvailable(port)) return port;
+  }
+  throw new Error(`No free Metro port found between ${preferredPort} and ${preferredPort + 49}`);
+}
+
+async function checkMetroHealth(port) {
+  if (!port) return false;
   try {
-    const response = await fetch("http://localhost:8081/status", {
+    const response = await fetch(`${getMetroBaseUrl(port)}/status`, {
       signal: AbortSignal.timeout(5000),
     });
     return response.ok;
@@ -128,7 +155,16 @@ function getExpoPublicReplId() {
 }
 
 async function startMetro(expoPublicDomain, expoPublicReplId) {
-  const isRunning = await checkMetroHealth();
+  const preferredPort = Number(process.env.EXPO_BUILD_METRO_PORT) || 8081;
+  if (await checkMetroHealth(preferredPort)) {
+    metroPort = preferredPort;
+    console.log(`Metro already running on port ${metroPort}`);
+    return;
+  }
+
+  metroPort = await findAvailablePort(preferredPort);
+  console.log(`Using Metro port ${metroPort}`);
+  const isRunning = await checkMetroHealth(metroPort);
   if (isRunning) {
     console.log("Metro already running");
     return;
@@ -155,6 +191,8 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
       "--no-dev",
       "--minify",
       "--localhost",
+      "--port",
+      String(metroPort),
     ],
     {
       stdio: ["ignore", "pipe", "pipe"],
@@ -180,7 +218,7 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
   for (let i = 0; i < 60; i++) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    const healthy = await checkMetroHealth();
+    const healthy = await checkMetroHealth(metroPort);
     if (healthy) {
       console.log("Metro ready");
       return;
@@ -230,7 +268,7 @@ async function downloadFile(url, outputPath) {
 async function downloadBundle(platform, timestamp) {
   const entryPath = path.resolve(projectRoot, "node_modules", "expo-router", "entry");
   const bundlePath = path.relative(workspaceRoot, entryPath);
-  const url = new URL(`http://localhost:8081/${bundlePath}.bundle`);
+  const url = new URL(`${getMetroBaseUrl()}/${bundlePath}.bundle`);
   url.searchParams.set("platform", platform);
   url.searchParams.set("dev", "false");
   url.searchParams.set("hot", "false");
@@ -258,7 +296,7 @@ async function downloadManifest(platform) {
 
   try {
     console.log(`Fetching ${platform} manifest...`);
-    const response = await fetch("http://localhost:8081/manifest", {
+    const response = await fetch(`${getMetroBaseUrl()}/manifest`, {
       headers: { "expo-platform": platform },
       signal: controller.signal,
     });
@@ -326,7 +364,7 @@ function extractAssets(timestamp) {
       const originalPath = match[1];
       const filename = match[3] + "." + match[4];
 
-      const tempUrl = new URL(`http://localhost:8081${originalPath}`);
+      const tempUrl = new URL(`${getMetroBaseUrl()}${originalPath}`);
       const unstablePath = tempUrl.searchParams.get("unstable_path");
 
       if (!unstablePath) {
@@ -368,7 +406,7 @@ async function downloadAssets(assets, timestamp) {
   const failures = [];
 
   const downloadPromises = assets.map(async (asset) => {
-    const tempUrl = new URL(`http://localhost:8081${asset.originalPath}`);
+    const tempUrl = new URL(`${getMetroBaseUrl()}${asset.originalPath}`);
     const unstablePath = tempUrl.searchParams.get("unstable_path");
 
     if (!unstablePath) {
@@ -441,7 +479,7 @@ function updateBundleUrls(timestamp, baseUrl) {
     bundle = bundle.replace(
       /httpServerLocation:"(\/[^"]+)"/g,
       (_match, capturedPath) => {
-        const tempUrl = new URL(`http://localhost:8081${capturedPath}`);
+        const tempUrl = new URL(`${getMetroBaseUrl()}${capturedPath}`);
         const unstablePath = tempUrl.searchParams.get("unstable_path");
 
         if (!unstablePath) {
