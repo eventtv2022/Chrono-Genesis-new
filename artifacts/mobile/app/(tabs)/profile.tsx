@@ -22,7 +22,12 @@ import { useCitizen } from "@/context/CitizenContext";
 import { CitizenAvatar } from "@/components/CitizenAvatar";
 import { getBaseUrl } from "@/lib/api";
 import { getStoredToken } from "@/lib/authStorage";
-import { getListMyTvCatalogQueryKey, useListMyTvCatalog } from "@workspace/api-client-react";
+import {
+  getListMyTimelineAnchorsQueryKey,
+  getListMyTvCatalogQueryKey,
+  useListMyTimelineAnchors,
+  useListMyTvCatalog,
+} from "@workspace/api-client-react";
 
 const BASE_URL = getBaseUrl();
 
@@ -48,6 +53,11 @@ function tvPlayerUrl(mediaUrl: string | null, catcastUrl: string | null) {
   return filename ? `${BASE_URL}/api/tv/media/${encodeURIComponent(filename)}` : null;
 }
 
+function formatCapturedMinute(coord: string) {
+  if (!/^\d{12}$/.test(coord)) return coord;
+  return `${coord.slice(0, 4)}-${coord.slice(4, 6)}-${coord.slice(6, 8)} ${coord.slice(8, 10)}:${coord.slice(10, 12)} UTC`;
+}
+
 export default function ProfileScreen() {
   const colors = useColors();
   const { lang } = useLanguage();
@@ -55,6 +65,15 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isRu = lang === "ru";
+  const anchorsQuery = useListMyTimelineAnchors({
+    query: {
+      enabled: Boolean(authToken),
+      queryKey: [...getListMyTimelineAnchorsQueryKey(), citizen?.id ?? "anonymous"],
+      retry: false,
+    },
+    request: { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
+  });
+  const anchors = anchorsQuery.data ?? [];
   const tvCatalogQuery = useListMyTvCatalog({
     query: {
       enabled: Boolean(authToken),
@@ -290,64 +309,6 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <TouchableOpacity
-          accessibilityRole="button"
-          onPress={() => router.push("/timenaming")}
-          style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Feather name="clock" size={19} color={colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{isRu ? "Именование времени · NFT минут" : "Timenaming · NFT minutes"}</Text>
-              <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 4 }]}>
-                {isRu ? "Проверьте минуту, оформите лицензию и выпустите NFT в Sepolia." : "Check a minute, create a license, and mint an NFT on Sepolia."}
-              </Text>
-            </View>
-            <Feather name="arrow-right" size={18} color={colors.primary} />
-          </View>
-        </TouchableOpacity>
-
-        <View style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID="section-tv-catalog">
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Feather name="film" size={19} color={colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{isRu ? "Видеослоты и капсулы времени" : "Video slots & time capsules"}</Text>
-              <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 4 }]}>
-                {isRu ? "Созданные вами слоты и капсулы с датой и временем создания." : "Your slots and capsules, with their creation date and time."}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => void tvCatalogQuery.refetch()} disabled={tvCatalogQuery.isFetching} accessibilityLabel={isRu ? "Обновить каталог видео" : "Refresh video catalog"}>
-              {tvCatalogQuery.isFetching ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="refresh-cw" size={17} color={colors.primary} />}
-            </TouchableOpacity>
-          </View>
-          {!authToken ? <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 12 }]}>{isRu ? "Войдите в аккаунт гражданина." : "Sign in to your citizen account."}</Text>
-            : tvCatalogQuery.isLoading ? <ActivityIndicator style={{ marginTop: 16 }} color={colors.primary} />
-            : tvCatalogQuery.isError ? <Text style={[styles.inlineError, { color: colors.destructive, marginTop: 12 }]}>{isRu ? "Не удалось загрузить каталог видео." : "Could not load your video catalog."}</Text>
-            : tvCatalog.length === 0 ? <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 12 }]}>{isRu ? "Пока нет созданных видеослотов." : "No video slots created yet."}</Text>
-            : tvCatalog.map((item) => {
-              const playerUrl = tvPlayerUrl(item.mediaUrl, item.catcastUrl);
-              const slotTime = `${String(Math.floor(item.minuteIndex / 60)).padStart(2, "0")}:${String(item.minuteIndex % 60).padStart(2, "0")}`;
-              return <View key={item.slotId} style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, marginTop: 12, paddingTop: 12 }} testID={`card-tv-catalog-${item.slotId}`}>
-                <Text style={{ color: colors.foreground, fontSize: 14, fontWeight: "700" }}>
-                  {item.seedText?.trim() || (isRu ? "Капсула времени" : "Time capsule")}
-                </Text>
-                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 4 }}>{item.slotDate} · {slotTime} UTC</Text>
-                <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 5 }}>
-                  {isRu ? "Слот создан" : "Slot created"}: {item.slotCreatedAt ? formatCreatedAt(item.slotCreatedAt) : (isRu ? "Время бронирования недоступно для старой записи" : "Booking time unavailable for this older record")}
-                </Text>
-                <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 3 }}>
-                  {item.capsuleCreatedAt
-                    ? `${isRu ? "Капсула создана" : "Capsule created"}: ${formatCreatedAt(item.capsuleCreatedAt)}`
-                    : (isRu ? "Капсула времени ещё не создана" : "No time capsule yet")}
-                </Text>
-                {playerUrl ? <TouchableOpacity onPress={() => void Linking.openURL(playerUrl)} style={[styles.copyButton, { borderColor: colors.primary, marginTop: 10 }]}>
-                  <Feather name="play-circle" size={15} color={colors.primary} />
-                  <Text style={[styles.copyText, { color: colors.primary }]}>{isRu ? "Открыть плеер" : "Open player"}</Text>
-                </TouchableOpacity> : <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 8 }}>{isRu ? "Видео ещё не готово" : "Video not ready yet"}</Text>}
-              </View>;
-            })}
-        </View>
-
         <View style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{isRu ? "Резюме и портфолио" : "Resume & portfolio"}</Text>
           <Text style={[styles.programCopy, { color: colors.mutedForeground }]}>
@@ -410,6 +371,69 @@ export default function ProfileScreen() {
             </Text>
             <Feather name="arrow-right" size={17} color={colors.primaryForeground} />
           </TouchableOpacity>
+        </View>
+
+        <View style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID="section-captured-minutes">
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Feather name="clock" size={18} color={colors.primary} />
+            <Text style={[styles.sectionTitle, { color: colors.foreground, flex: 1 }]}>{isRu ? "Захваченные минуты" : "Captured minutes"}</Text>
+            <TouchableOpacity onPress={() => void anchorsQuery.refetch()} disabled={anchorsQuery.isFetching} accessibilityLabel={isRu ? "Обновить захваченные минуты" : "Refresh captured minutes"}>
+              {anchorsQuery.isFetching ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="refresh-cw" size={17} color={colors.primary} />}
+            </TouchableOpacity>
+          </View>
+          <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 5 }]}>
+            {isRu ? "Минуты, закреплённые за вашим гражданским профилем." : "Minutes linked to your citizen profile."}
+          </Text>
+          {!authToken ? <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 12 }]}>{isRu ? "Войдите в аккаунт гражданина." : "Sign in to your citizen account."}</Text>
+            : anchorsQuery.isLoading ? <ActivityIndicator style={{ marginTop: 16 }} color={colors.primary} />
+            : anchorsQuery.isError ? <Text style={[styles.inlineError, { color: colors.destructive, marginTop: 12 }]}>{isRu ? "Не удалось загрузить захваченные минуты." : "Could not load captured minutes."}</Text>
+            : anchors.length === 0 ? <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 12 }]}>{isRu ? "Пока нет захваченных минут." : "No captured minutes yet."}</Text>
+            : anchors.map((anchor) => (
+              <View key={anchor.timelineCoord} style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, marginTop: 12, paddingTop: 12 }} testID={`card-captured-minute-${anchor.timelineCoord}`}>
+                <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: "700" }}>{formatCapturedMinute(anchor.timelineCoord)}</Text>
+                {anchor.capsuleText ? <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 4 }}>{anchor.capsuleText}</Text> : null}
+                <Text style={{ color: colors.primary, fontSize: 11, marginTop: 4 }}>
+                  {anchor.status === "MINTED" ? (isRu ? "NFT выпущен" : "NFT minted") : (isRu ? "Захвачена" : "Captured")}
+                </Text>
+              </View>
+            ))}
+        </View>
+
+        <View style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID="section-tv-catalog">
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Feather name="film" size={19} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{isRu ? "Видеослоты и капсулы времени" : "Video slots & time capsules"}</Text>
+              <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 4 }]}>
+                {isRu ? "Созданные вами слоты и капсулы с датой и временем создания." : "Your slots and capsules, with their creation date and time."}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => void tvCatalogQuery.refetch()} disabled={tvCatalogQuery.isFetching} accessibilityLabel={isRu ? "Обновить каталог видео" : "Refresh video catalog"}>
+              {tvCatalogQuery.isFetching ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="refresh-cw" size={17} color={colors.primary} />}
+            </TouchableOpacity>
+          </View>
+          {!authToken ? <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 12 }]}>{isRu ? "Войдите в аккаунт гражданина." : "Sign in to your citizen account."}</Text>
+            : tvCatalogQuery.isLoading ? <ActivityIndicator style={{ marginTop: 16 }} color={colors.primary} />
+            : tvCatalogQuery.isError ? <Text style={[styles.inlineError, { color: colors.destructive, marginTop: 12 }]}>{isRu ? "Не удалось загрузить каталог видео." : "Could not load your video catalog."}</Text>
+            : tvCatalog.length === 0 ? <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 12 }]}>{isRu ? "Пока нет созданных видеослотов." : "No video slots created yet."}</Text>
+            : tvCatalog.map((item) => {
+              const playerUrl = tvPlayerUrl(item.mediaUrl, item.catcastUrl);
+              const slotTime = `${String(Math.floor(item.minuteIndex / 60)).padStart(2, "0")}:${String(item.minuteIndex % 60).padStart(2, "0")}`;
+              return <View key={item.slotId} style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, marginTop: 12, paddingTop: 12 }} testID={`card-tv-catalog-${item.slotId}`}>
+                <Text style={{ color: colors.foreground, fontSize: 14, fontWeight: "700" }}>{item.seedText?.trim() || (isRu ? "Капсула времени" : "Time capsule")}</Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 4 }}>{item.slotDate} · {slotTime} UTC</Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 5 }}>
+                  {isRu ? "Слот создан" : "Slot created"}: {item.slotCreatedAt ? formatCreatedAt(item.slotCreatedAt) : (isRu ? "Время бронирования недоступно для старой записи" : "Booking time unavailable for this older record")}
+                </Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 3 }}>
+                  {item.capsuleCreatedAt ? `${isRu ? "Капсула создана" : "Capsule created"}: ${formatCreatedAt(item.capsuleCreatedAt)}` : (isRu ? "Капсула времени ещё не создана" : "No time capsule yet")}
+                </Text>
+                {playerUrl ? <TouchableOpacity onPress={() => void Linking.openURL(playerUrl)} style={[styles.copyButton, { borderColor: colors.primary, marginTop: 10 }]}>
+                  <Feather name="play-circle" size={15} color={colors.primary} />
+                  <Text style={[styles.copyText, { color: colors.primary }]}>{isRu ? "Открыть плеер" : "Open player"}</Text>
+                </TouchableOpacity> : <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 8 }}>{isRu ? "Видео ещё не готово" : "Video not ready yet"}</Text>}
+              </View>;
+            })}
         </View>
 
         <View style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -582,6 +606,22 @@ export default function ProfileScreen() {
               </View>
             )}
             {!!error && <Text style={[styles.inlineError, { color: colors.destructive }]}>{error}</Text>}
+            <TouchableOpacity
+              accessibilityRole="button"
+              onPress={() => router.push("/timenaming")}
+              style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 16 }]}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Feather name="clock" size={19} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{isRu ? "Именование времени · NFT минут" : "Timenaming · NFT minutes"}</Text>
+                  <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 4 }]}>
+                    {isRu ? "Проверьте минуту, оформите лицензию и выпустите NFT в Sepolia." : "Check a minute, create a license, and mint an NFT on Sepolia."}
+                  </Text>
+                </View>
+                <Feather name="arrow-right" size={18} color={colors.primary} />
+              </View>
+            </TouchableOpacity>
           </>
         ) : null}
       </ScrollView>
