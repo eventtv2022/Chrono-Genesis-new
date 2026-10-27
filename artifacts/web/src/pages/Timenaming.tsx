@@ -5,8 +5,9 @@ import { useLanguage } from "@/context/LanguageContext";
 import { timenamingCopy, timenamingContinuityQualifier, timenamingIsMachineTranslation, timenamingTranslationNotice, type HelpCategory } from "@/i18n/timenaming";
 import { timenamingPageRu, type TimenamingPageRuKey } from "@/i18n/timenamingPageRu";
 import type { LangCode } from "@/i18n/ui";
+import { useUploadTimenamingMedia } from "@workspace/api-client-react";
 import {
-  AlertCircle, ArrowUpRight, BadgeCheck, CalendarClock, Check, ChevronRight, ChevronDown, Search, X,
+  AlertCircle, ArrowUpRight, BadgeCheck, CalendarClock, Check, ChevronRight, ChevronDown, Search, X, Upload,
   CircleHelp, Clock3, Download, FileText, Fingerprint, LoaderCircle, LockKeyhole,
   Network, Shield, Sparkles, WalletCards,
 } from "lucide-react";
@@ -36,6 +37,9 @@ type License = {
   explorerUrl?: string | null;
   metadataUri?: string | null;
   certificateIpfsUri?: string | null;
+  mediaIpfsUri?: string | null;
+  mediaType?: "image" | "audio" | "video" | null;
+  mediaDurationSeconds?: number | null;
   [key: string]: unknown;
 };
 
@@ -125,6 +129,8 @@ export function Timenaming() {
   const [ownerName, setOwnerName] = useState(citizen?.name ?? "");
   const [customTitle, setCustomTitle] = useState("");
   const [customDescription, setCustomDescription] = useState("");
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [pinnedMedia, setPinnedMedia] = useState<{ mediaIpfsUri: string; mediaType: "image" | "audio" | "video"; mediaDurationSeconds: number | null } | null>(null);
   const [reserveError, setReserveError] = useState("");
   const [reserveSuccess, setReserveSuccess] = useState("");
   const [reserving, setReserving] = useState(false);
@@ -133,6 +139,9 @@ export function Timenaming() {
   const [faqQuery, setFaqQuery] = useState("");
   const [faqCategory, setFaqCategory] = useState<HelpCategory | "all">("all");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const mediaUpload = useUploadTimenamingMedia({
+    request: { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
+  });
   const visibleFaqs = useMemo(() => {
     const query = faqQuery.trim().toLocaleLowerCase(lang);
     return help.questions.map((item, index) => ({ ...item, index })).filter(item =>
@@ -328,6 +337,11 @@ export function Timenaming() {
     }
     setReserving(true);
     try {
+      let media = pinnedMedia;
+      if (needsLicense && mediaFile && !media) {
+        media = await mediaUpload.mutateAsync({ data: { file: mediaFile } });
+        setPinnedMedia(media);
+      }
       const endpoint = isUpgrade ? "/api/v1/timenaming/upgrade" : "/api/v1/timenaming/reserve";
       const result = await readJson<{ license?: License; newBalance: number; status?: string; transactionHash?: string }>(
         await fetch(endpoint, {
@@ -337,6 +351,7 @@ export function Timenaming() {
             minuteTimestamp: minuteValue,
             purchaseType: isUpgrade ? "UPGRADE" : purchaseType,
             ...(needsLicense ? { ownerName: ownerName.trim(), customTitle: customTitle.trim(), customDescription: customDescription.trim(), walletAddress } : {}),
+            ...(needsLicense && media ? media : {}),
           }),
         }),
       );
@@ -345,12 +360,33 @@ export function Timenaming() {
       setAvailability({ timestamp: asCoordinate(date, time), available: false, reserved: true, ownedByMe: true, minuteStatus: isMinted ? "MINTED" : isPending ? "MINT_PENDING" : "CLAIMED", ...(result.license ? { license: result.license } : {}) });
       setReserveSuccess(isMinted ? tx("nftMintedBalance", `NFT minted on Sepolia. Balance: ${result.newBalance} Д.`).replace("{balance}", String(result.newBalance)) : isPending ? tx("mintSubmitted", "Mint transaction submitted and awaiting confirmation.") : tx("minuteReservedBalance", `Minute reserved for your family. Balance: ${result.newBalance} Д.`).replace("{balance}", String(result.newBalance)));
       if (needsLicense) { setCustomTitle(""); setCustomDescription(""); }
+      setMediaFile(null);
+      setPinnedMedia(null);
       void refreshCitizen();
       void loadMine();
     } catch (error) {
       setReserveError(errorMessage(error, tx("reservationFailed", "Reservation could not be completed."), lang));
     } finally {
       setReserving(false);
+    }
+  }
+
+  async function attachMediaToLicense(license: License, file?: File) {
+    const id = recordId(license);
+    if (!file || !id || !authToken) return;
+    if (file.size > 25 * 1024 * 1024) {
+      setMineError(lang === "ru" ? "Размер файла не должен превышать 25 МБ." : "The file must be 25 MB or smaller.");
+      return;
+    }
+    setWorking(`media-${id}`);
+    setMineError("");
+    try {
+      await mediaUpload.mutateAsync({ data: { file, certificateId: String(id) } });
+      await loadMine();
+    } catch (error) {
+      setMineError(errorMessage(error, tx("reservationFailed", "Media could not be uploaded."), lang));
+    } finally {
+      setWorking(null);
     }
   }
 
@@ -491,7 +527,7 @@ export function Timenaming() {
                 {!availability.ownedByMe && (
                   <div className="tn-package-options" role="radiogroup" aria-label={tx("choosePackageAria", "Choose a minute package")}>
                     <label className={`tn-package-option ${purchaseType === "TIMELINE_ONLY" ? "selected" : ""}`}>
-                      <input type="radio" name="purchaseType" checked={purchaseType === "TIMELINE_ONLY"} onChange={() => setPurchaseType("TIMELINE_ONLY")} />
+                      <input type="radio" name="purchaseType" checked={purchaseType === "TIMELINE_ONLY"} onChange={() => { setPurchaseType("TIMELINE_ONLY"); setMediaFile(null); setPinnedMedia(null); }} />
                       <span><strong>{tx("reserveForFamily", "Reserve for your family")}</strong><small>{tx("timelineOnly", "Timeline claim only")}</small></span><b>1 Д</b>
                     </label>
                     <label className={`tn-package-option ${purchaseType === "ALL_INCLUSIVE" ? "selected" : ""} ${!config?.contractConfigured || !config?.ipfsPinningConfigured ? "disabled" : ""}`}>
@@ -509,6 +545,27 @@ export function Timenaming() {
                   <label className="tn-field"><span>{tx("orEnterAddress", "Or enter a public EVM address")}</span><input value={walletAddress} onChange={event => setWalletAddress(event.target.value.trim())} placeholder="0x…" maxLength={42} data-testid="input-evm-wallet-address" /></label>
                   {walletError && <div className="tn-inline-message tn-inline-error" role="alert" data-testid="error-wallet">{walletError}</div>}
                   {!walletAddress && <p className="tn-form-hint">{tx("connectWalletHint", "Connect MetaMask on Sepolia or enter the public EVM address that should receive the NFT.")}</p>}
+                   <div className="tn-public-warning" role="note">{lang === "ru" ? "Фото, аудио и видео будут общедоступны в IPFS. Аудио и видео — не длиннее 60 секунд; максимум 25 МБ." : "Photos, audio, and video will be public on IPFS. Audio/video must be 60 seconds or shorter; files up to 25 MB."}</div>
+                   <label className="tn-field"><span>{lang === "ru" ? "Медиа для NFT (необязательно)" : "NFT media (optional)"}</span>
+                     <input type="file" accept="image/*,audio/*,video/*" data-testid="input-nft-media"
+                       onChange={event => {
+                         const file = event.currentTarget.files?.[0] ?? null;
+                         event.currentTarget.value = "";
+                         if (file && file.size > 25 * 1024 * 1024) {
+                           setReserveError(lang === "ru" ? "Размер файла не должен превышать 25 МБ." : "The file must be 25 MB or smaller.");
+                           setMediaFile(null);
+                           setPinnedMedia(null);
+                           return;
+                         }
+                         setReserveError("");
+                         setMediaFile(file);
+                         setPinnedMedia(null);
+                       }} />
+                   </label>
+                   {mediaFile && <div className="tn-form-hint" data-testid="text-selected-nft-media">
+                     {mediaFile.name} · {pinnedMedia ? (lang === "ru" ? "Загружено в IPFS" : "Uploaded to IPFS") : (lang === "ru" ? "Будет загружено при оформлении" : "Uploads when you submit")}
+                     <button type="button" className="tn-outline-button" onClick={() => { setMediaFile(null); setPinnedMedia(null); }} data-testid="button-remove-nft-media">{lang === "ru" ? "Убрать" : "Remove"}</button>
+                   </div>}
                 </>}
                 {!citizen && <p className="tn-form-hint">{tx("signInToPurchase", "Sign in as a citizen to purchase. No private key or secret is requested.")}</p>}
                 {citizen && !enoughBalance && <p className="tn-form-hint">{tx("needBalance", "You need {amount} Д beyond the protected ancestral minute.").replace("{amount}", formatDarmins(purchaseCost, lang))}</p>}
@@ -577,8 +634,16 @@ export function Timenaming() {
                       <button className="tn-outline-button" type="button" onClick={() => void generateCertificate(license)} disabled={working !== null || !recordId(license)} data-testid={`button-certificate-${id}`}>
                         {working === `certificate-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Download size={14} />} Certificate
                       </button>
+                      {!nftComplete && !nftPending && <label className="tn-outline-button" data-testid={`button-media-${id}`}>
+                        {working === `media-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Upload size={14} />}
+                        {license.mediaIpfsUri ? (lang === "ru" ? "Заменить медиа" : "Replace media") : (lang === "ru" ? "Добавить медиа" : "Add media")}
+                        <input className="sr-only" type="file" accept="image/*,audio/*,video/*" data-testid={`input-media-${id}`}
+                          onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; void attachMediaToLicense(license, file); }} />
+                      </label>}
+                      {!nftComplete && !nftPending && <span className="tn-form-hint">{lang === "ru" ? "Загрузка делает файл общедоступным в IPFS." : "Uploading makes the file public on IPFS."}</span>}
                         {license.certificateIpfsUri && <a className="tn-tx-link" href={ipfsGatewayUrl(license.certificateIpfsUri)} target="_blank" rel="noreferrer" data-testid={`link-ipfs-certificate-${id}`}>{tx("ipfsCertificate", "IPFS certificate")} <ArrowUpRight size={13} /></a>}
                         {license.metadataUri && <a className="tn-tx-link" href={ipfsGatewayUrl(license.metadataUri)} target="_blank" rel="noreferrer" data-testid={`link-ipfs-metadata-${id}`}>{tx("nftMetadata", "NFT metadata")} <ArrowUpRight size={13} /></a>}
+                        {license.mediaIpfsUri && <a className="tn-tx-link" href={ipfsGatewayUrl(license.mediaIpfsUri)} target="_blank" rel="noreferrer" data-testid={`link-ipfs-media-${id}`}>{lang === "ru" ? "Медиа в IPFS" : "IPFS media"} <ArrowUpRight size={13} /></a>}
                       {!nftComplete && (
                           <button className="tn-mint-button" type="button" onClick={() => void mintNft(license)} disabled={working !== null || !config?.contractConfigured || !config?.ipfsPinningConfigured || !recordId(license) || nftPending} title={!config?.contractConfigured ? tx("contractNotConfigured", "The relayer is not configured.") : !config?.ipfsPinningConfigured ? tx("ipfsPinningNotConfigured", "IPFS pinning is not configured.") : tx("upgradeSepoliaHint", "Upgrade and mint on Sepolia for 2.04 Д including the 2% TimeNation fee.")} data-testid={`button-mint-${id}`}>
                            {working === `mint-${id}` ? <LoaderCircle size={14} className="tn-spin" /> : <Sparkles size={14} />} {nftPending ? tx("mintPendingButton", "Mint pending") : tx("upgradeMint", "Upgrade / mint · +2.04 Д")}

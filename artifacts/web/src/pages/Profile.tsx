@@ -7,6 +7,7 @@ import {
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { Layout } from "@/components/Layout";
+import { getListMyTimelineAnchorsQueryKey, useListMyTimelineAnchors } from "@workspace/api-client-react";
 
 interface ProfessionalDocuments {
   resume: { fileName: string; uploadedAt: string | null; visible: boolean } | null;
@@ -28,10 +29,22 @@ interface ReferralProfile {
   referrals: Referral[];
 }
 
+function formatCapturedMinute(coord: string) {
+  if (!/^\d{12}$/.test(coord)) return coord;
+  return `${coord.slice(0, 4)}-${coord.slice(4, 6)}-${coord.slice(6, 8)} ${coord.slice(8, 10)}:${coord.slice(10, 12)} UTC`;
+}
+
 export function Profile() {
   const { citizen, authToken } = useCitizen();
   const { lang } = useLanguage();
   const isRu = lang === "ru";
+  const anchorsQuery = useListMyTimelineAnchors({
+    query: {
+      enabled: Boolean(authToken),
+      queryKey: [...getListMyTimelineAnchorsQueryKey(), citizen?.id ?? "anonymous"],
+    },
+    request: { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
+  });
   const [documents, setDocuments] = useState<ProfessionalDocuments | null>(null);
   const [referrals, setReferrals] = useState<ReferralProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +70,9 @@ export function Profile() {
     signIn: "Войдите в аккаунт гражданина, чтобы открыть личный кабинет.",
     signInButton: "Войти", loading: "Загружаем профиль…", retry: "Повторить",
     uploadError: "Не удалось загрузить файл.", fileError: "Выберите PDF-файл размером не более 3 МБ.",
+    captured: "Захваченные минуты", capturedInfo: "Минуты, закреплённые за вашим гражданским профилем.",
+    noCaptured: "Пока нет захваченных минут.", capturedError: "Не удалось загрузить захваченные минуты.",
+    active: "Захвачена", minted: "NFT выпущен", refreshMinutes: "Обновить",
   } : {
     eyebrow: "CITIZEN CONTROL ROOM", title: "Profile", docs: "Resume & portfolio",
     docsInfo: "PDF files up to 3 MB are hidden by default. You can allow any signed-in TimeNation citizen to view each file. AI uses documents only with your consent.",
@@ -73,6 +89,9 @@ export function Profile() {
     signIn: "Sign in to your citizen account to open your profile.",
     signInButton: "Sign in", loading: "Loading your profile…", retry: "Try again",
     uploadError: "Could not upload the file.", fileError: "Choose a PDF file no larger than 3 MB.",
+    captured: "Captured minutes", capturedInfo: "Minutes linked to your citizen profile.",
+    noCaptured: "No captured minutes yet.", capturedError: "Could not load captured minutes.",
+    active: "Captured", minted: "NFT minted", refreshMinutes: "Refresh",
   };
 
   const loadProfileData = useCallback(async (signal?: AbortSignal) => {
@@ -220,6 +239,29 @@ export function Profile() {
               </div>;
             })}
           </div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="section-captured-minutes">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+            <div><h2 className="text-lg font-bold">{t.captured}</h2><p className="mt-1 text-sm text-muted-foreground">{t.capturedInfo}</p></div>
+            <button type="button" onClick={() => void anchorsQuery.refetch()} disabled={anchorsQuery.isFetching} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-border px-3 text-xs font-semibold hover:bg-secondary disabled:opacity-50" data-testid="button-refresh-captured-minutes">
+              {anchorsQuery.isFetching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{t.refreshMinutes}
+            </button>
+          </div>
+          {!authToken ? <p className="px-5 py-6 text-sm text-muted-foreground">{t.signIn}</p>
+            : anchorsQuery.isLoading ? <div role="status" className="px-5 py-8 text-center text-sm text-muted-foreground"><LoaderCircle className="mx-auto mb-2 h-5 w-5 animate-spin text-primary" />{t.loading}</div>
+            : anchorsQuery.isError ? <div role="alert" className="px-5 py-6 text-sm text-destructive">{t.capturedError}</div>
+            : !anchorsQuery.data?.length ? <p className="px-5 py-8 text-center text-sm text-muted-foreground" data-testid="empty-captured-minutes">{t.noCaptured}</p>
+            : <div className="divide-y divide-border">{anchorsQuery.data.map((anchor) => (
+              <article key={anchor.timelineCoord} className="flex flex-wrap items-center gap-3 px-5 py-4" data-testid={`card-captured-minute-${anchor.timelineCoord}`}>
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-primary/20 bg-primary/10 text-primary"><FileText className="h-4 w-4" /></div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-sm font-semibold">{formatCapturedMinute(anchor.timelineCoord)}</p>
+                  {anchor.capsuleText && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{anchor.capsuleText}</p>}
+                </div>
+                <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">{anchor.status === "MINTED" ? t.minted : t.active}</span>
+              </article>
+            ))}</div>}
         </section>
 
         {loading ? <div role="status" className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground"><LoaderCircle className="mx-auto mb-3 h-5 w-5 animate-spin text-primary" />{t.loading}</div> : referrals && <>
