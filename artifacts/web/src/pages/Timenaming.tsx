@@ -5,7 +5,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { timenamingCopy, timenamingContinuityQualifier, timenamingIsMachineTranslation, timenamingTranslationNotice, type HelpCategory } from "@/i18n/timenaming";
 import { timenamingPageRu, type TimenamingPageRuKey } from "@/i18n/timenamingPageRu";
 import type { LangCode } from "@/i18n/ui";
-import { useUploadTimenamingMedia } from "@workspace/api-client-react";
+import { getListMyTimelineAnchorsQueryKey, useListMyTimelineAnchors, useUploadTimenamingMedia } from "@workspace/api-client-react";
 import {
   AlertCircle, ArrowUpRight, BadgeCheck, CalendarClock, Check, ChevronRight, ChevronDown, Search, X, Upload,
   CircleHelp, Clock3, Download, FileText, Fingerprint, LoaderCircle, LockKeyhole,
@@ -154,6 +154,21 @@ export function Timenaming() {
     () => authToken ? { Authorization: `Bearer ${authToken}` } : {} as Record<string, string>,
     [authToken],
   );
+  const anchorsQuery = useListMyTimelineAnchors({
+    query: {
+      enabled: Boolean(authToken),
+      queryKey: [...getListMyTimelineAnchorsQueryKey(), citizen?.id ?? "anonymous"],
+      retry: false,
+    },
+    request: { headers: authHeaders },
+  });
+  const anchors = anchorsQuery.data ?? [];
+  const anchorByCoord = new Map(anchors.map(anchor => [anchor.timelineCoord, anchor]));
+  const minuteCoords = [...new Set([
+    ...anchors.map(anchor => anchor.timelineCoord),
+    ...licenses.map(license => license.timelineCoord).filter((coord): coord is string => Boolean(coord)),
+  ])].sort((a, b) => b.localeCompare(a));
+  const anchorsError = anchorsQuery.error instanceof Error ? anchorsQuery.error.message : "";
   const minuteValue = date && time ? toMinuteValue(date, time) : "";
   const [walletAddress, setWalletAddress] = useState("");
   const [walletError, setWalletError] = useState("");
@@ -317,6 +332,32 @@ export function Timenaming() {
     }
   }
 
+  async function prepareNftUpgrade(coord: string) {
+    if (!/^\d{12}$/.test(coord)) return;
+    const nextDate = `${coord.slice(0, 4)}-${coord.slice(4, 6)}-${coord.slice(6, 8)}`;
+    const nextTime = `${coord.slice(8, 10)}:${coord.slice(10, 12)}`;
+    setDate(nextDate);
+    setDateInput(lang === "ru" ? formatRussianDate(nextDate) : nextDate);
+    setTime(nextTime);
+    setPurchaseType("TIMELINE_ONLY");
+    setCheckError("");
+    setReserveError("");
+    setReserveSuccess("");
+    setAvailability(null);
+    document.querySelector('[data-testid="section-reservation"]')?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setChecking(true);
+    try {
+      const availability = await readJson<Availability>(
+        await fetch(`/api/v1/timenaming/check/${coord}`, { headers: authHeaders }),
+      );
+      setAvailability(availability);
+    } catch (error) {
+      setCheckError(errorMessage(error, tx("cannotCheckAvailability", "Availability could not be checked."), lang));
+    } finally {
+      setChecking(false);
+    }
+  }
+
   async function reserveMinute(event: React.FormEvent) {
     event.preventDefault();
     setReserveError("");
@@ -364,6 +405,7 @@ export function Timenaming() {
       setPinnedMedia(null);
       void refreshCitizen();
       void loadMine();
+      void anchorsQuery.refetch();
     } catch (error) {
       setReserveError(errorMessage(error, tx("reservationFailed", "Reservation could not be completed."), lang));
     } finally {
@@ -430,6 +472,7 @@ export function Timenaming() {
           method: "POST", headers: authHeaders,
         }),
       );
+      void anchorsQuery.refetch();
       await loadMine();
     } catch (error) {
       setMineError(errorMessage(error, tx("mintUnavailable", "NFT minting is currently unavailable."), lang));
@@ -605,23 +648,43 @@ export function Timenaming() {
 
         <section className="tn-records" data-testid="section-my-placements">
           <div className="tn-records-heading">
-            <div><span className="tn-overline">{tx("yourCitizenRecord", "YOUR CITIZEN RECORD")}</span><h2>{tx("myPlacements", "My placements")} <span>{licenses.length}</span></h2></div>
-            <button type="button" className="tn-refresh-button" onClick={() => void loadMine()} disabled={!authToken || mineLoading} data-testid="button-refresh-placements">
-              {mineLoading ? <LoaderCircle size={15} className="tn-spin" /> : <Sparkles size={15} />} {tx("refreshRecord", "Refresh record")}
+            <div><span className="tn-overline">{tx("yourCitizenRecord", "YOUR CITIZEN RECORD")}</span><h2>{lang === "ru" ? "Мои минуты" : "My minutes"} <span>{minuteCoords.length}</span></h2></div>
+            <button type="button" className="tn-refresh-button" onClick={() => { void loadMine(); void anchorsQuery.refetch(); }} disabled={!authToken || mineLoading || anchorsQuery.isFetching} data-testid="button-refresh-placements">
+              {mineLoading || anchorsQuery.isFetching ? <LoaderCircle size={15} className="tn-spin" /> : <Sparkles size={15} />} {tx("refreshRecord", "Refresh record")}
             </button>
           </div>
           {!authToken ? (
             <div className="tn-empty-state" data-testid="empty-placements"><div className="tn-empty-icon"><FileText size={21} /></div><div><strong>{tx("placementsWillAppear", "Your placements will appear here")}</strong><p>{tx("signInToView", "Sign in as a citizen to view issued placement licenses.")}</p></div></div>
-          ) : mineLoading ? (
+          ) : mineLoading || anchorsQuery.isLoading ? (
             <div className="tn-record-skeleton" data-testid="loading-placements"><span /><span /><span /></div>
-          ) : mineError ? (
-            <div className="tn-empty-state tn-error-state" role="alert" data-testid="error-placements"><AlertCircle size={20} /><div><strong>{tx("recordUnavailable", "Record unavailable")}</strong><p>{mineError}</p></div><button onClick={() => void loadMine()} data-testid="button-retry-placements">{tx("tryAgain", "Try again")}</button></div>
-          ) : licenses.length === 0 ? (
+          ) : mineError || anchorsError ? (
+            <div className="tn-empty-state tn-error-state" role="alert" data-testid="error-placements"><AlertCircle size={20} /><div><strong>{tx("recordUnavailable", "Record unavailable")}</strong><p>{mineError || anchorsError}</p></div><button onClick={() => { void loadMine(); void anchorsQuery.refetch(); }} data-testid="button-retry-placements">{tx("tryAgain", "Try again")}</button></div>
+          ) : minuteCoords.length === 0 ? (
             <div className="tn-empty-state" data-testid="empty-placements"><div className="tn-empty-icon"><Clock3 size={21} /></div><div><strong>{tx("noPlacements", "No placements yet")}</strong><p>{tx("noPlacementsDescription", "When you reserve a minute, its license and NFT status will be shown here.")}</p></div></div>
           ) : (
             <div className="tn-license-list">
-              {licenses.map((license, index) => {
-                const id = recordId(license) || `record-${index}`;
+              {minuteCoords.map((coord, index) => {
+                const license = licenses.find(item => item.timelineCoord === coord);
+                const anchor = anchorByCoord.get(coord);
+                const id = license ? recordId(license) || coord : coord || `record-${index}`;
+                if (!license) {
+                  const anchorStatus = anchor?.status.toLowerCase() ?? "";
+                  const canUpgrade = Boolean(anchor) && !["on_auction", "minted", "mint_pending"].includes(anchorStatus);
+                  const statusText = anchorStatus === "on_auction"
+                    ? (lang === "ru" ? "На аукционе" : "On auction")
+                    : anchorStatus === "minted"
+                      ? tx("minted", "MINTED")
+                      : lang === "ru" ? "Забронирована в истории · без NFT" : "Reserved in Timeline · no NFT";
+                  return <article className="tn-license-row" key={coord} data-testid={`card-placement-${coord}`}>
+                    <div className="tn-record-date"><span>{tx("historicalMinute", "HISTORICAL MINUTE")}</span><strong>{prettyMinute(coord, lang)}</strong></div>
+                    <div className="tn-record-title"><strong>{lang === "ru" ? "Минута в истории" : "Timeline minute"}</strong><span>{statusText}</span></div>
+                    <div className="tn-record-actions">
+                      {canUpgrade && <button className="tn-mint-button" type="button" onClick={() => void prepareNftUpgrade(coord)} disabled={working !== null} data-testid={`button-upgrade-minute-${coord}`}>
+                        <BadgeCheck size={14} />{lang === "ru" ? "Оформить NFT" : "Create NFT"}
+                      </button>}
+                    </div>
+                  </article>;
+                }
                 const nftComplete = license.status === "MINTED" || license.status === "ACTIVE_NFT" || !!license.tokenId || license.nftStatus === "minted";
                 const nftPending = license.status === "MINT_PENDING";
                 return (

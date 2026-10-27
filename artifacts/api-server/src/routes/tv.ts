@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tvSlotsTable, tvCapsulesTable, citizensTable, transactionsTable } from "@workspace/db";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { requireAdultKyc, requireAuth } from "../middleware/auth";
@@ -254,6 +254,43 @@ router.get("/tv/slots", async (req, res): Promise<void> => {
   res.json({ date, count: enriched.length, slots: enriched });
 });
 
+router.get("/tv/my-catalog", requireAuth, async (req, res): Promise<void> => {
+  const citizenId = req.citizen?.id;
+  if (!citizenId) {
+    res.status(401).json({ error: "Требуется авторизация" });
+    return;
+  }
+
+  const rows = await db
+    .select({
+      slotId: tvSlotsTable.id,
+      slotDate: tvSlotsTable.date,
+      minuteIndex: tvSlotsTable.minuteIndex,
+      slotType: tvSlotsTable.slotType,
+      slotStatus: tvSlotsTable.status,
+      slotCreatedAt: tvSlotsTable.bookedAt,
+      capsuleId: tvCapsulesTable.id,
+      capsuleCreatedAt: tvCapsulesTable.createdAt,
+      capsuleStatus: tvCapsulesTable.status,
+      seedText: tvCapsulesTable.seedText,
+      mediaUrl: tvCapsulesTable.mediaUrl,
+      catcastUrl: tvCapsulesTable.catcastUrl,
+      broadcastPolicy: tvCapsulesTable.broadcastPolicy,
+    })
+    .from(tvSlotsTable)
+    .leftJoin(
+      tvCapsulesTable,
+      and(
+        eq(tvCapsulesTable.slotId, tvSlotsTable.id),
+        eq(tvCapsulesTable.citizenId, citizenId),
+      ),
+    )
+    .where(eq(tvSlotsTable.ownerId, citizenId))
+    .orderBy(desc(tvSlotsTable.createdAt));
+
+  res.json({ items: rows });
+});
+
 // ─── GET /api/tv/slots/:id ────────────────────────────────────────────────────
 router.get("/tv/slots/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params["id"] ?? "", 10);
@@ -341,6 +378,7 @@ router.post("/tv/slots/book", requireAuth, requireAdultKyc, async (req, res): Pr
       .update(tvSlotsTable)
       .set({
         status: "booked",
+        bookedAt: new Date(),
         ownerId: citizenId,
         paymentType: "timeltr",
         fingerprintHash: fingerprint,
@@ -621,6 +659,7 @@ router.post("/tv/crypto/webhook", async (req, res): Promise<void> => {
       .update(tvSlotsTable)
       .set({
         status: "booked",
+        bookedAt: new Date(),
         ownerId: citizenId ?? slot.ownerId,
         paymentType: "crypto",
         paymentStatus: "completed",
@@ -677,6 +716,7 @@ router.get("/tv/checkout/confirm", async (req, res): Promise<void> => {
         .update(tvSlotsTable)
         .set({
           status: "booked",
+          bookedAt: new Date(),
           ownerId: citizenId,
           paymentType: "fiat",
           paymentStatus: "completed",

@@ -96,6 +96,7 @@ import type {
   TimenamingUpgradeInput,
   Transaction,
   TvLiveSlotResponse,
+  TvMyCatalogResponse,
   TvScheduleResponse,
   TvSlotsResponse
 } from './api.schemas';
@@ -4233,6 +4234,83 @@ export function useGetTvSlots<TData = Awaited<ReturnType<typeof getTvSlots>>, TE
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetTvSlotsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListMyTvCatalogUrl = () => {
+
+
+
+
+  return `/api/tv/my-catalog`
+}
+
+/**
+ * @summary List the authenticated citizen's TV slots and time capsules
+ */
+export const listMyTvCatalog = async ( options?: RequestInit): Promise<TvMyCatalogResponse> => {
+
+  return customFetch<TvMyCatalogResponse>(getListMyTvCatalogUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMyTvCatalogQueryKey = () => {
+    return [
+    `/api/tv/my-catalog`
+    ] as const;
+    }
+
+
+export const getListMyTvCatalogQueryOptions = <TData = Awaited<ReturnType<typeof listMyTvCatalog>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyTvCatalog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMyTvCatalogQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyTvCatalog>>> = ({ signal }) => listMyTvCatalog({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMyTvCatalog>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMyTvCatalogQueryResult = NonNullable<Awaited<ReturnType<typeof listMyTvCatalog>>>
+export type ListMyTvCatalogQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List the authenticated citizen's TV slots and time capsules
+ */
+
+export function useListMyTvCatalog<TData = Awaited<ReturnType<typeof listMyTvCatalog>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyTvCatalog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMyTvCatalogQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -1224,6 +1224,28 @@ export const GetTvSlotsResponse = zod.object({
 
 
 /**
+ * @summary List the authenticated citizen's TV slots and time capsules
+ */
+export const ListMyTvCatalogResponse = zod.object({
+  "items": zod.array(zod.object({
+  "slotId": zod.number(),
+  "slotDate": zod.string(),
+  "minuteIndex": zod.number(),
+  "slotType": zod.string(),
+  "slotStatus": zod.string(),
+  "slotCreatedAt": zod.coerce.date().nullable(),
+  "capsuleId": zod.number().nullable(),
+  "capsuleCreatedAt": zod.coerce.date().nullable(),
+  "capsuleStatus": zod.string().nullable(),
+  "seedText": zod.string().nullable(),
+  "mediaUrl": zod.string().nullable(),
+  "catcastUrl": zod.string().nullable(),
+  "broadcastPolicy": zod.string().nullable()
+}))
+})
+
+
+/**
  * @summary Get broadcast slot for a specific UTC minute (live player engine)
  */
 export const getTvLiveSlotQueryMinuteMin = 0;

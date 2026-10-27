@@ -7,7 +7,7 @@ import {
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { Layout } from "@/components/Layout";
-import { getListMyTimelineAnchorsQueryKey, useListMyTimelineAnchors } from "@workspace/api-client-react";
+import { getListMyTimelineAnchorsQueryKey, getListMyTvCatalogQueryKey, useListMyTimelineAnchors, useListMyTvCatalog } from "@workspace/api-client-react";
 
 interface ProfessionalDocuments {
   resume: { fileName: string; uploadedAt: string | null; visible: boolean } | null;
@@ -34,6 +34,12 @@ function formatCapturedMinute(coord: string) {
   return `${coord.slice(0, 4)}-${coord.slice(4, 6)}-${coord.slice(6, 8)} ${coord.slice(8, 10)}:${coord.slice(10, 12)} UTC`;
 }
 
+function tvPlayerUrl(mediaUrl: string | null, catcastUrl: string | null) {
+  if (catcastUrl) return catcastUrl;
+  const filename = mediaUrl?.split("/").filter(Boolean).pop();
+  return filename ? `/api/tv/media/${encodeURIComponent(filename)}` : null;
+}
+
 export function Profile() {
   const { citizen, authToken } = useCitizen();
   const { lang } = useLanguage();
@@ -42,6 +48,14 @@ export function Profile() {
     query: {
       enabled: Boolean(authToken),
       queryKey: [...getListMyTimelineAnchorsQueryKey(), citizen?.id ?? "anonymous"],
+    },
+    request: { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
+  });
+  const tvCatalogQuery = useListMyTvCatalog({
+    query: {
+      enabled: Boolean(authToken),
+      queryKey: [...getListMyTvCatalogQueryKey(), citizen?.id ?? "anonymous"],
+      retry: false,
     },
     request: { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
   });
@@ -73,6 +87,9 @@ export function Profile() {
     captured: "Захваченные минуты", capturedInfo: "Минуты, закреплённые за вашим гражданским профилем.",
     noCaptured: "Пока нет захваченных минут.", capturedError: "Не удалось загрузить захваченные минуты.",
     active: "Захвачена", minted: "NFT выпущен", refreshMinutes: "Обновить",
+    videoCatalog: "Видеослоты и капсулы времени", videoCatalogInfo: "Созданные вами видеослоты и капсулы с датой и временем создания.",
+    slotCreated: "Слот создан", capsuleCreated: "Капсула создана", capsuleMissing: "Капсула времени ещё не создана",
+    slotTimeUnavailable: "Время бронирования недоступно для старой записи", player: "Открыть плеер", playerPending: "Видео ещё не готово", videoCatalogError: "Не удалось загрузить каталог видео.",
   } : {
     eyebrow: "CITIZEN CONTROL ROOM", title: "Profile", docs: "Resume & portfolio",
     docsInfo: "PDF files up to 3 MB are hidden by default. You can allow any signed-in TimeNation citizen to view each file. AI uses documents only with your consent.",
@@ -92,8 +109,10 @@ export function Profile() {
     captured: "Captured minutes", capturedInfo: "Minutes linked to your citizen profile.",
     noCaptured: "No captured minutes yet.", capturedError: "Could not load captured minutes.",
     active: "Captured", minted: "NFT minted", refreshMinutes: "Refresh",
+    videoCatalog: "Video slots & time capsules", videoCatalogInfo: "Videos and capsules you created, with their creation times.",
+    slotCreated: "Slot created", capsuleCreated: "Capsule created", capsuleMissing: "No time capsule yet",
+    slotTimeUnavailable: "Booking time unavailable for this older record", player: "Open player", playerPending: "Video not ready", videoCatalogError: "Could not load your video catalog.",
   };
-
   const loadProfileData = useCallback(async (signal?: AbortSignal) => {
     if (!authToken) { setDocuments(null); setReferrals(null); setLoading(false); return; }
     setLoading(true);
@@ -204,6 +223,9 @@ export function Profile() {
   };
   const formatNumber = new Intl.NumberFormat(isRu ? "ru-RU" : "en-GB", { maximumFractionDigits: 2 });
   const formatDate = (value: string) => new Intl.DateTimeFormat(isRu ? "ru-RU" : "en-GB", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+  const formatCreatedAt = (value: string) => new Intl.DateTimeFormat(isRu ? "ru-RU" : "en-GB", {
+    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC", timeZoneName: "short",
+  }).format(new Date(value));
 
   return <Layout>
     <main className="mx-auto w-full max-w-5xl space-y-6">
@@ -262,6 +284,34 @@ export function Profile() {
                 <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">{anchor.status === "MINTED" ? t.minted : t.active}</span>
               </article>
             ))}</div>}
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="section-tv-catalog">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+            <div><h2 className="text-lg font-bold">{t.videoCatalog}</h2><p className="mt-1 text-sm text-muted-foreground">{t.videoCatalogInfo}</p></div>
+            <button type="button" onClick={() => void tvCatalogQuery.refetch()} disabled={tvCatalogQuery.isFetching} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-border px-3 text-xs font-semibold hover:bg-secondary disabled:opacity-50" data-testid="button-refresh-tv-catalog">
+              {tvCatalogQuery.isFetching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{t.refreshMinutes}
+            </button>
+          </div>
+          {!authToken ? <p className="px-5 py-6 text-sm text-muted-foreground">{t.signIn}</p>
+            : tvCatalogQuery.isLoading ? <div role="status" className="px-5 py-8 text-center text-sm text-muted-foreground"><LoaderCircle className="mx-auto mb-2 h-5 w-5 animate-spin text-primary" />{t.loading}</div>
+            : tvCatalogQuery.isError ? <div role="alert" className="px-5 py-6 text-sm text-destructive">{t.videoCatalogError}</div>
+            : !tvCatalogQuery.data?.items.length ? <p className="px-5 py-8 text-center text-sm text-muted-foreground" data-testid="empty-tv-catalog">{isRu ? "Пока нет созданных видеослотов." : "No video slots created yet."}</p>
+            : <div className="divide-y divide-border">{tvCatalogQuery.data.items.map((item) => {
+              const playerUrl = tvPlayerUrl(item.mediaUrl, item.catcastUrl);
+              const slotTime = `${String(Math.floor(item.minuteIndex / 60)).padStart(2, "0")}:${String(item.minuteIndex % 60).padStart(2, "0")}`;
+              return <article key={item.slotId} className="flex flex-wrap items-center gap-3 px-5 py-4" data-testid={`card-tv-catalog-${item.slotId}`}>
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-primary/20 bg-primary/10 text-primary"><FileText className="h-4 w-4" /></div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">{item.seedText?.trim() || (isRu ? "Капсула времени" : "Time capsule")} · {item.slotDate} {slotTime} UTC</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t.slotCreated}: {item.slotCreatedAt ? formatCreatedAt(item.slotCreatedAt) : t.slotTimeUnavailable}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{item.capsuleCreatedAt ? `${t.capsuleCreated}: ${formatCreatedAt(item.capsuleCreatedAt)}` : t.capsuleMissing}</p>
+                </div>
+                {playerUrl ? <a href={playerUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-2 rounded-md border border-primary/40 px-3 text-xs font-semibold text-primary hover:bg-primary/10" data-testid={`link-tv-player-${item.slotId}`}>
+                  <Link2 className="h-4 w-4" />{t.player}
+                </a> : <span className="text-xs text-muted-foreground">{t.playerPending}</span>}
+              </article>;
+            })}</div>}
         </section>
 
         {loading ? <div role="status" className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground"><LoaderCircle className="mx-auto mb-3 h-5 w-5 animate-spin text-primary" />{t.loading}</div> : referrals && <>

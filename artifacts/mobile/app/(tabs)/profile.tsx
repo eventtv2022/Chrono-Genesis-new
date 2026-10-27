@@ -22,6 +22,7 @@ import { useCitizen } from "@/context/CitizenContext";
 import { CitizenAvatar } from "@/components/CitizenAvatar";
 import { getBaseUrl } from "@/lib/api";
 import { getStoredToken } from "@/lib/authStorage";
+import { getListMyTvCatalogQueryKey, useListMyTvCatalog } from "@workspace/api-client-react";
 
 const BASE_URL = getBaseUrl();
 
@@ -41,6 +42,12 @@ interface ReferralProfile {
   referrals: Referral[];
 }
 
+function tvPlayerUrl(mediaUrl: string | null, catcastUrl: string | null) {
+  if (catcastUrl) return catcastUrl;
+  const filename = mediaUrl?.split("/").filter(Boolean).pop();
+  return filename ? `${BASE_URL}/api/tv/media/${encodeURIComponent(filename)}` : null;
+}
+
 export default function ProfileScreen() {
   const colors = useColors();
   const { lang } = useLanguage();
@@ -48,6 +55,18 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isRu = lang === "ru";
+  const tvCatalogQuery = useListMyTvCatalog({
+    query: {
+      enabled: Boolean(authToken),
+      queryKey: [...getListMyTvCatalogQueryKey(), citizen?.id ?? "anonymous"],
+      retry: false,
+    },
+    request: { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
+  });
+  const tvCatalog = tvCatalogQuery.data?.items ?? [];
+  const formatCreatedAt = (value: string) => new Intl.DateTimeFormat(isRu ? "ru-RU" : "en-GB", {
+    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC", timeZoneName: "short",
+  }).format(new Date(value));
   const [profile, setProfile] = useState<ReferralProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -287,6 +306,47 @@ export default function ProfileScreen() {
             <Feather name="arrow-right" size={18} color={colors.primary} />
           </View>
         </TouchableOpacity>
+
+        <View style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID="section-tv-catalog">
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Feather name="film" size={19} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{isRu ? "Видеослоты и капсулы времени" : "Video slots & time capsules"}</Text>
+              <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 4 }]}>
+                {isRu ? "Созданные вами слоты и капсулы с датой и временем создания." : "Your slots and capsules, with their creation date and time."}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => void tvCatalogQuery.refetch()} disabled={tvCatalogQuery.isFetching} accessibilityLabel={isRu ? "Обновить каталог видео" : "Refresh video catalog"}>
+              {tvCatalogQuery.isFetching ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="refresh-cw" size={17} color={colors.primary} />}
+            </TouchableOpacity>
+          </View>
+          {!authToken ? <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 12 }]}>{isRu ? "Войдите в аккаунт гражданина." : "Sign in to your citizen account."}</Text>
+            : tvCatalogQuery.isLoading ? <ActivityIndicator style={{ marginTop: 16 }} color={colors.primary} />
+            : tvCatalogQuery.isError ? <Text style={[styles.inlineError, { color: colors.destructive, marginTop: 12 }]}>{isRu ? "Не удалось загрузить каталог видео." : "Could not load your video catalog."}</Text>
+            : tvCatalog.length === 0 ? <Text style={[styles.programCopy, { color: colors.mutedForeground, marginTop: 12 }]}>{isRu ? "Пока нет созданных видеослотов." : "No video slots created yet."}</Text>
+            : tvCatalog.map((item) => {
+              const playerUrl = tvPlayerUrl(item.mediaUrl, item.catcastUrl);
+              const slotTime = `${String(Math.floor(item.minuteIndex / 60)).padStart(2, "0")}:${String(item.minuteIndex % 60).padStart(2, "0")}`;
+              return <View key={item.slotId} style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, marginTop: 12, paddingTop: 12 }} testID={`card-tv-catalog-${item.slotId}`}>
+                <Text style={{ color: colors.foreground, fontSize: 14, fontWeight: "700" }}>
+                  {item.seedText?.trim() || (isRu ? "Капсула времени" : "Time capsule")}
+                </Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 4 }}>{item.slotDate} · {slotTime} UTC</Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 5 }}>
+                  {isRu ? "Слот создан" : "Slot created"}: {item.slotCreatedAt ? formatCreatedAt(item.slotCreatedAt) : (isRu ? "Время бронирования недоступно для старой записи" : "Booking time unavailable for this older record")}
+                </Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 3 }}>
+                  {item.capsuleCreatedAt
+                    ? `${isRu ? "Капсула создана" : "Capsule created"}: ${formatCreatedAt(item.capsuleCreatedAt)}`
+                    : (isRu ? "Капсула времени ещё не создана" : "No time capsule yet")}
+                </Text>
+                {playerUrl ? <TouchableOpacity onPress={() => void Linking.openURL(playerUrl)} style={[styles.copyButton, { borderColor: colors.primary, marginTop: 10 }]}>
+                  <Feather name="play-circle" size={15} color={colors.primary} />
+                  <Text style={[styles.copyText, { color: colors.primary }]}>{isRu ? "Открыть плеер" : "Open player"}</Text>
+                </TouchableOpacity> : <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 8 }}>{isRu ? "Видео ещё не готово" : "Video not ready yet"}</Text>}
+              </View>;
+            })}
+        </View>
 
         <View style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{isRu ? "Резюме и портфолио" : "Resume & portfolio"}</Text>

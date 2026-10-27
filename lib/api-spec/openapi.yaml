@@ -1526,6 +1526,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /tv/my-catalog:
+    get:
+      operationId: listMyTvCatalog
+      tags: [tv]
+      summary: List the authenticated citizen's TV slots and time capsules
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Citizen TV catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TvMyCatalogResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /tv/live-slot:
     get:
       operationId: getTvLiveSlot
@@ -2864,6 +2885,61 @@ components:
         - date
         - count
         - slots
+
+    TvMyCatalogItem:
+      type: object
+      properties:
+        slotId:
+          type: integer
+        slotDate:
+          type: string
+        minuteIndex:
+          type: integer
+        slotType:
+          type: string
+        slotStatus:
+          type: string
+        slotCreatedAt:
+          type: ["string", "null"]
+          format: date-time
+        capsuleId:
+          type: ["integer", "null"]
+        capsuleCreatedAt:
+          type: ["string", "null"]
+          format: date-time
+        capsuleStatus:
+          type: ["string", "null"]
+        seedText:
+          type: ["string", "null"]
+        mediaUrl:
+          type: ["string", "null"]
+        catcastUrl:
+          type: ["string", "null"]
+        broadcastPolicy:
+          type: ["string", "null"]
+      required:
+        - slotId
+        - slotDate
+        - minuteIndex
+        - slotType
+        - slotStatus
+        - slotCreatedAt
+        - capsuleId
+        - capsuleCreatedAt
+        - capsuleStatus
+        - seedText
+        - mediaUrl
+        - catcastUrl
+        - broadcastPolicy
+
+    TvMyCatalogResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TvMyCatalogItem"
+      required: [items]
 
     TvScheduleEntry:
       type: object

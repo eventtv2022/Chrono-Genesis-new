@@ -110,6 +110,8 @@ export * from './timenamingUpgradeInput';
 export * from './timenamingUpgradeInputMediaType';
 export * from './transaction';
 export * from './tvLiveSlotResponse';
+export * from './tvMyCatalogItem';
+export * from './tvMyCatalogResponse';
 export * from './tvScheduleEntry';
 export * from './tvScheduleResponse';
 export * from './tvSlot';

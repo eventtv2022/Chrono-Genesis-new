@@ -27,6 +27,7 @@ export const tvSlotsTable = pgTable(
     cryptoPaymentUuid: text("crypto_payment_uuid"),   // Cryptomus payment UUID
     paymentStatus: text("payment_status").default("pending"), // pending | completed | refunded
     billingDescriptor: text("billing_descriptor"),    // exact label used in checkout
+    bookedAt: timestamp("booked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("tv_slots_date_minute_idx").on(t.date, t.minuteIndex)]

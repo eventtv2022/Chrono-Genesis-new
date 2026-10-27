@@ -859,6 +859,34 @@ export interface TvSlotsResponse {
   slots: TvSlot[];
 }
 
+export interface TvMyCatalogItem {
+  slotId: number;
+  slotDate: string;
+  minuteIndex: number;
+  slotType: string;
+  slotStatus: string;
+  /** @nullable */
+  slotCreatedAt: string | null;
+  /** @nullable */
+  capsuleId: number | null;
+  /** @nullable */
+  capsuleCreatedAt: string | null;
+  /** @nullable */
+  capsuleStatus: string | null;
+  /** @nullable */
+  seedText: string | null;
+  /** @nullable */
+  mediaUrl: string | null;
+  /** @nullable */
+  catcastUrl: string | null;
+  /** @nullable */
+  broadcastPolicy: string | null;
+}
+
+export interface TvMyCatalogResponse {
+  items: TvMyCatalogItem[];
+}
+
 export interface TvScheduleEntry {
   slotId: number;
   minuteIndex: number;
