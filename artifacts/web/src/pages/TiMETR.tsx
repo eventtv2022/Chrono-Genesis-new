@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ArrowRight, CheckCircle2, Clock3, LoaderCircle, Play, Search, Square, Users } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, LoaderCircle, LockKeyhole, Play, Search, Square, Users } from "lucide-react";
 import { Layout } from "@/components/Layout";
+import { TiMETREscrow } from "@/components/TiMETREscrow";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { getListCitizensQueryKey, useListCitizens } from "@workspace/api-client-react";
@@ -46,6 +47,7 @@ export function TiMETR() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<CompletedSession | null>(null);
+  const [mode, setMode] = useState<"transfer" | "escrow">("transfer");
 
   const { data: citizens = [], isLoading, isError, refetch } = useListCitizens({
     query: { queryKey: getListCitizensQueryKey(), enabled: !!citizen },
@@ -165,7 +167,16 @@ export function TiMETR() {
             </Link>
           </section>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.72fr)]">
+          <div className="space-y-5">
+            <div className="inline-flex rounded-xl border border-border bg-card p-1" role="tablist" aria-label="TiMETR mode">
+              <button type="button" role="tab" aria-selected={mode === "transfer"} onClick={() => setMode("transfer")} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${mode === "transfer" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                <Clock3 className="h-4 w-4" />{isRu ? "Передача времени" : "Time transfer"}
+              </button>
+              <button type="button" role="tab" aria-selected={mode === "escrow"} onClick={() => setMode("escrow")} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${mode === "escrow" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                <LockKeyhole className="h-4 w-4" />{isRu ? "Эскроу" : "Escrow"}
+              </button>
+            </div>
+            {mode === "escrow" ? <TiMETREscrow /> : <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.72fr)]">
             <section className={`rounded-2xl border bg-card p-6 sm:p-8 ${activeSession ? "border-primary/40 shadow-lg shadow-primary/5" : "border-border"}`}>
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <span className={`h-2 w-2 rounded-full ${activeSession ? "animate-pulse bg-emerald-400" : "bg-muted-foreground/40"}`} />
@@ -233,6 +244,7 @@ export function TiMETR() {
                 </div>
               }
             </section>
+            </div>}
           </div>
         )}
 
