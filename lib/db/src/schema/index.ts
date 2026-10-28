@@ -16,6 +16,7 @@ export * from "./chronopediaSlots";
 export * from "./chronopediaEvents";
 export * from "./timeBankLoans";
 export * from "./timeBankLedger";
+export * from "./timeBankDisclosureAcceptances";
 export * from "./timeAuditLogs";
 export * from "./aiSystemPrompts";
 export * from "./citizenReviews";

@@ -243,16 +243,6 @@ export default function StatsScreen() {
           </TouchableOpacity>
           {citizen && (
             <TouchableOpacity
-              style={styles.timeBankBtn}
-              onPress={() => router.push("/timebank")}
-              activeOpacity={0.75}
-            >
-              <Feather name="clock" size={14} color="#FFD700" />
-              <Text style={styles.timeBankBtnText}>{t.stats_bank}</Text>
-            </TouchableOpacity>
-          )}
-          {citizen && (
-            <TouchableOpacity
               style={styles.topupBtn}
               onPress={() => router.push("/shop")}
               activeOpacity={0.8}
@@ -281,6 +271,29 @@ export default function StatsScreen() {
           )}
         </View>
       </View>
+
+      {citizen && (
+        <TouchableOpacity
+          style={styles.timeBankCta}
+          onPress={() => router.push("/timebank")}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={lang === "ru" ? "Открыть Банк времени" : "Open Time Bank"}
+        >
+          <View style={styles.timeBankCtaIcon}>
+            <Feather name="clock" size={22} color={colors.primaryForeground} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.timeBankCtaTitle}>
+              {lang === "ru" ? "Банк времени" : "Time Bank"}
+            </Text>
+            <Text style={styles.timeBankCtaSubtitle}>
+              {lang === "ru" ? "Лимит доверия, доступные минуты и долг" : "Trust limit, available minutes, and debt"}
+            </Text>
+          </View>
+          <Feather name="arrow-right" size={19} color={colors.primaryForeground} />
+        </TouchableOpacity>
+      )}
 
       <View style={styles.metricsGrid}>
         {[
@@ -351,13 +364,24 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold", color: colors.foreground, letterSpacing: 2 },
     topupBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 },
     topupBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.primaryForeground },
-    timeBankBtn: {
-      flexDirection: "row", alignItems: "center", gap: 5,
-      backgroundColor: "rgba(212, 175, 55, 0.15)",
-      borderWidth: 1, borderColor: "#D4AF37",
-      paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16,
+    timeBankCta: {
+      marginHorizontal: 20, marginBottom: 12, padding: 14,
+      flexDirection: "row", alignItems: "center", gap: 12,
+      borderRadius: 14, backgroundColor: colors.primary,
     },
-    timeBankBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#FFD700" },
+    timeBankCtaIcon: {
+      width: 42, height: 42, borderRadius: 12,
+      backgroundColor: colors.primaryForeground + "22",
+      alignItems: "center", justifyContent: "center",
+    },
+    timeBankCtaTitle: {
+      fontSize: 16, fontFamily: "Inter_700Bold", color: colors.primaryForeground,
+    },
+    timeBankCtaSubtitle: {
+      fontSize: 12, lineHeight: 17, marginTop: 2,
+      fontFamily: "Inter_400Regular", color: colors.primaryForeground,
+      opacity: 0.9,
+    },
     metricsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 12, gap: 8, marginBottom: 8 },
     metricCard: { flex: 1, minWidth: "45%", backgroundColor: colors.card, borderRadius: 12, padding: 16, alignItems: "center", gap: 4, borderWidth: 1, borderColor: colors.border, marginHorizontal: 4 },
     metricNum: { fontSize: 28, fontFamily: "Inter_700Bold", color: colors.primary },

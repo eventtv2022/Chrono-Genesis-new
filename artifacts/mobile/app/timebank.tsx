@@ -65,6 +65,11 @@ interface TimeBankStatus {
   ledger: LedgerEntry[];
 }
 
+interface TimeBankDisclosure {
+  version: string;
+  accepted: boolean;
+}
+
 function getLedgerMeta(t: UIStrings): Record<string, { icon: string; color: string; label: string }> {
   return {
     loan_issued:         { icon: "download",   color: "#3b82f6", label: t.tb_loan_issued },
@@ -91,10 +96,11 @@ export default function TimeBankScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { citizen, refreshCitizen } = useCitizen();
+  const { citizen, authToken, authHeaders, refreshCitizen } = useCitizen();
   const queryClient = useQueryClient();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const isRu = lang === "ru";
 
   const [borrowAmount, setBorrowAmount] = useState("");
   const [repayAmount, setRepayAmount] = useState("");
@@ -102,18 +108,51 @@ export default function TimeBankScreen() {
   const [borrowSuccess, setBorrowSuccess] = useState(false);
   const [repayError, setRepayError] = useState<string | null>(null);
   const [repaySuccess, setRepaySuccess] = useState(false);
+  const [disclosureChecked, setDisclosureChecked] = useState(false);
 
   const st = getStyles(colors, topPad);
+
+  const disclosureQuery = useQuery<TimeBankDisclosure>({
+    queryKey: ["timebank-disclosure", citizen?.id],
+    queryFn: async () => {
+      if (!authToken) throw new Error(t.tb_no_auth);
+      const res = await fetch(`${BASE_URL}/api/timebank/disclosure`, { headers: authHeaders });
+      if (!res.ok) throw new Error(t.error);
+      return res.json() as Promise<TimeBankDisclosure>;
+    },
+    enabled: !!citizen?.id && !!authToken,
+    retry: false,
+  });
+
+  const acceptDisclosureMutation = useMutation({
+    mutationFn: async () => {
+      const version = disclosureQuery.data?.version;
+      if (!version || !authToken) throw new Error(t.tb_no_auth);
+      const res = await fetch(`${BASE_URL}/api/timebank/disclosure/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ version, language: isRu ? "ru" : "en" }),
+      });
+      const json = await res.json() as { error?: string; accepted?: boolean; version?: string };
+      if (!res.ok || !json.accepted) throw new Error(json.error ?? t.error);
+      return json as TimeBankDisclosure;
+    },
+    onSuccess: (data) => {
+      setDisclosureChecked(false);
+      queryClient.setQueryData(["timebank-disclosure", citizen?.id], data);
+      queryClient.invalidateQueries({ queryKey: ["timebank", citizen?.id] });
+    },
+  });
 
   const { data, isLoading, refetch, isRefetching } = useQuery<TimeBankStatus>({
     queryKey: ["timebank", citizen?.id],
     queryFn: async () => {
-      if (!citizen?.id) throw new Error(t.tb_no_auth);
-      const res = await fetch(`${BASE_URL}/api/timebank/status?citizenId=${citizen.id}`);
+      if (!citizen?.id || !authToken) throw new Error(t.tb_no_auth);
+      const res = await fetch(`${BASE_URL}/api/timebank/status`, { headers: authHeaders });
       if (!res.ok) throw new Error(t.error);
       return res.json() as Promise<TimeBankStatus>;
     },
-    enabled: !!citizen?.id,
+    enabled: !!citizen?.id && !!authToken && disclosureQuery.data?.accepted === true,
     refetchInterval: 15000,
   });
 
@@ -121,8 +160,8 @@ export default function TimeBankScreen() {
     mutationFn: async ({ amount }: { amount: number }) => {
       const res = await fetch(`${BASE_URL}/api/timebank/borrow`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ citizenId: citizen!.id, amount }),
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ amount }),
       });
       const json = await res.json() as { error?: string };
       if (!res.ok) throw new Error(json.error ?? t.error);
@@ -147,8 +186,8 @@ export default function TimeBankScreen() {
     mutationFn: async ({ amount }: { amount: number }) => {
       const res = await fetch(`${BASE_URL}/api/timebank/repay`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ citizenId: citizen!.id, amount }),
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ amount }),
       });
       const json = await res.json() as { error?: string };
       if (!res.ok) throw new Error(json.error ?? t.error);
@@ -210,6 +249,101 @@ export default function TimeBankScreen() {
             {t.tb_no_auth}
           </Text>
         </View>
+      ) : !authToken ? (
+        <View style={st.center}>
+          <Feather name="lock" size={40} color={colors.mutedForeground} />
+          <Text style={[st.emptyText, { color: colors.mutedForeground }]}>
+            {t.tb_no_auth}
+          </Text>
+        </View>
+      ) : disclosureQuery.isLoading ? (
+        <View style={st.center}>
+          <ActivityIndicator color={colors.primary} size="large" />
+        </View>
+      ) : disclosureQuery.isError || !disclosureQuery.data ? (
+        <View style={st.center}>
+          <Text style={[st.emptyText, { color: colors.mutedForeground }]}>
+            {isRu ? "Не удалось проверить подтверждение юридической информации." : "Could not check the legal information acknowledgement."}
+          </Text>
+          <TouchableOpacity
+            style={[st.actionBtn, { backgroundColor: colors.primary }]}
+            onPress={() => void disclosureQuery.refetch()}
+          >
+            <Text style={st.actionBtnText}>{isRu ? "Повторить" : "Retry"}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : !disclosureQuery.data.accepted ? (
+        <ScrollView contentContainerStyle={st.disclosureScroll}>
+          <View style={[st.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={st.cardHeader}>
+              <Feather name="shield" size={20} color={colors.primary} />
+              <Text style={[st.cardTitle, { color: colors.foreground }]}>
+                {isRu ? "Перед использованием Банка времени" : "Before using the Time Bank"}
+              </Text>
+            </View>
+            <Text style={[st.disclosureHeading, { color: colors.foreground }]}>
+              {isRu ? "Пожалуйста, ознакомьтесь с условиями" : "Please review this information"}
+            </Text>
+            <Text style={[st.disclosureText, { color: colors.foreground }]}>
+              {isRu
+                ? "Банк времени предоставляет кредит в минутах (Д). Взятая сумма поступает на баланс и учитывается как задолженность. Берите только ту сумму, которую готовы погасить."
+                : "The Time Bank provides credit in minutes (Д). The amount you borrow is added to your balance and recorded as debt. Borrow only an amount you are prepared to repay."}
+            </Text>
+            <Text style={[st.disclosureText, { color: colors.foreground }]}>
+              {isRu
+                ? "Доступная сумма зависит от вашего лимита доверия и активного долга. Лимит может повышаться по мере выполнения услуг и получения минут; конкретные значения и прогресс показываются на экране."
+                : "The available amount depends on your trust limit and active debt. The limit may increase as you complete services and receive minutes; the current values and progress appear on screen."}
+            </Text>
+            <Text style={[st.disclosureText, { color: colors.foreground }]}>
+              {isRu
+                ? "Погасить долг можно вручную с баланса, сохраняя одну непередаваемую родовую минуту. При наличии долга заработанные минуты TiMETR автоматически направляются на погашение."
+                : "You can repay debt manually from your balance while keeping one non-transferable ancestral minute. When you have debt, minutes earned through TiMETR are automatically applied to repayment."}
+            </Text>
+            <Text style={[st.disclosureText, { color: colors.foreground }]}>
+              {isRu
+                ? "Это описание не является юридическим заключением и не подтверждает соответствие Банка времени законам какой-либо страны. Правовой статус зависит от местного законодательства и особенностей продукта; для оценки соответствия требуется заключение квалифицированного юриста в вашей стране."
+                : "This information is not a legal opinion and does not certify that the Time Bank complies with the laws of any country. Its legal status depends on local law and product details; a qualified lawyer in your country must assess compliance."}
+            </Text>
+            <TouchableOpacity
+              style={st.disclosureCheckRow}
+              onPress={() => setDisclosureChecked((checked) => !checked)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: disclosureChecked }}
+              testID="timebank-disclosure-checkbox"
+            >
+              <View style={[
+                st.checkbox,
+                { borderColor: disclosureChecked ? colors.primary : colors.border },
+                disclosureChecked && { backgroundColor: colors.primary },
+              ]}>
+                {disclosureChecked && <Feather name="check" size={15} color={colors.primaryForeground} />}
+              </View>
+              <Text style={[st.disclosureCheckText, { color: colors.foreground }]}>
+                {isRu
+                  ? "Я ознакомился(ась) с этой информацией и принимаю условия использования Банка времени."
+                  : "I have read this information and accept the Time Bank terms."}
+              </Text>
+            </TouchableOpacity>
+            {acceptDisclosureMutation.isError && (
+              <Text style={[st.disclosureError, { color: colors.destructive }]}>
+                {acceptDisclosureMutation.error instanceof Error ? acceptDisclosureMutation.error.message : t.error}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[st.disclosureAcceptBtn, { backgroundColor: colors.primary, opacity: disclosureChecked && !acceptDisclosureMutation.isPending ? 1 : 0.5 }]}
+              onPress={() => acceptDisclosureMutation.mutate()}
+              disabled={!disclosureChecked || acceptDisclosureMutation.isPending}
+              accessibilityRole="button"
+              testID="timebank-disclosure-accept"
+            >
+              {acceptDisclosureMutation.isPending
+                ? <ActivityIndicator color={colors.primaryForeground} />
+                : <Text style={[st.disclosureAcceptText, { color: colors.primaryForeground }]}>
+                    {isRu ? "Подтвердить и продолжить" : "Accept and continue"}
+                  </Text>}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       ) : isLoading ? (
         <View style={st.center}>
           <ActivityIndicator color={colors.primary} size="large" />
@@ -643,6 +777,15 @@ function getStyles(colors: ReturnType<typeof useColors>, topPad: number) {
     backBtn: { padding: 8 },
     title: { fontSize: 17, fontWeight: "700" },
     scroll: { padding: 16 },
+    disclosureScroll: { padding: 16, paddingBottom: 32 },
+    disclosureHeading: { fontSize: 15, fontWeight: "700", marginBottom: 10 },
+    disclosureText: { fontSize: 13, lineHeight: 20, marginBottom: 12 },
+    disclosureCheckRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginTop: 4, marginBottom: 12 },
+    checkbox: { width: 22, height: 22, borderWidth: 1.5, borderRadius: 5, alignItems: "center", justifyContent: "center" },
+    disclosureCheckText: { flex: 1, fontSize: 13, lineHeight: 19 },
+    disclosureError: { fontSize: 12, lineHeight: 18, marginBottom: 8 },
+    disclosureAcceptBtn: { minHeight: 48, borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
+    disclosureAcceptText: { fontSize: 14, fontWeight: "700" },
     center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
     emptyText: { fontSize: 14 },
     card: { borderWidth: 1, borderRadius: 12, padding: 16, marginBottom: 12 },
