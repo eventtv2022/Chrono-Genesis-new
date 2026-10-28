@@ -288,7 +288,7 @@ export default function StatsScreen() {
               {lang === "ru" ? "Банк времени" : "Time Bank"}
             </Text>
             <Text style={styles.timeBankCtaSubtitle}>
-              {lang === "ru" ? "Лимит доверия, доступные минуты и долг" : "Trust limit, available minutes, and debt"}
+              {lang === "ru" ? "Лимит доверия, доступные минуты и возврат кредита времени" : "Trust limit, available minutes, and time-credit repayment"}
             </Text>
           </View>
           <Feather name="arrow-right" size={19} color={colors.primaryForeground} />

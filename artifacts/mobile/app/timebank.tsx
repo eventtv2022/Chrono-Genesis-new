@@ -301,8 +301,8 @@ export default function TimeBankScreen() {
             </Text>
             <Text style={[st.disclosureText, { color: colors.foreground }]}>
               {isRu
-                ? "Это описание не является юридическим заключением и не подтверждает соответствие Банка времени законам какой-либо страны. Правовой статус зависит от местного законодательства и особенностей продукта; для оценки соответствия требуется заключение квалифицированного юриста в вашей стране."
-                : "This information is not a legal opinion and does not certify that the Time Bank complies with the laws of any country. Its legal status depends on local law and product details; a qualified lawyer in your country must assess compliance."}
+                ? "Это описание не является юридическим заключением и не подтверждает соответствие Банка времени законам какой-либо страны. Правовой статус зависит от местного законодательства и особенностей продукта; для оценки соответствия требуется заключение квалифицированного юриста в вашей стране. Дармин (Д) не является финансовым инструментом, а представляет собой только игровой юнит системы."
+                : "This information is not a legal opinion and does not certify that the Time Bank complies with the laws of any country. Its legal status depends on local law and product details; a qualified lawyer in your country must assess compliance. Darmin (Д) is not a financial instrument; it is only a game unit within the system."}
             </Text>
             <TouchableOpacity
               style={st.disclosureCheckRow}

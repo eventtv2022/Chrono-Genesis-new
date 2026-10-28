@@ -13,7 +13,7 @@ import {
 
 const router: IRouter = Router();
 // Increment this whenever the pre-use disclosure text changes.
-const TIME_BANK_DISCLOSURE_VERSION = "2026-10-v1";
+const TIME_BANK_DISCLOSURE_VERSION = "2026-10-v2";
 
 async function hasCurrentDisclosureAcceptance(citizenId: number): Promise<boolean> {
   const [acceptance] = await db
