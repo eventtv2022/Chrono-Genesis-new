@@ -28,6 +28,7 @@ import { Register } from "./pages/Register";
 import { PassportLookup } from "./pages/PassportLookup";
 import { LaborDashboard } from "./pages/LaborDashboard";
 import { Time } from "./pages/Time";
+import { WatchShop } from "./pages/WatchShop";
 import { Clock } from "./pages/Clock";
 import { ResetPassword } from "./pages/ResetPassword";
 import { Admin } from "./pages/Admin";
@@ -83,7 +84,7 @@ function TgGuard({ children }: { children: React.ReactNode }) {
       }
 
       if (!citizen) {
-        const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/reset-password", "/qr-login", "/signature-request", "/referrals", "/profile", "/timenaming", "/timebank", "/timetr"];
+        const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/reset-password", "/qr-login", "/signature-request", "/referrals", "/profile", "/timenaming", "/timebank", "/timetr", "/watch-shop"];
         if (!guestRoutes.includes(location)) navigate("/welcome");
         else if (location === "/") navigate("/welcome");
       }
@@ -188,6 +189,7 @@ function Router() {
           <Route path="/signature-request" component={SignatureRequest} />
           <Route path="/passport-lookup" component={PassportLookup} />
           <Route path="/time" component={Time} />
+          <Route path="/watch-shop" component={WatchShop} />
           <Route path="/clock" component={Clock} />
           <Route path="/government/labor-dashboard" component={LaborDashboard} />
           <Route path="/reset-password" component={ResetPassword} />

@@ -197,7 +197,7 @@ export const UI: Record<LangCode, UIStrings> = {
   ru: {
     nav_dashboard: "Дашборд", nav_tv: "TimeNation-TV", nav_registry: "Реестр",
     nav_timeline: "Таймлайн", nav_treasury: "Казначейство", nav_become_citizen: "Стать гражданином",
-    nav_passport: "Мой паспорт", nav_time: "Время", nav_clock: "Циферблат народов",
+    nav_passport: "Мой паспорт", nav_time: "Часы", nav_clock: "Циферблат народов",
     digital_state: "Цифровое государство", login_title: "Войти", login_placeholder: "ID или псевдоним",
     login_btn: "Войти", login_password: "Пароль", logout_btn: "Выйти", refresh: "Обновить",
     citizen_not_found: "Гражданин не найден", connection_error: "Ошибка соединения",

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
-import { Globe, Clock, Bell, Play, Pause, RotateCcw, ChevronUp, ChevronDown, Info, Radio, X, Volume2, Search, Users, Zap } from "lucide-react";
+import { Globe, Clock, Bell, Play, Pause, RotateCcw, ChevronUp, ChevronDown, Info, Radio, X, Volume2, Search, Users, Zap, ShoppingBag } from "lucide-react";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useSocialAlarmWs } from "@/hooks/useSocialAlarmWs";
@@ -318,7 +319,7 @@ export function Time() {
   const { citizen, authToken, refreshCitizen } = useCitizen();
   const authHeaders: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {};
   const { lang, t } = useLanguage();
-  const [section, setSection] = useState<"clock" | "timer" | "alarm" | "social-alarm">("clock");
+  const [section, setSection] = useState<"clock" | "timer" | "alarm" | "social-alarm" | "watch-catalog">("clock");
 
   // ── World clock tick ───────────────────────────────────────────────────────
   const [tick, setTick] = useState(0);
@@ -785,7 +786,7 @@ export function Time() {
       <div className="max-w-2xl mx-auto space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Время</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Часы</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Мировые часы · Таймер фокусировки · Суверенный будильник · Синхро-сигнал
           </p>
@@ -794,7 +795,7 @@ export function Time() {
         {/* Section tabs — compact scrollable */}
         <div className="overflow-x-auto" style={{ scrollbarWidth: "none" }}>
           <div className="flex gap-1.5 flex-nowrap min-w-max">
-            {(["clock", "timer", "alarm", "social-alarm"] as const).map(s => (
+            {(["clock", "timer", "alarm", "social-alarm", "watch-catalog"] as const).map(s => (
               <button
                 key={s}
                 onClick={() => setSection(s)}
@@ -805,8 +806,8 @@ export function Time() {
                 }`}
                 style={{ fontSize: "12px" }}
               >
-                {s === "clock" ? <Globe className="w-3.5 h-3.5 shrink-0" /> : s === "timer" ? <Clock className="w-3.5 h-3.5 shrink-0" /> : s === "alarm" ? <Bell className="w-3.5 h-3.5 shrink-0" /> : <Radio className="w-3.5 h-3.5 shrink-0" />}
-                {s === "clock" ? "Часовые пояса" : s === "timer" ? "Таймер" : s === "alarm" ? "Будильник" : "Синхро-сигнал"}
+                {s === "clock" ? <Globe className="w-3.5 h-3.5 shrink-0" /> : s === "timer" ? <Clock className="w-3.5 h-3.5 shrink-0" /> : s === "alarm" ? <Bell className="w-3.5 h-3.5 shrink-0" /> : s === "watch-catalog" ? <ShoppingBag className="w-3.5 h-3.5 shrink-0" /> : <Radio className="w-3.5 h-3.5 shrink-0" />}
+                {s === "clock" ? "Часовые пояса" : s === "timer" ? "Таймер" : s === "alarm" ? "Будильник" : s === "watch-catalog" ? "Каталог часов" : "Синхро-сигнал"}
               </button>
             ))}
           </div>
@@ -857,6 +858,26 @@ export function Time() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {section === "watch-catalog" && (
+          <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
+            <div className="mx-auto max-w-xl text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <ShoppingBag className="h-7 w-7" />
+              </div>
+              <h2 className="text-xl font-semibold">Каталог часов TimeNation</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Откройте интернет-магазин часов. Каталог и оформление заказа появятся после подключения реальных товаров и настроек оплаты.
+              </p>
+              <Link href="/watch-shop">
+                <a className="mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
+                  <ShoppingBag className="h-4 w-4" />
+                  Открыть интернет-магазин часов
+                </a>
+              </Link>
             </div>
           </div>
         )}
