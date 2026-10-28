@@ -27,3 +27,19 @@ TIMENAMING_CONTRACT_ADDRESS = "0x717B7f28D256C70302fe238c4DEdf7F5dDCF8864"
 
 [nix]
 channel = "stable-25_05"
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
+[[ports]]
+localPort = 18115
+externalPort = 3000
+
+[[ports]]
+localPort = 22333
+externalPort = 80
