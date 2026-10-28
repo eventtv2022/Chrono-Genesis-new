@@ -7,6 +7,7 @@ import { TiMETREscrow } from "@/components/TiMETREscrow";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { getListCitizensQueryKey, useListCitizens } from "@workspace/api-client-react";
+import { getTiMETRCopy } from "@/i18n/timetr";
 
 type CitizenOption = {
   id: number;
@@ -28,6 +29,13 @@ type CompletedSession = {
   };
 };
 
+const languageOptions = [
+  ["ru", "Русский"], ["en", "English"], ["zh", "中文"], ["hi", "हिन्दी"], ["es", "Español"], ["fr", "Français"],
+  ["ar", "العربية"], ["bn", "বাংলা"], ["pt", "Português"], ["ur", "اردو"], ["id", "Bahasa Indonesia"], ["de", "Deutsch"],
+  ["ja", "日本語"], ["tr", "Türkçe"], ["vi", "Tiếng Việt"], ["he", "עברית"], ["fa", "فارسی"], ["ko", "한국어"],
+  ["it", "Italiano"], ["pl", "Polski"], ["uk", "Українська"], ["nl", "Nederlands"], ["kk", "Қазақша"], ["uz", "Oʻzbekcha"],
+] as const;
+
 function formatElapsed(seconds: number) {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -37,8 +45,8 @@ function formatElapsed(seconds: number) {
 
 export function TiMETR() {
   const { citizen, authToken, authHeaders, refreshCitizen } = useCitizen();
-  const { lang } = useLanguage();
-  const isRu = lang === "ru";
+  const { lang, setLang } = useLanguage();
+  const copy = getTiMETRCopy(lang);
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -88,11 +96,11 @@ export function TiMETR() {
         body: JSON.stringify({ fromCitizenId: citizen.id, toCitizenId: selectedRecipient.id }),
       });
       const body = await response.json() as ActiveSession & { error?: string };
-      if (!response.ok) throw new Error(body.error || (isRu ? "Не удалось начать сессию." : "Could not start the session."));
+      if (!response.ok) throw new Error(body.error || copy.error);
       setActiveSession(body);
       setNow(Date.now());
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : (isRu ? "Ошибка соединения." : "Connection error."));
+      setError(cause instanceof Error ? cause.message : copy.error);
     } finally {
       setBusy(false);
     }
@@ -108,40 +116,21 @@ export function TiMETR() {
         headers: authHeaders,
       });
       const body = await response.json() as CompletedSession & { error?: string };
-      if (!response.ok) throw new Error(body.error || (isRu ? "Не удалось завершить сессию." : "Could not complete the session."));
+      if (!response.ok) throw new Error(body.error || copy.error);
       setResult(body);
       setActiveSession(null);
       await refreshCitizen();
       await queryClient.invalidateQueries({ queryKey: getListCitizensQueryKey() });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : (isRu ? "Ошибка соединения." : "Connection error."));
+      setError(cause instanceof Error ? cause.message : copy.error);
     } finally {
       setBusy(false);
     }
   }
 
-  const copy = isRu ? {
-    title: "TiMETR", subtitle: "Передавайте время через реальные сессии взаимодействия.",
-    balance: "Ваш баланс", recipient: "Кому передать время", search: "Имя или ID гражданина",
-    choose: "Выберите гражданина", start: "Начать сессию", stop: "Завершить сессию",
-    active: "Сессия идёт", estimated: "Будет передано примерно", noRecipients: "Другие граждане не найдены.",
-    loading: "Загружаем список граждан…", retry: "Повторить", login: "Войдите в аккаунт гражданина, чтобы начать TiMETR.",
-    loginAction: "Войти", success: "Сессия завершена", transferred: "Передано минут", duration: "Длительность",
-    reserve: "Одна родовая минута остаётся непередаваемой.", error: "Не удалось выполнить действие.",
-  } : {
-    title: "TiMETR", subtitle: "Transfer time through real interaction sessions.",
-    balance: "Your balance", recipient: "Transfer time to", search: "Citizen name or ID",
-    choose: "Choose a citizen", start: "Start session", stop: "End session",
-    active: "Session in progress", estimated: "Estimated transfer",
-    noRecipients: "No other citizens found.", loading: "Loading citizens…", retry: "Retry",
-    login: "Sign in to your citizen account to start TiMETR.", loginAction: "Sign in",
-    success: "Session completed", transferred: "Minutes transferred", duration: "Duration",
-    reserve: "One ancestral minute is non-transferable.", error: "Could not complete the action.",
-  };
-
   return (
     <Layout>
-      <main className="mx-auto w-full max-w-5xl space-y-6 pb-10">
+      <main dir={["ar", "fa", "he", "ur"].includes(lang) ? "rtl" : "ltr"} className="mx-auto w-full max-w-5xl space-y-6 pb-10">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="mb-2 flex items-center gap-2 text-primary">
@@ -151,12 +140,18 @@ export function TiMETR() {
             <h1 className="text-3xl font-bold tracking-tight">{copy.title}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{copy.subtitle}</p>
           </div>
-          {citizen && (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-              <p className="text-xs text-muted-foreground">{copy.balance}</p>
-              <p className="font-mono text-xl font-semibold text-primary">{Number(citizen.balanceMinutes).toFixed(2)} Д</p>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="sr-only" htmlFor="timetR-language">TiMETR language</label>
+            <select id="timetR-language" aria-label="TiMETR language" value={lang} onChange={event => setLang(event.target.value as typeof lang)} className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
+              {languageOptions.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+            </select>
+            {citizen && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                <p className="text-xs text-muted-foreground">{copy.balance}</p>
+                <p className="font-mono text-xl font-semibold text-primary">{Number(citizen.balanceMinutes).toFixed(2)} Д</p>
+              </div>
+            )}
+          </div>
         </header>
 
         {!citizen || !authToken ? (
@@ -168,12 +163,12 @@ export function TiMETR() {
           </section>
         ) : (
           <div className="space-y-5">
-            <div className="inline-flex rounded-xl border border-border bg-card p-1" role="tablist" aria-label="TiMETR mode">
+            <div className="inline-flex rounded-xl border border-border bg-card p-1" role="tablist" aria-label={copy.title}>
               <button type="button" role="tab" aria-selected={mode === "transfer"} onClick={() => setMode("transfer")} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${mode === "transfer" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-                <Clock3 className="h-4 w-4" />{isRu ? "Передача времени" : "Time transfer"}
+                <Clock3 className="h-4 w-4" />{copy.tabTransfer}
               </button>
               <button type="button" role="tab" aria-selected={mode === "escrow"} onClick={() => setMode("escrow")} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${mode === "escrow" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-                <LockKeyhole className="h-4 w-4" />{isRu ? "Эскроу" : "Escrow"}
+                <LockKeyhole className="h-4 w-4" />{copy.tabEscrow}
               </button>
             </div>
             {mode === "escrow" ? <TiMETREscrow /> : <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.72fr)]">
@@ -221,7 +216,7 @@ export function TiMETR() {
                   <input value={search} onChange={event => setSearch(event.target.value)} placeholder={copy.search} className="w-full rounded-lg border border-border bg-background py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-primary" />
                 </label>
               )}
-              {isLoading ? <p className="py-6 text-center text-sm text-muted-foreground">{copy.loading}</p>
+              {isLoading ? <p className="py-6 text-center text-sm text-muted-foreground">{copy.loadingCitizens}</p>
                 : isError ? <div className="py-5 text-center text-sm text-muted-foreground">
                   <p>{copy.error}</p><button type="button" onClick={() => void refetch()} className="mt-2 text-primary underline">{copy.retry}</button>
                 </div>

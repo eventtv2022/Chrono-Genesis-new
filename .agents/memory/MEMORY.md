@@ -23,3 +23,4 @@
 - [In-app user guide](user-guide.md) — keep the full mobile manual accessible from the Profile section.
 - [Timenaming license legal status](timenaming-license.md) — keep the contradictory disclaimer visibly marked as draft until legal review.
 - [Time Bank legal status](timebank-legal-status.md) — do not claim universal legality without qualified, jurisdiction-specific review.
+- [Structured locale generation](structured-locale-generation.md) — key generated translations by message ID; translation arrays can return in a different order.
