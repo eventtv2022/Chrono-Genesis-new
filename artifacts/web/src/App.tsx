@@ -45,6 +45,7 @@ import { Referrals } from "./pages/Referrals";
 import { Profile } from "./pages/Profile";
 import { AnthemPlayer } from "./components/AnthemPlayer";
 import { Timenaming } from "./pages/Timenaming";
+import { TimeBank } from "./pages/TimeBank";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -81,7 +82,7 @@ function TgGuard({ children }: { children: React.ReactNode }) {
       }
 
       if (!citizen) {
-        const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/reset-password", "/qr-login", "/signature-request", "/referrals", "/profile", "/timenaming"];
+        const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/reset-password", "/qr-login", "/signature-request", "/referrals", "/profile", "/timenaming", "/timebank"];
         if (!guestRoutes.includes(location)) navigate("/welcome");
         else if (location === "/") navigate("/welcome");
       }
@@ -175,6 +176,7 @@ function Router() {
           <Route path="/citizens" component={Citizens} />
           <Route path="/timeline" component={Timeline} />
           <Route path="/timenaming" component={Timenaming} />
+          <Route path="/timebank" component={TimeBank} />
           <Route path="/shop" component={Shop} />
           <Route path="/referrals" component={Referrals} />
           <Route path="/profile" component={Profile} />
