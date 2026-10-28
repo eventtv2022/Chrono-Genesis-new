@@ -392,7 +392,7 @@ export const UI: Record<LangCode, UIStrings> = {
   ru: {
     tab_timer: "TiMETR", tab_timeline: "Таймлайн", tab_economy: "Экономика",
     tab_embassies: "Посольства", tab_auction: "Аукцион", tab_tv: "TV",
-    tab_chronopedia: "Хронопедия", tab_time: "Время", tab_clock: "Циферблат",
+    tab_chronopedia: "Хронопедия", tab_time: "Часы", tab_clock: "Циферблат",
     login: "Войти", logout: "Выйти", refresh: "Обновить",
     cancel: "Отмена", back: "Назад", save: "Сохранить", search: "Поиск",
     loading: "Загрузка…", confirm: "Подтвердить", close: "Закрыть", submit: "Отправить", soon: "Скоро",

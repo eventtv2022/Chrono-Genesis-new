@@ -25,6 +25,7 @@ import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { LogoBrand } from "@/components/LogoBrand";
 import { MinuteHourglass } from "@/components/MinuteHourglass";
+import { SandTimerCatalog } from "@/components/SandTimerCatalog";
 
 const BASE_URL = getBaseUrl();
 
@@ -312,7 +313,7 @@ export default function TimeUtilsScreen() {
   const PRESET_SECONDS = PRESET_MINUTES.map((m) => ({ label: `${m}m`, seconds: m * 60 }));
 
   // ── Section toggle ──────────────────────────────────────────────────────────
-  const [section, setSection] = useState<"clock" | "timer" | "alarm" | "social-alarm">("clock");
+  const [section, setSection] = useState<"clock" | "timer" | "alarm" | "social-alarm" | "shop">("clock");
 
   // ── Social Alarm ─────────────────────────────────────────────────────────────
   const [saConsent, setSaConsent] = useState(false);
@@ -828,19 +829,19 @@ export default function TimeUtilsScreen() {
         contentContainerStyle={st.sectionRow}
         style={{ flexGrow: 0 }}
       >
-        {(["clock", "timer", "alarm", "social-alarm"] as const).map((s) => (
+        {(["clock", "timer", "alarm", "social-alarm", "shop"] as const).map((s) => (
           <TouchableOpacity
             key={s}
             style={[st.sectionBtn, section === s && st.sectionBtnActive]}
             onPress={() => { Haptics.selectionAsync(); setSection(s); }}
           >
             <Feather
-              name={s === "clock" ? "globe" : s === "timer" ? "clock" : s === "alarm" ? "bell" : "radio"}
+              name={s === "clock" ? "globe" : s === "timer" ? "clock" : s === "alarm" ? "bell" : s === "social-alarm" ? "radio" : "shopping-bag"}
               size={14}
               color={section === s ? colors.primaryForeground : colors.mutedForeground}
             />
             <Text style={[st.sectionBtnText, section === s && st.sectionBtnTextActive]}>
-              {s === "clock" ? t.time_zones_tab : s === "timer" ? t.time_timer_tab : s === "alarm" ? t.time_alarm_tab : t.sa_tab}
+              {s === "clock" ? t.time_zones_tab : s === "timer" ? t.time_timer_tab : s === "alarm" ? t.time_alarm_tab : s === "social-alarm" ? t.sa_tab : lang === "ru" ? "Каталог" : "Shop"}
             </Text>
           </TouchableOpacity>
         ))}
@@ -1223,6 +1224,7 @@ export default function TimeUtilsScreen() {
             )}
           </View>
         )}
+        <SandTimerCatalog visible={section === "shop"} />
       </ScrollView>
 
       {/* QR Scanner Modal */}
