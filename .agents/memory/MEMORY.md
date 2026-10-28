@@ -22,3 +22,4 @@
 - [Professional documents & service catalog](professional-documents-and-service-catalog.md) — CV/portfolio stay private; AI analysis requires consent; catalog publication costs 1 Д.
 - [In-app user guide](user-guide.md) — keep the full mobile manual accessible from the Profile section.
 - [Timenaming license legal status](timenaming-license.md) — keep the contradictory disclaimer visibly marked as draft until legal review.
+- [Time Bank legal status](timebank-legal-status.md) — do not claim universal legality without qualified, jurisdiction-specific review.
