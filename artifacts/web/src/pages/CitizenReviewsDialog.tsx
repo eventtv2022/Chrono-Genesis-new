@@ -67,7 +67,7 @@ export function CitizenReviewsDialog({ open, onClose }: { open: boolean; onClose
           <button type="button" onClick={onClose} aria-label="Закрыть отзывы" style={{ border: 0, background: "transparent", color: "#aeb8d0", fontSize: 28, cursor: "pointer", lineHeight: 1 }}>×</button>
         </div>
         <p style={{ color: "#aeb8d0", fontSize: 13, lineHeight: 1.5, margin: "0 0 22px" }}>
-          Демонстрационные тексты на 24 языках. Имена и отзывы вымышлены.
+          Демонстрационные примеры отзывов на 24 языках.
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 12 }}>
           {reviews.map((review) => (
