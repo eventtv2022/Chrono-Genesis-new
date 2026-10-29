@@ -5,6 +5,7 @@ import {
   View,
   Text,
   StyleSheet,
+  AppState,
   TouchableOpacity,
   ScrollView,
   Alert,
@@ -12,8 +13,10 @@ import {
   Modal,
   TextInput,
   FlatList,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Constants from "expo-constants";
@@ -26,6 +29,14 @@ import { useLanguage } from "@/context/LanguageContext";
 import { LogoBrand } from "@/components/LogoBrand";
 import { MinuteHourglass } from "@/components/MinuteHourglass";
 import { SandTimerCatalog } from "@/components/SandTimerCatalog";
+import {
+  getListTimeMatrixTasksQueryKey,
+  useListTimeMatrixTasks,
+  useCreateTimeMatrixTask,
+  useStartTimeMatrixTask,
+  useCompleteTimeMatrixTask,
+  type TimeMatrixTask,
+} from "@workspace/api-client-react";
 
 const BASE_URL = getBaseUrl();
 
@@ -306,9 +317,20 @@ function getDayNames(lang: string): string[] {
 export default function TimeUtilsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { citizen, authToken } = useCitizen();
+  const { citizen, authToken, refreshCitizen } = useCitizen();
   const { t, lang } = useLanguage();
   const st = styles(colors);
+  const queryClient = useQueryClient();
+  const matrixTasksQuery = useListTimeMatrixTasks({
+    query: {
+      queryKey: [...getListTimeMatrixTasksQueryKey(), citizen?.id],
+      enabled: Boolean(authToken && citizen?.id),
+      retry: false,
+    },
+  });
+  const createMatrixTask = useCreateTimeMatrixTask();
+  const startMatrixTask = useStartTimeMatrixTask();
+  const completeMatrixTask = useCompleteTimeMatrixTask();
   const DAYS = getDayNames(lang);
   const PRESET_SECONDS = PRESET_MINUTES.map((m) => ({ label: `${m}m`, seconds: m * 60 }));
 
@@ -509,6 +531,16 @@ export default function TimeUtilsScreen() {
   const [remaining, setRemaining] = useState(PRESET_MINUTES[1]! * 60);
   const [running, setRunning] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [focusReward, setFocusReward] = useState<number | null>(null);
+  const [focusPausedForInactivity, setFocusPausedForInactivity] = useState(false);
+  const [matrixTaskTitle, setMatrixTaskTitle] = useState("");
+  const [matrixQuadrant, setMatrixQuadrant] = useState<TimeMatrixTask["quadrant"]>("A");
+  const [matrixTaskError, setMatrixTaskError] = useState("");
+  const matrixTodayKey = new Date().toDateString();
+  const completedMatrixTasksToday = (matrixTasksQuery.data ?? []).filter((task) =>
+    task.status === "completed" && task.completedAt && new Date(task.completedAt).toDateString() === matrixTodayKey
+  );
+  const focusSessionId = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionDurationRef = useRef(PRESET_MINUTES[1]! * 60);
 
@@ -524,25 +556,30 @@ export default function TimeUtilsScreen() {
     setRunning(false);
     setCompleted(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    // Log focus session to backend
-    if (citizen?.id) {
+    let awardedDarmins = 0;
+    if (citizen?.id && focusSessionId.current) {
       try {
-        await fetch(`${BASE_URL}/api/citizens/log-focus`, {
+        const response = await fetch(`${BASE_URL}/api/citizens/focus/${focusSessionId.current}/complete`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            citizenId: citizen.id,
-            durationMinutes: Math.round(sessionDurationRef.current / 60),
-          }),
+          headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
+          body: JSON.stringify({ text: "" }),
         });
-      } catch { /* silent — offline is fine */ }
+        const result = await response.json() as { rewardDarmins?: number; rewardBlockedReason?: string; error?: string };
+        if (!response.ok) throw new Error(result.error || "Не удалось подтвердить фокус-сессию");
+        awardedDarmins = result.rewardDarmins ?? 0;
+        setFocusReward(awardedDarmins);
+        focusSessionId.current = null;
+        await refreshCitizen();
+      } catch (error) {
+        Alert.alert(t.time_session_done, error instanceof Error ? error.message : "Не удалось подтвердить фокус-сессию");
+      }
     }
     Alert.alert(
       t.time_session_done,
-      `${Math.round(sessionDurationRef.current / 60)} min · ${t.time_pomodoro}`,
+      `${Math.round(sessionDurationRef.current / 60)} min · ${t.time_pomodoro}${citizen?.id ? ` · +${awardedDarmins} Д` : ""}`,
       [{ text: "OK", onPress: () => setCompleted(false) }]
     );
-  }, [citizen?.id, stopInterval]);
+  }, [authToken, citizen?.id, refreshCitizen, stopInterval, t.time_pomodoro, t.time_session_done]);
 
   useEffect(() => {
     if (running) {
@@ -561,6 +598,42 @@ export default function TimeUtilsScreen() {
     return stopInterval;
   }, [running, handleTimerComplete, stopInterval]);
 
+  useEffect(() => {
+    if (Platform.OS === "web" || !running) return;
+    let backgroundTimeout: ReturnType<typeof setTimeout> | null = null;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        if (backgroundTimeout) clearTimeout(backgroundTimeout);
+        backgroundTimeout = null;
+        return;
+      }
+      if (backgroundTimeout) clearTimeout(backgroundTimeout);
+      backgroundTimeout = setTimeout(async () => {
+        if (AppState.currentState === "active") return;
+        const id = focusSessionId.current;
+        if (id && authToken) {
+          try {
+            const response = await fetch(`${BASE_URL}/api/citizens/focus/${id}/pause`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${authToken}` },
+            });
+            if (!response.ok) return;
+            const result = await response.json() as { elapsedSeconds?: number };
+            if (typeof result.elapsedSeconds === "number") {
+              setRemaining(Math.max(0, sessionDurationRef.current - result.elapsedSeconds));
+            }
+          } catch { return; }
+        }
+        setRunning(false);
+        setFocusPausedForInactivity(true);
+      }, 30_000);
+    });
+    return () => {
+      subscription.remove();
+      if (backgroundTimeout) clearTimeout(backgroundTimeout);
+    };
+  }, [authToken, running]);
+
   const handlePreset = (i: number) => {
     stopInterval();
     setRunning(false);
@@ -570,19 +643,60 @@ export default function TimeUtilsScreen() {
     sessionDurationRef.current = PRESET_MINUTES[i]! * 60;
   };
 
-  const handleStartPause = () => {
+  const handleStartPause = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (!running && (completed || remaining === 0)) {
+    if (running) {
+      if (citizen?.id && focusSessionId.current) {
+        const response = await fetch(`${BASE_URL}/api/citizens/focus/${focusSessionId.current}/pause`, {
+          method: "POST",
+          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        });
+        if (!response.ok) {
+          Alert.alert(t.time_pomodoro, "Не удалось приостановить сессию. Проверьте соединение.");
+          return;
+        }
+      }
+      setRunning(false);
+      return;
+    }
+    setFocusPausedForInactivity(false);
+    if (completed || remaining === 0) {
       const duration = PRESET_MINUTES[preset]! * 60;
       setRemaining(duration);
       sessionDurationRef.current = duration;
       setCompleted(false);
+      setFocusReward(null);
     }
-    setRunning((r) => !r);
+    if (citizen?.id) {
+      try {
+        const route = focusSessionId.current
+          ? `${BASE_URL}/api/citizens/focus/${focusSessionId.current}/resume`
+          : `${BASE_URL}/api/citizens/focus/start`;
+        const response = await fetch(route, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
+          ...(!focusSessionId.current ? { body: JSON.stringify({ plannedSeconds: sessionDurationRef.current }) } : {}),
+        });
+        const data = await response.json() as { sessionId?: number; error?: string };
+        if (!response.ok) throw new Error(data.error || "Не удалось запустить фокус-сессию");
+        if (data.sessionId) focusSessionId.current = data.sessionId;
+      } catch (error) {
+        Alert.alert(t.time_pomodoro, error instanceof Error ? error.message : "Не удалось запустить фокус-сессию");
+        return;
+      }
+    }
+    setRunning(true);
   };
 
   const handleReset = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (citizen?.id && focusSessionId.current) {
+      void fetch(`${BASE_URL}/api/citizens/focus/${focusSessionId.current}/pause`, {
+        method: "POST",
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      }).catch(() => {});
+    }
+    focusSessionId.current = null;
     stopInterval();
     setRunning(false);
     setCompleted(false);
@@ -886,6 +1000,14 @@ export default function TimeUtilsScreen() {
           <View style={st.section}>
             <Text style={st.sectionTitle}>{t.time_pomodoro}</Text>
             <Text style={st.sectionSub}>{t.timer_ai_checker}</Text>
+            <View style={st.infoBox}>
+              <Feather name="shield" size={14} color={colors.primary} />
+              <Text style={st.infoText}>
+                {focusPausedForInactivity
+                  ? (lang === "ru" ? "Сессия приостановлена после 30 секунд в фоне." : "Session paused after 30 seconds in the background.")
+                  : (lang === "ru" ? `Proof-of-Focus ${running ? "активна" : "готова"} · 1 Д за 12 минут · максимум 12 Д/сутки` : `Proof-of-Focus ${running ? "active" : "ready"} · 1 Д per 12 minutes · 12 Д daily limit`)}
+              </Text>
+            </View>
 
             {/* Preset buttons */}
             <View style={st.presetRow}>
@@ -950,6 +1072,138 @@ export default function TimeUtilsScreen() {
             <View style={st.infoBox}>
               <Feather name="info" size={14} color={colors.mutedForeground} />
               <Text style={st.infoText}>{t.timer_ai_checker}</Text>
+            </View>
+
+            <View style={{ marginTop: 18, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, gap: 14 }}>
+              <View>
+                <Text style={st.sectionTitle}>Time Matrix</Text>
+                <Text style={st.sectionSub}>
+                  {lang === "ru" ? "Задачи сохраняются в вашем профиле." : "Tasks are saved to your profile."}
+                </Text>
+                <Text testID="text-time-matrix-balance" style={{ color: colors.primary, marginTop: 8, fontWeight: "700" }}>
+                  {lang === "ru" ? "Баланс" : "Balance"}: {(citizen?.balanceMinutes ?? 0).toFixed(2)} Д
+                </Text>
+                <Text testID="summary-time-matrix-today" style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6 }}>
+                  {lang === "ru" ? "Завершено сегодня" : "Completed today"}: {(["A", "B", "C", "D"] as const).map((quadrant) => `${quadrant} ${completedMatrixTasksToday.filter((task) => task.quadrant === quadrant).length}`).join(" · ")}
+                </Text>
+              </View>
+              {!authToken ? (
+                <Text style={st.infoText}>{lang === "ru" ? "Войдите, чтобы сохранять задачи." : "Sign in to save tasks."}</Text>
+              ) : (
+                <>
+                  <TextInput
+                    value={matrixTaskTitle}
+                    onChangeText={setMatrixTaskTitle}
+                    placeholder={lang === "ru" ? "Конкретное действие" : "Describe a specific task"}
+                    placeholderTextColor={colors.mutedForeground}
+                    maxLength={120}
+                    accessibilityLabel={lang === "ru" ? "Название задачи" : "Task title"}
+                    testID="input-time-matrix-task-title"
+                    style={{ color: colors.foreground, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 }}
+                  />
+                  <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                    {(["A", "B", "C", "D"] as const).map((value) => (
+                      <TouchableOpacity
+                        key={value}
+                        testID={`button-time-matrix-quadrant-${value}`}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: matrixQuadrant === value }}
+                        onPress={() => setMatrixQuadrant(value)}
+                        style={{ paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: matrixQuadrant === value ? colors.primary : colors.border, backgroundColor: matrixQuadrant === value ? colors.goldGlow : colors.surface }}
+                      >
+                        <Text style={{ color: matrixQuadrant === value ? colors.primary : colors.foreground, fontWeight: "700" }}>{value}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <Text style={st.infoText}>
+                    {matrixQuadrant === "B"
+                      ? (lang === "ru" ? "Квадрант B требует завершённой 12-минутной фокус-сессии." : "Quadrant B requires a completed 12-minute focus session.")
+                      : (lang === "ru" ? "Быстрый чек-лист до 60 секунд не начисляет Дармин." : "Quick checklists under 60 seconds do not earn Darmins.")}
+                  </Text>
+                  <TouchableOpacity
+                    testID="button-time-matrix-create"
+                    accessibilityRole="button"
+                    disabled={createMatrixTask.isPending || !matrixTaskTitle.trim()}
+                    onPress={() => {
+                      setMatrixTaskError("");
+                      createMatrixTask.mutate({ data: { title: matrixTaskTitle.trim(), quadrant: matrixQuadrant } }, {
+                        onSuccess: () => {
+                          setMatrixTaskTitle("");
+                          void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() });
+                        },
+                        onError: (error) => setMatrixTaskError(error.message),
+                      });
+                    }}
+                    style={{ minHeight: 44, borderRadius: 12, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, opacity: createMatrixTask.isPending || !matrixTaskTitle.trim() ? 0.55 : 1 }}
+                  >
+                    {createMatrixTask.isPending ? <ActivityIndicator color={colors.primaryForeground} /> : <Feather name="plus" size={16} color={colors.primaryForeground} />}
+                    <Text style={{ color: colors.primaryForeground, fontWeight: "700" }}>{lang === "ru" ? "Добавить задачу" : "Add task"}</Text>
+                  </TouchableOpacity>
+                  {!!matrixTaskError && <Text accessibilityRole="alert" testID="status-time-matrix-error" style={{ color: colors.destructive }}>{matrixTaskError}</Text>}
+                  {matrixTasksQuery.isLoading ? (
+                    <ActivityIndicator color={colors.primary} />
+                  ) : matrixTasksQuery.isError ? (
+                    <TouchableOpacity testID="button-time-matrix-retry" onPress={() => { void matrixTasksQuery.refetch(); }}>
+                      <Text style={{ color: colors.destructive }}>{lang === "ru" ? "Не удалось загрузить задачи. Нажмите, чтобы повторить." : "Tasks did not load. Tap to retry."}</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={{ gap: 12 }}>
+                      {(["A", "B", "C", "D"] as const).map((value) => {
+                        const titles = lang === "ru"
+                          ? { A: "Сделать сначала", B: "Запланировать", C: "Сократить", D: "Отложить" }
+                          : { A: "Do first", B: "Schedule", C: "Keep brief", D: "Let go" };
+                        const tasks = (matrixTasksQuery.data ?? []).filter((task) => task.quadrant === value);
+                        return (
+                          <View key={value} testID={`group-time-matrix-${value}`} style={{ gap: 8 }}>
+                            <Text style={{ color: colors.primary, fontWeight: "700" }}>{value} · {titles[value]} · {tasks.length}</Text>
+                            {tasks.length === 0 ? (
+                              <Text style={st.infoText}>{lang === "ru" ? "Пока нет задач." : "No tasks yet."}</Text>
+                            ) : tasks.map((task) => (
+                              <View key={task.id} testID={`card-time-matrix-task-${task.id}`} style={{ padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, gap: 7 }}>
+                                <Text style={{ color: colors.foreground, fontWeight: "600" }}>{task.title}</Text>
+                                {task.status === "completed" ? (
+                                  <Text style={{ color: colors.success, fontSize: 12 }}>
+                                    {task.quickChecklist
+                                      ? (lang === "ru" ? "Чек-лист · без награды" : "Checklist · no reward")
+                                      : `${Math.floor(task.elapsedSeconds / 60)} min · ${task.rewardDarmins} Д`}
+                                  </Text>
+                                ) : (
+                                  <View style={{ flexDirection: "row", gap: 12 }}>
+                                    {!task.startedAt && (
+                                      <TouchableOpacity
+                                        testID={`button-time-matrix-start-${task.id}`}
+                                        accessibilityRole="button"
+                                        disabled={startMatrixTask.isPending}
+                                        onPress={() => startMatrixTask.mutate({ id: task.id }, { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); }, onError: (error) => setMatrixTaskError(error.message) })}
+                                        style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
+                                      >
+                                        <Feather name="play" size={14} color={colors.primary} />
+                                        <Text style={{ color: colors.primary }}>{lang === "ru" ? "Начать" : "Start"}</Text>
+                                      </TouchableOpacity>
+                                    )}
+                                    {!!task.startedAt && (
+                                      <TouchableOpacity
+                                        testID={`button-time-matrix-complete-${task.id}`}
+                                        accessibilityRole="button"
+                                        disabled={completeMatrixTask.isPending}
+                                        onPress={() => completeMatrixTask.mutate({ id: task.id }, { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); }, onError: (error) => setMatrixTaskError(error.message) })}
+                                        style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
+                                      >
+                                        <Feather name="check" size={14} color={colors.success} />
+                                        <Text style={{ color: colors.success }}>{lang === "ru" ? "Завершить" : "Complete"}</Text>
+                                      </TouchableOpacity>
+                                    )}
+                                  </View>
+                                )}
+                              </View>
+                            ))}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+                </>
+              )}
             </View>
           </View>
         )}

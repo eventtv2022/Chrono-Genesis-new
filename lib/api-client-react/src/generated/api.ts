@@ -76,6 +76,8 @@ import type {
   StripeWebhook200,
   TelegramWebAppInput,
   TelegramWebAppSession,
+  TimeMatrixTask,
+  TimeMatrixTaskInput,
   TimelineAnchorInput,
   TimelineAnchorMoveInput,
   TimelineAnchorMoveResult,
@@ -2461,7 +2463,7 @@ export const getCompleteFocusSessionUrl = (id: number,) => {
 }
 
 /**
- * @summary Complete a focus session and award Darmins for text volume
+ * @summary Complete a verified focus session and award one Darmin
  */
 export const completeFocusSession = async (id: number,
     focusSessionCompletionInput: FocusSessionCompletionInput, options?: RequestInit): Promise<FocusSessionResult> => {
@@ -2511,7 +2513,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CompleteFocusSessionMutationError = ErrorType<ErrorResponse>
 
     /**
- * @summary Complete a focus session and award Darmins for text volume
+ * @summary Complete a verified focus session and award one Darmin
  */
 export const useCompleteFocusSession = <TError = ErrorType<ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeFocusSession>>, TError,{id: number;data: BodyType<FocusSessionCompletionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -2670,6 +2672,294 @@ export const useAnswerFocusQuizQuestion = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getAnswerFocusQuizQuestionMutationOptions(options));
+    }
+
+export const getListTimeMatrixTasksUrl = () => {
+
+
+
+
+  return `/api/citizens/time-matrix/tasks`
+}
+
+/**
+ * @summary List the authenticated citizen's Time Matrix tasks
+ */
+export const listTimeMatrixTasks = async ( options?: RequestInit): Promise<TimeMatrixTask[]> => {
+
+  return customFetch<TimeMatrixTask[]>(getListTimeMatrixTasksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTimeMatrixTasksQueryKey = () => {
+    return [
+    `/api/citizens/time-matrix/tasks`
+    ] as const;
+    }
+
+
+export const getListTimeMatrixTasksQueryOptions = <TData = Awaited<ReturnType<typeof listTimeMatrixTasks>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTimeMatrixTasks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTimeMatrixTasksQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTimeMatrixTasks>>> = ({ signal }) => listTimeMatrixTasks({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTimeMatrixTasks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTimeMatrixTasksQueryResult = NonNullable<Awaited<ReturnType<typeof listTimeMatrixTasks>>>
+export type ListTimeMatrixTasksQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the authenticated citizen's Time Matrix tasks
+ */
+
+export function useListTimeMatrixTasks<TData = Awaited<ReturnType<typeof listTimeMatrixTasks>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTimeMatrixTasks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTimeMatrixTasksQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateTimeMatrixTaskUrl = () => {
+
+
+
+
+  return `/api/citizens/time-matrix/tasks`
+}
+
+/**
+ * @summary Create a Time Matrix task
+ */
+export const createTimeMatrixTask = async (timeMatrixTaskInput: TimeMatrixTaskInput, options?: RequestInit): Promise<TimeMatrixTask> => {
+
+  return customFetch<TimeMatrixTask>(getCreateTimeMatrixTaskUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      timeMatrixTaskInput,)
+  }
+);}
+
+
+
+
+export const getCreateTimeMatrixTaskMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTimeMatrixTask>>, TError,{data: BodyType<TimeMatrixTaskInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTimeMatrixTask>>, TError,{data: BodyType<TimeMatrixTaskInput>}, TContext> => {
+
+const mutationKey = ['createTimeMatrixTask'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTimeMatrixTask>>, {data: BodyType<TimeMatrixTaskInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createTimeMatrixTask(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTimeMatrixTaskMutationResult = NonNullable<Awaited<ReturnType<typeof createTimeMatrixTask>>>
+    export type CreateTimeMatrixTaskMutationBody = BodyType<TimeMatrixTaskInput>
+    export type CreateTimeMatrixTaskMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create a Time Matrix task
+ */
+export const useCreateTimeMatrixTask = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTimeMatrixTask>>, TError,{data: BodyType<TimeMatrixTaskInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTimeMatrixTask>>,
+        TError,
+        {data: BodyType<TimeMatrixTaskInput>},
+        TContext
+      > => {
+      return useMutation(getCreateTimeMatrixTaskMutationOptions(options));
+    }
+
+export const getStartTimeMatrixTaskUrl = (id: number,) => {
+
+
+
+
+  return `/api/citizens/time-matrix/tasks/${id}/start`
+}
+
+/**
+ * @summary Start timing a Time Matrix task
+ */
+export const startTimeMatrixTask = async (id: number, options?: RequestInit): Promise<TimeMatrixTask> => {
+
+  return customFetch<TimeMatrixTask>(getStartTimeMatrixTaskUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getStartTimeMatrixTaskMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startTimeMatrixTask>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startTimeMatrixTask>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['startTimeMatrixTask'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startTimeMatrixTask>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  startTimeMatrixTask(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartTimeMatrixTaskMutationResult = NonNullable<Awaited<ReturnType<typeof startTimeMatrixTask>>>
+
+    export type StartTimeMatrixTaskMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Start timing a Time Matrix task
+ */
+export const useStartTimeMatrixTask = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startTimeMatrixTask>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startTimeMatrixTask>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getStartTimeMatrixTaskMutationOptions(options));
+    }
+
+export const getCompleteTimeMatrixTaskUrl = (id: number,) => {
+
+
+
+
+  return `/api/citizens/time-matrix/tasks/${id}/complete`
+}
+
+/**
+ * @summary Complete a Time Matrix task
+ */
+export const completeTimeMatrixTask = async (id: number, options?: RequestInit): Promise<TimeMatrixTask> => {
+
+  return customFetch<TimeMatrixTask>(getCompleteTimeMatrixTaskUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCompleteTimeMatrixTaskMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeTimeMatrixTask>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeTimeMatrixTask>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['completeTimeMatrixTask'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeTimeMatrixTask>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  completeTimeMatrixTask(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteTimeMatrixTaskMutationResult = NonNullable<Awaited<ReturnType<typeof completeTimeMatrixTask>>>
+
+    export type CompleteTimeMatrixTaskMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Complete a Time Matrix task
+ */
+export const useCompleteTimeMatrixTask = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeTimeMatrixTask>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeTimeMatrixTask>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCompleteTimeMatrixTaskMutationOptions(options));
     }
 
 export const getStartSessionUrl = () => {

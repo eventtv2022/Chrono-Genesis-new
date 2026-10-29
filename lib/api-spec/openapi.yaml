@@ -815,7 +815,7 @@ paths:
     post:
       operationId: completeFocusSession
       tags: [citizens]
-      summary: Complete a focus session and award Darmins for text volume
+      summary: Complete a verified focus session and award one Darmin
       security:
         - BearerAuth: []
       parameters:
@@ -881,6 +881,108 @@ paths:
                 $ref: "#/components/schemas/FocusQuizAnswerResult"
         "409":
           description: Attempt has already been answered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /citizens/time-matrix/tasks:
+    get:
+      operationId: listTimeMatrixTasks
+      tags: [citizens]
+      summary: List the authenticated citizen's Time Matrix tasks
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimeMatrixTask"
+    post:
+      operationId: createTimeMatrixTask
+      tags: [citizens]
+      summary: Create a Time Matrix task
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimeMatrixTaskInput"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeMatrixTask"
+        "400":
+          description: Invalid task title or quadrant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Task creation rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /citizens/time-matrix/tasks/{id}/start:
+    post:
+      operationId: startTimeMatrixTask
+      tags: [citizens]
+      summary: Start timing a Time Matrix task
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeMatrixTask"
+        "404":
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /citizens/time-matrix/tasks/{id}/complete:
+    post:
+      operationId: completeTimeMatrixTask
+      tags: [citizens]
+      summary: Complete a Time Matrix task
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeMatrixTask"
+        "409":
+          description: Quadrant B requires a verified focus session
           content:
             application/json:
               schema:
@@ -2465,7 +2567,39 @@ components:
           type: integer
         rewardDarmins:
           type: integer
+        rewardBlockedReason:
+          type: ["string", "null"]
+          enum: [daily_cap, cooldown, suspicious_activity, null]
+        newlyCompleted:
+          type: boolean
       required: [elapsedSeconds, textCharacters, rewardDarmins]
+
+    TimeMatrixTaskInput:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 120
+        quadrant:
+          type: string
+          enum: [A, B, C, D]
+      required: [title, quadrant]
+
+    TimeMatrixTask:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        quadrant: { type: string, enum: [A, B, C, D] }
+        status: { type: string, enum: [open, completed] }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+        elapsedSeconds: { type: integer }
+        rewardDarmins: { type: integer }
+        quickChecklist: { type: boolean }
+      required: [id, title, quadrant, status, createdAt, elapsedSeconds, rewardDarmins, quickChecklist]
 
     FocusQuizQuestion:
       type: object

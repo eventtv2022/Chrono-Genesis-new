@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, sql, desc, and, or, isNull } from "drizzle-orm";
+import { eq, sql, desc, and, or, isNull, gte } from "drizzle-orm";
 import crypto from "crypto";
 import path from "path";
 import fs from "fs";
@@ -7,7 +7,7 @@ import multer from "multer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@workspace/db";
 import { referralsTable } from "@workspace/db";
-import { citizensTable, onboardingProgressTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable, focusSessionsTable, focusQuizAttemptsTable, citizenProfessionalDocumentsTable } from "@workspace/db";
+import { citizensTable, onboardingProgressTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable, focusSessionsTable, focusQuizAttemptsTable, citizenProfessionalDocumentsTable, timeMatrixRewardsTable, timeMatrixTasksTable } from "@workspace/db";
 import { auditCitizenRate } from "../services/rateAuditorService";
 import {
   UpdateCitizenBody,
@@ -21,7 +21,7 @@ import { EMBLEM_DATA_URI, FLAG_DATA_URI } from "../services/assetsService";
 import { cropSignature, normalizePassportPhoto } from "../services/imageService";
 import { requireAdultKyc, requireAuth } from "../middleware/auth";
 import { sendAdminTelegramNotify } from "../services/emailService";
-import { notifyPassportEmissionStarted, sendDirectMessage, sendFocusThoughtsToTelegram } from "../services/telegramService";
+import { notifyPassportEmissionStarted, sendDirectMessage, sendFocusThoughtsToTelegram, sendTimeMatrixRewardNotification, sendTimeMatrixSecurityAlert } from "../services/telegramService";
 import { issueEligiblePassport } from "../services/passportIssuanceService";
 import { deriveAgeTier } from "../services/ageGateService";
 import { getCitizenDisplayName } from "../services/citizenIdentity";
@@ -1399,13 +1399,63 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
     const elapsedSeconds = session.elapsedSeconds + (session.status === "running" && session.runningSince ? Math.max(0, Math.floor((Date.now() - session.runningSince.getTime()) / 1000)) : 0);
     if (elapsedSeconds < session.plannedSeconds - 3) return { tooEarly: true as const };
     const chars = Array.from(parsed.data.text).length;
-    const reward = elapsedSeconds >= 12 * 60 ? Math.floor(chars / 1800) : 0;
-    await tx.update(focusSessionsTable).set({ status: "completed", runningSince: null, elapsedSeconds, textCharacters: chars, rewardDarmins: reward, completedAt: new Date() }).where(eq(focusSessionsTable.id, id));
-    if (reward) await tx.update(citizensTable).set({ balanceMinutes: sql`${citizensTable.balanceMinutes} + ${reward}` }).where(eq(citizensTable.id, req.citizen!.id));
-    return { elapsedSeconds, textCharacters: chars, rewardDarmins: reward, newlyCompleted: true };
+    const now = new Date();
+    let reward = elapsedSeconds >= 12 * 60 ? 1 : 0;
+    let rewardBlockedReason: "daily_cap" | "cooldown" | "suspicious_activity" | undefined;
+    if (reward) {
+      const [citizen] = await tx.select({
+        balanceMinutes: citizensTable.balanceMinutes,
+        timeXp: citizensTable.timeXp,
+        streakDays: citizensTable.streakDays,
+        suspiciousActivity: citizensTable.suspiciousActivity,
+        lastRewardAt: citizensTable.lastTimeMatrixRewardAt,
+      }).from(citizensTable).where(eq(citizensTable.id, req.citizen!.id)).for("update").limit(1);
+      const [daily] = await tx.select({
+        total: sql<number>`coalesce(sum(${timeMatrixRewardsTable.amount}), 0)`,
+      }).from(timeMatrixRewardsTable).where(and(
+        eq(timeMatrixRewardsTable.citizenId, req.citizen!.id),
+        gte(timeMatrixRewardsTable.createdAt, new Date(now.getTime() - 24 * 60 * 60 * 1000)),
+      ));
+      if (citizen?.suspiciousActivity) {
+        reward = 0;
+        rewardBlockedReason = "suspicious_activity";
+      } else if (Number(daily?.total ?? 0) >= 12) {
+        reward = 0;
+        rewardBlockedReason = "daily_cap";
+      } else if (citizen?.lastRewardAt && now.getTime() - citizen.lastRewardAt.getTime() < 12 * 60 * 1000) {
+        reward = 0;
+        rewardBlockedReason = "cooldown";
+      }
+      if (rewardBlockedReason === "daily_cap" || rewardBlockedReason === "cooldown") {
+        await tx.update(citizensTable).set({ suspiciousActivity: true }).where(eq(citizensTable.id, req.citizen!.id));
+      }
+      if (reward && citizen) {
+        const lastAt = citizen.lastRewardAt;
+        const today = now.toISOString().slice(0, 10);
+        const lastDay = lastAt?.toISOString().slice(0, 10);
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const streakDays = lastDay === today ? citizen.streakDays : lastDay === yesterday ? citizen.streakDays + 1 : 1;
+        await tx.update(citizensTable).set({
+          balanceMinutes: sql`${citizensTable.balanceMinutes} + 1`,
+          timeXp: sql`${citizensTable.timeXp} + 12`,
+          streakDays,
+          lastTimeMatrixRewardAt: now,
+        }).where(eq(citizensTable.id, req.citizen!.id));
+        await tx.insert(timeMatrixRewardsTable).values({ citizenId: req.citizen!.id, source: "focus_session", amount: 1, createdAt: now });
+      }
+    }
+    await tx.update(focusSessionsTable).set({ status: "completed", runningSince: null, elapsedSeconds, textCharacters: chars, rewardDarmins: reward, completedAt: now }).where(eq(focusSessionsTable.id, id));
+    return { elapsedSeconds, textCharacters: chars, rewardDarmins: reward, rewardBlockedReason, newlyCompleted: true };
   });
   if (!result) { res.status(404).json({ error: "Сеанс не найден или уже завершён" }); return; }
   if ("tooEarly" in result) { res.status(409).json({ error: "Таймер ещё не завершён" }); return; }
+  if (result.newlyCompleted && result.rewardDarmins > 0) {
+    const [citizen] = await db.select({ balanceMinutes: citizensTable.balanceMinutes }).from(citizensTable)
+      .where(eq(citizensTable.id, req.citizen!.id)).limit(1);
+    if (citizen) await sendTimeMatrixRewardNotification(req.citizen!.id, citizen.balanceMinutes);
+  } else if (result.newlyCompleted && result.rewardBlockedReason) {
+    await sendTimeMatrixSecurityAlert(req.citizen!.id, result.rewardBlockedReason);
+  }
   let telegramStatus: "not_requested" | "sent" | "not_linked" | "failed" = "not_requested";
   if (parsed.data.forwardToTelegram && result.newlyCompleted && parsed.data.text.trim()) {
     const [citizen] = await db.select({ telegramId: citizensTable.telegramId })
@@ -1439,15 +1489,144 @@ router.post("/citizens/focus/quiz/answer", requireAuth, async (req, res): Promis
     const correct = !!question?.answer.some(answer => normalizeQuizAnswer(answer) === normalizeQuizAnswer(parsed.data.answer));
     await tx.update(focusQuizAttemptsTable).set({ isCorrect: correct ? 1 : 0, answeredAt: new Date() }).where(eq(focusQuizAttemptsTable.id, attempt.id));
     const totalCorrect = citizen.focusQuizCorrectAnswers + (correct ? 1 : 0);
-    const awarded = correct && totalCorrect % 12 === 0 ? 1 : 0;
+    let awarded = correct && totalCorrect % 12 === 0 ? 1 : 0;
+    const now = new Date();
+    let rewardBlockedReason: "daily_cap" | "cooldown" | "suspicious_activity" | undefined;
+    if (awarded) {
+      const [daily] = await tx.select({
+        total: sql<number>`coalesce(sum(${timeMatrixRewardsTable.amount}), 0)`,
+      }).from(timeMatrixRewardsTable).where(and(
+        eq(timeMatrixRewardsTable.citizenId, req.citizen!.id),
+        gte(timeMatrixRewardsTable.createdAt, new Date(now.getTime() - 24 * 60 * 60 * 1000)),
+      ));
+      if (citizen.suspiciousActivity) rewardBlockedReason = "suspicious_activity";
+      else if (Number(daily?.total ?? 0) >= 12) rewardBlockedReason = "daily_cap";
+      else if (citizen.lastTimeMatrixRewardAt && now.getTime() - citizen.lastTimeMatrixRewardAt.getTime() < 12 * 60 * 1000) rewardBlockedReason = "cooldown";
+      if (rewardBlockedReason) {
+        awarded = 0;
+        await tx.update(citizensTable).set({ suspiciousActivity: true }).where(eq(citizensTable.id, citizen.id));
+      } else {
+        const lastDay = citizen.lastTimeMatrixRewardAt?.toISOString().slice(0, 10);
+        const today = now.toISOString().slice(0, 10);
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const streakDays = lastDay === today ? citizen.streakDays : lastDay === yesterday ? citizen.streakDays + 1 : 1;
+        await tx.insert(timeMatrixRewardsTable).values({ citizenId: citizen.id, source: "quiz", amount: 1, createdAt: now });
+        await tx.update(citizensTable).set({
+          balanceMinutes: sql`${citizensTable.balanceMinutes} + 1`,
+          timeXp: sql`${citizensTable.timeXp} + 1`,
+          streakDays,
+          lastTimeMatrixRewardAt: now,
+        }).where(eq(citizensTable.id, citizen.id));
+      }
+    }
     await tx.update(citizensTable).set({
       focusQuizCorrectAnswers: totalCorrect,
-      ...(awarded ? { balanceMinutes: sql`${citizensTable.balanceMinutes} + 1` } : {}),
     }).where(eq(citizensTable.id, citizen.id));
-    return { correct, totalCorrect, awardedDarmins: awarded };
+    return { correct, totalCorrect, awardedDarmins: awarded, rewardBlockedReason };
   });
   if (!result) { res.status(409).json({ error: "Ответ уже отправлен или вопрос не найден" }); return; }
+  if (result.awardedDarmins > 0) {
+    const [citizen] = await db.select({ balanceMinutes: citizensTable.balanceMinutes }).from(citizensTable)
+      .where(eq(citizensTable.id, req.citizen!.id)).limit(1);
+    if (citizen) await sendTimeMatrixRewardNotification(req.citizen!.id, citizen.balanceMinutes);
+  }
+  if (result.rewardBlockedReason) await sendTimeMatrixSecurityAlert(req.citizen!.id, result.rewardBlockedReason);
   res.json(result);
+});
+
+router.get("/citizens/time-matrix/tasks", requireAuth, async (req, res): Promise<void> => {
+  const tasks = await db.select().from(timeMatrixTasksTable)
+    .where(eq(timeMatrixTasksTable.citizenId, req.citizen!.id))
+    .orderBy(desc(timeMatrixTasksTable.createdAt));
+  res.json(tasks);
+});
+
+router.post("/citizens/time-matrix/tasks", requireAuth, async (req, res): Promise<void> => {
+  const parsed = z.object({
+    title: z.string().trim().min(3).max(120),
+    quadrant: z.enum(["A", "B", "C", "D"]),
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Укажите название и квадрант задачи" }); return; }
+
+  const citizenId = req.citizen!.id;
+  const now = new Date();
+  const [recent] = await db.select({ total: sql<number>`count(*)` }).from(timeMatrixTasksTable).where(and(
+    eq(timeMatrixTasksTable.citizenId, citizenId),
+    gte(timeMatrixTasksTable.createdAt, new Date(now.getTime() - 5 * 60 * 1000)),
+  ));
+  if (Number(recent?.total ?? 0) >= 15) {
+    await db.update(citizensTable).set({ suspiciousActivity: true }).where(eq(citizensTable.id, citizenId));
+    await sendTimeMatrixSecurityAlert(citizenId, "task_creation_rate");
+    res.status(429).json({ error: "Слишком много задач за короткое время; начисления заморожены до проверки" });
+    return;
+  }
+  const normalizedTitle = parsed.data.title.replace(/\s+/g, " ").trim();
+  const meaningfulWords = normalizedTitle.match(/[\p{L}\p{N}]{3,}/gu) ?? [];
+  if (parsed.data.quadrant === "B" && (normalizedTitle.length < 12 || meaningfulWords.length < 3)) {
+    await db.update(citizensTable).set({ suspiciousActivity: true }).where(eq(citizensTable.id, citizenId));
+    await sendTimeMatrixSecurityAlert(citizenId, "invalid_quadrant_b_title");
+    res.status(400).json({ error: "Для важной срочной задачи опишите конкретное действие подробнее" });
+    return;
+  }
+  const [task] = await db.insert(timeMatrixTasksTable).values({
+    citizenId,
+    title: normalizedTitle,
+    quadrant: parsed.data.quadrant,
+  }).returning();
+  res.status(201).json(task);
+});
+
+router.post("/citizens/time-matrix/tasks/:id/start", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) { res.status(400).json({ error: "Некорректная задача" }); return; }
+  const [task] = await db.select().from(timeMatrixTasksTable).where(and(
+    eq(timeMatrixTasksTable.id, id),
+    eq(timeMatrixTasksTable.citizenId, req.citizen!.id),
+  )).limit(1);
+  if (!task) { res.status(404).json({ error: "Задача не найдена" }); return; }
+  if (task.status === "completed") { res.status(409).json({ error: "Задача уже завершена" }); return; }
+  const [updated] = await db.update(timeMatrixTasksTable)
+    .set({ startedAt: task.startedAt ?? new Date() })
+    .where(eq(timeMatrixTasksTable.id, id))
+    .returning();
+  res.json(updated);
+});
+
+router.post("/citizens/time-matrix/tasks/:id/complete", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) { res.status(400).json({ error: "Некорректная задача" }); return; }
+  const [task] = await db.select().from(timeMatrixTasksTable).where(and(
+    eq(timeMatrixTasksTable.id, id),
+    eq(timeMatrixTasksTable.citizenId, req.citizen!.id),
+  )).limit(1);
+  if (!task) { res.status(404).json({ error: "Задача не найдена" }); return; }
+  if (task.status === "completed") { res.status(409).json({ error: "Задача уже завершена" }); return; }
+  if (!task.startedAt) { res.status(409).json({ error: "Сначала запустите таймер задачи" }); return; }
+
+  const now = new Date();
+  const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - task.startedAt.getTime()) / 1000));
+  const quickChecklist = elapsedSeconds < 60;
+  if (task.quadrant === "B" && elapsedSeconds >= 12 * 60) {
+    const [verifiedSession] = await db.select({ id: focusSessionsTable.id }).from(focusSessionsTable).where(and(
+      eq(focusSessionsTable.citizenId, req.citizen!.id),
+      eq(focusSessionsTable.status, "completed"),
+      gte(focusSessionsTable.elapsedSeconds, 12 * 60),
+      gte(focusSessionsTable.createdAt, task.startedAt),
+      gte(focusSessionsTable.completedAt, task.startedAt),
+    )).limit(1);
+    if (!verifiedSession) {
+      res.status(409).json({ error: "Квадрант B требует завершённой 12-минутной фокус-сессии" });
+      return;
+    }
+  }
+  const [updated] = await db.update(timeMatrixTasksTable).set({
+    status: "completed",
+    completedAt: now,
+    elapsedSeconds,
+    quickChecklist,
+    rewardDarmins: 0,
+  }).where(eq(timeMatrixTasksTable.id, id)).returning();
+  res.json(updated);
 });
 
 export default router;

@@ -5,9 +5,13 @@
  * TimeNation API — digital state where time is currency
  * OpenAPI spec version: 0.1.0
  */
+import type { FocusSessionResultRewardBlockedReason } from './focusSessionResultRewardBlockedReason';
 
 export interface FocusSessionResult {
   elapsedSeconds: number;
   textCharacters: number;
   rewardDarmins: number;
+  /** @nullable */
+  rewardBlockedReason?: FocusSessionResultRewardBlockedReason;
+  newlyCompleted?: boolean;
 }

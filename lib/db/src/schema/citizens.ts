@@ -12,6 +12,10 @@ export const citizensTable = pgTable("citizens", {
   walletNonce: text("wallet_nonce"),
   walletVerified: integer("wallet_verified").notNull().default(0),
   balanceMinutes: real("balance_minutes").notNull().default(1), // 1 Д при регистрации
+  timeXp: integer("time_xp").notNull().default(0),
+  streakDays: integer("streak_days").notNull().default(0),
+  suspiciousActivity: boolean("suspicious_activity").notNull().default(false),
+  lastTimeMatrixRewardAt: timestamp("last_time_matrix_reward_at", { withTimezone: true }),
   focusQuizCorrectAnswers: integer("focus_quiz_correct_answers").notNull().default(0),
   referralBonusMinutes: real("referral_bonus_minutes").notNull().default(0), // Restricted in-network credit; never a cash balance
   // Historical rows retain their initial credit; new applications receive it on issuance.

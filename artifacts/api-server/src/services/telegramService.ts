@@ -32,6 +32,40 @@ export function getBot(): Telegraf | null {
   return bot;
 }
 
+export async function sendTimeMatrixRewardNotification(citizenId: number, balance: number): Promise<void> {
+  if (!bot) return;
+  try {
+    const [citizen] = await db.select({
+      telegramId: citizensTable.telegramId,
+      tgNotifyState: citizensTable.tgNotifyState,
+    }).from(citizensTable).where(eq(citizensTable.id, citizenId)).limit(1);
+    if (citizen?.telegramId && citizen.tgNotifyState) {
+      await bot.telegram.sendMessage(citizen.telegramId, `🪙 Награда получена! Начислено: +1 Дармин. Баланс: ${balance} Д.`);
+    }
+    if (process.env.ADMIN_TELEGRAM_ID) {
+      await bot.telegram.sendMessage(process.env.ADMIN_TELEGRAM_ID, `📊 Гражданин #${citizenId} получил 1 Дармин за подтверждённую фокус-сессию.`);
+    }
+  } catch (err) {
+    logger.warn({ err, citizenId }, "Time Matrix reward Telegram notification failed");
+  }
+}
+
+export async function sendTimeMatrixSecurityAlert(citizenId: number, reason: string): Promise<void> {
+  if (!bot || !process.env.ADMIN_TELEGRAM_ID) return;
+  try {
+    await bot.telegram.sendMessage(
+      process.env.ADMIN_TELEGRAM_ID,
+      `⚠️ Аномалия Time Matrix: гражданин #${citizenId}. Начисление заморожено. Причина: ${reason}.`,
+      { reply_markup: { inline_keyboard: [[
+        { text: "Заблокировать", callback_data: `tm_block:${citizenId}` },
+        { text: "Снять флаг", callback_data: `tm_clear:${citizenId}` },
+      ]] } },
+    );
+  } catch (err) {
+    logger.warn({ err, citizenId }, "Time Matrix security Telegram alert failed");
+  }
+}
+
 export function getBotUsername(): string {
   return _botUsername;
 }
@@ -201,6 +235,26 @@ export function initBot(token: string): Telegraf {
   const launchedBot = new Telegraf(token);
   bot?.stop("replaced");
   bot = launchedBot;
+  launchedBot.action(/^tm_clear:(\d+)$/, async (ctx) => {
+    if (!ctx.from || !isAdmin(String(ctx.from.id))) {
+      await ctx.answerCbQuery("Admin access required");
+      return;
+    }
+    const citizenId = Number(ctx.match[1]);
+    await db.update(citizensTable).set({ suspiciousActivity: false }).where(eq(citizensTable.id, citizenId));
+    await ctx.answerCbQuery("Security flag cleared");
+    await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+  });
+  launchedBot.action(/^tm_block:(\d+)$/, async (ctx) => {
+    if (!ctx.from || !isAdmin(String(ctx.from.id))) {
+      await ctx.answerCbQuery("Admin access required");
+      return;
+    }
+    const citizenId = Number(ctx.match[1]);
+    await db.update(citizensTable).set({ status: "blocked", authToken: null }).where(eq(citizensTable.id, citizenId));
+    await ctx.answerCbQuery("Citizen blocked");
+    await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+  });
   const generation = ++pollingGeneration;
   pollingStatus = {
     state: "starting",

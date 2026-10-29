@@ -48,6 +48,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       res.status(401).json({ error: "Неверный или просроченный токен авторизации" });
       return;
     }
+    if (citizen.status === "blocked") {
+      res.status(403).json({ error: "Доступ временно заблокирован администратором" });
+      return;
+    }
 
     const ageTier = deriveAgeTier(citizen.dateOfBirth ?? "");
     if (ageTier && ageTier !== "UNDER_13" && citizen.ageTier !== ageTier) {

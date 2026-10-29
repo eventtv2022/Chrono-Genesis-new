@@ -5,6 +5,16 @@ import { Globe, Clock, Bell, Play, Pause, RotateCcw, ChevronUp, ChevronDown, Inf
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useSocialAlarmWs } from "@/hooks/useSocialAlarmWs";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  getListTimeMatrixTasksQueryKey,
+  useListTimeMatrixTasks,
+  useCreateTimeMatrixTask,
+  useStartTimeMatrixTask,
+  useCompleteTimeMatrixTask,
+} from "@workspace/api-client-react";
+import type { TimeMatrixTask } from "@workspace/api-client-react";
+import { Check, CircleAlert, ListTodo, Plus, RotateCw } from "lucide-react";
 
 // ── World clock zones — 24 UTC offsets ────────────────────────────────────────
 
@@ -313,13 +323,255 @@ function MinuteHourglass({ elapsedSeconds, running }: { elapsedSeconds: number; 
   );
 }
 
+const MATRIX_QUADRANTS = [
+  { id: "A", title: "Do first", descriptor: "Urgent + important", tone: "border-rose-300/25 bg-rose-300/[0.07] text-rose-200", marker: "bg-rose-300" },
+  { id: "B", title: "Schedule", descriptor: "Important, not urgent", tone: "border-teal-300/25 bg-teal-300/[0.07] text-teal-200", marker: "bg-teal-300" },
+  { id: "C", title: "Keep brief", descriptor: "Urgent, less important", tone: "border-amber-300/25 bg-amber-300/[0.07] text-amber-200", marker: "bg-amber-300" },
+  { id: "D", title: "Let go", descriptor: "Neither urgent nor important", tone: "border-slate-300/20 bg-slate-300/[0.05] text-slate-200", marker: "bg-slate-300" },
+] as const;
+
+function formatTaskDuration(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return minutes > 0 ? `${minutes}m ${remainder}s` : `${remainder}s`;
+}
+
+function TimeMatrixSurface() {
+  const queryClient = useQueryClient();
+  const tasksQuery = useListTimeMatrixTasks({
+    query: { queryKey: getListTimeMatrixTasksQueryKey(), staleTime: 0, refetchOnMount: "always" },
+  });
+  const createTask = useCreateTimeMatrixTask({
+    mutation: { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); } },
+  });
+  const startTask = useStartTimeMatrixTask({
+    mutation: { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); } },
+  });
+  const completeTask = useCompleteTimeMatrixTask({
+    mutation: { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); } },
+  });
+  const [title, setTitle] = useState("");
+  const [quadrant, setQuadrant] = useState<TimeMatrixTask["quadrant"]>("A");
+  const [formError, setFormError] = useState("");
+  const taskList = tasksQuery.data ?? [];
+  const todayKey = new Date().toDateString();
+  const completedTodayByQuadrant = Object.fromEntries(["A", "B", "C", "D"].map((id) => [
+    id,
+    taskList.filter((task) => task.quadrant === id && task.status === "completed" && task.completedAt && new Date(task.completedAt).toDateString() === todayKey).length,
+  ]));
+  const isMutating = createTask.isPending || startTask.isPending || completeTask.isPending;
+
+  const submitTask = () => {
+    const cleanTitle = title.trim();
+    if (cleanTitle.length < 3) {
+      setFormError("Add a task title with at least 3 characters.");
+      return;
+    }
+    setFormError("");
+    createTask.mutate({ data: { title: cleanTitle, quadrant } }, {
+      onSuccess: () => setTitle(""),
+      onError: () => setFormError("Your task could not be saved. Please try again."),
+    });
+  };
+
+  return (
+    <section className="space-y-5" aria-labelledby="time-matrix-title" data-testid="section-time-matrix">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-7">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+              <span className="h-px w-5 bg-primary" /> Make room for what matters
+            </div>
+            <h2 id="time-matrix-title" className="text-2xl font-semibold tracking-tight text-foreground">Time Matrix</h2>
+            <p className="mt-1 max-w-lg text-sm leading-relaxed text-muted-foreground">
+              Sort your next steps by urgency and importance. Start a task when you are ready to focus.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/[0.07] px-3 py-2 text-xs text-primary">
+            <ListTodo className="h-4 w-4" />
+            <span data-testid="text-open-task-count">{taskList.filter(task => task.status === "open").length} open</span>
+            <span className="text-primary/40">/</span>
+            <span data-testid="text-completed-task-count">{taskList.filter(task => task.status === "completed").length} done</span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3 border-b border-border px-5 py-3 text-xs text-muted-foreground sm:px-7" data-testid="summary-time-matrix-today">
+          <span className="font-semibold text-foreground">Completed today</span>
+          {(["A", "B", "C", "D"] as const).map((id) => (
+            <span key={id} data-testid={`text-daily-quadrant-${id.toLowerCase()}`}>{id}: {completedTodayByQuadrant[id] ?? 0}</span>
+          ))}
+        </div>
+
+        <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+          {MATRIX_QUADRANTS.map((q, index) => {
+            const quadrantTasks = taskList.filter(task => task.quadrant === q.id);
+            return (
+              <div
+                key={q.id}
+                className={`min-h-48 rounded-xl border p-4 transition-colors ${q.tone}`}
+                data-testid={`quadrant-${q.id.toLowerCase()}`}
+              >
+                <div className="mb-4 flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-3">
+                    <span className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${q.marker} text-[11px] font-bold text-slate-950`}>{q.id}</span>
+                    <div>
+                      <h3 className="text-sm font-semibold">{q.title}</h3>
+                      <p className="mt-0.5 text-[11px] opacity-70">{q.descriptor}</p>
+                    </div>
+                  </div>
+                  <span className="font-mono text-[11px] opacity-60" data-testid={`text-quadrant-count-${q.id.toLowerCase()}`}>
+                    {String(quadrantTasks.length).padStart(2, "0")}
+                  </span>
+                </div>
+                {tasksQuery.isLoading ? (
+                  <div className="space-y-2" aria-label="Loading tasks" data-testid={`skeleton-quadrant-${q.id.toLowerCase()}`}>
+                    <div className="h-10 animate-pulse rounded-lg bg-foreground/[0.07]" />
+                    <div className="h-10 w-4/5 animate-pulse rounded-lg bg-foreground/[0.05]" />
+                  </div>
+                ) : quadrantTasks.length ? (
+                  <ul className="space-y-2">
+                    {quadrantTasks.map(task => (
+                      <li key={task.id} className="rounded-lg border border-border/70 bg-background/70 px-3 py-2.5 text-foreground" data-testid={`task-row-${task.id}`}>
+                        <div className="flex items-start gap-2.5">
+                          <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${task.status === "completed" ? "bg-teal-300" : q.marker}`} />
+                          <div className="min-w-0 flex-1">
+                            <p className={`break-words text-sm leading-snug ${task.status === "completed" ? "text-muted-foreground line-through" : ""}`} data-testid={`text-task-title-${task.id}`}>
+                              {task.title}
+                            </p>
+                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                              {task.quickChecklist && <span data-testid={`status-checklist-${task.id}`}>Quick checklist</span>}
+                              {task.elapsedSeconds > 0 && <span data-testid={`text-task-elapsed-${task.id}`}>{formatTaskDuration(task.elapsedSeconds)} focused</span>}
+                              {task.status === "completed" && task.rewardDarmins > 0 && <span className="text-primary" data-testid={`text-task-reward-${task.id}`}>+{task.rewardDarmins} Darmins</span>}
+                            </div>
+                          </div>
+                          {task.status === "completed" ? (
+                            <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-teal-200" data-testid={`status-task-completed-${task.id}`}>
+                              <Check className="h-3 w-3" /> Done
+                            </span>
+                          ) : (
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={isMutating}
+                                onClick={() => startTask.mutate({ id: task.id })}
+                                className="rounded-md border border-primary/30 px-2 py-1 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                data-testid={`button-start-task-${task.id}`}
+                              >Focus</button>
+                              <button
+                                type="button"
+                                disabled={isMutating}
+                                onClick={() => completeTask.mutate({ id: task.id })}
+                                className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-teal-300/40 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                data-testid={`button-complete-task-${task.id}`}
+                              >Complete</button>
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="rounded-lg border border-dashed border-current/20 px-3 py-3 text-xs opacity-55" data-testid={`empty-quadrant-${q.id.toLowerCase()}`}>
+                    {index === 0 ? "Nothing urgent yet. Add a task when one comes to mind." : "A clear space for now."}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
+        <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+          <div className="mb-4 flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><Plus className="h-4 w-4" /></span>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Capture a task</h3>
+              <p className="text-xs text-muted-foreground">Keep the next action clear and concrete.</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <label className="min-w-0 flex-1">
+              <span className="sr-only">Task title</span>
+              <input
+                value={title}
+                onChange={event => { setTitle(event.target.value); setFormError(""); }}
+                onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); submitTask(); } }}
+                maxLength={120}
+                placeholder="What needs your attention?"
+                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15"
+                data-testid="input-task-title"
+              />
+            </label>
+            <label className="sm:w-52">
+              <span className="sr-only">Time Matrix quadrant</span>
+              <select
+                value={quadrant}
+                onChange={event => setQuadrant(event.target.value as TimeMatrixTask["quadrant"])}
+                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary/60"
+                data-testid="select-task-quadrant"
+              >
+                {MATRIX_QUADRANTS.map(q => <option key={q.id} value={q.id}>{q.id} · {q.title}</option>)}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={submitTask}
+              disabled={createTask.isPending || title.trim().length < 3}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
+              data-testid="button-create-task"
+            >
+              {createTask.isPending ? <span className="h-4 w-4 animate-pulse rounded-full bg-primary-foreground/60" /> : <Plus className="h-4 w-4" />}
+              Add task
+            </button>
+          </div>
+          {formError && <p className="mt-3 text-xs text-rose-300" role="alert" data-testid="error-task-form">{formError}</p>}
+          {createTask.isError && !formError && <p className="mt-3 text-xs text-rose-300" role="alert" data-testid="error-task-create">Could not add this task. Please try again.</p>}
+        </div>
+        <aside className="rounded-2xl border border-primary/15 bg-primary/[0.045] p-5">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary/80">A gentle reminder</p>
+          <p className="mt-3 text-sm leading-relaxed text-foreground/85">
+            Choose one meaningful thing. Focus sessions are verified separately by the timer.
+          </p>
+          <div className="mt-4 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="h-px w-5 bg-primary/50" /> Progress, not pressure
+          </div>
+        </aside>
+      </div>
+
+      {tasksQuery.isError && (
+        <div className="flex flex-col gap-3 rounded-xl border border-rose-300/25 bg-rose-300/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between" role="alert" data-testid="error-time-matrix">
+          <div className="flex items-start gap-2.5 text-sm text-rose-100">
+            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>Tasks could not be loaded. Your focus timer is still available.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void tasksQuery.refetch()}
+            className="inline-flex items-center gap-2 self-start rounded-lg border border-rose-200/25 px-3 py-2 text-xs font-medium text-rose-100 hover:bg-rose-100/10 sm:self-auto"
+            data-testid="button-retry-time-matrix"
+          ><RotateCw className="h-3.5 w-3.5" /> Try again</button>
+        </div>
+      )}
+      {(startTask.isError || completeTask.isError) && (
+        <p className="rounded-lg border border-rose-300/20 bg-rose-300/[0.05] px-4 py-3 text-xs text-rose-200" role="alert" data-testid="error-task-action">
+          That task could not be updated. Please try again.
+        </p>
+      )}
+      {!tasksQuery.isLoading && !tasksQuery.isError && taskList.length === 0 && (
+        <p className="sr-only" data-testid="empty-time-matrix">No tasks have been added yet.</p>
+      )}
+    </section>
+  );
+}
+
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export function Time() {
   const { citizen, authToken, refreshCitizen } = useCitizen();
   const authHeaders: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {};
   const { lang, t } = useLanguage();
-  const [section, setSection] = useState<"clock" | "timer" | "alarm" | "social-alarm" | "watch-catalog">("clock");
+  const [section, setSection] = useState<"clock" | "timer" | "alarm" | "social-alarm" | "watch-catalog" | "matrix">("clock");
 
   // ── World clock tick ───────────────────────────────────────────────────────
   const [tick, setTick] = useState(0);
@@ -336,7 +588,7 @@ export function Time() {
   const [completed, setCompleted] = useState(false);
   const [focusText, setFocusText] = useState("");
   const [forwardFocusToTelegram, setForwardFocusToTelegram] = useState(false);
-  const [focusResult, setFocusResult] = useState<{ rewardDarmins: number; textCharacters: number; telegramStatus?: "not_requested" | "sent" | "not_linked" | "failed" | "already_completed" } | null>(null);
+  const [focusResult, setFocusResult] = useState<{ rewardDarmins: number; elapsedSeconds: number; rewardBlockedReason?: string; textCharacters: number; telegramStatus?: "not_requested" | "sent" | "not_linked" | "failed" | "already_completed" } | null>(null);
   const [focusError, setFocusError] = useState("");
   const focusSessionId = useRef<number | null>(null);
   const [quizAttempt, setQuizAttempt] = useState<{ id: string; question: string } | null>(null);
@@ -363,9 +615,9 @@ export function Time() {
           headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify({ text: focusText, forwardToTelegram: forwardFocusToTelegram }),
         });
-        const data = await response.json() as { rewardDarmins?: number; textCharacters?: number; telegramStatus?: "not_requested" | "sent" | "not_linked" | "failed"; newlyCompleted?: boolean; error?: string };
+        const data = await response.json() as { rewardDarmins?: number; elapsedSeconds?: number; rewardBlockedReason?: string; textCharacters?: number; telegramStatus?: "not_requested" | "sent" | "not_linked" | "failed"; newlyCompleted?: boolean; error?: string };
         if (!response.ok) throw new Error(data.error || "Не удалось сохранить сеанс");
-        setFocusResult({ rewardDarmins: data.rewardDarmins ?? 0, textCharacters: data.textCharacters ?? 0, telegramStatus: data.newlyCompleted === false ? "already_completed" : data.telegramStatus });
+        setFocusResult({ rewardDarmins: data.rewardDarmins ?? 0, elapsedSeconds: data.elapsedSeconds ?? 0, rewardBlockedReason: data.rewardBlockedReason, textCharacters: data.textCharacters ?? 0, telegramStatus: data.newlyCompleted === false ? "already_completed" : data.telegramStatus });
         focusSessionId.current = null;
         if (!forwardFocusToTelegram || data.telegramStatus === "sent" || !focusText.trim()) setFocusText("");
         setForwardFocusToTelegram(false);
@@ -389,6 +641,36 @@ export function Time() {
     }
     return stopInterval;
   }, [running, handleTimerComplete, stopInterval]);
+
+  useEffect(() => {
+    if (!running) return;
+    let backgroundTimeout: ReturnType<typeof setTimeout> | null = null;
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        if (backgroundTimeout) clearTimeout(backgroundTimeout);
+        backgroundTimeout = null;
+        return;
+      }
+      if (backgroundTimeout) clearTimeout(backgroundTimeout);
+      backgroundTimeout = setTimeout(async () => {
+        if (!document.hidden) return;
+        if (focusSessionId.current) {
+          await fetch(`/api/citizens/focus/${focusSessionId.current}/pause`, {
+            method: "POST",
+            headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+          });
+        }
+        setRunning(false);
+        setFocusError("Сессия приостановлена: приложение было неактивно более 30 секунд.");
+      }, 30_000);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    onVisibilityChange();
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (backgroundTimeout) clearTimeout(backgroundTimeout);
+    };
+  }, [running, authToken]);
 
   const handlePreset = (i: number) => {
     stopInterval(); setRunning(false); setCompleted(false);
@@ -795,10 +1077,11 @@ export function Time() {
         {/* Section tabs — compact scrollable */}
         <div className="overflow-x-auto" style={{ scrollbarWidth: "none" }}>
           <div className="flex gap-1.5 flex-nowrap min-w-max">
-            {(["clock", "timer", "alarm", "social-alarm", "watch-catalog"] as const).map(s => (
+            {(["clock", "timer", "matrix", "alarm", "social-alarm", "watch-catalog"] as const).map(s => (
               <button
                 key={s}
                 onClick={() => setSection(s)}
+                data-testid={`tab-time-${s}`}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium border transition-colors whitespace-nowrap shrink-0 ${
                   section === s
                     ? "bg-primary text-primary-foreground border-primary"
@@ -806,12 +1089,14 @@ export function Time() {
                 }`}
                 style={{ fontSize: "12px" }}
               >
-                {s === "clock" ? <Globe className="w-3.5 h-3.5 shrink-0" /> : s === "timer" ? <Clock className="w-3.5 h-3.5 shrink-0" /> : s === "alarm" ? <Bell className="w-3.5 h-3.5 shrink-0" /> : s === "watch-catalog" ? <ShoppingBag className="w-3.5 h-3.5 shrink-0" /> : <Radio className="w-3.5 h-3.5 shrink-0" />}
-                {s === "clock" ? "Часовые пояса" : s === "timer" ? "Таймер" : s === "alarm" ? "Будильник" : s === "watch-catalog" ? "Каталог часов" : "Синхро-сигнал"}
+                {s === "clock" ? <Globe className="w-3.5 h-3.5 shrink-0" /> : s === "timer" ? <Clock className="w-3.5 h-3.5 shrink-0" /> : s === "matrix" ? <ListTodo className="w-3.5 h-3.5 shrink-0" /> : s === "alarm" ? <Bell className="w-3.5 h-3.5 shrink-0" /> : s === "watch-catalog" ? <ShoppingBag className="w-3.5 h-3.5 shrink-0" /> : <Radio className="w-3.5 h-3.5 shrink-0" />}
+                {s === "clock" ? "Часовые пояса" : s === "timer" ? "Таймер" : s === "matrix" ? "Time Matrix" : s === "alarm" ? "Будильник" : s === "watch-catalog" ? "Каталог часов" : "Синхро-сигнал"}
               </button>
             ))}
           </div>
         </div>
+
+        {section === "matrix" && <TimeMatrixSurface />}
 
         {/* ── World Clock ── */}
         {section === "clock" && (
@@ -885,6 +1170,9 @@ export function Time() {
         {/* ── Focus Timer ── */}
         {section === "timer" && (
           <div className="space-y-5">
+            <div className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
+              Proof-of-Focus · {running ? "Active" : "Ready"} · 12 min
+            </div>
             <div>
               <h2 className="text-lg font-semibold">⏱ Таймер фокусировки</h2>
               <p className="text-xs text-muted-foreground">Завершённая сессия засчитывается ИИ-Аудитором</p>
@@ -979,7 +1267,7 @@ export function Time() {
                 <span className="text-xl">🎉</span>
                 <p className="text-sm text-foreground">
                   Сеанс завершён: <strong>{Math.round(sessionDurationRef.current / 60)} минут</strong> концентрации.
-                  {focusResult && <> Учтено {focusResult.textCharacters} символов, начислено {focusResult.rewardDarmins} Д.</>}
+                  {focusResult && <> Сессия: {Math.floor(focusResult.elapsedSeconds / 60)} мин. Начислено {focusResult.rewardDarmins} Д.{focusResult.rewardBlockedReason ? ` · Награда заблокирована: ${focusResult.rewardBlockedReason}` : ""}</>}
                   {focusResult?.telegramStatus === "sent" && <> Мысли отправлены в Telegram.</>}
                   {focusResult?.telegramStatus === "not_linked" && <> Telegram не привязан — мысли не отправлены.</>}
                   {focusResult?.telegramStatus === "failed" && <> Не удалось отправить мысли в Telegram.</>}

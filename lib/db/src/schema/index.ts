@@ -33,6 +33,8 @@ export * from "./passportEmailNotifications";
 export * from "./siteVisitors";
 export * from "./referrals";
 export * from "./focusSessions";
+export * from "./timeMatrixRewards";
+export * from "./timeMatrixTasks";
 export * from "./timelineExchangeRequests";
 export * from "./citizenProfessionalDocuments";
 export * from "./serviceListings";

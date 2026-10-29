@@ -736,7 +736,7 @@ export const ResumeFocusSessionResponse = zod.object({
 
 
 /**
- * @summary Complete a focus session and award Darmins for text volume
+ * @summary Complete a verified focus session and award one Darmin
  */
 export const CompleteFocusSessionParams = zod.object({
   "id": zod.coerce.number()
@@ -753,7 +753,9 @@ export const CompleteFocusSessionBody = zod.object({
 export const CompleteFocusSessionResponse = zod.object({
   "elapsedSeconds": zod.number(),
   "textCharacters": zod.number(),
-  "rewardDarmins": zod.number()
+  "rewardDarmins": zod.number(),
+  "rewardBlockedReason": zod.union([zod.literal('daily_cap'),zod.literal('cooldown'),zod.literal('suspicious_activity'),zod.literal(null)]).nullish(),
+  "newlyCompleted": zod.boolean().optional()
 })
 
 
@@ -782,6 +784,80 @@ export const AnswerFocusQuizQuestionResponse = zod.object({
   "correct": zod.boolean(),
   "totalCorrect": zod.number(),
   "awardedDarmins": zod.number()
+})
+
+
+/**
+ * @summary List the authenticated citizen's Time Matrix tasks
+ */
+export const ListTimeMatrixTasksResponseItem = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "quadrant": zod.enum(['A', 'B', 'C', 'D']),
+  "status": zod.enum(['open', 'completed']),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "elapsedSeconds": zod.number(),
+  "rewardDarmins": zod.number(),
+  "quickChecklist": zod.boolean()
+})
+export const ListTimeMatrixTasksResponse = zod.array(ListTimeMatrixTasksResponseItem)
+
+
+/**
+ * @summary Create a Time Matrix task
+ */
+export const createTimeMatrixTaskBodyTitleMin = 3;
+export const createTimeMatrixTaskBodyTitleMax = 120;
+
+
+
+export const CreateTimeMatrixTaskBody = zod.object({
+  "title": zod.string().min(createTimeMatrixTaskBodyTitleMin).max(createTimeMatrixTaskBodyTitleMax),
+  "quadrant": zod.enum(['A', 'B', 'C', 'D'])
+})
+
+
+/**
+ * @summary Start timing a Time Matrix task
+ */
+export const StartTimeMatrixTaskParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const StartTimeMatrixTaskResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "quadrant": zod.enum(['A', 'B', 'C', 'D']),
+  "status": zod.enum(['open', 'completed']),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "elapsedSeconds": zod.number(),
+  "rewardDarmins": zod.number(),
+  "quickChecklist": zod.boolean()
+})
+
+
+/**
+ * @summary Complete a Time Matrix task
+ */
+export const CompleteTimeMatrixTaskParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CompleteTimeMatrixTaskResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "quadrant": zod.enum(['A', 'B', 'C', 'D']),
+  "status": zod.enum(['open', 'completed']),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "elapsedSeconds": zod.number(),
+  "rewardDarmins": zod.number(),
+  "quickChecklist": zod.boolean()
 })
 
 

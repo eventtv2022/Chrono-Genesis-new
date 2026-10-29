@@ -602,10 +602,77 @@ export interface FocusSessionCompletionInput {
   text: string;
 }
 
+/**
+ * @nullable
+ */
+export type FocusSessionResultRewardBlockedReason = typeof FocusSessionResultRewardBlockedReason[keyof typeof FocusSessionResultRewardBlockedReason] | null;
+
+
+export const FocusSessionResultRewardBlockedReason = {
+  daily_cap: 'daily_cap',
+  cooldown: 'cooldown',
+  suspicious_activity: 'suspicious_activity',
+} as const;
+
 export interface FocusSessionResult {
   elapsedSeconds: number;
   textCharacters: number;
   rewardDarmins: number;
+  /** @nullable */
+  rewardBlockedReason?: FocusSessionResultRewardBlockedReason;
+  newlyCompleted?: boolean;
+}
+
+export type TimeMatrixTaskInputQuadrant = typeof TimeMatrixTaskInputQuadrant[keyof typeof TimeMatrixTaskInputQuadrant];
+
+
+export const TimeMatrixTaskInputQuadrant = {
+  A: 'A',
+  B: 'B',
+  C: 'C',
+  D: 'D',
+} as const;
+
+export interface TimeMatrixTaskInput {
+  /**
+     * @minLength 3
+     * @maxLength 120
+     */
+  title: string;
+  quadrant: TimeMatrixTaskInputQuadrant;
+}
+
+export type TimeMatrixTaskQuadrant = typeof TimeMatrixTaskQuadrant[keyof typeof TimeMatrixTaskQuadrant];
+
+
+export const TimeMatrixTaskQuadrant = {
+  A: 'A',
+  B: 'B',
+  C: 'C',
+  D: 'D',
+} as const;
+
+export type TimeMatrixTaskStatus = typeof TimeMatrixTaskStatus[keyof typeof TimeMatrixTaskStatus];
+
+
+export const TimeMatrixTaskStatus = {
+  open: 'open',
+  completed: 'completed',
+} as const;
+
+export interface TimeMatrixTask {
+  id: number;
+  title: string;
+  quadrant: TimeMatrixTaskQuadrant;
+  status: TimeMatrixTaskStatus;
+  createdAt: string;
+  /** @nullable */
+  startedAt?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  elapsedSeconds: number;
+  rewardDarmins: number;
+  quickChecklist: boolean;
 }
 
 export interface FocusQuizQuestion {
