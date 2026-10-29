@@ -4,6 +4,7 @@ import { Layout } from "@/components/Layout";
 import { Globe, Clock, Bell, Play, Pause, RotateCcw, ChevronUp, ChevronDown, Info, Radio, X, Volume2, Search, Users, Zap, ShoppingBag } from "lucide-react";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { TIME_MATRIX_ACTIONS, TIME_MATRIX_DELETE, TIME_MATRIX_ERRORS, TIME_MATRIX_I18N } from "../../../mobile/lib/timeMatrixI18n";
 import { useSocialAlarmWs } from "@/hooks/useSocialAlarmWs";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -339,6 +340,8 @@ function formatTaskDuration(seconds: number) {
 }
 
 function TimeMatrixSurface() {
+  const { lang, t } = useLanguage();
+  const matrixText = TIME_MATRIX_I18N[lang];
   const queryClient = useQueryClient();
   const tasksQuery = useListTimeMatrixTasks({
     query: { queryKey: getListTimeMatrixTasksQueryKey(), staleTime: 0, refetchOnMount: "always" },
@@ -375,13 +378,13 @@ function TimeMatrixSurface() {
   const submitTask = () => {
     const cleanTitle = title.trim();
     if (cleanTitle.length < 3) {
-      setFormError("Add a task title with at least 3 characters.");
+      setFormError(TIME_MATRIX_ERRORS[lang].titleTooShort);
       return;
     }
     setFormError("");
     createTask.mutate({ data: { title: cleanTitle, quadrant } }, {
       onSuccess: () => setTitle(""),
-      onError: () => setFormError("Your task could not be saved. Please try again."),
+      onError: () => setFormError(TIME_MATRIX_ERRORS[lang].saveFailed),
     });
   };
 
@@ -391,28 +394,28 @@ function TimeMatrixSurface() {
         <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-7">
           <div>
             <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-              <span className="h-px w-5 bg-primary" /> Make room for what matters
+              <span className="h-px w-5 bg-primary" /> {matrixText.tab}
             </div>
-            <h2 id="time-matrix-title" className="text-2xl font-semibold tracking-tight text-foreground">Time Matrix</h2>
+            <h2 id="time-matrix-title" className="text-2xl font-semibold tracking-tight text-foreground">{matrixText.tab}</h2>
             <p className="mt-1 max-w-lg text-sm leading-relaxed text-muted-foreground">
-              Sort your next steps by urgency and importance. Start a task when you are ready to focus.
+              {matrixText.intro}
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/[0.07] px-3 py-2 text-xs text-primary">
             <ListTodo className="h-4 w-4" />
-            <span data-testid="text-open-task-count">{taskList.filter(task => task.status === "open").length} open</span>
+            <span data-testid="text-open-task-count">{taskList.filter(task => task.status === "open").length} {TIME_MATRIX_ACTIONS[lang].open}</span>
             <span className="text-primary/40">/</span>
-            <span data-testid="text-completed-task-count">{taskList.filter(task => task.status === "completed").length} done</span>
+            <span data-testid="text-completed-task-count">{taskList.filter(task => task.status === "completed").length} {TIME_MATRIX_ACTIONS[lang].done}</span>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-3 border-b border-border px-5 py-3 text-xs text-muted-foreground sm:px-7" data-testid="summary-time-matrix-today">
-          <span className="font-semibold text-foreground">Completed today</span>
+          <span className="font-semibold text-foreground">{matrixText.today}</span>
           {(["A", "B", "C", "D"] as const).map((id) => (
             <span key={id} data-testid={`text-daily-quadrant-${id.toLowerCase()}`}>{id}: {completedTodayByQuadrant[id] ?? 0}</span>
           ))}
         </div>
-        {(updateTask.isError || deleteTask.isError) && <p className="px-5 pt-3 text-sm text-rose-300" role="alert" data-testid="error-time-matrix-mutation">{updateTask.error?.message ?? deleteTask.error?.message ?? "Could not update this task."}</p>}
+        {(updateTask.isError || deleteTask.isError) && <p className="px-5 pt-3 text-sm text-rose-300" role="alert" data-testid="error-time-matrix-mutation">{TIME_MATRIX_ERRORS[lang].saveFailed}</p>}
 
         <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
           {MATRIX_QUADRANTS.map((q, index) => {
@@ -427,8 +430,7 @@ function TimeMatrixSurface() {
                   <div className="flex items-start gap-3">
                     <span className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${q.marker} text-[11px] font-bold text-slate-950`}>{q.id}</span>
                     <div>
-                      <h3 className="text-sm font-semibold">{q.title}</h3>
-                      <p className="mt-0.5 text-[11px] opacity-70">{q.descriptor}</p>
+                      <h3 className="text-sm font-semibold">{matrixText.quadrants[index]}</h3>
                     </div>
                   </div>
                   <span className="font-mono text-[11px] opacity-60" data-testid={`text-quadrant-count-${q.id.toLowerCase()}`}>
@@ -436,7 +438,7 @@ function TimeMatrixSurface() {
                   </span>
                 </div>
                 {tasksQuery.isLoading ? (
-                  <div className="space-y-2" aria-label="Loading tasks" data-testid={`skeleton-quadrant-${q.id.toLowerCase()}`}>
+                  <div className="space-y-2" aria-label={matrixText.tab} data-testid={`skeleton-quadrant-${q.id.toLowerCase()}`}>
                     <div className="h-10 animate-pulse rounded-lg bg-foreground/[0.07]" />
                     <div className="h-10 w-4/5 animate-pulse rounded-lg bg-foreground/[0.05]" />
                   </div>
@@ -449,45 +451,45 @@ function TimeMatrixSurface() {
                           <div className="min-w-0 flex-1">
                             {editingTaskId === task.id ? (
                               <div className="space-y-2">
-                                <input value={editingTitle} onChange={event => setEditingTitle(event.target.value)} maxLength={120} className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm" data-testid={`input-edit-task-${task.id}`} />
+                <input value={editingTitle} onChange={event => setEditingTitle(event.target.value)} maxLength={120} aria-label={matrixText.placeholder} className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm" data-testid={`input-edit-task-${task.id}`} />
                                 <select value={editingQuadrant} onChange={event => setEditingQuadrant(event.target.value as TimeMatrixTask["quadrant"])} className="rounded-md border border-border bg-background px-2 py-1 text-xs">
-                                  {MATRIX_QUADRANTS.map(item => <option key={item.id} value={item.id}>{item.id} · {item.title}</option>)}
+                                  {MATRIX_QUADRANTS.map((item, index) => <option key={item.id} value={item.id}>{item.id} · {matrixText.quadrants[index]}</option>)}
                                 </select>
                                 <div className="flex gap-2">
-                                  <button type="button" onClick={() => updateTask.mutate({ id: task.id, data: { title: editingTitle, quadrant: editingQuadrant } })} disabled={isMutating || editingTitle.trim().length < 3} className="text-xs font-semibold text-primary" data-testid={`button-save-task-${task.id}`}>Save</button>
-                                  <button type="button" onClick={() => setEditingTaskId(null)} className="text-xs text-muted-foreground">Cancel</button>
+                                  <button type="button" onClick={() => updateTask.mutate({ id: task.id, data: { title: editingTitle, quadrant: editingQuadrant } })} disabled={isMutating || editingTitle.trim().length < 3} className="text-xs font-semibold text-primary" data-testid={`button-save-task-${task.id}`}>{t.save}</button>
+                                  <button type="button" onClick={() => setEditingTaskId(null)} className="text-xs text-muted-foreground">{t.cancel}</button>
                                 </div>
                               </div>
                             ) : <p className={`break-words text-sm leading-snug ${task.status === "completed" ? "text-muted-foreground line-through" : ""}`} data-testid={`text-task-title-${task.id}`}>{task.title}</p>}
                             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
-                              {task.quickChecklist && <span data-testid={`status-checklist-${task.id}`}>Quick checklist</span>}
-                              {task.elapsedSeconds > 0 && <span data-testid={`text-task-elapsed-${task.id}`}>{formatTaskDuration(task.elapsedSeconds)} focused</span>}
-                              {task.status === "completed" && task.rewardDarmins > 0 && <span className="text-primary" data-testid={`text-task-reward-${task.id}`}>+{task.rewardDarmins} Darmins</span>}
+                              {task.quickChecklist && <span data-testid={`status-checklist-${task.id}`}>{matrixText.checklistHint}</span>}
+                              {task.elapsedSeconds > 0 && <span data-testid={`text-task-elapsed-${task.id}`}>{formatTaskDuration(task.elapsedSeconds)}</span>}
+                              {task.status === "completed" && task.rewardDarmins > 0 && <span className="text-primary" data-testid={`text-task-reward-${task.id}`}>+{task.rewardDarmins} Д</span>}
                             </div>
                           </div>
                           {task.status === "completed" ? (
                             <div className="flex shrink-0 items-center gap-2">
-                              <span className="flex items-center gap-1 text-[10px] font-medium text-teal-200" data-testid={`status-task-completed-${task.id}`}><Check className="h-3 w-3" /> Done</span>
-                              <button type="button" disabled={isMutating} onClick={() => { if (window.confirm("Delete this task? This cannot be undone.")) deleteTask.mutate({ id: task.id }); }} className="rounded-md border border-rose-400/30 px-2 py-1 text-[10px] text-rose-300" data-testid={`button-delete-task-${task.id}`}>Delete</button>
+                              <span className="flex items-center gap-1 text-[10px] font-medium text-teal-200" data-testid={`status-task-completed-${task.id}`}><Check className="h-3 w-3" /> {TIME_MATRIX_ACTIONS[lang].done}</span>
+                              <button type="button" disabled={isMutating} onClick={() => { if (window.confirm(TIME_MATRIX_ACTIONS[lang].deletePrompt)) deleteTask.mutate({ id: task.id }); }} className="rounded-md border border-rose-400/30 px-2 py-1 text-[10px] text-rose-300" data-testid={`button-delete-task-${task.id}`}>{TIME_MATRIX_DELETE[lang]}</button>
                             </div>
                           ) : (
                             <div className="flex shrink-0 items-center gap-1.5">
-                              {!task.startedAt && editingTaskId !== task.id && <button type="button" disabled={isMutating} onClick={() => { setEditingTaskId(task.id); setEditingTitle(task.title); setEditingQuadrant(task.quadrant); }} className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground" data-testid={`button-edit-task-${task.id}`}>Edit</button>}
-                              <button type="button" disabled={isMutating} onClick={() => { if (window.confirm("Delete this task? This cannot be undone.")) deleteTask.mutate({ id: task.id }); }} className="rounded-md border border-rose-400/30 px-2 py-1 text-[10px] text-rose-300" data-testid={`button-delete-task-${task.id}`}>Delete</button>
+                              {!task.startedAt && editingTaskId !== task.id && <button type="button" disabled={isMutating} onClick={() => { setEditingTaskId(task.id); setEditingTitle(task.title); setEditingQuadrant(task.quadrant); }} className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground" data-testid={`button-edit-task-${task.id}`}>{TIME_MATRIX_ACTIONS[lang].edit}</button>}
+                              <button type="button" disabled={isMutating} onClick={() => { if (window.confirm(TIME_MATRIX_ACTIONS[lang].deletePrompt)) deleteTask.mutate({ id: task.id }); }} className="rounded-md border border-rose-400/30 px-2 py-1 text-[10px] text-rose-300" data-testid={`button-delete-task-${task.id}`}>{TIME_MATRIX_DELETE[lang]}</button>
                               <button
                                 type="button"
                                 disabled={isMutating}
                                 onClick={() => startTask.mutate({ id: task.id })}
                                 className="rounded-md border border-primary/30 px-2 py-1 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
                                 data-testid={`button-start-task-${task.id}`}
-                              >Focus</button>
+                              >{TIME_MATRIX_ACTIONS[lang].start}</button>
                               <button
                                 type="button"
                                 disabled={isMutating}
                                 onClick={() => completeTask.mutate({ id: task.id })}
                                 className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-teal-300/40 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-50"
                                 data-testid={`button-complete-task-${task.id}`}
-                              >Complete</button>
+                              >{TIME_MATRIX_ACTIONS[lang].complete}</button>
                             </div>
                           )}
                         </div>
@@ -496,7 +498,7 @@ function TimeMatrixSurface() {
                   </ul>
                 ) : (
                   <p className="rounded-lg border border-dashed border-current/20 px-3 py-3 text-xs opacity-55" data-testid={`empty-quadrant-${q.id.toLowerCase()}`}>
-                    {index === 0 ? "Nothing urgent yet. Add a task when one comes to mind." : "A clear space for now."}
+                    {matrixText.empty}
                   </p>
                 )}
               </div>
@@ -510,32 +512,32 @@ function TimeMatrixSurface() {
           <div className="mb-4 flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><Plus className="h-4 w-4" /></span>
             <div>
-              <h3 className="text-sm font-semibold text-foreground">Capture a task</h3>
-              <p className="text-xs text-muted-foreground">Keep the next action clear and concrete.</p>
+              <h3 className="text-sm font-semibold text-foreground">{matrixText.add}</h3>
+              <p className="text-xs text-muted-foreground">{matrixText.intro}</p>
             </div>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <label className="min-w-0 flex-1">
-              <span className="sr-only">Task title</span>
+              <span className="sr-only">{matrixText.placeholder}</span>
               <input
                 value={title}
                 onChange={event => { setTitle(event.target.value); setFormError(""); }}
                 onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); submitTask(); } }}
                 maxLength={120}
-                placeholder="What needs your attention?"
+                placeholder={matrixText.placeholder}
                 className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15"
                 data-testid="input-task-title"
               />
             </label>
             <label className="sm:w-52">
-              <span className="sr-only">Time Matrix quadrant</span>
+              <span className="sr-only">{matrixText.tab}</span>
               <select
                 value={quadrant}
                 onChange={event => setQuadrant(event.target.value as TimeMatrixTask["quadrant"])}
                 className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary/60"
                 data-testid="select-task-quadrant"
               >
-                {MATRIX_QUADRANTS.map(q => <option key={q.id} value={q.id}>{q.id} · {q.title}</option>)}
+                {MATRIX_QUADRANTS.map((q, index) => <option key={q.id} value={q.id}>{q.id} · {matrixText.quadrants[index]}</option>)}
               </select>
             </label>
             <button
@@ -546,19 +548,17 @@ function TimeMatrixSurface() {
               data-testid="button-create-task"
             >
               {createTask.isPending ? <span className="h-4 w-4 animate-pulse rounded-full bg-primary-foreground/60" /> : <Plus className="h-4 w-4" />}
-              Add task
+              {matrixText.add}
             </button>
           </div>
           {formError && <p className="mt-3 text-xs text-rose-300" role="alert" data-testid="error-task-form">{formError}</p>}
-          {createTask.isError && !formError && <p className="mt-3 text-xs text-rose-300" role="alert" data-testid="error-task-create">Could not add this task. Please try again.</p>}
+          {createTask.isError && !formError && <p className="mt-3 text-xs text-rose-300" role="alert" data-testid="error-task-create">{TIME_MATRIX_ERRORS[lang].saveFailed}</p>}
         </div>
         <aside className="rounded-2xl border border-primary/15 bg-primary/[0.045] p-5">
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary/80">A gentle reminder</p>
-          <p className="mt-3 text-sm leading-relaxed text-foreground/85">
-            Choose one meaningful thing. Focus sessions are verified separately by the timer.
-          </p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary/80">{matrixText.tab}</p>
+          <p className="mt-3 text-sm leading-relaxed text-foreground/85">{matrixText.urgentHint}</p>
           <div className="mt-4 flex items-center gap-2 text-[11px] text-muted-foreground">
-            <span className="h-px w-5 bg-primary/50" /> Progress, not pressure
+            <span className="h-px w-5 bg-primary/50" /> {matrixText.checklistHint}
           </div>
         </aside>
       </div>
@@ -567,23 +567,23 @@ function TimeMatrixSurface() {
         <div className="flex flex-col gap-3 rounded-xl border border-rose-300/25 bg-rose-300/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between" role="alert" data-testid="error-time-matrix">
           <div className="flex items-start gap-2.5 text-sm text-rose-100">
             <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>Tasks could not be loaded. Your focus timer is still available.</span>
+            <span>{matrixText.loadError}</span>
           </div>
           <button
             type="button"
             onClick={() => void tasksQuery.refetch()}
             className="inline-flex items-center gap-2 self-start rounded-lg border border-rose-200/25 px-3 py-2 text-xs font-medium text-rose-100 hover:bg-rose-100/10 sm:self-auto"
             data-testid="button-retry-time-matrix"
-          ><RotateCw className="h-3.5 w-3.5" /> Try again</button>
+          ><RotateCw className="h-3.5 w-3.5" /> {matrixText.retry}</button>
         </div>
       )}
       {(startTask.isError || completeTask.isError) && (
         <p className="rounded-lg border border-rose-300/20 bg-rose-300/[0.05] px-4 py-3 text-xs text-rose-200" role="alert" data-testid="error-task-action">
-          That task could not be updated. Please try again.
+          {TIME_MATRIX_ERRORS[lang].saveFailed}
         </p>
       )}
       {!tasksQuery.isLoading && !tasksQuery.isError && taskList.length === 0 && (
-        <p className="sr-only" data-testid="empty-time-matrix">No tasks have been added yet.</p>
+        <p className="sr-only" data-testid="empty-time-matrix">{matrixText.empty}</p>
       )}
     </section>
   );
@@ -1114,7 +1114,7 @@ export function Time() {
                 style={{ fontSize: "12px" }}
               >
                 {s === "clock" ? <Globe className="w-3.5 h-3.5 shrink-0" /> : s === "timer" ? <Clock className="w-3.5 h-3.5 shrink-0" /> : s === "matrix" ? <ListTodo className="w-3.5 h-3.5 shrink-0" /> : s === "alarm" ? <Bell className="w-3.5 h-3.5 shrink-0" /> : s === "watch-catalog" ? <ShoppingBag className="w-3.5 h-3.5 shrink-0" /> : <Radio className="w-3.5 h-3.5 shrink-0" />}
-                {s === "clock" ? "Часовые пояса" : s === "timer" ? "Таймер" : s === "matrix" ? "Time Matrix" : s === "alarm" ? "Будильник" : s === "watch-catalog" ? "Каталог часов" : "Синхро-сигнал"}
+                {s === "clock" ? "Часовые пояса" : s === "timer" ? "Таймер" : s === "matrix" ? TIME_MATRIX_I18N[lang].tab : s === "alarm" ? "Будильник" : s === "watch-catalog" ? "Каталог часов" : "Синхро-сигнал"}
               </button>
             ))}
           </div>
