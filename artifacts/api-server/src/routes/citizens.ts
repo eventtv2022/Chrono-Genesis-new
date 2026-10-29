@@ -25,6 +25,7 @@ import { notifyPassportEmissionStarted, sendDirectMessage, sendFocusThoughtsToTe
 import { issueEligiblePassport } from "../services/passportIssuanceService";
 import { deriveAgeTier } from "../services/ageGateService";
 import { getCitizenDisplayName } from "../services/citizenIdentity";
+import { checkQuadrantBTitle } from "../services/timeMatrixAi";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
 export const VAULT_DIR = path.join(process.cwd(), "secure_vault");
@@ -70,6 +71,7 @@ function formatCitizenRow(c: typeof citizensTable.$inferSelect) {
     dateOfBirth: _dob,
     ageTier: _ageTier,
     kycVerified: _kycVerified,
+    timeMatrixDigestSentOn: _tmDigest,
     ...safe
   } = c;
   return {
@@ -1561,12 +1563,18 @@ router.post("/citizens/time-matrix/tasks", requireAuth, async (req, res): Promis
     return;
   }
   const normalizedTitle = parsed.data.title.replace(/\s+/g, " ").trim();
-  const meaningfulWords = normalizedTitle.match(/[\p{L}\p{N}]{3,}/gu) ?? [];
-  if (parsed.data.quadrant === "B" && (normalizedTitle.length < 12 || meaningfulWords.length < 3)) {
-    await db.update(citizensTable).set({ suspiciousActivity: true }).where(eq(citizensTable.id, citizenId));
-    await sendTimeMatrixSecurityAlert(citizenId, "invalid_quadrant_b_title");
-    res.status(400).json({ error: "Для важной срочной задачи опишите конкретное действие подробнее" });
-    return;
+  if (parsed.data.quadrant === "B") {
+    try {
+      const check = await checkQuadrantBTitle(normalizedTitle, req.headers["accept-language"]?.startsWith("en") ? "en" : "ru");
+      if (!check.valid) {
+        res.status(400).json({ error: check.reason || "Опишите важную и срочную задачу конкретно" });
+        return;
+      }
+    } catch (err) {
+      req.log.error({ err, citizenId }, "Time Matrix AI title validation failed");
+      res.status(503).json({ error: "Проверка названия временно недоступна. Попробуйте позже." });
+      return;
+    }
   }
   const [task] = await db.insert(timeMatrixTasksTable).values({
     citizenId,
@@ -1574,6 +1582,58 @@ router.post("/citizens/time-matrix/tasks", requireAuth, async (req, res): Promis
     quadrant: parsed.data.quadrant,
   }).returning();
   res.status(201).json(task);
+});
+
+router.patch("/citizens/time-matrix/tasks/:id", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const parsed = z.object({
+    title: z.string().trim().min(3).max(120).optional(),
+    quadrant: z.enum(["A", "B", "C", "D"]).optional(),
+  }).refine((value) => value.title !== undefined || value.quadrant !== undefined).safeParse(req.body);
+  if (!Number.isSafeInteger(id) || id < 1 || !parsed.success) {
+    res.status(400).json({ error: "Укажите корректное название или квадрант" });
+    return;
+  }
+  const [task] = await db.select().from(timeMatrixTasksTable).where(and(
+    eq(timeMatrixTasksTable.id, id),
+    eq(timeMatrixTasksTable.citizenId, req.citizen!.id),
+  )).limit(1);
+  if (!task) { res.status(404).json({ error: "Задача не найдена" }); return; }
+  if (task.status !== "open" || task.startedAt) {
+    res.status(409).json({ error: "Можно менять только незапущенные задачи" });
+    return;
+  }
+  const title = parsed.data.title?.replace(/\s+/g, " ").trim() ?? task.title;
+  const quadrant = parsed.data.quadrant ?? task.quadrant;
+  if (quadrant === "B" && (parsed.data.title !== undefined || task.quadrant !== "B")) {
+    try {
+      const check = await checkQuadrantBTitle(title, req.headers["accept-language"]?.startsWith("en") ? "en" : "ru");
+      if (!check.valid) {
+        res.status(400).json({ error: check.reason || "Опишите важную и срочную задачу конкретно" });
+        return;
+      }
+    } catch (err) {
+      req.log.error({ err, citizenId: req.citizen!.id }, "Time Matrix AI title validation failed");
+      res.status(503).json({ error: "Проверка названия временно недоступна. Попробуйте позже." });
+      return;
+    }
+  }
+  const [updated] = await db.update(timeMatrixTasksTable)
+    .set({ title, quadrant })
+    .where(and(eq(timeMatrixTasksTable.id, id), eq(timeMatrixTasksTable.citizenId, req.citizen!.id)))
+    .returning();
+  res.json(updated);
+});
+
+router.delete("/citizens/time-matrix/tasks/:id", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) { res.status(400).json({ error: "Некорректная задача" }); return; }
+  const [deleted] = await db.delete(timeMatrixTasksTable).where(and(
+    eq(timeMatrixTasksTable.id, id),
+    eq(timeMatrixTasksTable.citizenId, req.citizen!.id),
+  )).returning({ id: timeMatrixTasksTable.id });
+  if (!deleted) { res.status(404).json({ error: "Задача не найдена" }); return; }
+  res.sendStatus(204);
 });
 
 router.post("/citizens/time-matrix/tasks/:id/start", requireAuth, async (req, res): Promise<void> => {

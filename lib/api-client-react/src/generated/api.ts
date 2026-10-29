@@ -78,6 +78,7 @@ import type {
   TelegramWebAppSession,
   TimeMatrixTask,
   TimeMatrixTaskInput,
+  TimeMatrixTaskUpdate,
   TimelineAnchorInput,
   TimelineAnchorMoveInput,
   TimelineAnchorMoveResult,
@@ -2820,6 +2821,148 @@ export const useCreateTimeMatrixTask = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getCreateTimeMatrixTaskMutationOptions(options));
+    }
+
+export const getUpdateTimeMatrixTaskUrl = (id: number,) => {
+
+
+
+
+  return `/api/citizens/time-matrix/tasks/${id}`
+}
+
+/**
+ * @summary Update an open Time Matrix task
+ */
+export const updateTimeMatrixTask = async (id: number,
+    timeMatrixTaskUpdate: TimeMatrixTaskUpdate, options?: RequestInit): Promise<TimeMatrixTask> => {
+
+  return customFetch<TimeMatrixTask>(getUpdateTimeMatrixTaskUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      timeMatrixTaskUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateTimeMatrixTaskMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTimeMatrixTask>>, TError,{id: number;data: BodyType<TimeMatrixTaskUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTimeMatrixTask>>, TError,{id: number;data: BodyType<TimeMatrixTaskUpdate>}, TContext> => {
+
+const mutationKey = ['updateTimeMatrixTask'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTimeMatrixTask>>, {id: number;data: BodyType<TimeMatrixTaskUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateTimeMatrixTask(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTimeMatrixTaskMutationResult = NonNullable<Awaited<ReturnType<typeof updateTimeMatrixTask>>>
+    export type UpdateTimeMatrixTaskMutationBody = BodyType<TimeMatrixTaskUpdate>
+    export type UpdateTimeMatrixTaskMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update an open Time Matrix task
+ */
+export const useUpdateTimeMatrixTask = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTimeMatrixTask>>, TError,{id: number;data: BodyType<TimeMatrixTaskUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateTimeMatrixTask>>,
+        TError,
+        {id: number;data: BodyType<TimeMatrixTaskUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateTimeMatrixTaskMutationOptions(options));
+    }
+
+export const getDeleteTimeMatrixTaskUrl = (id: number,) => {
+
+
+
+
+  return `/api/citizens/time-matrix/tasks/${id}`
+}
+
+/**
+ * @summary Delete a citizen-owned Time Matrix task
+ */
+export const deleteTimeMatrixTask = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteTimeMatrixTaskUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteTimeMatrixTaskMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTimeMatrixTask>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTimeMatrixTask>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteTimeMatrixTask'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTimeMatrixTask>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteTimeMatrixTask(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTimeMatrixTaskMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTimeMatrixTask>>>
+
+    export type DeleteTimeMatrixTaskMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete a citizen-owned Time Matrix task
+ */
+export const useDeleteTimeMatrixTask = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTimeMatrixTask>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTimeMatrixTask>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteTimeMatrixTaskMutationOptions(options));
     }
 
 export const getStartTimeMatrixTaskUrl = (id: number,) => {

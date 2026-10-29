@@ -41,7 +41,7 @@ function tvPlayerUrl(mediaUrl: string | null, catcastUrl: string | null) {
 }
 
 export function Profile() {
-  const { citizen, authToken } = useCitizen();
+  const { citizen, authToken, refreshCitizen } = useCitizen();
   const { lang } = useLanguage();
   const isRu = lang === "ru";
   const anchorsQuery = useListMyTimelineAnchors({
@@ -68,6 +68,9 @@ export function Profile() {
   const [error, setError] = useState("");
   const [passportPhotoUrl, setPassportPhotoUrl] = useState<string | null>(null);
   const fileInputs = useRef<Record<"resume" | "portfolio", HTMLInputElement | null>>({ resume: null, portfolio: null });
+  useEffect(() => {
+    if (authToken && citizen?.id) void refreshCitizen();
+  }, [authToken, citizen?.id]);
   const t = isRu ? {
     eyebrow: "ЛИЧНЫЙ КАБИНЕТ", title: "Профиль", docs: "Резюме и портфолио",
     docsInfo: "PDF-файлы до 3 МБ скрыты по умолчанию. Вы можете разрешить просмотр каждому авторизованному гражданину TimeNation. ИИ использует документы только после вашего согласия.",
@@ -236,6 +239,10 @@ export function Profile() {
         </div>
       </header>
       {!authToken ? <section className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">{t.signIn}<Link className="ml-3 font-semibold text-primary hover:underline" href="/login?returnTo=%2Fprofile">{t.signInButton}</Link></section> : <>
+        <section className="grid grid-cols-2 gap-3" aria-label={isRu ? "Прогресс Time Matrix" : "Time Matrix progress"} data-testid="section-time-matrix-progress">
+          <div className="rounded-xl border border-border bg-card p-4"><p className="text-xs text-muted-foreground">{isRu ? "Опыт Time Matrix" : "Time Matrix XP"}</p><p className="mt-1 text-2xl font-bold text-primary" data-testid="text-time-matrix-xp">{new Intl.NumberFormat(isRu ? "ru-RU" : "en-GB").format(citizen?.timeXp ?? 0)} XP</p></div>
+          <div className="rounded-xl border border-border bg-card p-4"><p className="text-xs text-muted-foreground">{isRu ? "Текущая серия" : "Current streak"}</p><p className="mt-1 text-2xl font-bold text-primary" data-testid="text-time-matrix-streak">{citizen?.streakDays ?? 0} {isRu ? "дн." : "days"}</p></div>
+        </section>
         <section className="rounded-2xl border border-border bg-card p-5 md:p-6">
           <h2 className="text-lg font-bold">{t.docs}</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{t.docsInfo}</p>

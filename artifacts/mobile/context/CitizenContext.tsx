@@ -15,6 +15,8 @@ export interface CitizenProfile {
   name: string;
   phone: string;
   balanceMinutes: number;
+  timeXp: number;
+  streakDays: number;
   totalGiven: number;
   totalReceived: number;
   status: string;

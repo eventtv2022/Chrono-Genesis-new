@@ -16,6 +16,7 @@ export const citizensTable = pgTable("citizens", {
   streakDays: integer("streak_days").notNull().default(0),
   suspiciousActivity: boolean("suspicious_activity").notNull().default(false),
   lastTimeMatrixRewardAt: timestamp("last_time_matrix_reward_at", { withTimezone: true }),
+  timeMatrixDigestSentOn: text("time_matrix_digest_sent_on"),
   focusQuizCorrectAnswers: integer("focus_quiz_correct_answers").notNull().default(0),
   referralBonusMinutes: real("referral_bonus_minutes").notNull().default(0), // Restricted in-network credit; never a cash balance
   // Historical rows retain their initial credit; new applications receive it on issuance.

@@ -820,6 +820,45 @@ export const CreateTimeMatrixTaskBody = zod.object({
 
 
 /**
+ * @summary Update an open Time Matrix task
+ */
+export const UpdateTimeMatrixTaskParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateTimeMatrixTaskBodyTitleMin = 3;
+export const updateTimeMatrixTaskBodyTitleMax = 120;
+
+
+
+export const UpdateTimeMatrixTaskBody = zod.object({
+  "title": zod.string().min(updateTimeMatrixTaskBodyTitleMin).max(updateTimeMatrixTaskBodyTitleMax).optional(),
+  "quadrant": zod.enum(['A', 'B', 'C', 'D']).optional()
+})
+
+export const UpdateTimeMatrixTaskResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "quadrant": zod.enum(['A', 'B', 'C', 'D']),
+  "status": zod.enum(['open', 'completed']),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "elapsedSeconds": zod.number(),
+  "rewardDarmins": zod.number(),
+  "quickChecklist": zod.boolean()
+})
+
+
+/**
+ * @summary Delete a citizen-owned Time Matrix task
+ */
+export const DeleteTimeMatrixTaskParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
  * @summary Start timing a Time Matrix task
  */
 export const StartTimeMatrixTaskParams = zod.object({

@@ -99,6 +99,8 @@ export * from './timeMatrixTaskInput';
 export * from './timeMatrixTaskInputQuadrant';
 export * from './timeMatrixTaskQuadrant';
 export * from './timeMatrixTaskStatus';
+export * from './timeMatrixTaskUpdate';
+export * from './timeMatrixTaskUpdateQuadrant';
 export * from './timenamingAvailability';
 export * from './timenamingCertificateResult';
 export * from './timenamingConfig';

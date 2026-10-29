@@ -642,6 +642,25 @@ export interface TimeMatrixTaskInput {
   quadrant: TimeMatrixTaskInputQuadrant;
 }
 
+export type TimeMatrixTaskUpdateQuadrant = typeof TimeMatrixTaskUpdateQuadrant[keyof typeof TimeMatrixTaskUpdateQuadrant];
+
+
+export const TimeMatrixTaskUpdateQuadrant = {
+  A: 'A',
+  B: 'B',
+  C: 'C',
+  D: 'D',
+} as const;
+
+export interface TimeMatrixTaskUpdate {
+  /**
+     * @minLength 3
+     * @maxLength 120
+     */
+  title?: string;
+  quadrant?: TimeMatrixTaskUpdateQuadrant;
+}
+
 export type TimeMatrixTaskQuadrant = typeof TimeMatrixTaskQuadrant[keyof typeof TimeMatrixTaskQuadrant];
 
 

@@ -35,6 +35,8 @@ import {
   useCreateTimeMatrixTask,
   useStartTimeMatrixTask,
   useCompleteTimeMatrixTask,
+  useUpdateTimeMatrixTask,
+  useDeleteTimeMatrixTask,
   type TimeMatrixTask,
 } from "@workspace/api-client-react";
 
@@ -331,6 +333,8 @@ export default function TimeUtilsScreen() {
   const createMatrixTask = useCreateTimeMatrixTask();
   const startMatrixTask = useStartTimeMatrixTask();
   const completeMatrixTask = useCompleteTimeMatrixTask();
+  const updateMatrixTask = useUpdateTimeMatrixTask();
+  const deleteMatrixTask = useDeleteTimeMatrixTask();
   const DAYS = getDayNames(lang);
   const PRESET_SECONDS = PRESET_MINUTES.map((m) => ({ label: `${m}m`, seconds: m * 60 }));
 
@@ -536,6 +540,9 @@ export default function TimeUtilsScreen() {
   const [matrixTaskTitle, setMatrixTaskTitle] = useState("");
   const [matrixQuadrant, setMatrixQuadrant] = useState<TimeMatrixTask["quadrant"]>("A");
   const [matrixTaskError, setMatrixTaskError] = useState("");
+  const [editingMatrixTaskId, setEditingMatrixTaskId] = useState<number | null>(null);
+  const [editingMatrixTaskTitle, setEditingMatrixTaskTitle] = useState("");
+  const [editingMatrixTaskQuadrant, setEditingMatrixTaskQuadrant] = useState<TimeMatrixTask["quadrant"]>("A");
   const matrixTodayKey = new Date().toDateString();
   const completedMatrixTasksToday = (matrixTasksQuery.data ?? []).filter((task) =>
     task.status === "completed" && task.completedAt && new Date(task.completedAt).toDateString() === matrixTodayKey
@@ -1161,6 +1168,16 @@ export default function TimeUtilsScreen() {
                             ) : tasks.map((task) => (
                               <View key={task.id} testID={`card-time-matrix-task-${task.id}`} style={{ padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, gap: 7 }}>
                                 <Text style={{ color: colors.foreground, fontWeight: "600" }}>{task.title}</Text>
+                                {editingMatrixTaskId === task.id && (
+                                  <View style={{ gap: 8 }}>
+                                    <TextInput value={editingMatrixTaskTitle} onChangeText={setEditingMatrixTaskTitle} maxLength={120} accessibilityLabel={lang === "ru" ? "Название задачи" : "Task title"} style={{ color: colors.foreground, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 9 }} />
+                                    <View style={{ flexDirection: "row", gap: 6 }}>
+                                      {(["A", "B", "C", "D"] as const).map((q) => <TouchableOpacity key={q} onPress={() => setEditingMatrixTaskQuadrant(q)} style={{ padding: 8, borderRadius: 8, backgroundColor: editingMatrixTaskQuadrant === q ? colors.goldGlow : colors.card }}><Text style={{ color: colors.foreground }}>{q}</Text></TouchableOpacity>)}
+                                      <TouchableOpacity onPress={() => updateMatrixTask.mutate({ id: task.id, data: { title: editingMatrixTaskTitle, quadrant: editingMatrixTaskQuadrant } }, { onSuccess: () => { setEditingMatrixTaskId(null); void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); }, onError: (error) => setMatrixTaskError(error.message) })} disabled={updateMatrixTask.isPending || editingMatrixTaskTitle.trim().length < 3}><Text style={{ color: colors.primary, padding: 8 }}>{lang === "ru" ? "Сохранить" : "Save"}</Text></TouchableOpacity>
+                                      <TouchableOpacity onPress={() => setEditingMatrixTaskId(null)}><Text style={{ color: colors.mutedForeground, padding: 8 }}>{lang === "ru" ? "Отмена" : "Cancel"}</Text></TouchableOpacity>
+                                    </View>
+                                  </View>
+                                )}
                                 {task.status === "completed" ? (
                                   <Text style={{ color: colors.success, fontSize: 12 }}>
                                     {task.quickChecklist
@@ -1195,6 +1212,21 @@ export default function TimeUtilsScreen() {
                                     )}
                                   </View>
                                 )}
+                                {task.status === "open" && !task.startedAt && editingMatrixTaskId !== task.id && (
+                                  <TouchableOpacity onPress={() => { setEditingMatrixTaskId(task.id); setEditingMatrixTaskTitle(task.title); setEditingMatrixTaskQuadrant(task.quadrant); }} accessibilityRole="button" testID={`button-time-matrix-edit-${task.id}`}>
+                                    <Text style={{ color: colors.primary, fontSize: 12 }}>{lang === "ru" ? "Изменить" : "Edit"}</Text>
+                                  </TouchableOpacity>
+                                )}
+                                <TouchableOpacity
+                                  accessibilityRole="button"
+                                  testID={`button-time-matrix-delete-${task.id}`}
+                                  onPress={() => Alert.alert(lang === "ru" ? "Удалить задачу?" : "Delete task?", lang === "ru" ? "Это действие нельзя отменить." : "This cannot be undone.", [
+                                    { text: lang === "ru" ? "Отмена" : "Cancel", style: "cancel" },
+                                    { text: lang === "ru" ? "Удалить" : "Delete", style: "destructive", onPress: () => deleteMatrixTask.mutate({ id: task.id }, { onSuccess: () => void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }), onError: (error) => setMatrixTaskError(error.message) }) },
+                                  ])}
+                                >
+                                  <Text style={{ color: colors.destructive, fontSize: 12 }}>{lang === "ru" ? "Удалить" : "Delete"}</Text>
+                                </TouchableOpacity>
                               </View>
                             ))}
                           </View>

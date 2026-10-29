@@ -61,7 +61,7 @@ function formatCapturedMinute(coord: string) {
 export default function ProfileScreen() {
   const colors = useColors();
   const { lang } = useLanguage();
-  const { authToken, citizen } = useCitizen();
+  const { authToken, citizen, refreshCitizen } = useCitizen();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isRu = lang === "ru";
@@ -99,6 +99,10 @@ export default function ProfileScreen() {
   const [docConsent, setDocConsent] = useState(false);
   const [docBusy, setDocBusy] = useState(false);
   const [docError, setDocError] = useState("");
+
+  useEffect(() => {
+    if (authToken && citizen?.id) void refreshCitizen();
+  }, [authToken, citizen?.id]);
 
   const loadProfessionalDocs = useCallback(async () => {
     try {
@@ -306,6 +310,17 @@ export default function ProfileScreen() {
             ) : (
               <Feather name="user" size={20} color={colors.primary} />
             )}
+          </View>
+        </View>
+
+        <View testID="section-time-matrix-progress" style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ flex: 1, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}>
+            <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{isRu ? "Опыт Time Matrix" : "Time Matrix XP"}</Text>
+            <Text testID="text-time-matrix-xp" style={{ color: colors.primary, fontSize: 22, fontWeight: "700", marginTop: 4 }}>{new Intl.NumberFormat(isRu ? "ru-RU" : "en-GB").format(citizen?.timeXp ?? 0)} XP</Text>
+          </View>
+          <View style={{ flex: 1, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}>
+            <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{isRu ? "Текущая серия" : "Current streak"}</Text>
+            <Text testID="text-time-matrix-streak" style={{ color: colors.primary, fontSize: 22, fontWeight: "700", marginTop: 4 }}>{citizen?.streakDays ?? 0} {isRu ? "дн." : "days"}</Text>
           </View>
         </View>
 

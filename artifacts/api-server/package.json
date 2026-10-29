@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^8.4.0",
+    "@google/genai": "^2.31.0",
     "@google/generative-ai": "^0.24.1",
     "@openzeppelin/contracts": "^5.0.2",
     "@replit/connectors-sdk": "^0.4.3",

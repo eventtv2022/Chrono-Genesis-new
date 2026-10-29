@@ -12,6 +12,8 @@ import {
   useCreateTimeMatrixTask,
   useStartTimeMatrixTask,
   useCompleteTimeMatrixTask,
+  useUpdateTimeMatrixTask,
+  useDeleteTimeMatrixTask,
 } from "@workspace/api-client-react";
 import type { TimeMatrixTask } from "@workspace/api-client-react";
 import { Check, CircleAlert, ListTodo, Plus, RotateCw } from "lucide-react";
@@ -350,8 +352,17 @@ function TimeMatrixSurface() {
   const completeTask = useCompleteTimeMatrixTask({
     mutation: { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); } },
   });
+  const updateTask = useUpdateTimeMatrixTask({
+    mutation: { onSuccess: () => { setEditingTaskId(null); void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); } },
+  });
+  const deleteTask = useDeleteTimeMatrixTask({
+    mutation: { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); } },
+  });
   const [title, setTitle] = useState("");
   const [quadrant, setQuadrant] = useState<TimeMatrixTask["quadrant"]>("A");
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const [editingQuadrant, setEditingQuadrant] = useState<TimeMatrixTask["quadrant"]>("A");
   const [formError, setFormError] = useState("");
   const taskList = tasksQuery.data ?? [];
   const todayKey = new Date().toDateString();
@@ -359,7 +370,7 @@ function TimeMatrixSurface() {
     id,
     taskList.filter((task) => task.quadrant === id && task.status === "completed" && task.completedAt && new Date(task.completedAt).toDateString() === todayKey).length,
   ]));
-  const isMutating = createTask.isPending || startTask.isPending || completeTask.isPending;
+  const isMutating = createTask.isPending || startTask.isPending || completeTask.isPending || updateTask.isPending || deleteTask.isPending;
 
   const submitTask = () => {
     const cleanTitle = title.trim();
@@ -401,6 +412,7 @@ function TimeMatrixSurface() {
             <span key={id} data-testid={`text-daily-quadrant-${id.toLowerCase()}`}>{id}: {completedTodayByQuadrant[id] ?? 0}</span>
           ))}
         </div>
+        {(updateTask.isError || deleteTask.isError) && <p className="px-5 pt-3 text-sm text-rose-300" role="alert" data-testid="error-time-matrix-mutation">{updateTask.error?.message ?? deleteTask.error?.message ?? "Could not update this task."}</p>}
 
         <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
           {MATRIX_QUADRANTS.map((q, index) => {
@@ -435,9 +447,18 @@ function TimeMatrixSurface() {
                         <div className="flex items-start gap-2.5">
                           <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${task.status === "completed" ? "bg-teal-300" : q.marker}`} />
                           <div className="min-w-0 flex-1">
-                            <p className={`break-words text-sm leading-snug ${task.status === "completed" ? "text-muted-foreground line-through" : ""}`} data-testid={`text-task-title-${task.id}`}>
-                              {task.title}
-                            </p>
+                            {editingTaskId === task.id ? (
+                              <div className="space-y-2">
+                                <input value={editingTitle} onChange={event => setEditingTitle(event.target.value)} maxLength={120} className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm" data-testid={`input-edit-task-${task.id}`} />
+                                <select value={editingQuadrant} onChange={event => setEditingQuadrant(event.target.value as TimeMatrixTask["quadrant"])} className="rounded-md border border-border bg-background px-2 py-1 text-xs">
+                                  {MATRIX_QUADRANTS.map(item => <option key={item.id} value={item.id}>{item.id} · {item.title}</option>)}
+                                </select>
+                                <div className="flex gap-2">
+                                  <button type="button" onClick={() => updateTask.mutate({ id: task.id, data: { title: editingTitle, quadrant: editingQuadrant } })} disabled={isMutating || editingTitle.trim().length < 3} className="text-xs font-semibold text-primary" data-testid={`button-save-task-${task.id}`}>Save</button>
+                                  <button type="button" onClick={() => setEditingTaskId(null)} className="text-xs text-muted-foreground">Cancel</button>
+                                </div>
+                              </div>
+                            ) : <p className={`break-words text-sm leading-snug ${task.status === "completed" ? "text-muted-foreground line-through" : ""}`} data-testid={`text-task-title-${task.id}`}>{task.title}</p>}
                             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
                               {task.quickChecklist && <span data-testid={`status-checklist-${task.id}`}>Quick checklist</span>}
                               {task.elapsedSeconds > 0 && <span data-testid={`text-task-elapsed-${task.id}`}>{formatTaskDuration(task.elapsedSeconds)} focused</span>}
@@ -445,11 +466,14 @@ function TimeMatrixSurface() {
                             </div>
                           </div>
                           {task.status === "completed" ? (
-                            <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-teal-200" data-testid={`status-task-completed-${task.id}`}>
-                              <Check className="h-3 w-3" /> Done
-                            </span>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="flex items-center gap-1 text-[10px] font-medium text-teal-200" data-testid={`status-task-completed-${task.id}`}><Check className="h-3 w-3" /> Done</span>
+                              <button type="button" disabled={isMutating} onClick={() => { if (window.confirm("Delete this task? This cannot be undone.")) deleteTask.mutate({ id: task.id }); }} className="rounded-md border border-rose-400/30 px-2 py-1 text-[10px] text-rose-300" data-testid={`button-delete-task-${task.id}`}>Delete</button>
+                            </div>
                           ) : (
                             <div className="flex shrink-0 items-center gap-1.5">
+                              {!task.startedAt && editingTaskId !== task.id && <button type="button" disabled={isMutating} onClick={() => { setEditingTaskId(task.id); setEditingTitle(task.title); setEditingQuadrant(task.quadrant); }} className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground" data-testid={`button-edit-task-${task.id}`}>Edit</button>}
+                              <button type="button" disabled={isMutating} onClick={() => { if (window.confirm("Delete this task? This cannot be undone.")) deleteTask.mutate({ id: task.id }); }} className="rounded-md border border-rose-400/30 px-2 py-1 text-[10px] text-rose-300" data-testid={`button-delete-task-${task.id}`}>Delete</button>
                               <button
                                 type="button"
                                 disabled={isMutating}

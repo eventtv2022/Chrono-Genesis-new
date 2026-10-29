@@ -10,7 +10,7 @@ import {
 import { applyEntropy } from "./services/meritocracyService";
 import { drainEmissionQueue } from "./services/emissionService";
 import { airDueSlots } from "./services/tvService";
-import { initBot } from "./services/telegramService";
+import { initBot, sendTimeMatrixDailyDigests } from "./services/telegramService";
 import { rehydrateRenderQueue } from "./services/renderQueue";
 import { startNodeValidator } from "./services/nodeValidatorService";
 import { finalizeExpiredAuctions } from "./routes/auctions";
@@ -170,6 +170,30 @@ function scheduleGovernmentPolls() {
   logger.info("Government poll scheduler scheduled (15-second interval)");
 }
 
+function scheduleTimeMatrixDailyDigests() {
+  let running = false;
+  const tick = async () => {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Moscow",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date());
+    if (parts !== "21:00" || running) return;
+    running = true;
+    try {
+      await sendTimeMatrixDailyDigests();
+    } catch (err) {
+      logger.error({ err }, "Time Matrix daily digest scheduler failed");
+    } finally {
+      running = false;
+    }
+  };
+  void tick();
+  setInterval(() => void tick(), 60_000);
+  logger.info("Time Matrix Telegram daily digest scheduled (21:00 Moscow)");
+}
+
 // ── Async bootstrap — rehydrate render queue BEFORE accepting connections ──────
 async function bootstrap(): Promise<void> {
   scheduleDailyEntropy();
@@ -179,6 +203,7 @@ async function bootstrap(): Promise<void> {
   schedulePassportReadyNotificationRetries();
   schedulePassportEmailRetries();
   scheduleGovernmentPolls();
+  scheduleTimeMatrixDailyDigests();
   startNodeValidator();
 
   // ── Create HTTP server from Express app ───────────────────────────────────────

@@ -1,7 +1,7 @@
 import { Telegraf } from "telegraf";
 import { db } from "@workspace/db";
-import { citizensTable, transactionsTable } from "@workspace/db";
-import { eq, and, ilike } from "drizzle-orm";
+import { citizensTable, transactionsTable, timeMatrixTasksTable, timeMatrixRewardsTable } from "@workspace/db";
+import { eq, and, ilike, gte, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 let bot: Telegraf | null = null;
@@ -63,6 +63,65 @@ export async function sendTimeMatrixSecurityAlert(citizenId: number, reason: str
     );
   } catch (err) {
     logger.warn({ err, citizenId }, "Time Matrix security Telegram alert failed");
+  }
+}
+
+export async function sendTimeMatrixDailyDigests(): Promise<void> {
+  if (!bot) return;
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const datePart = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  const today = `${datePart("year")}-${datePart("month")}-${datePart("day")}`;
+  const start = new Date(`${today}T00:00:00+03:00`);
+  const recipients = await db.select({
+    id: citizensTable.id,
+    telegramId: citizensTable.telegramId,
+    notify: citizensTable.tgNotifyState,
+    xp: citizensTable.timeXp,
+    streak: citizensTable.streakDays,
+    digestSentOn: citizensTable.timeMatrixDigestSentOn,
+  }).from(citizensTable).where(and(
+    sql`${citizensTable.telegramId} is not null`,
+    eq(citizensTable.tgNotifyState, 1),
+    sql`${citizensTable.timeMatrixDigestSentOn} is distinct from ${today}`,
+  ));
+
+  for (const recipient of recipients) {
+    if (!recipient.telegramId || recipient.digestSentOn === today) continue;
+    try {
+      const tasks = await db.select({
+        quadrant: timeMatrixTasksTable.quadrant,
+      }).from(timeMatrixTasksTable).where(and(
+        eq(timeMatrixTasksTable.citizenId, recipient.id),
+        eq(timeMatrixTasksTable.status, "completed"),
+        gte(timeMatrixTasksTable.completedAt, start),
+      ));
+      const rewardRows = await db.select({
+        total: sql<number>`coalesce(sum(${timeMatrixRewardsTable.amount}), 0)`,
+      }).from(timeMatrixRewardsTable).where(and(
+        eq(timeMatrixRewardsTable.citizenId, recipient.id),
+        gte(timeMatrixRewardsTable.createdAt, start),
+      ));
+      const counts = { A: 0, B: 0, C: 0, D: 0 };
+      for (const task of tasks) {
+        if (task.quadrant in counts) counts[task.quadrant as keyof typeof counts] += 1;
+      }
+      const darmins = Number(rewardRows[0]?.total ?? 0);
+      await bot.telegram.sendMessage(
+        recipient.telegramId,
+        `📊 Ваша сводка Time Matrix за ${today}\nЗадач выполнено: ${tasks.length} (A: ${counts.A}, B: ${counts.B}, C: ${counts.C}, D: ${counts.D})\nДарминов получено: ${darmins}\nXP: ${recipient.xp} · Серия: ${recipient.streak} дн.`,
+      );
+      await db.update(citizensTable)
+        .set({ timeMatrixDigestSentOn: today })
+        .where(and(
+          eq(citizensTable.id, recipient.id),
+          sql`${citizensTable.timeMatrixDigestSentOn} is distinct from ${today}`,
+        ));
+    } catch (err) {
+      logger.warn({ err, citizenId: recipient.id }, "Time Matrix daily digest delivery failed");
+    }
   }
 }
 
