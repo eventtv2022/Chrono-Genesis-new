@@ -5,6 +5,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { GATE_COPY } from "@/i18n/gate";
 import type { GateCopy } from "@/i18n/gate";
 import { PeopleClockDial } from "@/pages/Clock";
+import { CitizenReviewsDialog } from "@/pages/CitizenReviewsDialog";
 
 /* ─────────────────────── helpers ─────────────────────── */
 function pad2(n: number) { return String(n).padStart(2, "0"); }
@@ -305,10 +306,27 @@ function NeonButton({
   );
 }
 
+function ReviewsButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width: "100%", padding: "12px 16px", borderRadius: 10,
+        border: "1px solid rgba(0,212,255,0.42)", background: "rgba(0,212,255,0.07)",
+        color: "#b8efff", fontSize: 13, fontWeight: 700, fontFamily: FONT_EXO,
+        lineHeight: 1.4, cursor: "pointer", boxShadow: "0 0 12px rgba(0,212,255,0.12)",
+      }}
+    >
+      Почему я вступил в гражданство: отзывы граждан
+    </button>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    DESKTOP AAA HERO  — split layout: Flag ← | → Headline + CTAs
 ═══════════════════════════════════════════════════════════════════ */
-function DesktopHero() {
+function DesktopHero({ onShowReviews }: { onShowReviews: () => void }) {
   const [, navigate] = useLocation();
   const { lang } = useLanguage();
   const copy = GATE_COPY[lang];
@@ -562,6 +580,7 @@ function DesktopHero() {
                 👑&nbsp; {copy.login}
               </NeonButton>
             </div>
+            <ReviewsButton onClick={onShowReviews} />
           </div>
         </div>
       </div>
@@ -729,7 +748,7 @@ function MobileCanvas() {
 /* ═══════════════════════════════════════════════════════════════════
    MOBILE HERO — AAA Sci-Fi redesign
 ═══════════════════════════════════════════════════════════════════ */
-function MobileHero() {
+function MobileHero({ onShowReviews }: { onShowReviews: () => void }) {
   const [, navigate]        = useLocation();
   const { lang }            = useLanguage();
   const copy                = GATE_COPY[lang];
@@ -1000,6 +1019,7 @@ function MobileHero() {
           >
             👑&nbsp; {copy.login}
           </GlassBtn>
+          <ReviewsButton onClick={onShowReviews} />
         </div>
 
         {/* ── BOTTOM ROW: clock + activity ─────────────────────── */}
@@ -1128,6 +1148,7 @@ function GlassBtn({
 ═══════════════════════════════════════════════════════════════════ */
 export function Welcome() {
   const [isDesktop, setIsDesktop] = useState(false);
+  const [showReviews, setShowReviews] = useState(false);
   const { lang } = useLanguage();
   const isRtl = ["ar", "ur", "he", "fa"].includes(lang);
 
@@ -1157,12 +1178,20 @@ export function Welcome() {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  if (!isDesktop) return <MobileHero />;
+  if (!isDesktop) {
+    return (
+      <>
+        <MobileHero onShowReviews={() => setShowReviews(true)} />
+        <CitizenReviewsDialog open={showReviews} onClose={() => setShowReviews(false)} />
+      </>
+    );
+  }
 
   return (
     <div dir={isRtl ? "rtl" : "ltr"} style={{ minHeight: "100vh", background: "#02020f", color: "#e8e8f4", fontFamily: FONT_EXO, overflowX: "hidden" }}>
       <HyperspaceCanvas />
-      <DesktopHero />
+      <DesktopHero onShowReviews={() => setShowReviews(true)} />
+      <CitizenReviewsDialog open={showReviews} onClose={() => setShowReviews(false)} />
     </div>
   );
 }
