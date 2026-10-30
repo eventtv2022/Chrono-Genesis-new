@@ -6,11 +6,11 @@ import {
   useUpdateCitizenOnboardingProgress,
   useGetOnboardingStatus,
 } from "@workspace/api-client-react";
-import { ArrowRight, Check, Clock3, Eye, ShieldCheck } from "lucide-react";
+import { ArrowRight, BookOpen, Check, Clock3, Eye, ShieldCheck } from "lucide-react";
 import { useCitizen } from "@/context/CitizenContext";
 import { SignaturePad } from "@/components/SignaturePad";
 import { AnthemButton } from "@/components/AnthemPlayer";
-import { PASSPORT_SIMULATOR_QUESTIONS, onboardingBlockTitle } from "../../../../lib/onboarding-questions";
+import { PASSPORT_SIMULATOR_QUESTIONS, PRE_APPLICATION_QUESTIONS, onboardingBlockTitle } from "../../../../lib/onboarding-questions";
 import { PreApplicationGuide } from "./PreApplicationGuide";
 
 function formatClock(totalSeconds: number) {
@@ -19,6 +19,37 @@ function formatClock(totalSeconds: number) {
   const minutes = Math.floor((seconds % 3600) / 60);
   const rest = seconds % 60;
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+}
+
+function ReadQuestionsPanel() {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="rounded-xl border border-white/10 bg-white/[0.035] p-5 text-left">
+      <h2 className="font-semibold">Пока ждёте паспорт, прочитайте 30 вопросов</h2>
+      <p className="mt-1 text-sm text-muted-foreground">Вопросы и ответы знакомства доступны для повторного чтения.</p>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((visible) => !visible)}
+        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-primary/30 px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/10"
+        data-testid="button-read-onboarding-questions"
+      >
+        <BookOpen className="h-4 w-4" />
+        {open ? "Скрыть вопросы" : "Прочитать 30 вопросов и ответов"}
+      </button>
+      {open && (
+        <div className="mt-4 max-h-[50vh] space-y-3 overflow-y-auto pr-2" aria-label="30 вопросов и ответов">
+          {PRE_APPLICATION_QUESTIONS.map((item) => (
+            <article key={item.id} className="rounded-lg border border-white/10 bg-black/20 p-4">
+              <p className="font-mono text-xs text-primary">{item.id}/30</p>
+              <h3 className="mt-1 font-semibold">{item.question}</h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.answer}</p>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export function OnboardingGame() {
@@ -196,6 +227,7 @@ export function OnboardingGame() {
             <p className="font-mono text-xs uppercase tracking-widest text-primary/80">До права на выдачу</p>
             <p className="mt-2 font-mono text-3xl tabular-nums" data-testid="text-eligibility-countdown">{formatClock(secondsUntilEligibility)}</p>
           </div>
+          <ReadQuestionsPanel />
           <p className="text-xs text-muted-foreground">Статус проверяется автоматически. Эта страница обновится при выдаче паспорта.</p>
         </section>
       </main>
@@ -217,6 +249,7 @@ export function OnboardingGame() {
             <p className="font-mono text-xs uppercase tracking-widest text-primary/80">До финала</p>
             <p className="mt-2 font-mono text-3xl tabular-nums" data-testid="text-onboarding-timer">{formatClock(remainingSeconds)}</p>
           </div>
+          <ReadQuestionsPanel />
           <p className="text-xs text-muted-foreground">Отсчёт продолжается по сроку, записанному сервером при подаче заявления.</p>
         </section>
       </main>

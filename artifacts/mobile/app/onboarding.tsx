@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Feather } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -54,6 +55,40 @@ function ScreenFrame({ children }: { children: React.ReactNode }) {
     >
       {children}
     </ScrollView>
+  );
+}
+
+function ReadQuestionsPanel() {
+  const colors = useColors();
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: colors.radius, padding: 16, gap: 10 }}>
+      <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: "700" }}>Пока ждёте паспорт, прочитайте 30 вопросов</Text>
+      <Text style={{ color: colors.mutedForeground, fontSize: 13, lineHeight: 20 }}>Вопросы и ответы знакомства доступны для повторного чтения.</Text>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        testID="button-read-onboarding-questions"
+        onPress={() => setOpen((visible) => !visible)}
+        style={{ minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: colors.primary + "70", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 12 }}
+      >
+        <Feather name="book-open" size={17} color={colors.primary} />
+        <Text style={{ color: colors.primary, fontSize: 14, fontWeight: "700", textAlign: "center" }}>
+          {open ? "Скрыть вопросы" : "Прочитать 30 вопросов и ответов"}
+        </Text>
+      </TouchableOpacity>
+      {open && (
+        <View style={{ gap: 10, marginTop: 4 }} accessibilityLabel="30 вопросов и ответов">
+          {PRE_APPLICATION_QUESTIONS.map((item) => (
+            <View key={item.id} style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background }}>
+              <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "700", letterSpacing: 1 }}>{item.id}/30</Text>
+              <Text style={{ color: colors.foreground, fontSize: 15, fontWeight: "600", lineHeight: 22, marginTop: 5 }}>{item.question}</Text>
+              <Text style={{ color: colors.mutedForeground, fontSize: 13, lineHeight: 20, marginTop: 7 }}>{item.answer}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -386,6 +421,7 @@ function OnboardingScreen() {
               {formatClock(status.data.secondsUntilEligibility)}
             </Text>
           </View>
+          <ReadQuestionsPanel />
         </View>
       </ScreenFrame>
     );
@@ -403,6 +439,7 @@ function OnboardingScreen() {
           <Text style={{ color: colors.primary, fontSize: 35, fontVariant: ["tabular-nums"], fontWeight: "700" }}>
             {formatClock(remaining)}
           </Text>
+          <ReadQuestionsPanel />
         </View>
       </ScreenFrame>
     );

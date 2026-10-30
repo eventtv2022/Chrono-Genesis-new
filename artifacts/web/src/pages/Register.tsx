@@ -11,6 +11,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { LegalModal, type LegalDocType } from "@/components/LegalModal";
 import { useCitizen, type CitizenProfile } from "@/context/CitizenContext";
 import { getPreApplicationProgressToken, isPreApplicationGuideComplete } from "./PreApplicationGuide";
+import { PRE_APPLICATION_QUESTIONS } from "../../../../lib/onboarding-questions";
 
 const BASE_WEB = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 const MANIFESTO_URL = "https://issuu.com/timenation2025/docs/_timenatio";
@@ -31,7 +32,7 @@ type Mode = "form" | "pending" | "issued";
 interface PendingData { citizenNumber: string; availableAt: string; citizenId: number; citizenName: string; }
 
 export function Register() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { citizen, authToken, twaStatus, setCitizen, setAuthToken } = useCitizen();
   const [, navigate] = useLocation();
   const [name, setName] = useState("");
@@ -79,6 +80,7 @@ export function Register() {
   const [mode, setMode] = useState<Mode>("form");
   const [pendingData, setPendingData] = useState<PendingData | null>(null);
   const [countdown, setCountdown] = useState(3600);
+  const [showQuestions, setShowQuestions] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { document.title = `${t.nav_become_citizen} | TimeNation`; }, [t]);
@@ -251,6 +253,33 @@ export function Register() {
                 {formatCountdown(countdown)}
               </p>
               {countdown <= 0 && <p className="text-sm text-muted-foreground font-mono animate-pulse">{t.reg_getting_passport}</p>}
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardContent className="p-5 space-y-3">
+              <div>
+                <h3 className="font-semibold">{lang === "ru" ? "Пока ждёте паспорт, прочитайте 30 вопросов" : "Read the 30 questions while you wait"}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {lang === "ru" ? "Вопросы и ответы знакомства доступны для повторного чтения." : "Review the onboarding questions and answers at your own pace."}
+                </p>
+              </div>
+              <Button type="button" variant="outline" className="w-full" onClick={() => setShowQuestions((open) => !open)} aria-expanded={showQuestions}>
+                <BookOpen className="mr-2 h-4 w-4" />
+                {showQuestions
+                  ? (lang === "ru" ? "Скрыть вопросы" : "Hide questions")
+                  : (lang === "ru" ? "Прочитать 30 вопросов и ответов" : "Read the 30 questions and answers")}
+              </Button>
+              {showQuestions && (
+                <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-2" aria-label={lang === "ru" ? "30 вопросов и ответов" : "30 questions and answers"}>
+                  {PRE_APPLICATION_QUESTIONS.map((item) => (
+                    <article key={item.id} className="rounded-md border border-border bg-secondary/30 p-4">
+                      <p className="text-xs font-mono uppercase tracking-wider text-primary">{item.id}/30</p>
+                      <h4 className="mt-1 font-semibold">{item.question}</h4>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.answer}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
           <Card className="bg-card border-border">

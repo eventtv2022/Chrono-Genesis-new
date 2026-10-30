@@ -29,6 +29,7 @@ import { LogoBrand } from "@/components/LogoBrand";
 import {
   ONBOARDING_PROGRESS_TOKEN_KEY,
   PRE_APPLICATION_GUIDE_COMPLETE_KEY,
+  PRE_APPLICATION_QUESTIONS,
 } from "../../../lib/onboarding-questions";
 
 // ── Web-only canvas signature pad ────────────────────────────────────────────
@@ -199,6 +200,7 @@ export default function RegisterScreen({ initialMode }: { initialMode?: Mode } =
   // Pending / issued
   const [pendingData, setPendingData] = useState<PendingData | null>(null);
   const [countdown, setCountdown] = useState(3600);
+  const [showQuestions, setShowQuestions] = useState(false);
   const [issuedPassportUrl, setIssuedPassportUrl] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -985,6 +987,40 @@ export default function RegisterScreen({ initialMode }: { initialMode?: Mode } =
             <Text style={[styles.idLabel, { color: colors.mutedForeground }]}>НОМЕР ГРАЖДАНИНА</Text>
             <Text style={[styles.idValue, { color: colors.primary }]}>{pendingData.citizenNumber}</Text>
             <Text style={[styles.idNote, { color: colors.mutedForeground }]}>Сохраните этот номер — он ваш идентификатор в TimeNation</Text>
+          </View>
+
+          <View style={{ gap: 10, marginTop: 8 }}>
+            <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: "Inter_700Bold" }}>
+              {t("Пока ждёте паспорт, прочитайте 30 вопросов", "Read the 30 questions while you wait")}
+            </Text>
+            <Text style={{ color: colors.mutedForeground, fontSize: 13, lineHeight: 19 }}>
+              {t("Вопросы и ответы знакомства доступны для повторного чтения.", "Review the onboarding questions and answers at your own pace.")}
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showQuestions }}
+              style={[styles.secondaryBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => setShowQuestions((visible) => !visible)}
+              activeOpacity={0.8}
+            >
+              <Feather name="book-open" size={17} color={colors.primary} />
+              <Text style={[styles.secondaryBtnText, { color: colors.foreground, textAlign: "center" }]}>
+                {showQuestions
+                  ? t("Скрыть вопросы", "Hide questions")
+                  : t("Прочитать 30 вопросов и ответов", "Read the 30 questions and answers")}
+              </Text>
+            </TouchableOpacity>
+            {showQuestions && (
+              <View accessibilityLabel={t("30 вопросов и ответов", "30 questions and answers")} style={{ gap: 10, marginTop: 4 }}>
+                {PRE_APPLICATION_QUESTIONS.map((item) => (
+                  <View key={item.id} style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}>
+                    <Text style={{ color: colors.primary, fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 1 }}>{item.id}/30</Text>
+                    <Text style={{ color: colors.foreground, fontSize: 15, fontFamily: "Inter_600SemiBold", lineHeight: 22, marginTop: 5 }}>{item.question}</Text>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 13, lineHeight: 20, marginTop: 7 }}>{item.answer}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
 
           <TouchableOpacity style={[styles.secondaryBtn, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.back()}>
