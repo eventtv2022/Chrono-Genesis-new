@@ -7,7 +7,7 @@
 - [Two-stage onboarding](two-stage-onboarding.md) — guide precedes application; finale is T−1m; issue and grant one ancestral minute at eligibility
 - [Drizzle schema preservation](postgres-drizzle-preservation.md) — keep legacy raw-SQL tables represented before pushing schema changes
 - [Expo video web rendering](expo-video-web-rendering.md) — use an HTML video with explicit fit sizing on web; keep Expo AV for native playback
-- [Expo web font loading](expo-web-font-loading.md) — avoid FontFaceObserver timeouts in browser previews while keeping bundled fonts on native
+- [Expo web font loading](expo-web-font-loading.md) — keep Expo/vector icon fonts out of Android Chrome preview; preserve native fonts
 - [Replit config edits](replit-config-edits.md) — `.replit` changes require the schema-validated replacement callback; direct patches are rejected
 - [Telegraf and esbuild](timenation-telegraf-bundling.md) — keep Telegraf external; bundling renames its AbortSignal shim and breaks node-fetch v2 polling
 - [Telegram polling lifecycle](telegram-polling.md) — Telegraf retries some getUpdates failures internally but lets terminal polling errors reject launch

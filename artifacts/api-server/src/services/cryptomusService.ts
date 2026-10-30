@@ -94,9 +94,16 @@ export function verifyCryptomusWebhook(
   rawBody: Record<string, unknown>,
   incomingSign: string
 ): boolean {
+  if (typeof incomingSign !== "string" || !/^[a-f0-9]{32}$/i.test(incomingSign)) {
+    return false;
+  }
+
   const { sign: _s, ...bodyWithoutSign } = rawBody;
   const expected = sign(bodyWithoutSign);
-  return expected === incomingSign;
+  return crypto.timingSafeEqual(
+    Buffer.from(expected, "hex"),
+    Buffer.from(incomingSign, "hex")
+  );
 }
 
 // ── Payment status ────────────────────────────────────────────────────────────

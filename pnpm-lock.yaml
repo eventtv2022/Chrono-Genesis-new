@@ -338,6 +338,9 @@ importers:
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
+      lucide-react:
+        specifier: 'catalog:'
+        version: 0.545.0(react@19.1.0)
       open-location-code:
         specifier: ^1.0.3
         version: 1.0.3

@@ -69,6 +69,7 @@
     "expo-sharing": "~14.0.8",
     "expo-updates": "~29.0.19",
     "leaflet": "^1.9.4",
+    "lucide-react": "catalog:",
     "open-location-code": "^1.0.3",
     "react-leaflet": "^4.2.1",
     "react-native-signature-canvas": "^5.0.2",
