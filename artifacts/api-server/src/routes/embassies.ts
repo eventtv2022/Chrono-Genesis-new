@@ -33,7 +33,7 @@ const CreateEmbassyBody = z.object({
 });
 
 const SetNodeIpBody = z.object({
-  nodeIp: z.string().ip({ version: "v4" }).or(z.string().ip({ version: "v6" })),
+  nodeIp: z.union([z.ipv4(), z.ipv6()]),
 });
 
 const VerifyLocationBody = z.object({

@@ -24,3 +24,4 @@
 - [Timenaming license legal status](timenaming-license.md) — keep the contradictory disclaimer visibly marked as draft until legal review.
 - [Time Bank legal status](timebank-legal-status.md) — do not claim universal legality without qualified, jurisdiction-specific review.
 - [Structured locale generation](structured-locale-generation.md) — key generated translations by message ID; translation arrays can return in a different order.
+- [Workspace typecheck timeouts](workspace-typecheck-timeouts.md) — if aggregate typecheck stalls, validate shared libs and app packages serially.
