@@ -1241,7 +1241,9 @@ paths:
     get:
       operationId: listTransactions
       tags: [transactions]
-      summary: List public transactions with passport numbers only
+      summary: List the authenticated citizen's transactions
+      security:
+        - BearerAuth: []
       parameters:
         - name: limit
           in: query
@@ -1250,13 +1252,19 @@ paths:
             type: integer
       responses:
         "200":
-          description: Public transaction summaries without names or internal citizen IDs
+          description: Recent transactions involving the authenticated citizen
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/PublicTransaction"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /citizens/{id}/heritage-transfer:
     post:
@@ -3046,31 +3054,16 @@ components:
           type: integer
         totalTransactions:
           type: integer
-        totalMinutesCirculated:
-          type: integer
+        totalMinutesTransferred:
+          type: number
         uniqueVisitors:
           type: integer
-        topGivers:
-          type: array
-          items:
-            $ref: "#/components/schemas/EconomyTopCitizen"
-        topReceivers:
-          type: array
-          items:
-            $ref: "#/components/schemas/EconomyTopCitizen"
-        recentTransactions:
-          type: array
-          items:
-            $ref: "#/components/schemas/PublicTransaction"
       required:
         - totalCitizens
         - activeCitizens
         - totalTransactions
-        - totalMinutesCirculated
+        - totalMinutesTransferred
         - uniqueVisitors
-        - topGivers
-        - topReceivers
-        - recentTransactions
 
     SiteVisitorInput:
       type: object

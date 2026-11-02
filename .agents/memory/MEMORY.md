@@ -25,3 +25,4 @@
 - [Time Bank legal status](timebank-legal-status.md) — do not claim universal legality without qualified, jurisdiction-specific review.
 - [Structured locale generation](structured-locale-generation.md) — key generated translations by message ID; translation arrays can return in a different order.
 - [Workspace typecheck timeouts](workspace-typecheck-timeouts.md) — if aggregate typecheck stalls, validate shared libs and app packages serially.
+- [Public dashboard privacy](public-dashboard-privacy.md) — public views use aggregates only; citizen-level balances and histories require sign-in.

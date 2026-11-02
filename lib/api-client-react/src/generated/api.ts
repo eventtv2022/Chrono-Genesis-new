@@ -3599,7 +3599,7 @@ export const getListTransactionsUrl = (params?: ListTransactionsParams,) => {
 }
 
 /**
- * @summary List public transactions with passport numbers only
+ * @summary List the authenticated citizen's transactions
  */
 export const listTransactions = async (params?: ListTransactionsParams, options?: RequestInit): Promise<PublicTransaction[]> => {
 
@@ -3623,7 +3623,7 @@ export const getListTransactionsQueryKey = (params?: ListTransactionsParams,) =>
     }
 
 
-export const getListTransactionsQueryOptions = <TData = Awaited<ReturnType<typeof listTransactions>>, TError = ErrorType<unknown>>(params?: ListTransactionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListTransactionsQueryOptions = <TData = Awaited<ReturnType<typeof listTransactions>>, TError = ErrorType<ErrorResponse>>(params?: ListTransactionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -3642,14 +3642,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListTransactionsQueryResult = NonNullable<Awaited<ReturnType<typeof listTransactions>>>
-export type ListTransactionsQueryError = ErrorType<unknown>
+export type ListTransactionsQueryError = ErrorType<ErrorResponse>
 
 
 /**
- * @summary List public transactions with passport numbers only
+ * @summary List the authenticated citizen's transactions
  */
 
-export function useListTransactions<TData = Awaited<ReturnType<typeof listTransactions>>, TError = ErrorType<unknown>>(
+export function useListTransactions<TData = Awaited<ReturnType<typeof listTransactions>>, TError = ErrorType<ErrorResponse>>(
  params?: ListTransactionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {

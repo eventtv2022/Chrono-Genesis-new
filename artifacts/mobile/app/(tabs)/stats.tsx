@@ -22,54 +22,12 @@ import { useLanguage } from "@/context/LanguageContext";
 
 const BASE_URL = getBaseUrl();
 
-interface Transaction {
-  id: number;
-  fromCitizenNumber: string | null;
-  toCitizenNumber: string | null;
-  minutesTransferred: number;
-  durationSeconds: number;
-  createdAt: string;
-}
-
-interface Citizen {
-  citizenNumber: string;
-  totalGiven: number;
-  totalReceived: number;
-}
-
 interface Stats {
   totalCitizens: number;
   activeCitizens: number;
   totalTransactions: number;
-  totalMinutesCirculated: number;
-  topGivers: Citizen[];
-  topReceivers: Citizen[];
-  recentTransactions: Transaction[];
-}
-
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
-}
-
-function timeAgo(iso: string, lang: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  try {
-    const rtf = new Intl.RelativeTimeFormat(lang, { numeric: "auto" });
-    if (mins < 1) return rtf.format(0, "minutes");
-    if (mins < 60) return rtf.format(-mins, "minutes");
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return rtf.format(-hours, "hours");
-    return rtf.format(-Math.floor(hours / 24), "days");
-  } catch {
-    if (mins < 1) return "now";
-    if (mins < 60) return `${mins}m`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h`;
-    return `${Math.floor(hours / 24)}d`;
-  }
+  totalMinutesTransferred: number;
+  uniqueVisitors: number;
 }
 
 // ── Discount calculator (same tiers as shop.tsx) ─────────────────────────────
@@ -189,7 +147,7 @@ export default function StatsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { citizen } = useCitizen();
+  const { citizen, authToken } = useCitizen();
   const { t, lang } = useLanguage();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : 0;
@@ -293,7 +251,7 @@ export default function StatsScreen() {
           { icon: "users",    num: data?.totalCitizens ?? 0,          label: t.stats_citizens,       color: colors.primary  },
           { icon: "activity", num: data?.activeCitizens ?? 0,         label: t.stats_active,         color: colors.success  },
           { icon: "repeat",   num: data?.totalTransactions ?? 0,      label: t.stats_transactions,   color: colors.primary  },
-          { icon: "clock",    num: (data?.totalMinutesCirculated ?? 0).toFixed(3), label: t.stats_in_circulation, color: colors.primary  },
+          { icon: "clock",    num: (data?.totalMinutesTransferred ?? 0).toLocaleString(lang, { maximumFractionDigits: 2 }), label: lang === "ru" ? "переведено всего, Д" : "transferred, D", color: colors.primary  },
         ].map((m) => (
           <View key={m.label} style={styles.metricCard}>
             <Feather name={m.icon as keyof typeof Feather.glyphMap} size={18} color={m.color} />
@@ -303,35 +261,12 @@ export default function StatsScreen() {
         ))}
       </View>
 
-      {(data?.topGivers.length ?? 0) > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t.stats_top_givers.toUpperCase()}</Text>
-          {data!.topGivers.map((c, i) => (
-            <View key={c.citizenNumber} style={styles.rankRow}>
-              <Text style={styles.rankNum}>#{i + 1}</Text>
-              <View style={styles.rankAvatar}><Text style={styles.rankAvatarText}>№</Text></View>
-              <Text style={styles.rankName}>№{c.citizenNumber}</Text>
-              <View style={styles.rankBadge}><Text style={styles.rankBadgeText}>+{c.totalGiven.toFixed(2)} Д</Text></View>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {(data?.recentTransactions.length ?? 0) > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t.stats_recent_tx.toUpperCase()}</Text>
-          {data!.recentTransactions.map((tx) => (
-            <View key={tx.id} style={styles.txRow}>
-              <View style={styles.txLeft}>
-                <Text style={styles.txNames}>№{tx.fromCitizenNumber ?? "—"} → №{tx.toCitizenNumber ?? "—"}</Text>
-                <Text style={styles.txTime}>{formatDuration(tx.durationSeconds)} · {timeAgo(tx.createdAt, lang)}</Text>
-              </View>
-              <View style={styles.txAmount}>
-                <Text style={styles.txAmountText}>+{tx.minutesTransferred.toFixed(2)}</Text>
-                <Text style={styles.txAmountUnit}>Д</Text>
-              </View>
-            </View>
-          ))}
+      {citizen && authToken && (
+        <View style={styles.privateBalance}>
+          <Text style={styles.sectionTitle}>{lang === "ru" ? "ВАШ ЛИЧНЫЙ БАЛАНС" : "YOUR PERSONAL BALANCE"}</Text>
+          <Text style={styles.privateBalanceValue}>
+            {Number(citizen.balanceMinutes).toLocaleString(lang, { maximumFractionDigits: 2 })} Д
+          </Text>
         </View>
       )}
 
@@ -381,20 +316,8 @@ function getStyles(colors: ReturnType<typeof useColors>) {
     metricLabel: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
     section: { marginHorizontal: 20, marginTop: 16 },
     sectionTitle: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground, letterSpacing: 1.5, marginBottom: 10 },
-    rankRow: { flexDirection: "row", alignItems: "center", backgroundColor: colors.card, borderRadius: 10, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: colors.border, gap: 10 },
-    rankNum: { fontSize: 13, fontFamily: "Inter_700Bold", color: colors.mutedForeground, width: 24 },
-    rankAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.goldGlow, borderWidth: 1, borderColor: colors.primary, alignItems: "center", justifyContent: "center" },
-    rankAvatarText: { fontSize: 13, fontFamily: "Inter_700Bold", color: colors.primary },
-    rankName: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium", color: colors.foreground },
-    rankBadge: { backgroundColor: colors.goldGlow, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-    rankBadgeText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.primary },
-    txRow: { flexDirection: "row", alignItems: "center", backgroundColor: colors.card, borderRadius: 10, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: colors.border },
-    txLeft: { flex: 1, gap: 2 },
-    txNames: { fontSize: 13, fontFamily: "Inter_500Medium", color: colors.foreground },
-    txTime: { fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
-    txAmount: { alignItems: "flex-end" },
-    txAmountText: { fontSize: 18, fontFamily: "Inter_700Bold", color: colors.primary },
-    txAmountUnit: { fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground },
+    privateBalance: { marginHorizontal: 20, marginTop: 16, padding: 16, backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.primary + "66" },
+    privateBalanceValue: { fontSize: 24, fontFamily: "Inter_700Bold", color: colors.primary },
     emptyState: { alignItems: "center", paddingTop: 60, gap: 8 },
     emptyText: { fontSize: 18, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground },
     emptySubtext: { fontSize: 13, fontFamily: "Inter_400Regular", color: colors.mutedForeground },

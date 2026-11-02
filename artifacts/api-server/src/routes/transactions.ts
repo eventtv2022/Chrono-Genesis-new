@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
 import { createHash } from "node:crypto";
-import { count, desc, eq } from "drizzle-orm";
+import { count, desc, eq, or, sum } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@workspace/db";
 import { transactionsTable, citizensTable, siteVisitorsTable } from "@workspace/db";
+import { requireAuth } from "../middleware/auth";
 
 const router: IRouter = Router();
 
@@ -22,7 +23,7 @@ const txSelect = {
   toCitizenNumber:    toAlias.citizenNumber,
 } as const;
 
-router.get("/transactions", async (req, res): Promise<void> => {
+router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   const limitRaw = req.query["limit"];
   const parsedLimit = limitRaw ? parseInt(String(limitRaw), 10) : 50;
   const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 200) : 50;
@@ -33,59 +34,35 @@ router.get("/transactions", async (req, res): Promise<void> => {
     .leftJoin(fromAlias, eq(transactionsTable.fromCitizenId, fromAlias.id))
     .leftJoin(toAlias,   eq(transactionsTable.toCitizenId,   toAlias.id));
 
-  const rows = await base.orderBy(desc(transactionsTable.createdAt)).limit(limit);
+  const rows = await base
+    .where(or(
+      eq(transactionsTable.fromCitizenId, req.citizen!.id),
+      eq(transactionsTable.toCitizenId, req.citizen!.id),
+    ))
+    .orderBy(desc(transactionsTable.createdAt))
+    .limit(limit);
 
   res.json(rows.map((t) => ({ ...t, createdAt: t.createdAt.toISOString() })));
 });
 
 router.get("/stats", async (_req, res): Promise<void> => {
-  const citizens = await db
+  const citizens = await db.select({ status: citizensTable.status }).from(citizensTable);
+  const [transactionTotals] = await db
     .select({
-      citizenNumber: citizensTable.citizenNumber,
-      status: citizensTable.status,
-      totalGiven: citizensTable.totalGiven,
-      totalReceived: citizensTable.totalReceived,
+      total: count(),
+      minutes: sum(transactionsTable.minutesTransferred),
     })
-    .from(citizensTable);
+    .from(transactionsTable);
   const [visitorCount] = await db
     .select({ total: count() })
     .from(siteVisitorsTable);
 
-  const recentRows = await db
-    .select(txSelect)
-    .from(transactionsTable)
-    .leftJoin(fromAlias, eq(transactionsTable.fromCitizenId, fromAlias.id))
-    .leftJoin(toAlias,   eq(transactionsTable.toCitizenId,   toAlias.id))
-    .orderBy(desc(transactionsTable.createdAt))
-    .limit(200);
-
-  const totalMinutesAll = recentRows.reduce((sum, t) => sum + t.minutesTransferred, 0);
-
-  const citizensWithPassport = citizens.filter(
-    (citizen): citizen is typeof citizen & { citizenNumber: string } => citizen.citizenNumber !== null,
-  );
-  const topGivers = [...citizensWithPassport]
-    .sort((a, b) => b.totalGiven - a.totalGiven)
-    .slice(0, 5)
-    .map(({ citizenNumber, totalGiven, totalReceived }) => ({ citizenNumber, totalGiven, totalReceived }));
-
-  const topReceivers = [...citizensWithPassport]
-    .sort((a, b) => b.totalReceived - a.totalReceived)
-    .slice(0, 5)
-    .map(({ citizenNumber, totalGiven, totalReceived }) => ({ citizenNumber, totalGiven, totalReceived }));
-
   res.json({
-    totalCitizens:          citizens.length,
-    activeCitizens:         citizens.filter((c) => c.status === "active").length,
-    totalTransactions:      recentRows.length,
-    totalMinutesCirculated: totalMinutesAll,
-    uniqueVisitors:         visitorCount?.total ?? 0,
-    topGivers,
-    topReceivers,
-    recentTransactions: recentRows.slice(0, 10).map((t) => ({
-      ...t,
-      createdAt: t.createdAt.toISOString(),
-    })),
+    totalCitizens: citizens.length,
+    activeCitizens: citizens.filter((citizen) => citizen.status === "active").length,
+    totalTransactions: transactionTotals?.total ?? 0,
+    totalMinutesTransferred: Number(transactionTotals?.minutes ?? 0),
+    uniqueVisitors: visitorCount?.total ?? 0,
   });
 });
 

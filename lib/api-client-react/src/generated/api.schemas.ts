@@ -913,11 +913,8 @@ export interface EconomyStats {
   totalCitizens: number;
   activeCitizens: number;
   totalTransactions: number;
-  totalMinutesCirculated: number;
+  totalMinutesTransferred: number;
   uniqueVisitors: number;
-  topGivers: EconomyTopCitizen[];
-  topReceivers: EconomyTopCitizen[];
-  recentTransactions: PublicTransaction[];
 }
 
 export interface SiteVisitorInput {

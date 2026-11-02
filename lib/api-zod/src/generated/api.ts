@@ -1165,7 +1165,7 @@ export const MakeAdminPersonalTransferResponse = zod.object({
 
 
 /**
- * @summary List public transactions with passport numbers only
+ * @summary List the authenticated citizen's transactions
  */
 export const ListTransactionsQueryParams = zod.object({
   "limit": zod.coerce.number().optional()
@@ -1388,26 +1388,8 @@ export const GetStatsResponse = zod.object({
   "totalCitizens": zod.number(),
   "activeCitizens": zod.number(),
   "totalTransactions": zod.number(),
-  "totalMinutesCirculated": zod.number(),
-  "uniqueVisitors": zod.number(),
-  "topGivers": zod.array(zod.object({
-  "citizenNumber": zod.string(),
-  "totalGiven": zod.number(),
-  "totalReceived": zod.number()
-})),
-  "topReceivers": zod.array(zod.object({
-  "citizenNumber": zod.string(),
-  "totalGiven": zod.number(),
-  "totalReceived": zod.number()
-})),
-  "recentTransactions": zod.array(zod.object({
-  "id": zod.number(),
-  "fromCitizenNumber": zod.string().nullable(),
-  "toCitizenNumber": zod.string().nullable(),
-  "minutesTransferred": zod.number(),
-  "durationSeconds": zod.number(),
-  "createdAt": zod.coerce.date()
-}))
+  "totalMinutesTransferred": zod.number(),
+  "uniqueVisitors": zod.number()
 })
 
 

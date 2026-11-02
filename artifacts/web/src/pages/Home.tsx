@@ -1,120 +1,75 @@
 import { useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { useGetStats } from "@workspace/api-client-react";
+import { useCitizen } from "@/context/CitizenContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, Clock, Users, Zap } from "lucide-react";
 
 export function Home() {
-  const { data: stats, isLoading } = useGetStats();
+  const { data: stats, isLoading, isError } = useGetStats();
+  const { citizen, authToken } = useCitizen();
 
   useEffect(() => {
-    document.title = "Хронос-Консоль | TimeNation";
+    document.title = "Обзор TimeNation";
   }, []);
 
   return (
     <Layout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Хронос-Консоль</h1>
-          <p className="text-muted-foreground font-mono text-sm mt-2">Пульс экономики в реальном времени</p>
+          <h1 className="text-3xl font-bold tracking-tight">Обзор TimeNation</h1>
+          <p className="text-muted-foreground font-mono text-sm mt-2">
+            Публичные агрегаты за всю историю системы
+          </p>
         </div>
 
-        {isLoading || !stats ? (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[1,2,3,4].map(i => <Skeleton key={i} className="h-32 bg-secondary" />)}
+        {isError ? (
+          <p className="rounded-md border border-border p-4 text-sm text-muted-foreground">
+            Не удалось загрузить сводку. Попробуйте обновить страницу.
+          </p>
+        ) : isLoading || !stats ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32 bg-secondary" />)}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <StatCard title="Всего граждан" value={stats.totalCitizens} icon={Users} />
-            <StatCard title="Активных граждан" value={stats.activeCitizens} icon={Activity} />
-            <StatCard title="Циркулирует (Д)" value={stats.totalMinutesCirculated} icon={Clock} />
-            <StatCard title="Транзакций" value={stats.totalTransactions} icon={Zap} />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard title="Всего граждан" value={stats.totalCitizens.toLocaleString()} icon={Users} />
+            <StatCard title="Активные аккаунты" value={stats.activeCitizens.toLocaleString()} icon={Activity} />
+            <StatCard title="Переводов за всё время" value={stats.totalTransactions.toLocaleString()} icon={Zap} />
+            <StatCard
+              title="Общий объём переводов"
+              value={`${Number(stats.totalMinutesTransferred).toLocaleString(undefined, { maximumFractionDigits: 2 })} Д`}
+              icon={Clock}
+            />
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-          <Card className="bg-card border-border">
+        {citizen && authToken && (
+          <Card className="max-w-xl border-primary/30 bg-primary/5">
             <CardHeader>
-              <CardTitle className="text-lg font-medium flex items-center gap-2">
-                <Clock className="w-5 h-5 text-primary" />
-                Последние транзакции
-              </CardTitle>
+              <CardTitle className="text-lg">Ваш личный баланс</CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoading || !stats ? (
-                <div className="space-y-4">
-                  {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-12 bg-secondary" />)}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {stats.recentTransactions.map(tx => (
-                    <div key={tx.id} className="flex justify-between items-center p-3 bg-secondary/50 border border-border/50 rounded-sm">
-                      <div>
-                        <div className="text-sm font-medium">№{tx.fromCitizenNumber ?? "—"} → №{tx.toCitizenNumber ?? "—"}</div>
-                        <div className="text-xs text-muted-foreground font-mono mt-1">{new Date(tx.createdAt).toLocaleString()}</div>
-                      </div>
-                      <div className="text-primary font-mono font-bold">+{(tx.minutesTransferred as number).toFixed(2)} Д</div>
-                    </div>
-                  ))}
-                  {stats.recentTransactions.length === 0 && (
-                    <div className="text-muted-foreground text-sm py-4 text-center">Транзакций пока нет</div>
-                  )}
-                </div>
-              )}
+              <div className="text-3xl font-bold font-mono text-primary">
+                {Number(citizen.balanceMinutes).toLocaleString(undefined, { maximumFractionDigits: 2 })} Д
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Этот показатель виден только после входа в аккаунт.
+              </p>
             </CardContent>
           </Card>
-          
-          <div className="space-y-6">
-             <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-lg font-medium">Топ — Отдают</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isLoading || !stats ? <Skeleton className="h-32 bg-secondary" /> : (
-                  <div className="space-y-3">
-                    {stats.topGivers.slice(0, 3).map((citizen, i) => (
-                      <div key={citizen.citizenNumber} className="flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                          <span className="text-muted-foreground font-mono text-xs w-4">{i + 1}.</span>
-                          <span className="font-medium font-mono">№{citizen.citizenNumber}</span>
-                        </div>
-                        <span className="text-sm font-mono text-muted-foreground">{(citizen.totalGiven as number).toFixed(2)} Д</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+        )}
 
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-lg font-medium">Топ — Принимают</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isLoading || !stats ? <Skeleton className="h-32 bg-secondary" /> : (
-                  <div className="space-y-3">
-                    {stats.topReceivers.slice(0, 3).map((citizen, i) => (
-                      <div key={citizen.citizenNumber} className="flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                          <span className="text-muted-foreground font-mono text-xs w-4">{i + 1}.</span>
-                          <span className="font-medium font-mono">№{citizen.citizenNumber}</span>
-                        </div>
-                        <span className="text-sm font-mono text-muted-foreground">{(citizen.totalReceived as number).toFixed(2)} Д</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Общий объём — сумма всех завершённых переводов, а не текущий остаток минут в системе.
+        </p>
       </div>
     </Layout>
   );
 }
 
-function StatCard({ title, value, icon: Icon }: { title: string, value: string | number, icon: any }) {
+function StatCard({ title, value, icon: Icon }: { title: string; value: string; icon: typeof Users }) {
   return (
     <Card className="bg-card border-border">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

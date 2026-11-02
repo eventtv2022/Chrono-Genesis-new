@@ -211,12 +211,12 @@ function ActivityWidget({
   stats,
   copy,
 }: {
-  stats: { activeCitizens: number; totalMinutesCirculated: number | string; uniqueVisitors: number } | undefined;
+  stats: { activeCitizens: number; totalMinutesTransferred: number | string; uniqueVisitors: number } | undefined;
   copy: GateCopy;
 }) {
   const rows = [
     { icon: "⚡", label: copy.citizens, value: stats ? stats.activeCitizens.toLocaleString() : "—", color: "#00ff88" },
-    { icon: "⏳", label: copy.darmins, value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—", color: "#c9a84c" },
+    { icon: "⏳", label: copy.darmins, value: stats ? Number(stats.totalMinutesTransferred).toFixed(0) : "—", color: "#c9a84c" },
     { icon: "◉", label: copy.visitors, value: stats ? stats.uniqueVisitors.toLocaleString() : "—", color: "#00d4ff" },
   ];
 
@@ -914,7 +914,7 @@ function MobileHero({ onShowReviews }: { onShowReviews: () => void }) {
         }}>
           {[
             { icon: "👥", label: copy.citizens, value: stats?.activeCitizens ?? "—", color: "0,212,255" },
-            { icon: "⏳", label: copy.darmins, value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—", color: "201,168,76" },
+            { icon: "⏳", label: copy.darmins, value: stats ? Number(stats.totalMinutesTransferred).toFixed(0) : "—", color: "201,168,76" },
             { icon: "⚡", label: copy.activity, value: copy.live, color: "0,255,136" },
           ].map(s => (
             <div key={s.label} style={{
@@ -1045,7 +1045,7 @@ function MobileHero({ onShowReviews }: { onShowReviews: () => void }) {
             <div style={{ fontSize: 8, letterSpacing: "0.16em", color: "#00d4ff", fontFamily: FONT_ORBITRON, marginBottom: 8, textTransform: "uppercase", opacity: 0.8 }}>◉ {copy.activity}</div>
             {[
               { label: copy.citizens, value: stats?.activeCitizens ?? "—", color: "#00ff88" },
-              { label: copy.darmins, value: stats ? Number(stats.totalMinutesCirculated).toFixed(0) : "—", color: "#c9a84c" },
+              { label: copy.darmins, value: stats ? Number(stats.totalMinutesTransferred).toFixed(0) : "—", color: "#c9a84c" },
               { label: copy.visitors, value: stats?.uniqueVisitors ?? "—", color: "#00d4ff" },
             ].map(r => (
               <div key={r.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
