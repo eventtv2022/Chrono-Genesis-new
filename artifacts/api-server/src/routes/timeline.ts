@@ -80,9 +80,8 @@ const capsuleUpload = multer({
       cb(null, `${Date.now()}${ext}`);
     },
   }),
-  // Busboy rejects at >= fileSize. Add one byte so exactly 10 MB is allowed,
-  // while any larger file is still rejected, matching the client.
-  limits: { fileSize: 10 * 1024 * 1024 + 1 },
+  // Busboy accepts files up to the configured size and rejects larger files.
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, _file, cb) => {
     // Accept any MIME type — server inspects file content after upload.
     cb(null, true);
