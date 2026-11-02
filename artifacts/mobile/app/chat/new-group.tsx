@@ -29,7 +29,7 @@ interface Citizen { id: number; name: string | null; rank: string | null; }
 
 export default function NewGroupScreen() {
   const router = useRouter();
-  const { citizen } = useCitizen();
+  const { citizen, authHeaders } = useCitizen();
 
   const [groupName, setGroupName] = useState("");
   const [groupDesc, setGroupDesc] = useState("");
@@ -41,12 +41,12 @@ export default function NewGroupScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${BASE_URL}/api/citizens`);
+        const res = await fetch(`${BASE_URL}/api/citizens/directory`, { headers: authHeaders });
         const all = (await res.json()) as Citizen[];
         setAllCitizens(all.filter((c) => c.id !== citizen?.id));
       } catch { /* silent */ }
     })();
-  }, [citizen?.id]);
+  }, [citizen?.id, authHeaders.Authorization]);
 
   const filtered = searchQuery.trim()
     ? allCitizens.filter((c) => (c.name ?? "").toLowerCase().includes(searchQuery.toLowerCase()))

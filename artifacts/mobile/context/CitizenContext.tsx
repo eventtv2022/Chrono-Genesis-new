@@ -146,7 +146,7 @@ export function CitizenProvider({ children }: { children: React.ReactNode }) {
   async function refreshCitizen() {
     if (!citizen) return;
     try {
-      const res = await fetch(`${BASE_URL}/api/citizens/${citizen.id}`);
+      const res = await fetch(`${BASE_URL}/api/citizens/${citizen.id}`, { headers: authHeaders });
       if (res.ok) {
         const updated = (await res.json()) as CitizenProfile;
         setCitizenState(updated);

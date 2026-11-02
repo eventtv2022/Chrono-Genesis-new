@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2, CircleDollarSign, LoaderCircle, LockKeyhol
 import { MessageCircle } from "lucide-react";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { getListCitizensQueryKey, useListCitizens } from "@workspace/api-client-react";
+import { getListCitizenDirectoryQueryKey, useListCitizenDirectory } from "@workspace/api-client-react";
 import { TiMETREscrowDiscussion } from "@/components/TiMETREscrowDiscussion";
 import { getTiMETRCopy } from "@/i18n/timetr";
 
@@ -53,8 +53,9 @@ export function TiMETREscrow() {
   const [notice, setNotice] = useState("");
   const [failure, setFailure] = useState("");
 
-  const { data: citizens = [] } = useListCitizens({
-    query: { queryKey: getListCitizensQueryKey(), enabled: !!citizen },
+  const { data: citizens = [] } = useListCitizenDirectory({
+    query: { queryKey: getListCitizenDirectoryQueryKey(), enabled: !!citizen && !!authHeaders.Authorization },
+    request: { headers: authHeaders },
   });
   const people = citizens as Person[];
   const { data: deals = [], isPending, isError, refetch } = useQuery<Deal[]>({

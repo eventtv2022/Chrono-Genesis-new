@@ -7,6 +7,5 @@
  */
 
 export type ListTransactionsParams = {
-citizenId?: number;
 limit?: number;
 };

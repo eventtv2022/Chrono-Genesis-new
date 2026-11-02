@@ -611,16 +611,16 @@ paths:
     get:
       operationId: listCitizens
       tags: [citizens]
-      summary: List all citizens
+      summary: List public passport numbers
       responses:
         "200":
-          description: List of citizens
+          description: Citizen passport numbers only
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Citizen"
+                  $ref: "#/components/schemas/PublicCitizenNumber"
     post:
       operationId: createCitizen
       tags: [citizens]
@@ -651,11 +651,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /citizens/directory:
+    get:
+      operationId: listCitizenDirectory
+      tags: [citizens]
+      summary: List citizen profiles for authenticated in-app actions
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Minimal recipient profiles for signed-in citizens
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CitizenDirectoryEntry"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /citizens/{id}:
     get:
       operationId: getCitizen
       tags: [citizens]
-      summary: Get citizen by ID
+      summary: Get own citizen profile
+      security:
+        - BearerAuth: []
       parameters:
         - name: id
           in: path
@@ -1216,13 +1241,8 @@ paths:
     get:
       operationId: listTransactions
       tags: [transactions]
-      summary: List all transactions
+      summary: List public transactions with passport numbers only
       parameters:
-        - name: citizenId
-          in: query
-          required: false
-          schema:
-            type: integer
         - name: limit
           in: query
           required: false
@@ -1230,13 +1250,13 @@ paths:
             type: integer
       responses:
         "200":
-          description: List of transactions
+          description: Public transaction summaries without names or internal citizen IDs
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Transaction"
+                  $ref: "#/components/schemas/PublicTransaction"
 
   /citizens/{id}/heritage-transfer:
     post:
@@ -2244,6 +2264,61 @@ components:
           type: integer
       required: [phase, action, questionId]
 
+    PublicCitizenNumber:
+      type: object
+      properties:
+        citizenNumber:
+          type: string
+      required: [citizenNumber]
+
+    CitizenDirectoryEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        citizenNumber:
+          type: ["string", "null"]
+        rank:
+          type: string
+        meritScore:
+          type: number
+        balanceMinutes:
+          type: number
+        totalGiven:
+          type: number
+        totalReceived:
+          type: number
+        status:
+          type: string
+        lastActivity:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        photoUrl:
+          type: ["string", "null"]
+        consultationRate:
+          type: number
+      required:
+        - id
+        - name
+        - phone
+        - citizenNumber
+        - rank
+        - meritScore
+        - balanceMinutes
+        - totalGiven
+        - totalReceived
+        - status
+        - lastActivity
+        - createdAt
+        - photoUrl
+        - consultationRate
+
     Citizen:
       type: object
       properties:
@@ -2776,6 +2851,41 @@ components:
         - durationSeconds
         - createdAt
 
+    PublicTransaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        fromCitizenNumber:
+          type: ["string", "null"]
+        toCitizenNumber:
+          type: ["string", "null"]
+        minutesTransferred:
+          type: number
+        durationSeconds:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - fromCitizenNumber
+        - toCitizenNumber
+        - minutesTransferred
+        - durationSeconds
+        - createdAt
+
+    EconomyTopCitizen:
+      type: object
+      properties:
+        citizenNumber:
+          type: string
+        totalGiven:
+          type: number
+        totalReceived:
+          type: number
+      required: [citizenNumber, totalGiven, totalReceived]
+
     HeritageTransferInput:
       type: object
       properties:
@@ -2943,15 +3053,15 @@ components:
         topGivers:
           type: array
           items:
-            $ref: "#/components/schemas/Citizen"
+            $ref: "#/components/schemas/EconomyTopCitizen"
         topReceivers:
           type: array
           items:
-            $ref: "#/components/schemas/Citizen"
+            $ref: "#/components/schemas/EconomyTopCitizen"
         recentTransactions:
           type: array
           items:
-            $ref: "#/components/schemas/Transaction"
+            $ref: "#/components/schemas/PublicTransaction"
       required:
         - totalCitizens
         - activeCitizens

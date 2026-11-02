@@ -367,6 +367,30 @@ export interface OnboardingProgressActionInput {
   questionId: number;
 }
 
+export interface PublicCitizenNumber {
+  citizenNumber: string;
+}
+
+export interface CitizenDirectoryEntry {
+  id: number;
+  name: string;
+  phone: string;
+  /** @nullable */
+  citizenNumber: string | null;
+  rank: string;
+  meritScore: number;
+  balanceMinutes: number;
+  totalGiven: number;
+  totalReceived: number;
+  status: string;
+  /** @nullable */
+  lastActivity: string | null;
+  createdAt: string;
+  /** @nullable */
+  photoUrl: string | null;
+  consultationRate: number;
+}
+
 export type CitizenStatus = typeof CitizenStatus[keyof typeof CitizenStatus];
 
 
@@ -760,6 +784,23 @@ export interface SessionResult {
   sheetsLogged: boolean;
 }
 
+export interface PublicTransaction {
+  id: number;
+  /** @nullable */
+  fromCitizenNumber: string | null;
+  /** @nullable */
+  toCitizenNumber: string | null;
+  minutesTransferred: number;
+  durationSeconds: number;
+  createdAt: string;
+}
+
+export interface EconomyTopCitizen {
+  citizenNumber: string;
+  totalGiven: number;
+  totalReceived: number;
+}
+
 export interface HeritageTransferInput {
   heirCitizenId: number;
 }
@@ -874,9 +915,9 @@ export interface EconomyStats {
   totalTransactions: number;
   totalMinutesCirculated: number;
   uniqueVisitors: number;
-  topGivers: Citizen[];
-  topReceivers: Citizen[];
-  recentTransactions: Transaction[];
+  topGivers: EconomyTopCitizen[];
+  topReceivers: EconomyTopCitizen[];
+  recentTransactions: PublicTransaction[];
 }
 
 export interface SiteVisitorInput {
@@ -1114,7 +1155,6 @@ limit?: number;
 };
 
 export type ListTransactionsParams = {
-citizenId?: number;
 limit?: number;
 };
 

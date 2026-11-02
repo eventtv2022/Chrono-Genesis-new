@@ -482,6 +482,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
   colors: ReturnType<typeof useColors>;
   refreshCitizen: () => Promise<void>;
 }) {
+  const { authHeaders } = useCitizen();
   const { t, lang } = useLanguage();
   const router = useRouter();
   const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -623,7 +624,7 @@ function EscrowModule({ citizen, citizens, colors, refreshCitizen }: {
       // Fetch FRESH balance from server — context cache may be stale after TimeBank/other operations
       let freshBalance = Number(citizen.balanceMinutes);
       try {
-        const r = await fetch(`${BASE_URL}/api/citizens/${citizen.id}`);
+        const r = await fetch(`${BASE_URL}/api/citizens/${citizen.id}`, { headers: authHeaders });
         if (r.ok) {
           const data = await r.json() as { balanceMinutes?: number };
           if (typeof data.balanceMinutes === "number") freshBalance = data.balanceMinutes;
@@ -1265,7 +1266,7 @@ function escrowStyles(colors: ReturnType<typeof useColors>) {
 export default function TimerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { citizen, isLoading: citizenLoading, refreshCitizen, setCitizen } = useCitizen();
+  const { citizen, authHeaders, isLoading: citizenLoading, refreshCitizen, setCitizen } = useCitizen();
   const { t: ui, lang, setLang } = useLanguage();
   const loginLang: "ru" | "en" = lang === "ru" ? "ru" : "en";
   const loginUi = UI[loginLang];
@@ -1342,11 +1343,11 @@ export default function TimerScreen() {
   } = useQuery<Citizen[]>({
     queryKey: ["citizens"],
     queryFn: async () => {
-      const res = await fetch(`${BASE_URL}/api/citizens`);
+      const res = await fetch(`${BASE_URL}/api/citizens/directory`, { headers: authHeaders });
       if (!res.ok) throw new Error(`Could not load citizens (${res.status})`);
       return res.json() as Promise<Citizen[]>;
     },
-    enabled: !!citizen,
+    enabled: !!citizen && !!authHeaders.Authorization,
   });
 
   const startSession = async () => {

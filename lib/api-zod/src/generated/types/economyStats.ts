@@ -5,8 +5,8 @@
  * TimeNation API — digital state where time is currency
  * OpenAPI spec version: 0.1.0
  */
-import type { Citizen } from './citizen';
-import type { Transaction } from './transaction';
+import type { EconomyTopCitizen } from './economyTopCitizen';
+import type { PublicTransaction } from './publicTransaction';
 
 export interface EconomyStats {
   totalCitizens: number;
@@ -14,7 +14,7 @@ export interface EconomyStats {
   totalTransactions: number;
   totalMinutesCirculated: number;
   uniqueVisitors: number;
-  topGivers: Citizen[];
-  topReceivers: Citizen[];
-  recentTransactions: Transaction[];
+  topGivers: EconomyTopCitizen[];
+  topReceivers: EconomyTopCitizen[];
+  recentTransactions: PublicTransaction[];
 }

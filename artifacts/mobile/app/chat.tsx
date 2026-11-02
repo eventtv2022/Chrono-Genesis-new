@@ -166,7 +166,7 @@ export default function ChatListScreen() {
     const t = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await fetch(`${BASE_URL}/api/citizens`);
+        const res = await fetch(`${BASE_URL}/api/citizens/directory`, { headers: authHeaders });
         const all = (await res.json()) as Citizen[];
         const q = searchQuery.toLowerCase();
         setSearchResults(all.filter((c) => (c.name ?? "").toLowerCase().includes(q) || (c.citizenNumber ?? "").includes(q)).slice(0, 20));
@@ -174,7 +174,7 @@ export default function ChatListScreen() {
       finally { setSearching(false); }
     }, 400);
     return () => clearTimeout(t);
-  }, [searchQuery]);
+  }, [searchQuery, authHeaders.Authorization]);
 
   if (!citizen) {
     return (

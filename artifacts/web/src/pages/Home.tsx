@@ -51,7 +51,7 @@ export function Home() {
                   {stats.recentTransactions.map(tx => (
                     <div key={tx.id} className="flex justify-between items-center p-3 bg-secondary/50 border border-border/50 rounded-sm">
                       <div>
-                        <div className="text-sm font-medium">{tx.fromCitizenName} → {tx.toCitizenName}</div>
+                        <div className="text-sm font-medium">№{tx.fromCitizenNumber ?? "—"} → №{tx.toCitizenNumber ?? "—"}</div>
                         <div className="text-xs text-muted-foreground font-mono mt-1">{new Date(tx.createdAt).toLocaleString()}</div>
                       </div>
                       <div className="text-primary font-mono font-bold">+{(tx.minutesTransferred as number).toFixed(2)} Д</div>
@@ -74,10 +74,10 @@ export function Home() {
                 {isLoading || !stats ? <Skeleton className="h-32 bg-secondary" /> : (
                   <div className="space-y-3">
                     {stats.topGivers.slice(0, 3).map((citizen, i) => (
-                      <div key={citizen.id} className="flex justify-between items-center">
+                      <div key={citizen.citizenNumber} className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
                           <span className="text-muted-foreground font-mono text-xs w-4">{i + 1}.</span>
-                          <span className="font-medium">{citizen.name}</span>
+                          <span className="font-medium font-mono">№{citizen.citizenNumber}</span>
                         </div>
                         <span className="text-sm font-mono text-muted-foreground">{(citizen.totalGiven as number).toFixed(2)} Д</span>
                       </div>
@@ -95,10 +95,10 @@ export function Home() {
                 {isLoading || !stats ? <Skeleton className="h-32 bg-secondary" /> : (
                   <div className="space-y-3">
                     {stats.topReceivers.slice(0, 3).map((citizen, i) => (
-                      <div key={citizen.id} className="flex justify-between items-center">
+                      <div key={citizen.citizenNumber} className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
                           <span className="text-muted-foreground font-mono text-xs w-4">{i + 1}.</span>
-                          <span className="font-medium">{citizen.name}</span>
+                          <span className="font-medium font-mono">№{citizen.citizenNumber}</span>
                         </div>
                         <span className="text-sm font-mono text-muted-foreground">{(citizen.totalReceived as number).toFixed(2)} Д</span>
                       </div>

@@ -663,26 +663,10 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * @summary List all citizens
+ * @summary List public passport numbers
  */
 export const ListCitizensResponseItem = zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "phone": zod.string(),
-  "citizenNumber": zod.string().nullable(),
-  "telegramId": zod.string().nullable(),
-  "walletAddress": zod.string().nullable(),
-  "balanceMinutes": zod.number(),
-  "transferableBalance": zod.number(),
-  "totalGiven": zod.number(),
-  "totalReceived": zod.number(),
-  "status": zod.enum(['active', 'inactive', 'suspended']),
-  "meritScore": zod.number(),
-  "rank": zod.string(),
-  "lastActivity": zod.string().nullable(),
-  "createdAt": zod.string(),
-  "onboardingCompleted": zod.boolean().optional(),
-  "ageProfileRequired": zod.boolean()
+  "citizenNumber": zod.string()
 })
 export const ListCitizensResponse = zod.array(ListCitizensResponseItem)
 
@@ -726,7 +710,29 @@ export const CreateCitizenResponse = zod.object({
 
 
 /**
- * @summary Get citizen by ID
+ * @summary List citizen profiles for authenticated in-app actions
+ */
+export const ListCitizenDirectoryResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "phone": zod.string(),
+  "citizenNumber": zod.string().nullable(),
+  "rank": zod.string(),
+  "meritScore": zod.number(),
+  "balanceMinutes": zod.number(),
+  "totalGiven": zod.number(),
+  "totalReceived": zod.number(),
+  "status": zod.string(),
+  "lastActivity": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "photoUrl": zod.string().nullable(),
+  "consultationRate": zod.number()
+})
+export const ListCitizenDirectoryResponse = zod.array(ListCitizenDirectoryResponseItem)
+
+
+/**
+ * @summary Get own citizen profile
  */
 export const GetCitizenParams = zod.object({
   "id": zod.coerce.number()
@@ -1159,23 +1165,19 @@ export const MakeAdminPersonalTransferResponse = zod.object({
 
 
 /**
- * @summary List all transactions
+ * @summary List public transactions with passport numbers only
  */
 export const ListTransactionsQueryParams = zod.object({
-  "citizenId": zod.coerce.number().optional(),
   "limit": zod.coerce.number().optional()
 })
 
 export const ListTransactionsResponseItem = zod.object({
   "id": zod.number(),
-  "sessionId": zod.number(),
-  "fromCitizenId": zod.number(),
-  "toCitizenId": zod.number(),
-  "fromCitizenName": zod.string(),
-  "toCitizenName": zod.string(),
+  "fromCitizenNumber": zod.string().nullable(),
+  "toCitizenNumber": zod.string().nullable(),
   "minutesTransferred": zod.number(),
   "durationSeconds": zod.number(),
-  "createdAt": zod.string()
+  "createdAt": zod.coerce.date()
 })
 export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem)
 
@@ -1389,53 +1391,22 @@ export const GetStatsResponse = zod.object({
   "totalMinutesCirculated": zod.number(),
   "uniqueVisitors": zod.number(),
   "topGivers": zod.array(zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "phone": zod.string(),
-  "citizenNumber": zod.string().nullable(),
-  "telegramId": zod.string().nullable(),
-  "walletAddress": zod.string().nullable(),
-  "balanceMinutes": zod.number(),
-  "transferableBalance": zod.number(),
+  "citizenNumber": zod.string(),
   "totalGiven": zod.number(),
-  "totalReceived": zod.number(),
-  "status": zod.enum(['active', 'inactive', 'suspended']),
-  "meritScore": zod.number(),
-  "rank": zod.string(),
-  "lastActivity": zod.string().nullable(),
-  "createdAt": zod.string(),
-  "onboardingCompleted": zod.boolean().optional(),
-  "ageProfileRequired": zod.boolean()
+  "totalReceived": zod.number()
 })),
   "topReceivers": zod.array(zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "phone": zod.string(),
-  "citizenNumber": zod.string().nullable(),
-  "telegramId": zod.string().nullable(),
-  "walletAddress": zod.string().nullable(),
-  "balanceMinutes": zod.number(),
-  "transferableBalance": zod.number(),
+  "citizenNumber": zod.string(),
   "totalGiven": zod.number(),
-  "totalReceived": zod.number(),
-  "status": zod.enum(['active', 'inactive', 'suspended']),
-  "meritScore": zod.number(),
-  "rank": zod.string(),
-  "lastActivity": zod.string().nullable(),
-  "createdAt": zod.string(),
-  "onboardingCompleted": zod.boolean().optional(),
-  "ageProfileRequired": zod.boolean()
+  "totalReceived": zod.number()
 })),
   "recentTransactions": zod.array(zod.object({
   "id": zod.number(),
-  "sessionId": zod.number(),
-  "fromCitizenId": zod.number(),
-  "toCitizenId": zod.number(),
-  "fromCitizenName": zod.string(),
-  "toCitizenName": zod.string(),
+  "fromCitizenNumber": zod.string().nullable(),
+  "toCitizenNumber": zod.string().nullable(),
   "minutesTransferred": zod.number(),
   "durationSeconds": zod.number(),
-  "createdAt": zod.string()
+  "createdAt": zod.coerce.date()
 }))
 })
 

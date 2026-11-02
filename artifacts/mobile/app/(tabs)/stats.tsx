@@ -24,24 +24,17 @@ const BASE_URL = getBaseUrl();
 
 interface Transaction {
   id: number;
-  sessionId: number;
-  fromCitizenId: number;
-  toCitizenId: number;
-  fromCitizenName: string;
-  toCitizenName: string;
+  fromCitizenNumber: string | null;
+  toCitizenNumber: string | null;
   minutesTransferred: number;
   durationSeconds: number;
   createdAt: string;
 }
 
 interface Citizen {
-  id: number;
-  name: string;
-  balanceMinutes: number;
+  citizenNumber: string;
   totalGiven: number;
   totalReceived: number;
-  status: string;
-  createdAt: string;
 }
 
 interface Stats {
@@ -314,10 +307,10 @@ export default function StatsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t.stats_top_givers.toUpperCase()}</Text>
           {data!.topGivers.map((c, i) => (
-            <View key={c.id} style={styles.rankRow}>
+            <View key={c.citizenNumber} style={styles.rankRow}>
               <Text style={styles.rankNum}>#{i + 1}</Text>
-              <View style={styles.rankAvatar}><Text style={styles.rankAvatarText}>{c.name.charAt(0)}</Text></View>
-              <Text style={styles.rankName}>{c.name}</Text>
+              <View style={styles.rankAvatar}><Text style={styles.rankAvatarText}>№</Text></View>
+              <Text style={styles.rankName}>№{c.citizenNumber}</Text>
               <View style={styles.rankBadge}><Text style={styles.rankBadgeText}>+{c.totalGiven.toFixed(2)} Д</Text></View>
             </View>
           ))}
@@ -330,7 +323,7 @@ export default function StatsScreen() {
           {data!.recentTransactions.map((tx) => (
             <View key={tx.id} style={styles.txRow}>
               <View style={styles.txLeft}>
-                <Text style={styles.txNames}>{tx.fromCitizenName} → {tx.toCitizenName}</Text>
+                <Text style={styles.txNames}>№{tx.fromCitizenNumber ?? "—"} → №{tx.toCitizenNumber ?? "—"}</Text>
                 <Text style={styles.txTime}>{formatDuration(tx.durationSeconds)} · {timeAgo(tx.createdAt, lang)}</Text>
               </View>
               <View style={styles.txAmount}>

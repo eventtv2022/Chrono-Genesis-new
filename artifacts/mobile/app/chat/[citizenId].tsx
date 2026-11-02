@@ -118,7 +118,7 @@ export default function ConversationScreen() {
   const router = useRouter();
   const { citizenId: rawId } = useLocalSearchParams<{ citizenId: string }>();
   const peerId = parseInt(rawId ?? "0", 10);
-  const { citizen, authToken, setCitizen } = useCitizen();
+  const { citizen, authToken, authHeaders, setCitizen } = useCitizen();
   const { t } = useLanguage();
 
   const [peer, setPeer] = useState<PeerInfo | null>(null);
@@ -247,11 +247,12 @@ export default function ConversationScreen() {
       }
     } catch { /* fall through */ }
 
-    // Always fetch full citizen profile to get photoUrl and rank
+    // Fetch the signed-in directory entry for the peer profile.
     try {
-      const citRes = await fetch(`${BASE_URL}/api/citizens/${peerId}`);
+      const citRes = await fetch(`${BASE_URL}/api/citizens/directory`, { headers: authHeaders });
       if (citRes.ok) {
-        const c = (await citRes.json()) as { id: number; name: string | null; rank: string | null; photoUrl?: string | null; meritScore?: number; createdAt?: string; consultationRate?: number };
+        const directory = (await citRes.json()) as Array<{ id: number; name: string | null; rank: string | null; photoUrl?: string | null; meritScore?: number; createdAt?: string; consultationRate?: number }>;
+        const c = directory.find((entry) => entry.id === peerId);
         if (c?.id) {
           const citizenDays = c.createdAt
             ? Math.floor((Date.now() - new Date(c.createdAt).getTime()) / 86_400_000)
@@ -266,7 +267,7 @@ export default function ConversationScreen() {
     } catch { /* silent */ }
 
     setPeer((prev) => prev ?? { id: peerId, name: null, rank: null, hasKey: false });
-  }, [peerId, citizen?.id, citizen?.name, citizen?.rank]);
+  }, [peerId, citizen?.id, citizen?.name, citizen?.rank, authHeaders.Authorization]);
 
   useEffect(() => { fetchPeerKey(); }, [fetchPeerKey]);
 
@@ -1039,7 +1040,7 @@ export default function ConversationScreen() {
   // ── Forward message ───────────────────────────────────────────────────────
   async function openForward() {
     try {
-      const res = await fetch(`${BASE_URL}/api/citizens`);
+      const res = await fetch(`${BASE_URL}/api/citizens/directory`, { headers: authHeaders });
       const all = (await res.json()) as CitizenItem[];
       setForwardCitizens(all.filter((c) => c.id !== citizen?.id).slice(0, 100));
     } catch { setForwardCitizens([]); }

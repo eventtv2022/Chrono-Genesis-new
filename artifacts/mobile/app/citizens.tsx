@@ -11,7 +11,6 @@ import {
   Platform,
   TouchableOpacity,
 } from "react-native";
-import { CitizenAvatar } from "@/components/CitizenAvatar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
@@ -21,26 +20,8 @@ import { useColors } from "@/hooks/useColors";
 const BASE_URL = getBaseUrl();
 
 interface Citizen {
-  id: number;
-  name: string;
-  phone: string;
-  rank: string;
-  meritScore: number;
-  balanceMinutes: number;
-  totalGiven: number;
-  totalReceived: number;
-  photoUrl?: string | null;
+  citizenNumber: string;
 }
-
-const RANK_COLORS: Record<string, string> = {
-  "Гражданин":              "#71717a",
-  "Оператор времени":       "#22c55e",
-  "Хранитель времени":      "#a855f7",
-  "Архитектор потока":      "#3b82f6",
-  "Мастер хронологии":      "#f59e0b",
-  "Синхронизатор вечности": "#ef4444",
-  "Посол":                  "#3b82f6",
-};
 
 export default function CitizensScreen() {
   const colors = useColors();
@@ -63,45 +44,16 @@ export default function CitizensScreen() {
   const filtered = (citizens ?? []).filter(
     (c) =>
       !query ||
-      c.name.toLowerCase().includes(query.toLowerCase())
+      c.citizenNumber.includes(query.trim())
   );
-
-  const sorted = [...filtered].sort((a, b) => (b.meritScore ?? 0) - (a.meritScore ?? 0));
 
   const styles = getStyles(colors);
 
   const renderItem = ({ item: c, index }: { item: Citizen; index: number }) => {
-    const rankColor = RANK_COLORS[c.rank] ?? colors.primary;
     return (
       <View style={styles.row}>
         <Text style={styles.idx}>{index + 1}</Text>
-        <View style={styles.rowMain}>
-          <CitizenAvatar
-            citizenId={c.id}
-            name={c.name}
-            hasPhoto={!!c.photoUrl}
-            size={36}
-            rankColor={rankColor}
-          />
-          <View style={styles.nameBlock}>
-            <Text style={styles.name} numberOfLines={1}>{c.name}</Text>
-          </View>
-        </View>
-        <View style={[styles.rankPill, { backgroundColor: rankColor + "22", borderColor: rankColor + "55" }]}>
-          <Text style={[styles.rankText, { color: rankColor }]} numberOfLines={1}>{c.rank}</Text>
-        </View>
-        <View style={styles.stats}>
-          <Text style={[styles.meritScore, { color: colors.primary }]}>{c.meritScore ?? 0}</Text>
-          <Text style={styles.statLabel}>Merit</Text>
-        </View>
-        <View style={styles.stats}>
-          <Text style={styles.statNum}>{c.balanceMinutes}</Text>
-          <Text style={styles.statLabel}>Д</Text>
-        </View>
-        <View style={styles.stats}>
-          <Text style={[styles.statNum, { color: colors.primary }]}>↑{c.totalGiven}</Text>
-          <Text style={styles.statLabel}>Отдал</Text>
-        </View>
+        <Text style={styles.name} numberOfLines={1}>№{c.citizenNumber}</Text>
       </View>
     );
   };
@@ -115,7 +67,7 @@ export default function CitizensScreen() {
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={styles.title}>Реестр граждан</Text>
           <Text style={styles.subtitle}>
-            По Merit Score · {citizens?.length ?? "…"} граждан
+            Только номера паспортов · {citizens?.length ?? "…"} граждан
           </Text>
         </View>
       </View>
@@ -126,7 +78,7 @@ export default function CitizensScreen() {
           style={styles.searchInput}
           value={query}
           onChangeText={setQuery}
-          placeholder="Поиск по псевдониму…"
+          placeholder="Поиск по номеру паспорта…"
           placeholderTextColor={colors.mutedForeground}
         />
         {query.length > 0 && (
@@ -140,15 +92,15 @@ export default function CitizensScreen() {
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      ) : sorted.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <View style={styles.center}>
           <Feather name="users" size={40} color={colors.mutedForeground} />
           <Text style={styles.empty}>Граждан не найдено</Text>
         </View>
       ) : (
         <FlatList
-          data={sorted}
-          keyExtractor={(c) => String(c.id)}
+          data={filtered}
+          keyExtractor={(c) => c.citizenNumber}
           renderItem={renderItem}
           contentContainerStyle={{ paddingBottom: 40, paddingTop: 4 }}
           showsVerticalScrollIndicator={false}

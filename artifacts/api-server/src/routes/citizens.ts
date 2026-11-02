@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, sql, desc, and, or, isNull, gte } from "drizzle-orm";
+import { eq, sql, desc, and, or, isNull, isNotNull, gte } from "drizzle-orm";
 import crypto from "crypto";
 import path from "path";
 import fs from "fs";
@@ -324,13 +324,44 @@ function generatePassportSvg(c: {
 </svg>`;
 }
 
-// ── GET /citizens ─────────────────────────────────────────────────────────────
+// ── Public passport-number directory ──────────────────────────────────────────
 router.get("/citizens", async (req, res): Promise<void> => {
   const citizens = await db
-    .select()
+    .select({ citizenNumber: citizensTable.citizenNumber })
+    .from(citizensTable)
+    .where(isNotNull(citizensTable.citizenNumber))
+    .orderBy(citizensTable.citizenNumber);
+  res.json(citizens);
+});
+
+// Authenticated directory for in-app citizen-to-citizen actions.
+router.get("/citizens/directory", requireAuth, async (_req, res): Promise<void> => {
+  const citizens = await db
+    .select({
+      id: citizensTable.id,
+      name: citizensTable.name,
+      phone: citizensTable.phone,
+      citizenNumber: citizensTable.citizenNumber,
+      rank: citizensTable.rank,
+      meritScore: citizensTable.meritScore,
+      balanceMinutes: citizensTable.balanceMinutes,
+      totalGiven: citizensTable.totalGiven,
+      totalReceived: citizensTable.totalReceived,
+      status: citizensTable.status,
+      lastActivity: citizensTable.lastActivity,
+      createdAt: citizensTable.createdAt,
+      photoUrl: citizensTable.photoUrl,
+      consultationRate: citizensTable.consultationRate,
+    })
     .from(citizensTable)
     .orderBy(citizensTable.createdAt);
-  res.json(citizens.map(formatCitizenRow));
+
+  res.json(citizens.map((citizen) => ({
+    ...citizen,
+    photoUrl: citizen.photoUrl ? "vault:protected" : null,
+    lastActivity: citizen.lastActivity?.toISOString() ?? null,
+    createdAt: citizen.createdAt.toISOString(),
+  })));
 });
 
 // ── GET /citizens/:id/photo ───────────────────────────────────────────────────
@@ -857,11 +888,15 @@ router.get("/citizens/lookup/:num", async (req, res): Promise<void> => {
 });
 
 // ── GET /citizens/:id ─────────────────────────────────────────────────────────
-router.get("/citizens/:id", async (req, res): Promise<void> => {
+router.get("/citizens/:id", requireAuth, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw ?? "", 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid citizen ID" });
+    return;
+  }
+  if (req.citizen?.id !== id && req.citizen?.isAdmin !== 1) {
+    res.status(403).json({ error: "Доступ запрещён" });
     return;
   }
 

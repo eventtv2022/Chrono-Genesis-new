@@ -27,6 +27,7 @@ import type {
   AuthSession,
   CastGovernmentPollVote200,
   Citizen,
+  CitizenDirectoryEntry,
   CitizenInput,
   CitizenRegistrationResult,
   CitizenUpdate,
@@ -65,6 +66,8 @@ import type {
   PasswordCitizenRegistrationInput,
   PaymentCheckoutInput,
   PaymentCheckoutResult,
+  PublicCitizenNumber,
+  PublicTransaction,
   ServiceCatalogAuditPreview,
   ServiceCatalogAuditPreviewInput,
   ServiceCatalogPublishInput,
@@ -97,7 +100,6 @@ import type {
   TimenamingMutationResult,
   TimenamingReservationInput,
   TimenamingUpgradeInput,
-  Transaction,
   TvLiveSlotResponse,
   TvMyCatalogResponse,
   TvScheduleResponse,
@@ -1899,11 +1901,11 @@ export const getListCitizensUrl = () => {
 }
 
 /**
- * @summary List all citizens
+ * @summary List public passport numbers
  */
-export const listCitizens = async ( options?: RequestInit): Promise<Citizen[]> => {
+export const listCitizens = async ( options?: RequestInit): Promise<PublicCitizenNumber[]> => {
 
-  return customFetch<Citizen[]>(getListCitizensUrl(),
+  return customFetch<PublicCitizenNumber[]>(getListCitizensUrl(),
   {
     ...options,
     method: 'GET'
@@ -1946,7 +1948,7 @@ export type ListCitizensQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List all citizens
+ * @summary List public passport numbers
  */
 
 export function useListCitizens<TData = Awaited<ReturnType<typeof listCitizens>>, TError = ErrorType<unknown>>(
@@ -2038,6 +2040,83 @@ export const useCreateCitizen = <TError = ErrorType<ErrorResponse>,
       return useMutation(getCreateCitizenMutationOptions(options));
     }
 
+export const getListCitizenDirectoryUrl = () => {
+
+
+
+
+  return `/api/citizens/directory`
+}
+
+/**
+ * @summary List citizen profiles for authenticated in-app actions
+ */
+export const listCitizenDirectory = async ( options?: RequestInit): Promise<CitizenDirectoryEntry[]> => {
+
+  return customFetch<CitizenDirectoryEntry[]>(getListCitizenDirectoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCitizenDirectoryQueryKey = () => {
+    return [
+    `/api/citizens/directory`
+    ] as const;
+    }
+
+
+export const getListCitizenDirectoryQueryOptions = <TData = Awaited<ReturnType<typeof listCitizenDirectory>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCitizenDirectory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCitizenDirectoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCitizenDirectory>>> = ({ signal }) => listCitizenDirectory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCitizenDirectory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCitizenDirectoryQueryResult = NonNullable<Awaited<ReturnType<typeof listCitizenDirectory>>>
+export type ListCitizenDirectoryQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List citizen profiles for authenticated in-app actions
+ */
+
+export function useListCitizenDirectory<TData = Awaited<ReturnType<typeof listCitizenDirectory>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCitizenDirectory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCitizenDirectoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getGetCitizenUrl = (id: number,) => {
 
 
@@ -2047,7 +2126,7 @@ export const getGetCitizenUrl = (id: number,) => {
 }
 
 /**
- * @summary Get citizen by ID
+ * @summary Get own citizen profile
  */
 export const getCitizen = async (id: number, options?: RequestInit): Promise<Citizen> => {
 
@@ -2094,7 +2173,7 @@ export type GetCitizenQueryError = ErrorType<ErrorResponse>
 
 
 /**
- * @summary Get citizen by ID
+ * @summary Get own citizen profile
  */
 
 export function useGetCitizen<TData = Awaited<ReturnType<typeof getCitizen>>, TError = ErrorType<ErrorResponse>>(
@@ -3520,11 +3599,11 @@ export const getListTransactionsUrl = (params?: ListTransactionsParams,) => {
 }
 
 /**
- * @summary List all transactions
+ * @summary List public transactions with passport numbers only
  */
-export const listTransactions = async (params?: ListTransactionsParams, options?: RequestInit): Promise<Transaction[]> => {
+export const listTransactions = async (params?: ListTransactionsParams, options?: RequestInit): Promise<PublicTransaction[]> => {
 
-  return customFetch<Transaction[]>(getListTransactionsUrl(params),
+  return customFetch<PublicTransaction[]>(getListTransactionsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -3567,7 +3646,7 @@ export type ListTransactionsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List all transactions
+ * @summary List public transactions with passport numbers only
  */
 
 export function useListTransactions<TData = Awaited<ReturnType<typeof listTransactions>>, TError = ErrorType<unknown>>(

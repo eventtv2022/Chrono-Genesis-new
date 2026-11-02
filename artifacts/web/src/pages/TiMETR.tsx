@@ -6,7 +6,7 @@ import { Layout } from "@/components/Layout";
 import { TiMETREscrow } from "@/components/TiMETREscrow";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { getListCitizensQueryKey, useListCitizens } from "@workspace/api-client-react";
+import { getListCitizenDirectoryQueryKey, useListCitizenDirectory } from "@workspace/api-client-react";
 import { getTiMETRCopy } from "@/i18n/timetr";
 
 type CitizenOption = {
@@ -57,8 +57,9 @@ export function TiMETR() {
   const [result, setResult] = useState<CompletedSession | null>(null);
   const [mode, setMode] = useState<"transfer" | "escrow">("transfer");
 
-  const { data: citizens = [], isLoading, isError, refetch } = useListCitizens({
-    query: { queryKey: getListCitizensQueryKey(), enabled: !!citizen },
+  const { data: citizens = [], isLoading, isError, refetch } = useListCitizenDirectory({
+    query: { queryKey: getListCitizenDirectoryQueryKey(), enabled: !!citizen && !!authHeaders.Authorization },
+    request: { headers: authHeaders },
   });
 
   useEffect(() => {
@@ -120,7 +121,7 @@ export function TiMETR() {
       setResult(body);
       setActiveSession(null);
       await refreshCitizen();
-      await queryClient.invalidateQueries({ queryKey: getListCitizensQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getListCitizenDirectoryQueryKey() });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : copy.error);
     } finally {

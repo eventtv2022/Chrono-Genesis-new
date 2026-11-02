@@ -154,7 +154,8 @@ export default function GroupConversationScreen() {
   // ── Forward group message to personal DM ─────────────────────────────────
   async function openGroupForward() {
     try {
-      const res = await fetch(`${BASE_URL}/api/citizens`);
+      const hdrs = await getStoredAuthHeaders();
+      const res = await fetch(`${BASE_URL}/api/citizens/directory`, { headers: hdrs });
       const all = (await res.json()) as CitizenItem[];
       setForwardCitizens(all.filter((c) => c.id !== citizen?.id).slice(0, 100));
     } catch { setForwardCitizens([]); }
