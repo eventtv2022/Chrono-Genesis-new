@@ -341,31 +341,35 @@ export default function ProfileScreen() {
             const item = professionalDocs?.[kind];
             const label = kind === "resume" ? (isRu ? "Резюме" : "Resume") : (isRu ? "Портфолио" : "Portfolio");
             return (
-              <View key={kind} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 }}>
-                <View style={{ flex: 1 }}>
+              <View key={kind} style={{ marginTop: 12 }}>
+                <View>
                   <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: "600" }}>{label}</Text>
                   <Text numberOfLines={1} style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 3 }}>
                     {item?.fileName ?? (isRu ? "Файл не загружен" : "No file uploaded")}
                   </Text>
                 </View>
-                {item && (
-                  <TouchableOpacity
-                    disabled={docBusy}
-                    onPress={() => void setDocumentVisibility(kind, !item.visible)}
-                    accessibilityLabel={isRu ? `${item.visible ? "Скрыть" : "Показать"} ${label.toLowerCase()}` : `${item.visible ? "Hide" : "Show"} ${label.toLowerCase()}`}
-                    style={[styles.copyButton, { borderColor: colors.border, marginTop: 6, paddingHorizontal: 10, opacity: docBusy ? 0.5 : 1 }]}
-                  >
-                    <Feather name={item.visible ? "eye" : "eye-off"} size={14} color={item.visible ? colors.primary : colors.mutedForeground} />
-                    <Text style={[styles.copyText, { color: item.visible ? colors.primary : colors.mutedForeground }]}>
-                      {isRu ? (item.visible ? "Виден гражданам" : "Скрыт") : (item.visible ? "Visible to citizens" : "Hidden")}
-                    </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 6 }}>
+                  {item && (
+                    <>
+                      <TouchableOpacity
+                        disabled={docBusy}
+                        onPress={() => void setDocumentVisibility(kind, !item.visible)}
+                        accessibilityLabel={isRu ? `${item.visible ? "Скрыть" : "Показать"} ${label.toLowerCase()}` : `${item.visible ? "Hide" : "Show"} ${label.toLowerCase()}`}
+                        style={[styles.copyButton, { borderColor: colors.border, marginTop: 0, paddingHorizontal: 10, flexShrink: 1, opacity: docBusy ? 0.5 : 1 }]}
+                      >
+                        <Feather name={item.visible ? "eye" : "eye-off"} size={14} color={item.visible ? colors.primary : colors.mutedForeground} />
+                        <Text numberOfLines={1} style={[styles.copyText, { color: item.visible ? colors.primary : colors.mutedForeground, flexShrink: 1 }]}>
+                          {isRu ? (item.visible ? "Виден гражданам" : "Скрыт") : (item.visible ? "Visible to citizens" : "Hidden")}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity disabled={docBusy} onPress={() => void removeProfessionalDoc(kind)} accessibilityLabel={isRu ? "Удалить файл" : "Remove file"}><Feather name="trash-2" size={17} color={colors.destructive} /></TouchableOpacity>
+                    </>
+                  )}
+                  <TouchableOpacity disabled={docBusy || !docConsent} onPress={() => void uploadProfessionalDoc(kind)} style={[styles.copyButton, { borderColor: colors.border, marginTop: 0, paddingHorizontal: 10, opacity: docConsent ? 1 : 0.45 }]}>
+                    {docBusy ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="upload" size={14} color={colors.primary} />}
+                    <Text style={[styles.copyText, { color: colors.primary }]}>{isRu ? (item ? "Заменить" : "Загрузить") : (item ? "Replace" : "Upload")}</Text>
                   </TouchableOpacity>
-                )}
-                {item && <TouchableOpacity disabled={docBusy} onPress={() => void removeProfessionalDoc(kind)} accessibilityLabel={isRu ? "Удалить файл" : "Remove file"}><Feather name="trash-2" size={17} color={colors.destructive} /></TouchableOpacity>}
-                <TouchableOpacity disabled={docBusy || !docConsent} onPress={() => void uploadProfessionalDoc(kind)} style={[styles.copyButton, { borderColor: colors.border, marginTop: 0, paddingHorizontal: 10, opacity: docConsent ? 1 : 0.45 }]}>
-                  {docBusy ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="upload" size={14} color={colors.primary} />}
-                  <Text style={[styles.copyText, { color: colors.primary }]}>{isRu ? (item ? "Заменить" : "Загрузить") : (item ? "Replace" : "Upload")}</Text>
-                </TouchableOpacity>
+                </View>
               </View>
             );
           })}
