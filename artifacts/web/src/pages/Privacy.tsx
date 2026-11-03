@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { CookieConsent } from "@/components/CookieConsent";
 import { AnthemButton } from "@/components/AnthemPlayer";
+import { LegalFooter } from "@/components/LegalFooter";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 export type PrivacyLangCode =
@@ -316,6 +317,15 @@ function detectLang(): PrivacyLangCode {
   return nav in UI ? nav : "en";
 }
 
+function normalizePrivacyContent(sections: PolicySection[]): PolicySection[] {
+  return sections.map(section => ({
+    ...section,
+    paragraphs: section.paragraphs
+      .filter(paragraph => !paragraph.includes("@timenation_support"))
+      .map(paragraph => paragraph.replaceAll("privacy@timenation.info", "support@timenation.info")),
+  }));
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 export function Privacy() {
   const [lang, setLang] = useState<PrivacyLangCode>(detectLang);
@@ -333,12 +343,15 @@ export function Privacy() {
     setLoading(true);
     fetch(`${import.meta.env.BASE_URL}locales/${lang}/privacy.json`)
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then((data: LocaleData) => { setContent(data.sections); setLoading(false); })
+      .then((data: LocaleData) => {
+        setContent(normalizePrivacyContent(data.sections));
+        setLoading(false);
+      })
       .catch(() => {
         // fallback to English
         fetch(`${import.meta.env.BASE_URL}locales/en/privacy.json`)
           .then(r => r.json())
-          .then((data: LocaleData) => { setContent(data.sections); setLoading(false); })
+          .then((data: LocaleData) => { setContent(normalizePrivacyContent(data.sections)); setLoading(false); })
           .catch(() => setLoading(false));
       });
   }, [lang]);
@@ -441,9 +454,9 @@ export function Privacy() {
                 <p style={{ margin: "0 0 8px", fontSize: 14, color: muted }}>{s.delete_note}</p>
                 <div style={{ margin: "16px 0 10px", display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 14, color: muted }}>{s.delete_email_label}</span>
-                  <a href="mailto:privacy@timenation.info?subject=Account%20deletion%20request" style={{ color: accent, fontWeight: 600, fontSize: 14 }}>privacy@timenation.info</a>
+                  <a href="mailto:support@timenation.info?subject=Account%20deletion%20request" style={{ color: accent, fontWeight: 600, fontSize: 14 }}>support@timenation.info</a>
                 </div>
-                <a href="mailto:privacy@timenation.info?subject=Account%20deletion%20request"
+                <a href="mailto:support@timenation.info?subject=Account%20deletion%20request"
                   style={{ display: "inline-block", marginTop: 8, background: dark ? "rgba(220,80,80,.2)" : "rgba(220,80,80,.1)", color: dark ? "#ff8080" : "#cc2020", border: `1px solid ${dark ? "rgba(220,80,80,.4)" : "rgba(220,80,80,.3)"}`, borderRadius: 8, padding: "10px 20px", fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
                   {s.delete_btn}
                 </a>
@@ -461,6 +474,7 @@ export function Privacy() {
         </main>
       </div>
 
+      <LegalFooter lang={lang === "ru" ? "ru" : "en"} />
       <CookieConsent isRtl={isRtl} strings={s} />
 
       <style>{`@media(min-width:768px){.privacy-toc{display:block!important}}`}</style>

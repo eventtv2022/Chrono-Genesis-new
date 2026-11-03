@@ -27,3 +27,4 @@
 - [Workspace typecheck timeouts](workspace-typecheck-timeouts.md) — if aggregate typecheck stalls, validate shared libs and app packages serially.
 - [Public dashboard privacy](public-dashboard-privacy.md) — public views use aggregates only; citizen-level balances and histories require sign-in.
 - [Souvenir DarMin auction custody](souvenir-darmin-auctions.md) — souvenir NFTs may be listed through platform-controlled Sepolia escrow with return and winner-transfer paths.
+- [TimeNation refund policy](refund-policy.md) — 14-day refunds apply to every payment method; use support@timenation.info as the sole official contact.

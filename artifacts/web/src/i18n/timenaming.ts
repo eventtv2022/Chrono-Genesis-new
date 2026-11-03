@@ -30,7 +30,7 @@ const ru: TimenamingCopy = {
     "Настоящий документ подтверждает приобретение неисключительного права на размещение и индексацию цифрового контента (информационной метки времени) в рамках программного обеспечения как услуги (SaaS) платформы TimeNation.",
     "Данная лицензия является исключительно утилитарным цифровым правом доступа к функционалу платформы. Она не является ценной бумагой, долей в уставном капитале, финансовым инструментом, инвестиционным контрактом, средством платежа, цифровой валютой или обязательством по обратному выкупу (buyback).",
     "Лицензия не предоставляет никаких прав собственности, владения или распоряжения реальным физическим временем, астрономическими объектами или материальными активами в реальном мире.",
-    "Все платежи за лицензии и внутренние расчетные единицы (DarMin) являются окончательными, невозвратными (non-refundable) и направляются на покрытие операционных расходов по поддержанию SaaS-инфраструктуры.",
+    "Возврат платежа за лицензию или внутренние расчетные единицы (DarMin) можно запросить в течение 14 календарных дней с даты оплаты при любом способе оплаты. Подробнее — в Политике возврата TimeNation.",
     "Администрация платформы не несет ответственности за изменение рыночной стоимости прав на индексацию или действия третьих лиц на вторичном рынке. Документ носит информационный характер и не является юридической, финансовой или инвестиционной консультацией.",
   ],
   questions: [
@@ -52,7 +52,7 @@ const en: TimenamingCopy = {
     "This document confirms the acquisition of a non-exclusive right to place and index digital content (an informational timestamp) within TimeNation’s software-as-a-service (SaaS) platform.",
     "This license is solely a utilitarian digital right of access to platform functionality. It is not a security, equity interest, financial instrument, investment contract, means of payment, digital currency, or buyback obligation.",
     "The license grants no ownership, possession, or control rights over real physical time, astronomical objects, or tangible real-world assets.",
-    "All payments for licenses and internal accounting units (DarMin) are final and non-refundable, and are directed toward operating costs for maintaining the SaaS infrastructure.",
+    "A refund for a license or internal accounting units (DarMin) may be requested within 14 calendar days of payment, regardless of payment method. See the TimeNation Refund Policy for details.",
     "The platform administration is not responsible for changes in the market value of indexing rights or the actions of third parties in a secondary market. This document is informational and is not legal, financial, or investment advice.",
   ],
   questions: [

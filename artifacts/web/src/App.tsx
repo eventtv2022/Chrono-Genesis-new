@@ -40,7 +40,6 @@ import { GovPolls } from "./pages/GovPolls";
 import { QrLogin } from "./pages/QrLogin";
 import { Privacy } from "./pages/Privacy";
 import { Welcome } from "./pages/Welcome";
-import { Tos } from "./pages/Tos";
 import { Login } from "./pages/Login";
 import { OnboardingGame } from "./pages/OnboardingGame";
 import { SignatureRequest } from "./pages/SignatureRequest";
@@ -50,6 +49,7 @@ import { AnthemPlayer } from "./components/AnthemPlayer";
 import { Timenaming } from "./pages/Timenaming";
 import { TimeBank } from "./pages/TimeBank";
 import { TiMETR } from "./pages/TiMETR";
+import { Refund, Terms } from "./pages/LegalPages";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,6 +74,7 @@ function TgGuard({ children }: { children: React.ReactNode }) {
       if (isLoading) return;
 
       if (location === "/signature-request") return;
+      if (["/privacy", "/tos", "/terms", "/refund"].includes(location)) return;
 
       if (citizen?.registrationStatus === "pending") {
         if (location !== "/onboarding") navigate("/onboarding");
@@ -86,7 +87,7 @@ function TgGuard({ children }: { children: React.ReactNode }) {
       }
 
       if (!citizen) {
-        const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/reset-password", "/qr-login", "/signature-request", "/referrals", "/profile", "/timenaming", "/timebank", "/timetr", "/watch-shop"];
+        const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/terms", "/refund", "/reset-password", "/qr-login", "/signature-request", "/referrals", "/profile", "/timenaming", "/timebank", "/timetr", "/watch-shop"];
         if (!guestRoutes.includes(location)) navigate("/welcome");
         else if (location === "/") navigate("/welcome");
       }
@@ -97,6 +98,7 @@ function TgGuard({ children }: { children: React.ReactNode }) {
     if (twaLoading) return;
 
     if (location === "/signature-request") return;
+    if (["/privacy", "/tos", "/terms", "/refund"].includes(location)) return;
 
     if (!citizen) {
       if (location !== "/onboarding") navigate("/onboarding");
@@ -203,7 +205,9 @@ function Router() {
           <Route path="/gov/polls" component={GovPolls} />
           <Route path="/qr-login" component={QrLogin} />
           <Route path="/privacy" component={Privacy} />
-          <Route path="/tos" component={Tos} />
+          <Route path="/terms" component={Terms} />
+          <Route path="/refund" component={Refund} />
+          <Route path="/tos" component={Terms} />
           <Route path="/welcome" component={Welcome} />
           <Route component={NotFound} />
         </Switch>

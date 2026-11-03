@@ -7,6 +7,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useWsSync } from "@/hooks/useWsSync";
 import { AnthemButton } from "./AnthemPlayer";
 import { timenamingCopy } from "@/i18n/timenaming";
+import { LegalFooter } from "./LegalFooter";
 
 function CitizenWidget() {
   const { citizen, setCitizen, setAuthToken, refreshCitizen } = useCitizen();
@@ -302,6 +303,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="pl-14 pr-4 pt-4 pb-4 lg:p-8 max-w-7xl mx-auto min-h-full">
           {children}
         </div>
+        <LegalFooter lang={lang === "ru" ? "ru" : "en"} />
       </main>
     </div>
   );

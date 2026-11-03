@@ -363,6 +363,10 @@ export function Shop() {
                         <div className="text-base font-bold font-mono text-muted-foreground">{price.eurPerDarmin.toFixed(2)} €/Д</div>
                       </div>
                     </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[11px] font-mono text-muted-foreground">
+                      <span className="font-semibold text-emerald-400">Stripe · оплата картой EUR</span>
+                      <span>Возврат можно запросить в течение 14 дней для любого способа оплаты.</span>
+                    </div>
                     <Button
                       onClick={() => void handleBuy()}
                       disabled={loading || !citizen || amount < 1}
@@ -517,7 +521,8 @@ export function Shop() {
 
         <p className="text-xs text-muted-foreground font-mono leading-relaxed">
           Дармины — внутренняя игровая валюта TimeNation. Не являются денежными средствами
-          в юридическом смысле. Оплата обрабатывается через Stripe (EUR).
+          в юридическом смысле. Оплата картой в EUR обрабатывается Stripe; USDT через TRC20 и WalletConnect — отдельные блокчейн-платежи.
+          <a href="/refund" className="ml-1 text-primary hover:underline">Политика возврата (14 дней)</a>
         </p>
       </div>
     </Layout>
