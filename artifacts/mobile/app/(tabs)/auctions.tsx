@@ -19,12 +19,13 @@ interface Auction {
   id: number;
   sellerId: number;
   sellerName: string | null;
-  assetType: "DARMIN_CURRENCY" | "HISTORICAL_SLOT" | "TIME_ANCHOR";
+  assetType: "DARMIN_CURRENCY" | "HISTORICAL_SLOT" | "TIME_ANCHOR" | "SOUVENIR_NFT";
   amountDarmins: number;
   slotId: number | null;
   slotLocation: string | null;
   slotTimeMarker: string | null;
   timelineCoord: string | null;
+  souvenirSerialNumber: number | null;
   capsuleText: string | null;
   mediaUrl: string | null;
   mediaType: string | null;
@@ -163,6 +164,7 @@ export default function AuctionsScreen() {
           const currentPrice = item.currentBid ?? item.startingPrice;
           const isSlot   = item.assetType === "HISTORICAL_SLOT";
           const isAnchor = item.assetType === "TIME_ANCHOR";
+          const isSouvenir = item.assetType === "SOUVENIR_NFT";
           const fmtCoord = (c: string | null) => {
             if (!c || c.length !== 12) return c ?? "—";
             return `${c.slice(6,8)}.${c.slice(4,6)}.${parseInt(c.slice(0,4),10)} ${c.slice(8,10)}:${c.slice(10,12)}`;
@@ -179,6 +181,11 @@ export default function AuctionsScreen() {
                   <Text style={[styles.slotBadgeText, { color: "#7c3aed" }]}>⏱ Точка на таймлайне истории</Text>
                 </View>
               )}
+              {isSouvenir && (
+                <View style={[styles.slotBadge, { backgroundColor: "#0891b218", borderColor: "#0891b244" }]}>
+                  <Text style={[styles.slotBadgeText, { color: "#0891b2" }]}>🪙 NFT сувенирный ДарМин · DM {String(item.souvenirSerialNumber ?? 0).padStart(9, "0")}</Text>
+                </View>
+              )}
               <View style={styles.cardTop}>
                 <View style={styles.lotInfo}>
                   {isSlot ? (
@@ -189,6 +196,11 @@ export default function AuctionsScreen() {
                   ) : isAnchor ? (
                     <>
                       <Text style={styles.lotAmount} numberOfLines={1}>{fmtCoord(item.timelineCoord)}</Text>
+                      <Text style={styles.lotSeller}>{item.sellerName ?? "—"}{isOwn ? ` (${t.auc_own})` : ""}</Text>
+                    </>
+                  ) : isSouvenir ? (
+                    <>
+                      <Text style={styles.lotAmount}>DM {String(item.souvenirSerialNumber ?? 0).padStart(9, "0")}</Text>
                       <Text style={styles.lotSeller}>{item.sellerName ?? "—"}{isOwn ? ` (${t.auc_own})` : ""}</Text>
                     </>
                   ) : (

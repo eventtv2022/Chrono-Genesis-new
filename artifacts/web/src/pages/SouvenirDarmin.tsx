@@ -13,6 +13,7 @@ type Note = {
   nftTokenId: string | null;
   nftTransactionHash: string | null;
 };
+type EscrowDetails = { serialNumber: number; escrowAddress: string; contractAddress: string; tokenId: string; alreadyEscrowed?: boolean };
 
 export function SouvenirDarmin() {
   const { authToken, citizen } = useCitizen();
@@ -20,6 +21,8 @@ export function SouvenirDarmin() {
   const [portrait, setPortrait] = useState<File | null>(null);
   const [slogan, setSlogan] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
+  const [startingPrice, setStartingPrice] = useState("1");
+  const [escrow, setEscrow] = useState<EscrowDetails | null>(null);
   const [images, setImages] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -82,6 +85,47 @@ export function SouvenirDarmin() {
     } finally { setBusy(false); }
   }
 
+  async function prepareAuction(serialNumber: number) {
+    setError("");
+    try {
+      const response = await fetch(`/api/auctions/souvenir-darmin/${serialNumber}/escrow`, { headers });
+      const data = await response.json() as EscrowDetails & { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Не удалось подготовить escrow.");
+      setEscrow(data);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Ошибка подготовки escrow."); }
+  }
+
+  async function listAuction(serialNumber: number) {
+    setBusy(true); setError("");
+    try {
+      const response = await fetch("/api/auctions/souvenir-darmin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ serialNumber, startingPrice: Number(startingPrice), durationHours: 24 }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Не удалось разместить NFT.");
+      setEscrow(null);
+      await loadNotes();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Ошибка размещения NFT."); }
+    finally { setBusy(false); }
+  }
+
+  async function returnNft(serialNumber: number) {
+    setBusy(true); setError("");
+    try {
+      const response = await fetch(`/api/auctions/souvenir-darmin/${serialNumber}/return`, {
+        method: "POST",
+        headers,
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Не удалось вернуть NFT.");
+      setEscrow(null);
+      await loadNotes();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Ошибка возврата NFT."); }
+    finally { setBusy(false); }
+  }
+
   return (
     <Layout>
       <div className="mx-auto max-w-3xl space-y-6">
@@ -115,6 +159,28 @@ export function SouvenirDarmin() {
                     <Input value={walletAddress} onChange={(event) => setWalletAddress(event.target.value)} placeholder="Sepolia wallet 0x…" />
                     <Button disabled={busy} onClick={() => void mintNft(note.serialNumber)}>Создать NFT</Button>
                   </div>}
+                {note.status === "NFT_MINTED" && (
+                  <div className="space-y-2 border-t border-border pt-3">
+                    {!escrow || escrow.serialNumber !== note.serialNumber ? (
+                      <Button variant="outline" disabled={busy} onClick={() => void prepareAuction(note.serialNumber)}>Подготовить к аукциону</Button>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground">{escrow.alreadyEscrowed ? "NFT уже находится в escrow. Укажите начальную цену и подтвердите размещение." : "Переведите NFT вручную на Sepolia в escrow-кошелёк, дождитесь подтверждения и затем нажмите «Разместить»."}</p>
+                        <p className="break-all font-mono text-xs text-primary">Escrow: {escrow.escrowAddress}</p>
+                        <p className="break-all font-mono text-xs text-muted-foreground">Contract {escrow.contractAddress} · token #{escrow.tokenId}</p>
+                        <Input type="number" min="0.01" step="0.01" value={startingPrice} onChange={(event) => setStartingPrice(event.target.value)} placeholder="Начальная цена в Д" />
+                        <Button disabled={busy || Number(startingPrice) <= 0} onClick={() => void listAuction(note.serialNumber)}>Разместить на 24 часа</Button>
+                        <Button variant="ghost" disabled={busy} onClick={() => void returnNft(note.serialNumber)}>Вернуть NFT из escrow</Button>
+                      </>
+                    )}
+                  </div>
+                )}
+                {note.status === "AUCTION_LISTED" && (
+                  <div className="space-y-2">
+                    <p className="text-sm text-amber-300">NFT находится в escrow и выставлен на аукцион.</p>
+                    <Button variant="outline" disabled={busy} onClick={() => void returnNft(note.serialNumber)}>Отменить, если ставок нет</Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

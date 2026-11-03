@@ -108,6 +108,7 @@ export const citizensTable = pgTable("citizens", {
 export const insertCitizenSchema = createInsertSchema(citizensTable).omit({
   id: true,
   balanceMinutes: true,
+  fiatDarminBalance: true,
   totalGiven: true,
   totalReceived: true,
   meritScore: true,

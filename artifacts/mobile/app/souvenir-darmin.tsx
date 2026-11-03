@@ -18,6 +18,7 @@ type Note = {
   nftTransactionHash: string | null;
   createdAt: string;
 };
+type EscrowDetails = { serialNumber: number; escrowAddress: string; contractAddress: string; tokenId: string; alreadyEscrowed?: boolean };
 
 export default function SouvenirDarminScreen() {
   const colors = useColors();
@@ -30,6 +31,8 @@ export default function SouvenirDarminScreen() {
   const [portrait, setPortrait] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [slogan, setSlogan] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
+  const [startingPrice, setStartingPrice] = useState("1");
+  const [escrowDetails, setEscrowDetails] = useState<EscrowDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyNote, setBusyNote] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -108,6 +111,54 @@ export default function SouvenirDarminScreen() {
     }
   }
 
+  async function prepareAuction(serialNumber: number) {
+    setError("");
+    try {
+      const response = await fetch(`${BASE_URL}/api/auctions/souvenir-darmin/${serialNumber}/escrow`, { headers: authHeaders });
+      const data = await response.json() as EscrowDetails & { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Не удалось подготовить escrow.");
+      setEscrowDetails(data);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Ошибка подготовки escrow.");
+    }
+  }
+
+  async function listAuction(serialNumber: number) {
+    setBusyNote(serialNumber);
+    setError("");
+    try {
+      const response = await fetch(`${BASE_URL}/api/auctions/souvenir-darmin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ serialNumber, startingPrice: Number(startingPrice), durationHours: 24 }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Не удалось разместить NFT.");
+      setEscrowDetails(null);
+      await loadNotes();
+      router.push("/(tabs)/auctions");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Ошибка размещения NFT.");
+    } finally { setBusyNote(null); }
+  }
+
+  async function returnNft(serialNumber: number) {
+    setBusyNote(serialNumber);
+    setError("");
+    try {
+      const response = await fetch(`${BASE_URL}/api/auctions/souvenir-darmin/${serialNumber}/return`, {
+        method: "POST",
+        headers: authHeaders,
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Не удалось вернуть NFT.");
+      setEscrowDetails(null);
+      await loadNotes();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Ошибка возврата NFT.");
+    } finally { setBusyNote(null); }
+  }
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ paddingTop: Platform.OS === "web" ? 67 : insets.top + 8, paddingHorizontal: 20, paddingBottom: insets.bottom + 32, gap: 16 }}>
       <TouchableOpacity onPress={() => router.back()} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -161,6 +212,42 @@ export default function SouvenirDarminScreen() {
               </>
             )}
             {!!note.nftTokenId && <Text style={{ color: colors.mutedForeground }}>{isRu ? `NFT #${note.nftTokenId} · ${note.nftTransactionHash ?? ""}` : `NFT #${note.nftTokenId} · ${note.nftTransactionHash ?? ""}`}</Text>}
+            {note.status === "NFT_MINTED" && (
+              <View style={{ gap: 8 }}>
+                {!escrowDetails || escrowDetails.serialNumber !== note.serialNumber ? (
+                  <TouchableOpacity onPress={() => void prepareAuction(note.serialNumber)} style={{ minHeight: 42, borderWidth: 1, borderColor: colors.primary, borderRadius: 10, alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ color: colors.primary, fontWeight: "600" }}>{isRu ? "Подготовить NFT к аукциону" : "Prepare NFT for auction"}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 18 }}>
+                      {escrowDetails.alreadyEscrowed
+                        ? (isRu ? "NFT уже находится в escrow. Укажите стартовую цену и подтвердите размещение." : "The NFT is already in escrow. Set a starting price and confirm listing.")
+                        : (isRu ? "Сначала вручную переведите этот NFT в escrow-кошелёк на Sepolia. После подтверждения транзакции нажмите «Разместить»." : "Transfer this NFT manually to the Sepolia escrow wallet. After confirmation, tap List.")}
+                    </Text>
+                    <Text selectable style={{ color: colors.primary, fontSize: 12 }}>{escrowDetails.escrowAddress}</Text>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>Contract {escrowDetails.contractAddress} · Token #{escrowDetails.tokenId}</Text>
+                    <TextInput value={startingPrice} onChangeText={setStartingPrice} keyboardType="decimal-pad" placeholder={isRu ? "Начальная цена в Д" : "Starting price in D"} placeholderTextColor={colors.mutedForeground} style={{ color: colors.foreground, borderColor: colors.border, borderWidth: 1, borderRadius: 9, padding: 10 }} />
+                    <TouchableOpacity disabled={busyNote === note.serialNumber} onPress={() => void listAuction(note.serialNumber)} style={{ minHeight: 42, backgroundColor: colors.primary, borderRadius: 10, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ color: colors.primaryForeground, fontWeight: "700" }}>{isRu ? "Разместить на 24 часа" : "List for 24 hours"}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity disabled={busyNote === note.serialNumber} onPress={() => void returnNft(note.serialNumber)} style={{ minHeight: 38, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{isRu ? "Вернуть NFT из escrow" : "Return NFT from escrow"}</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            )}
+            {note.status === "AUCTION_LISTED" && (
+              <View style={{ gap: 8 }}>
+                <TouchableOpacity onPress={() => router.push("/(tabs)/auctions")} style={{ minHeight: 42, borderWidth: 1, borderColor: colors.primary, borderRadius: 10, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ color: colors.primary, fontWeight: "600" }}>{isRu ? "Открыть аукцион" : "Open auction"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity disabled={busyNote === note.serialNumber} onPress={() => void returnNft(note.serialNumber)} style={{ minHeight: 38, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{isRu ? "Отменить, если ставок нет" : "Cancel if there are no bids"}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         ))}
       </View>

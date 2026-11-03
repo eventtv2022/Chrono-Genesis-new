@@ -25,6 +25,7 @@ function safeRow(c: typeof citizensTable.$inferSelect) {
   // Never expose password fields or the auth token in regular profile responses
   const {
     passwordHash: _ph, resetPasswordToken: _rt, resetPasswordExpires: _re, authToken: _at,
+    fiatDarminBalance: _fiatDarminBalance,
     dateOfBirth: _dob, ageTier: _ageTier, kycVerified: _kycVerified, ...rest
   } = c;
   return {

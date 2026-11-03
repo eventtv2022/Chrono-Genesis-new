@@ -30,6 +30,9 @@ export const auctionsTable = pgTable("auctions", {
   amountDarmins:  integer("amount_darmins").notNull().default(0), // 0 for HISTORICAL_SLOT / TIME_ANCHOR
   slotId:         integer("slot_id"),                              // null for DARMIN_CURRENCY / TIME_ANCHOR
   timelineCoord:  text("timeline_coord"),                          // null for DARMIN_CURRENCY / HISTORICAL_SLOT
+  souvenirSerialNumber: integer("souvenir_serial_number"),         // null unless assetType='SOUVENIR_NFT'
+  nftTransferTxHash: text("nft_transfer_tx_hash"),
+  nftRecipientAddress: text("nft_recipient_address"),
   startingPrice:  real("starting_price").notNull(),
   currentBid:     real("current_bid"),
   buyerId:        integer("buyer_id"),

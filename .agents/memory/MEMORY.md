@@ -26,3 +26,4 @@
 - [Structured locale generation](structured-locale-generation.md) — key generated translations by message ID; translation arrays can return in a different order.
 - [Workspace typecheck timeouts](workspace-typecheck-timeouts.md) — if aggregate typecheck stalls, validate shared libs and app packages serially.
 - [Public dashboard privacy](public-dashboard-privacy.md) — public views use aggregates only; citizen-level balances and histories require sign-in.
+- [Souvenir DarMin auction custody](souvenir-darmin-auctions.md) — souvenir NFTs may be listed through platform-controlled Sepolia escrow with return and winner-transfer paths.

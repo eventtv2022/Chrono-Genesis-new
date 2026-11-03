@@ -67,6 +67,7 @@ function formatCitizenRow(c: typeof citizensTable.$inferSelect) {
     resetPasswordToken: _rt,
     resetPasswordExpires: _re,
     authToken: _at,
+    fiatDarminBalance: _fiatDarminBalance,
     signatureBase64: _signature,
     dateOfBirth: _dob,
     ageTier: _ageTier,
