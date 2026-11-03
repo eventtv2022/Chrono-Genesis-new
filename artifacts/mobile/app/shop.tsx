@@ -65,7 +65,7 @@ export default function ShopScreen() {
   const insets  = useSafeAreaInsets();
   const { citizen, refreshCitizen, authHeaders } = useCitizen();
   const router  = useRouter();
-  const { t }   = useLanguage();
+  const { t, lang } = useLanguage();
 
   const [amountStr, setAmountStr] = useState("100");
   const [loading,   setLoading]   = useState(false);
@@ -237,6 +237,14 @@ export default function ShopScreen() {
             </View>
           )}
         </View>
+        <TouchableOpacity
+          onPress={() => router.push("/souvenir-darmin")}
+          style={{ marginHorizontal: 20, marginBottom: 16, minHeight: 48, borderWidth: 1, borderColor: colors.primary, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 }}
+          accessibilityRole="button"
+        >
+          <Feather name="image" size={16} color={colors.primary} />
+          <Text style={{ color: colors.primary, fontWeight: "700" }}>{lang === "ru" ? "Печатать Свой ДарМин" : "Print your DarMin"}</Text>
+        </TouchableOpacity>
 
         {!citizen && (
           <View style={styles.authWarn}>

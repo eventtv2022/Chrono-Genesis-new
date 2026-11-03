@@ -6,6 +6,7 @@ import { AlertCircle, ShoppingBag, Tag, Zap, Copy, CheckCircle, CreditCard, Bitc
 import { useCitizen } from "@/context/CitizenContext";
 import { lazy, Suspense, useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
 const TRC20_WALLET      = "TDLRNKKjNJ5RNuit6Hr7nVta5syzEEwr2q";
 const SYSTEM_FEE        = 0.05;
@@ -212,6 +213,11 @@ export function Shop() {
             Пополнение баланса Дарминов · 1 Д = 1 € / 1 USDT базовая цена
           </p>
         </div>
+        <Link href="/souvenir-darmin">
+          <Button variant="outline" className="w-full border-primary text-primary">
+            Печатать Свой ДарМин
+          </Button>
+        </Link>
 
         {/* Total Supply */}
         {supply && (

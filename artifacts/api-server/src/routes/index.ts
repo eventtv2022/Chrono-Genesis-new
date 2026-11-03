@@ -31,6 +31,7 @@ import trc20Router from "./trc20";
 import referralsRouter from "./referrals";
 import serviceCatalogRouter from "./serviceCatalog";
 import timenamingRouter from "./timenaming";
+import souvenirDarminsRouter from "./souvenirDarmins";
 
 const router: IRouter = Router();
 
@@ -66,5 +67,6 @@ router.use(trc20Router);
 router.use(referralsRouter);
 router.use(serviceCatalogRouter);
 router.use(timenamingRouter);
+router.use(souvenirDarminsRouter);
 
 export default router;

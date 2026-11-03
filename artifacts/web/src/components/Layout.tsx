@@ -87,12 +87,20 @@ function CitizenWidget() {
 
         {/* Admin — Registry button */}
         {!!citizen.isAdmin && (
-          <Link href="/admin/registry">
-            <button className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[11px] font-bold transition-colors">
-              <Database className="w-3.5 h-3.5" />
-              🛡 База Данных Граждан
-            </button>
-          </Link>
+          <>
+            <Link href="/admin/registry">
+              <button className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[11px] font-bold transition-colors">
+                <Database className="w-3.5 h-3.5" />
+                🛡 База Данных Граждан
+              </button>
+            </Link>
+            <Link href="/admin/souvenir-darmins">
+              <button className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-[11px] font-bold transition-colors">
+                <Database className="w-3.5 h-3.5" />
+                Реестр сувенирных Дарминов
+              </button>
+            </Link>
+          </>
         )}
       </div>
     );

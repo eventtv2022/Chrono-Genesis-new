@@ -301,6 +301,25 @@ export async function logTransactionToSheets(data: {
   return ok;
 }
 
+export async function logSouvenirDarminToSheets(data: {
+  serialNumber: number;
+  citizenId: number;
+  citizenName: string;
+  slogan: string;
+  createdAt: string;
+  status: string;
+}): Promise<boolean> {
+  const headers = ["Номер", "Дата выпуска", "ID гражданина", "Гражданин", "Слоган", "Статус NFT"];
+  return appendRow("Сувенирные Дармины", headers, [
+    `DM ${String(data.serialNumber).padStart(9, "0")}`,
+    data.createdAt,
+    data.citizenId,
+    data.citizenName,
+    /^[=+\-@]/.test(data.slogan) ? `'${data.slogan}` : data.slogan,
+    data.status,
+  ]);
+}
+
 export async function logTimelineAnchorToSheets(data: {
   timelineCoord: string;
   citizenId: number;

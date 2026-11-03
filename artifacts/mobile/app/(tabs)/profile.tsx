@@ -8,6 +8,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Image,
   Linking,
   Platform,
 } from "react-native";
@@ -99,6 +100,7 @@ export default function ProfileScreen() {
   const [docConsent, setDocConsent] = useState(false);
   const [docBusy, setDocBusy] = useState(false);
   const [docError, setDocError] = useState("");
+  const [souvenirDarmins, setSouvenirDarmins] = useState<Array<{ serialNumber: number; slogan: string; nftTokenId: string | null }>>([]);
 
   useEffect(() => {
     if (authToken && citizen?.id) void refreshCitizen();
@@ -116,6 +118,14 @@ export default function ProfileScreen() {
   }, [authToken]);
 
   useEffect(() => { void loadProfessionalDocs(); }, [loadProfessionalDocs]);
+
+  useEffect(() => {
+    if (!authToken) { setSouvenirDarmins([]); return; }
+    void fetch(`${BASE_URL}/api/souvenir-darmins/me`, { headers: { Authorization: `Bearer ${authToken}` } })
+      .then(async (response) => response.ok ? response.json() as Promise<typeof souvenirDarmins> : [])
+      .then(setSouvenirDarmins)
+      .catch(() => setSouvenirDarmins([]));
+  }, [authToken, citizen?.id]);
 
   const uploadProfessionalDoc = async (kind: "resume" | "portfolio") => {
     if (!docConsent) return;
@@ -322,6 +332,27 @@ export default function ProfileScreen() {
             <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{isRu ? "Текущая серия" : "Current streak"}</Text>
             <Text testID="text-time-matrix-streak" style={{ color: colors.primary, fontSize: 22, fontWeight: "700", marginTop: 4 }}>{citizen?.streakDays ?? 0} {isRu ? "дн." : "days"}</Text>
           </View>
+        </View>
+
+        <View style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{isRu ? "Мои сувенирные ДарМины" : "My souvenir Darmins"}</Text>
+          <Text style={[styles.programCopy, { color: colors.mutedForeground }]}>
+            {souvenirDarmins.length
+              ? (isRu ? `Выпущено банкнот: ${souvenirDarmins.length}` : `Issued banknotes: ${souvenirDarmins.length}`)
+              : (isRu ? "Здесь появятся ваши выпущенные сувенирные банкноты." : "Your issued souvenir banknotes will appear here.")}
+          </Text>
+          {souvenirDarmins.map((note) => (
+            <View key={note.serialNumber} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+              <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "700" }}>
+                DM {String(note.serialNumber).padStart(9, "0").replace(/(\d{3})(?=\d)/g, "$1 ")}
+              </Text>
+              {note.nftTokenId ? <Feather name="award" size={16} color={colors.primary} /> : null}
+            </View>
+          ))}
+          <TouchableOpacity onPress={() => router.push("/souvenir-darmin")} style={[styles.copyButton, { borderColor: colors.primary }]}>
+            <Feather name="image" size={15} color={colors.primary} />
+            <Text style={[styles.copyText, { color: colors.primary }]}>{isRu ? "Открыть сувенирные ДарМины" : "Open souvenir Darmins"}</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={[styles.programCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

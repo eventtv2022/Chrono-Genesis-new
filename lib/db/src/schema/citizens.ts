@@ -12,6 +12,7 @@ export const citizensTable = pgTable("citizens", {
   walletNonce: text("wallet_nonce"),
   walletVerified: integer("wallet_verified").notNull().default(0),
   balanceMinutes: real("balance_minutes").notNull().default(1), // 1 Д при регистрации
+  fiatDarminBalance: real("fiat_darmin_balance").notNull().default(0),
   timeXp: integer("time_xp").notNull().default(0),
   streakDays: integer("streak_days").notNull().default(0),
   suspiciousActivity: boolean("suspicious_activity").notNull().default(false),

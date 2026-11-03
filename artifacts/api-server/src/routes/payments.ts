@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { citizensTable } from "@workspace/db";
+import { citizensTable, fiatDarminPurchasesTable } from "@workspace/db";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import { requireAdultKyc, requireAuth } from "../middleware/auth";
@@ -266,28 +266,35 @@ router.post("/payments/webhook", async (req, res): Promise<void> => {
     const session = event.data.object as {
       metadata?: { citizenId?: string; minutes?: string };
       id: string;
+      payment_status?: string;
     };
     const citizenId = parseInt(session.metadata?.citizenId ?? "", 10);
     const minutes   = parseInt(session.metadata?.minutes   ?? "", 10);
 
-    if (!isNaN(citizenId) && !isNaN(minutes) && minutes > 0) {
-      const [citizen] = await db
-        .select()
-        .from(citizensTable)
-        .where(eq(citizensTable.id, citizenId))
-        .limit(1);
+    if (session.payment_status === "paid" && !isNaN(citizenId) && !isNaN(minutes) && minutes > 0) {
+      const credited = await db.transaction(async (tx) => {
+        const [purchase] = await tx
+          .insert(fiatDarminPurchasesTable)
+          .values({ stripeSessionId: session.id, citizenId, darmins: minutes })
+          .onConflictDoNothing()
+          .returning({ stripeSessionId: fiatDarminPurchasesTable.stripeSessionId });
 
-      if (citizen) {
-        await db
+        if (!purchase) return false;
+
+        await tx
           .update(citizensTable)
-          .set({ balanceMinutes: citizen.balanceMinutes + minutes })
+          .set({
+            balanceMinutes: sql`${citizensTable.balanceMinutes} + ${minutes}`,
+            fiatDarminBalance: sql`${citizensTable.fiatDarminBalance} + ${minutes}`,
+          })
           .where(eq(citizensTable.id, citizenId));
+        return true;
+      });
 
-        logger.info(
-          { citizenId, minutes, stripeSessionId: session.id },
-          "Minutes credited after Stripe payment"
-        );
-      }
+      logger.info(
+        { citizenId, minutes, stripeSessionId: session.id, credited },
+        credited ? "Minutes credited after Stripe payment" : "Duplicate Stripe credit ignored"
+      );
     }
   }
 

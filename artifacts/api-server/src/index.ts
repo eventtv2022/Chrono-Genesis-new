@@ -16,6 +16,8 @@ import { startNodeValidator } from "./services/nodeValidatorService";
 import { finalizeExpiredAuctions } from "./routes/auctions";
 import { attachSocialAlarmWs } from "./services/socialAlarmWs";
 import { processGovernmentPollSchedule } from "./services/governmentPollService";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 
 const rawPort = process.env["PORT"];
 
@@ -196,6 +198,30 @@ function scheduleTimeMatrixDailyDigests() {
 
 // ── Async bootstrap — rehydrate render queue BEFORE accepting connections ──────
 async function bootstrap(): Promise<void> {
+  // Keep the fiat-origin pool aligned with the spendable wallet: any ordinary
+  // DarMin debit consumes fiat-origin credits first, so received/rewarded units
+  // cannot restore eligibility after a purchased DarMin has already been spent.
+  await db.execute(sql`
+    CREATE OR REPLACE FUNCTION consume_fiat_darmin_credits() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.balance_minutes < OLD.balance_minutes THEN
+        NEW.fiat_darmin_balance := GREATEST(
+          0::real,
+          OLD.fiat_darmin_balance - (OLD.balance_minutes - NEW.balance_minutes)
+        );
+      END IF;
+      RETURN NEW;
+    END;
+    $$
+  `);
+  await db.execute(sql`DROP TRIGGER IF EXISTS citizens_consume_fiat_darmin_credits ON citizens`);
+  await db.execute(sql`
+    CREATE TRIGGER citizens_consume_fiat_darmin_credits
+    BEFORE UPDATE OF balance_minutes ON citizens
+    FOR EACH ROW EXECUTE FUNCTION consume_fiat_darmin_credits()
+  `);
+
   scheduleDailyEntropy();
   scheduleMidnightUTCEmissionDrain();
   scheduleMinuteTick();
