@@ -339,7 +339,9 @@ function formatTaskDuration(seconds: number) {
   return minutes > 0 ? `${minutes}m ${remainder}s` : `${remainder}s`;
 }
 
-function TimeMatrixSurface() {
+function TimeMatrixSurface({ onStartFocus }: {
+  onStartFocus: (task: Pick<TimeMatrixTask, "id" | "title">, focusSessionId: number) => void;
+}) {
   const { citizen, authToken, authHeaders } = useCitizen();
   const { lang, t } = useLanguage();
   const matrixText = TIME_MATRIX_I18N[lang];
@@ -506,10 +508,12 @@ function TimeMatrixSurface() {
                               <button
                                 type="button"
                                 disabled={isMutating}
-                                onClick={() => startTask.mutate({ id: task.id })}
+                                onClick={() => startTask.mutate({ id: task.id }, {
+                                  onSuccess: (result) => onStartFocus({ id: task.id, title: task.title }, result.focusSessionId),
+                                })}
                                 className="rounded-md border border-primary/30 px-2 py-1 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
                                 data-testid={`button-start-task-${task.id}`}
-                              >{TIME_MATRIX_ACTIONS[lang].start}</button>
+                              >{lang === "ru" ? "Начать фокус" : "Start focus"}</button>
                               <button
                                 type="button"
                                 disabled={isMutating}
@@ -637,6 +641,7 @@ export function Time() {
   const [remaining, setRemaining] = useState(PRESETS[1]!.seconds);
   const [running, setRunning] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [activeFocusTask, setActiveFocusTask] = useState<{ id: number; title: string } | null>(null);
   const [focusText, setFocusText] = useState("");
   const [forwardFocusToTelegram, setForwardFocusToTelegram] = useState(false);
   const [focusResult, setFocusResult] = useState<{ rewardDarmins: number; elapsedSeconds: number; rewardBlockedReason?: string; textCharacters: number; telegramStatus?: "not_requested" | "sent" | "not_linked" | "failed" | "already_completed" } | null>(null);
@@ -802,6 +807,21 @@ export function Time() {
     } finally {
       setQuizBusy(false);
     }
+  };
+
+  const startTaskFocus = (task: { id: number; title: string }, sessionId: number) => {
+    focusSessionId.current = sessionId;
+    setActiveFocusTask(task);
+    setPreset(1);
+    setRemaining(12 * 60);
+    sessionDurationRef.current = 12 * 60;
+    setCompleted(false);
+    setFocusResult(null);
+    setFocusError("");
+    setFocusText("");
+    setForwardFocusToTelegram(false);
+    setRunning(true);
+    setSection("timer");
   };
 
   useEffect(() => {
@@ -1147,7 +1167,7 @@ export function Time() {
           </div>
         </div>
 
-        {section === "matrix" && <TimeMatrixSurface />}
+        {section === "matrix" && <TimeMatrixSurface onStartFocus={startTaskFocus} />}
 
         {/* ── World Clock ── */}
         {section === "clock" && (
@@ -1224,6 +1244,12 @@ export function Time() {
             <div className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
               Proof-of-Focus · {running ? "Active" : "Ready"} · 12 min
             </div>
+            {activeFocusTask && (
+              <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/[0.06] px-3 py-2 text-sm" data-testid="text-active-focus-task">
+                <ListTodo className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span className="text-muted-foreground">{lang === "ru" ? "Фокус по задаче:" : "Focusing on:"} <strong className="text-foreground">{activeFocusTask.title}</strong></span>
+              </div>
+            )}
             <div>
               <h2 className="text-lg font-semibold">⏱ Таймер фокусировки</h2>
               <p className="text-xs text-muted-foreground">Завершённая сессия засчитывается ИИ-Аудитором</p>
