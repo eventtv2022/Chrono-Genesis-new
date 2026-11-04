@@ -34,6 +34,7 @@ export * from "./siteVisitors";
 export * from "./referrals";
 export * from "./focusSessions";
 export * from "./timeMatrixRewards";
+export * from "./darminSecurity";
 export * from "./timeMatrixTasks";
 export * from "./timelineExchangeRequests";
 export * from "./citizenProfessionalDocuments";

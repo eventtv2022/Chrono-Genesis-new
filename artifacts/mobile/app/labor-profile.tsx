@@ -23,7 +23,7 @@ export default function LaborProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { citizen, setCitizen } = useCitizen();
+  const { citizen, setCitizen, authHeaders, refreshCitizen } = useCitizen();
 
   const [skills, setSkills] = useState(citizen?.professionalSkills ?? "");
   const [depositHours, setDepositHours] = useState(4);
@@ -45,7 +45,7 @@ export default function LaborProfileScreen() {
     try {
       const res = await fetch(`${BASE_URL}/api/citizens/deposit-labor`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ citizenId: citizen.id, professionalSkills: skills, depositHours }),
       });
       const data = await res.json() as {
@@ -63,6 +63,7 @@ export default function LaborProfileScreen() {
       if (citizen && data.kq) {
         setCitizen({ ...citizen, professionalSkills: skills, calculatedMinuteRate: data.kq });
       }
+      await refreshCitizen();
     } catch {
       Alert.alert("Сетевая ошибка", "Проверьте подключение");
     } finally {

@@ -28,6 +28,7 @@ import { issueEligiblePassport } from "../services/passportIssuanceService";
 import { deriveAgeTier } from "../services/ageGateService";
 import { getCitizenDisplayName } from "../services/citizenIdentity";
 import { checkFocusReport, checkQuadrantBTitle } from "../services/timeMatrixAi";
+import { rateLimit } from "../services/darminSecurityService";
 import { selectRelevantGuideFragments } from "./guide";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
@@ -502,7 +503,12 @@ const RegisterCitizenBody = z.object({
   preApplicationProgressToken: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
-router.post("/citizens", upload.single("passport_photo"), async (req, res): Promise<void> => {
+router.post("/citizens", upload.single("passport_photo"), rateLimit(
+  "citizen_application",
+  3,
+  24 * 60 * 60 * 1000,
+  (request) => typeof request.body?.phone === "string" ? request.body.phone.replace(/\D/g, "") : null,
+), async (req, res): Promise<void> => {
   const parsed = RegisterCitizenBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Неверные данные" });
@@ -1177,13 +1183,23 @@ router.delete("/citizens/me/professional-documents/:kind", requireAuth, async (r
 });
 
 // ── POST /citizens/audit-rate — расчёт коэффициента Kq через ИИ ───────────────
-router.post("/citizens/audit-rate", async (req: Request, res: Response) => {
+router.post("/citizens/audit-rate", requireAuth, rateLimit(
+  "labor_rate_audit",
+  5,
+  24 * 60 * 60 * 1000,
+  (request) => String(request.citizen!.id),
+), async (req: Request, res: Response) => {
   const parsed = z.object({
     citizenId: z.number().int().positive(),
     professionalSkills: z.string().min(20),
   }).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Неверные данные" }); return; }
-  const { citizenId, professionalSkills } = parsed.data;
+  const { citizenId: requestedCitizenId, professionalSkills } = parsed.data;
+  const citizenId = req.citizen!.id;
+  if (requestedCitizenId !== citizenId) {
+    res.status(403).json({ error: "Нельзя изменять тариф другого гражданина" });
+    return;
+  }
 
   const [citizen] = await db.select().from(citizensTable).where(eq(citizensTable.id, citizenId)).limit(1);
   if (!citizen) { res.status(404).json({ error: "Гражданин не найден" }); return; }
@@ -1205,51 +1221,77 @@ router.post("/citizens/audit-rate", async (req: Request, res: Response) => {
 });
 
 // ── POST /citizens/deposit-labor — депонирование потенциального труда ─────────
-router.post("/citizens/deposit-labor", async (req: Request, res: Response) => {
+router.post("/citizens/deposit-labor", requireAuth, rateLimit(
+  "labor_deposit",
+  3,
+  24 * 60 * 60 * 1000,
+  (request) => String(request.citizen!.id),
+), async (req: Request, res: Response) => {
   const parsed = z.object({
     citizenId: z.number().int().positive(),
     professionalSkills: z.string().min(20),
     depositHours: z.number().min(0.5).max(8),
   }).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Неверные данные" }); return; }
-  const { citizenId, professionalSkills, depositHours } = parsed.data;
-
-  const [citizen] = await db.select().from(citizensTable).where(eq(citizensTable.id, citizenId)).limit(1);
-  if (!citizen) { res.status(404).json({ error: "Гражданин не найден" }); return; }
-
-  const totalDeposited = (citizen.potentialLaborDepositedMinutes ?? 0) + depositHours * 60;
-  if (totalDeposited > 480) {
-    res.status(400).json({ error: `Превышен лимит 8 часов (480 мин). Уже задепонировано: ${citizen.potentialLaborDepositedMinutes} мин` });
+  const { citizenId: requestedCitizenId, professionalSkills, depositHours } = parsed.data;
+  const citizenId = req.citizen!.id;
+  if (requestedCitizenId !== citizenId) {
+    res.status(403).json({ error: "Нельзя депонировать труд от имени другого гражданина" });
     return;
   }
-
-  let kq = citizen.calculatedMinuteRate ?? 1.0;
-  let industry = "";
-  let justification = "";
-  let depositBonus = 0;
-
+  let audit: Awaited<ReturnType<typeof auditCitizenRate>>;
   try {
-    const audit = await auditCitizenRate(professionalSkills);
-    kq = Math.max(0.5, Math.min(2.5, audit.kq));
-    industry = audit.industry;
-    justification = audit.justification;
-    depositBonus = Math.min(120, audit.depositBonus ?? 0);
+    audit = await auditCitizenRate(professionalSkills);
   } catch (err) {
-    req.log.warn({ err }, "Gemini audit failed, using existing rate");
+    req.log.error({ err, citizenId }, "Labor deposit audit failed");
+    res.status(503).json({ error: "Проверка навыков временно недоступна. Дармины не начислены." });
+    return;
   }
-
-  const earnedDarmins = Math.round(depositHours * kq * 60) + depositBonus;
-
-  await db.update(citizensTable).set({
-    professionalSkills,
-    calculatedMinuteRate: kq,
-    skillsAuditedAt: new Date(),
-    potentialLaborDepositedMinutes: Math.round(totalDeposited),
-    balanceMinutes: citizen.balanceMinutes + earnedDarmins,
-  }).where(eq(citizensTable.id, citizenId));
-
-  req.log.info({ citizenId, kq, depositHours, earnedDarmins }, "Labor deposited");
-  res.json({ kq, industry, justification, depositBonus, earnedDarmins, totalDepositedMinutes: Math.round(totalDeposited) });
+  if (!Number.isFinite(audit.kq) || !Number.isFinite(audit.depositBonus)) {
+    res.status(503).json({ error: "Аудитор вернул некорректные данные. Дармины не начислены." });
+    return;
+  }
+  const kq = Math.max(0.5, Math.min(2.5, audit.kq));
+  const result = await db.transaction(async (tx) => {
+    const [citizen] = await tx.select({
+      id: citizensTable.id,
+      suspiciousActivity: citizensTable.suspiciousActivity,
+      deposited: citizensTable.potentialLaborDepositedMinutes,
+      bonusGranted: citizensTable.laborDepositBonusGranted,
+    }).from(citizensTable).where(eq(citizensTable.id, citizenId)).for("update").limit(1);
+    if (!citizen) return { error: "Гражданин не найден" as const };
+    if (citizen.suspiciousActivity) return { error: "Начисления временно заморожены до проверки администратором" as const };
+    const totalDeposited = (citizen.deposited ?? 0) + depositHours * 60;
+    if (totalDeposited > 480) {
+      return { error: `Превышен лимит 8 часов (480 мин). Уже задепонировано: ${citizen.deposited} мин` as const };
+    }
+    const bonus = totalDeposited >= 480 && !citizen.bonusGranted
+      ? Math.max(0, Math.min(120, Math.floor(audit.depositBonus)))
+      : 0;
+    const earnedDarmins = Math.round(depositHours * kq * 60) + bonus;
+    await tx.update(citizensTable).set({
+      professionalSkills,
+      calculatedMinuteRate: kq,
+      skillsAuditedAt: new Date(),
+      potentialLaborDepositedMinutes: Math.round(totalDeposited),
+      laborDepositBonusGranted: citizen.bonusGranted || bonus > 0,
+      balanceMinutes: sql`${citizensTable.balanceMinutes} + ${earnedDarmins}`,
+    }).where(eq(citizensTable.id, citizenId));
+    return { earnedDarmins, totalDeposited: Math.round(totalDeposited), depositBonus: bonus };
+  });
+  if ("error" in result) {
+    res.status(result.error === "Гражданин не найден" ? 404 : 409).json({ error: result.error });
+    return;
+  }
+  req.log.info({ citizenId, kq, depositHours, earnedDarmins: result.earnedDarmins }, "Labor deposited");
+  res.json({
+    kq,
+    industry: audit.industry,
+    justification: audit.justification,
+    depositBonus: result.depositBonus,
+    earnedDarmins: result.earnedDarmins,
+    totalDepositedMinutes: result.totalDeposited,
+  });
 });
 
 // ── POST /citizens/audit-task — гражданский ИИ-аудит (без gov-пароля) ─────────

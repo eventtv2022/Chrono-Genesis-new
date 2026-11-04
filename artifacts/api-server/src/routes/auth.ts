@@ -11,6 +11,7 @@ import { encrypt, encryptNullable, tryDecrypt } from "../services/encryptionServ
 import { deriveAgeTier } from "../services/ageGateService";
 import { requireAuth } from "../middleware/auth";
 import { notifyPassportEmissionStarted } from "../services/telegramService";
+import { rateLimit } from "../services/darminSecurityService";
 
 const VAULT_PHOTOS_DIR = path.join(process.cwd(), "secure_vault", "photos");
 fs.mkdirSync(VAULT_PHOTOS_DIR, { recursive: true });
@@ -63,7 +64,12 @@ const RegisterBody = z.object({
   preApplicationProgressToken: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
-router.post("/auth/register", async (req, res): Promise<void> => {
+router.post("/auth/register", rateLimit(
+  "citizen_register",
+  3,
+  24 * 60 * 60 * 1000,
+  (request) => typeof request.body?.phone === "string" ? request.body.phone.replace(/\D/g, "") : null,
+), async (req, res): Promise<void> => {
   const parsed = RegisterBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Неверные данные" });

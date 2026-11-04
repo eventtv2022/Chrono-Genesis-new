@@ -69,6 +69,7 @@ export const citizensTable = pgTable("citizens", {
   professionalSkills: text("professional_skills"),          // free-text: skills, certs, services
   calculatedMinuteRate: real("calculated_minute_rate").notNull().default(1.0), // Kq coefficient
   potentialLaborDepositedMinutes: integer("potential_labor_deposited_minutes").notNull().default(0), // 0–480
+  laborDepositBonusGranted: boolean("labor_deposit_bonus_granted").notNull().default(false),
   skillsAuditedAt: timestamp("skills_audited_at", { withTimezone: true }),
   reviewScoreCount: integer("review_score_count").notNull().default(0), // учтённых отзывов для ИИ
 
