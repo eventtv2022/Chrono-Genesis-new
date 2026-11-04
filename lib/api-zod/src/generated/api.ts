@@ -929,8 +929,13 @@ export const SaveFocusSessionReportResponse = zod.object({
 /**
  * @summary Get a TimeNation quiz question
  */
+export const GetFocusQuizQuestionQueryParams = zod.object({
+  "sessionId": zod.uuid().optional()
+})
+
 export const GetFocusQuizQuestionResponse = zod.object({
   "attemptId": zod.uuid(),
+  "sessionId": zod.uuid(),
   "question": zod.string()
 })
 

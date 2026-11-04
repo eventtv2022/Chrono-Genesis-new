@@ -41,6 +41,7 @@ export * from './focusSessionResult';
 export * from './focusSessionResultRewardBlockedReason';
 export * from './focusSessionResumed';
 export * from './focusSessionStarted';
+export * from './getFocusQuizQuestionParams';
 export * from './getTimelineOccupiedParams';
 export * from './getTvLiveSlotParams';
 export * from './getTvScheduleParams';

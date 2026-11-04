@@ -648,6 +648,7 @@ export function Time() {
   const [focusError, setFocusError] = useState("");
   const focusSessionId = useRef<number | null>(null);
   const [quizAttempt, setQuizAttempt] = useState<{ id: string; question: string } | null>(null);
+  const quizSession = useRef<{ citizenId: number; sessionId: string | null } | null>(null);
   const [quizAnswer, setQuizAnswer] = useState("");
   const [quizResult, setQuizResult] = useState<{ correct: boolean; totalCorrect: number; awardedDarmins: number } | null>(null);
   const [quizError, setQuizError] = useState("");
@@ -777,9 +778,29 @@ export function Time() {
     if (!citizen?.id) return;
     setQuizError("");
     try {
-      const response = await fetch("/api/citizens/focus/quiz/question", { headers: authHeaders });
-      const data = await response.json() as { attemptId?: string; question?: string; error?: string };
-      if (!response.ok || !data.attemptId || !data.question) throw new Error(data.error || "Не удалось загрузить вопрос");
+      if (!quizSession.current || quizSession.current.citizenId !== citizen.id) {
+        const storageKey = `timenation-focus-quiz-session-${citizen.id}`;
+        let storedSessionId: string | null = null;
+        try {
+          storedSessionId = window.sessionStorage.getItem(storageKey);
+        } catch {
+          // The in-memory session still prevents repeats if browser storage is unavailable.
+        }
+        quizSession.current = { citizenId: citizen.id, sessionId: storedSessionId };
+      }
+      const storageKey = `timenation-focus-quiz-session-${citizen.id}`;
+      const params = new URLSearchParams();
+      if (quizSession.current.sessionId) params.set("sessionId", quizSession.current.sessionId);
+      const query = params.size ? `?${params.toString()}` : "";
+      const response = await fetch(`/api/citizens/focus/quiz/question${query}`, { headers: authHeaders });
+      const data = await response.json() as { attemptId?: string; sessionId?: string; question?: string; error?: string };
+      if (!response.ok || !data.attemptId || !data.sessionId || !data.question) throw new Error(data.error || "Не удалось загрузить вопрос");
+      quizSession.current.sessionId = data.sessionId;
+      try {
+        window.sessionStorage.setItem(storageKey, data.sessionId);
+      } catch {
+        // Keep using the in-memory session if browser storage is unavailable.
+      }
       setQuizAttempt({ id: data.attemptId, question: data.question });
       setQuizAnswer("");
     } catch (error) {

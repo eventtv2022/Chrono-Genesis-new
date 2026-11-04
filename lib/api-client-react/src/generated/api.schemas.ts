@@ -788,6 +788,7 @@ export interface GuideAssistantResponse {
 
 export interface FocusQuizQuestion {
   attemptId: string;
+  sessionId: string;
   question: string;
 }
 
@@ -1205,6 +1206,10 @@ export type GovernmentPollWithBallots = AdminGovernmentPoll & {
   /** @nullable */
   myVote: GovernmentPollWithBallotsMyVote;
   ballots: GovernmentPollWithBallotsBallotsItem[];
+};
+
+export type GetFocusQuizQuestionParams = {
+sessionId?: string;
 };
 
 export type ListAdminTransactionsParams = {

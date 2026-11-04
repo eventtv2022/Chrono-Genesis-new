@@ -926,6 +926,13 @@ paths:
       summary: Get a TimeNation quiz question
       security:
         - BearerAuth: []
+      parameters:
+        - name: sessionId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
       responses:
         "200":
           description: Question and one-time attempt identifier
@@ -2907,9 +2914,12 @@ components:
         attemptId:
           type: string
           format: uuid
+        sessionId:
+          type: string
+          format: uuid
         question:
           type: string
-      required: [attemptId, question]
+      required: [attemptId, sessionId, question]
 
     FocusQuizAnswerInput:
       type: object

@@ -48,6 +48,7 @@ import type {
   FocusSessionResult,
   FocusSessionResumed,
   FocusSessionStarted,
+  GetFocusQuizQuestionParams,
   GetTimelineOccupiedParams,
   GetTvLiveSlotParams,
   GetTvScheduleParams,
@@ -2783,20 +2784,27 @@ export const useSaveFocusSessionReport = <TError = ErrorType<ErrorResponse>,
       return useMutation(getSaveFocusSessionReportMutationOptions(options));
     }
 
-export const getGetFocusQuizQuestionUrl = () => {
+export const getGetFocusQuizQuestionUrl = (params?: GetFocusQuizQuestionParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/citizens/focus/quiz/question`
+  return stringifiedParams.length > 0 ? `/api/citizens/focus/quiz/question?${stringifiedParams}` : `/api/citizens/focus/quiz/question`
 }
 
 /**
  * @summary Get a TimeNation quiz question
  */
-export const getFocusQuizQuestion = async ( options?: RequestInit): Promise<FocusQuizQuestion> => {
+export const getFocusQuizQuestion = async (params?: GetFocusQuizQuestionParams, options?: RequestInit): Promise<FocusQuizQuestion> => {
 
-  return customFetch<FocusQuizQuestion>(getGetFocusQuizQuestionUrl(),
+  return customFetch<FocusQuizQuestion>(getGetFocusQuizQuestionUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2809,23 +2817,23 @@ export const getFocusQuizQuestion = async ( options?: RequestInit): Promise<Focu
 
 
 
-export const getGetFocusQuizQuestionQueryKey = () => {
+export const getGetFocusQuizQuestionQueryKey = (params?: GetFocusQuizQuestionParams,) => {
     return [
-    `/api/citizens/focus/quiz/question`
+    `/api/citizens/focus/quiz/question`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetFocusQuizQuestionQueryOptions = <TData = Awaited<ReturnType<typeof getFocusQuizQuestion>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFocusQuizQuestion>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetFocusQuizQuestionQueryOptions = <TData = Awaited<ReturnType<typeof getFocusQuizQuestion>>, TError = ErrorType<unknown>>(params?: GetFocusQuizQuestionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFocusQuizQuestion>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetFocusQuizQuestionQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetFocusQuizQuestionQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFocusQuizQuestion>>> = ({ signal }) => getFocusQuizQuestion({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFocusQuizQuestion>>> = ({ signal }) => getFocusQuizQuestion(params, { signal, ...requestOptions });
 
 
 
@@ -2843,11 +2851,11 @@ export type GetFocusQuizQuestionQueryError = ErrorType<unknown>
  */
 
 export function useGetFocusQuizQuestion<TData = Awaited<ReturnType<typeof getFocusQuizQuestion>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFocusQuizQuestion>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetFocusQuizQuestionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFocusQuizQuestion>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetFocusQuizQuestionQueryOptions(options)
+  const queryOptions = getGetFocusQuizQuestionQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

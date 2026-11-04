@@ -5,6 +5,8 @@ import path from "path";
 import fs from "fs";
 import multer from "multer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
+import { readFile } from "node:fs/promises";
 import { db } from "@workspace/db";
 import { referralsTable } from "@workspace/db";
 import { citizensTable, onboardingProgressTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable, focusSessionsTable, focusQuizAttemptsTable, citizenProfessionalDocumentsTable, timeMatrixRewardsTable, timeMatrixTasksTable } from "@workspace/db";
@@ -26,6 +28,7 @@ import { issueEligiblePassport } from "../services/passportIssuanceService";
 import { deriveAgeTier } from "../services/ageGateService";
 import { getCitizenDisplayName } from "../services/citizenIdentity";
 import { checkQuadrantBTitle } from "../services/timeMatrixAi";
+import { selectRelevantGuideFragments } from "./guide";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
 export const VAULT_DIR = path.join(process.cwd(), "secure_vault");
@@ -1375,7 +1378,7 @@ router.get("/citizens/:id/rate", async (req, res): Promise<void> => {
 
 // ── POST /api/citizens/log-focus ──────────────────────────────────────────────
 // Records a completed Pomodoro focus session for AI-Auditor activity tracking.
-const focusQuestions = [
+const legacyFocusQuestions = [
   { id: "darmin", question: "Чему равен один Дармин в TimeNation?", answer: ["1 минута", "одна минута", "минута"] },
   { id: "capital", question: "Какой город указан как столица суверенного времени TimeNation?", answer: ["фамагуста"] },
   { id: "currency", question: "Как называется внутренняя единица времени TimeNation?", answer: ["дармин", "дармины"] },
@@ -1391,6 +1394,49 @@ const focusQuestions = [
 ];
 const normalizeQuizAnswer = (value: string) =>
   value.toLocaleLowerCase("ru").replaceAll("ё", "е").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+type GeneratedFocusQuizQuestion = { question: string; topic: string; answers: string[] };
+
+async function generateFocusQuizQuestion(previousQuestions: string[], previousQuestionIds: string[]): Promise<GeneratedFocusQuizQuestion> {
+  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+  const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+  if (!apiKey || !baseUrl) throw new Error("TimeNation quiz assistant is not configured");
+
+  const guide = await readFile(new URL("./assets/USER_GUIDE_RU.md", import.meta.url), "utf8");
+  const knowledge = selectRelevantGuideFragments(
+    guide,
+    "TimeNation Дармин минута гражданство паспорт Матрица времени ТаймБанк TimeNaming Хронопедия посольство",
+  );
+  if (!knowledge) throw new Error("TimeNation guide has no quiz knowledge");
+
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "", baseUrl } });
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const result = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Составь один новый вопрос для викторины TimeNation на русском языке. Вопрос должен проверять один конкретный факт из предоставленного руководства; правильный ответ — короткий, однозначный и прямо подтверждается текстом. Не повторяй ни один из предыдущих вопросов и не спрашивай повторно тот же факт, даже другими словами. Верни только JSON вида {"question":"...","topic":"уникальный короткий ключ проверяемого факта в snake_case","answers":["основной ответ","допустимый вариант"]}. Предыдущие вопросы:\n${previousQuestions.length ? previousQuestions.map((question, index) => `${index + 1}. ${question}`).join("\n") : "Пока нет."}`,
+      config: {
+        systemInstruction: `Ты создаёшь вопросы для TimeNation на основе базы знаний ЗаБОТливого технического специалиста. Используй только факты из приложенного руководства. Не выдумывай сведения. Формулируй коротко, без вариантов ответа; допустимые ответы должны быть краткими и эквивалентными. Ключ topic должен обозначать сам факт, а не формулировку вопроса, и оставаться одинаковым при перефразировании. Руководство:\n${knowledge}`,
+        responseMimeType: "application/json",
+        temperature: 0.8,
+      },
+    });
+    try {
+      const parsed = z.object({
+        question: z.string().trim().min(12).max(300),
+        topic: z.string().trim().min(3).max(80),
+        answers: z.array(z.string().trim().min(1).max(100)).min(1).max(5),
+      }).safeParse(JSON.parse(result.text ?? ""));
+      if (!parsed.success) continue;
+      const questionKey = normalizeQuizAnswer(parsed.data.question);
+      const topicId = crypto.createHash("sha256").update(normalizeQuizAnswer(parsed.data.topic)).digest("hex");
+      if (previousQuestionIds.includes(topicId) || previousQuestions.some((previous) => normalizeQuizAnswer(previous) === questionKey)) continue;
+      return parsed.data;
+    } catch {
+      continue;
+    }
+  }
+  throw new Error("The TimeNation assistant could not generate a new unique question");
+}
 
 router.post("/citizens/focus/start", requireAuth, async (req, res): Promise<void> => {
   const parsed = z.object({ plannedSeconds: z.number().int().min(60).max(5400) }).safeParse(req.body);
@@ -1554,10 +1600,48 @@ router.patch("/citizens/focus/:id/report", requireAuth, async (req, res): Promis
 });
 
 router.get("/citizens/focus/quiz/question", requireAuth, async (req, res): Promise<void> => {
-  const question = focusQuestions[Math.floor(Math.random() * focusQuestions.length)]!;
-  const attemptId = crypto.randomUUID();
-  await db.insert(focusQuizAttemptsTable).values({ id: attemptId, citizenId: req.citizen!.id, questionId: question.id });
-  res.json({ attemptId, question: question.question });
+  const parsed = z.string().uuid().optional().safeParse(req.query.sessionId);
+  if (!parsed.success) { res.status(400).json({ error: "Неверная сессия викторины" }); return; }
+  const sessionId = parsed.data ?? crypto.randomUUID();
+  const [pendingAttempt] = await db.select({
+    id: focusQuizAttemptsTable.id,
+    question: focusQuizAttemptsTable.question,
+  }).from(focusQuizAttemptsTable).where(and(
+    eq(focusQuizAttemptsTable.citizenId, req.citizen!.id),
+    eq(focusQuizAttemptsTable.sessionId, sessionId),
+    isNull(focusQuizAttemptsTable.answeredAt),
+  )).limit(1);
+  if (pendingAttempt?.question) {
+    res.json({ attemptId: pendingAttempt.id, sessionId, question: pendingAttempt.question });
+    return;
+  }
+  const previousAttempts = await db.select({
+    questionId: focusQuizAttemptsTable.questionId,
+    question: focusQuizAttemptsTable.question,
+  }).from(focusQuizAttemptsTable).where(and(
+    eq(focusQuizAttemptsTable.citizenId, req.citizen!.id),
+    eq(focusQuizAttemptsTable.sessionId, sessionId),
+  ));
+  try {
+    const generated = await generateFocusQuizQuestion(
+      previousAttempts.flatMap((item) => item.question ? [item.question] : []),
+      previousAttempts.map((item) => item.questionId),
+    );
+    const attemptId = crypto.randomUUID();
+    const questionId = crypto.createHash("sha256").update(normalizeQuizAnswer(generated.topic)).digest("hex");
+    await db.insert(focusQuizAttemptsTable).values({
+      id: attemptId,
+      citizenId: req.citizen!.id,
+      questionId,
+      sessionId,
+      question: generated.question,
+      acceptedAnswers: generated.answers,
+    });
+    res.json({ attemptId, sessionId, question: generated.question });
+  } catch (error) {
+    logger.error({ err: error, citizenId: req.citizen!.id }, "TimeNation quiz question generation failed");
+    res.status(503).json({ error: "Не удалось подготовить новый вопрос. Попробуйте ещё раз." });
+  }
 });
 
 router.post("/citizens/focus/quiz/answer", requireAuth, async (req, res): Promise<void> => {
@@ -1567,8 +1651,9 @@ router.post("/citizens/focus/quiz/answer", requireAuth, async (req, res): Promis
     const [citizen] = await tx.select().from(citizensTable).where(eq(citizensTable.id, req.citizen!.id)).for("update").limit(1);
     const [attempt] = await tx.select().from(focusQuizAttemptsTable).where(and(eq(focusQuizAttemptsTable.id, parsed.data.attemptId), eq(focusQuizAttemptsTable.citizenId, req.citizen!.id))).for("update").limit(1);
     if (!citizen || !attempt || attempt.answeredAt) return null;
-    const question = focusQuestions.find(item => item.id === attempt.questionId);
-    const correct = !!question?.answer.some(answer => normalizeQuizAnswer(answer) === normalizeQuizAnswer(parsed.data.answer));
+    const legacyQuestion = legacyFocusQuestions.find(item => item.id === attempt.questionId);
+    const acceptedAnswers = attempt.acceptedAnswers ?? legacyQuestion?.answer ?? [];
+    const correct = acceptedAnswers.some(answer => normalizeQuizAnswer(answer) === normalizeQuizAnswer(parsed.data.answer));
     await tx.update(focusQuizAttemptsTable).set({ isCorrect: correct ? 1 : 0, answeredAt: new Date() }).where(eq(focusQuizAttemptsTable.id, attempt.id));
     const totalCorrect = citizen.focusQuizCorrectAnswers + (correct ? 1 : 0);
     let awarded = correct && totalCorrect % 12 === 0 ? 1 : 0;

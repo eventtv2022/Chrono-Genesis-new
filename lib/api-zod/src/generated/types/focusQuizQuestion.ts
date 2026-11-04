@@ -8,5 +8,6 @@
 
 export interface FocusQuizQuestion {
   attemptId: string;
+  sessionId: string;
   question: string;
 }
