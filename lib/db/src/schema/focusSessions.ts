@@ -4,6 +4,7 @@ export const focusSessionsTable = pgTable("focus_sessions", {
   id: serial("id").primaryKey(),
   citizenId: integer("citizen_id").notNull(),
   taskId: integer("task_id"),
+  focusTopic: text("focus_topic"),
   report: text("report"),
   plannedSeconds: integer("planned_seconds").notNull(),
   elapsedSeconds: integer("elapsed_seconds").notNull().default(0),

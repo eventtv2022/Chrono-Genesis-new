@@ -827,10 +827,14 @@ export const GetCitizenByPhoneResponse = zod.object({
 export const startFocusSessionBodyPlannedSecondsMin = 60;
 export const startFocusSessionBodyPlannedSecondsMax = 5400;
 
+export const startFocusSessionBodyFocusTopicMin = 3;
+export const startFocusSessionBodyFocusTopicMax = 160;
+
 
 
 export const StartFocusSessionBody = zod.object({
-  "plannedSeconds": zod.number().min(startFocusSessionBodyPlannedSecondsMin).max(startFocusSessionBodyPlannedSecondsMax)
+  "plannedSeconds": zod.number().min(startFocusSessionBodyPlannedSecondsMin).max(startFocusSessionBodyPlannedSecondsMax),
+  "focusTopic": zod.string().min(startFocusSessionBodyFocusTopicMin).max(startFocusSessionBodyFocusTopicMax).optional()
 })
 
 export const StartFocusSessionResponse = zod.object({
@@ -878,7 +882,7 @@ export const CompleteFocusSessionParams = zod.object({
 
 export const completeFocusSessionBodyTextMax = 100000;
 
-export const completeFocusSessionBodyReportMax = 500;
+export const completeFocusSessionBodyReportMax = 2000;
 
 
 
@@ -891,7 +895,8 @@ export const CompleteFocusSessionResponse = zod.object({
   "elapsedSeconds": zod.number(),
   "textCharacters": zod.number(),
   "rewardDarmins": zod.number(),
-  "rewardBlockedReason": zod.union([zod.literal('daily_cap'),zod.literal('cooldown'),zod.literal('suspicious_activity'),zod.literal(null)]).nullish(),
+  "rewardBlockedReason": zod.union([zod.literal('daily_cap'),zod.literal('cooldown'),zod.literal('suspicious_activity'),zod.literal('report_not_relevant'),zod.literal(null)]).nullish(),
+  "reportAuditReason": zod.string().optional(),
   "newlyCompleted": zod.boolean().optional()
 })
 
@@ -919,7 +924,7 @@ export const SaveFocusSessionReportParams = zod.object({
   "id": zod.coerce.number()
 })
 
-export const saveFocusSessionReportBodyReportMax = 500;
+export const saveFocusSessionReportBodyReportMax = 2000;
 
 
 

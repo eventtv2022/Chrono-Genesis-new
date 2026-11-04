@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -40,7 +41,6 @@ import {
   useDeleteTimeMatrixTask,
   useListFocusSessionHistory,
   getListFocusSessionHistoryQueryKey,
-  useSaveFocusSessionReport,
   type TimeMatrixTask,
 } from "@workspace/api-client-react";
 
@@ -344,7 +344,6 @@ export default function TimeUtilsScreen() {
     },
     request: { headers: authHeaders },
   });
-  const saveFocusSessionReport = useSaveFocusSessionReport({ request: { headers: authHeaders } });
   const createMatrixTask = useCreateTimeMatrixTask({ request: { headers: authHeaders } });
   const startMatrixTask = useStartTimeMatrixTask({ request: { headers: authHeaders } });
   const completeMatrixTask = useCompleteTimeMatrixTask({ request: { headers: authHeaders } });
@@ -552,6 +551,7 @@ export default function TimeUtilsScreen() {
   const [completed, setCompleted] = useState(false);
   const [focusReward, setFocusReward] = useState<number | null>(null);
   const [focusReport, setFocusReport] = useState("");
+  const [focusTopic, setFocusTopic] = useState("");
   const [focusReportPending, setFocusReportPending] = useState(false);
   const [focusReportSaving, setFocusReportSaving] = useState(false);
   const [focusReportSessionId, setFocusReportSessionId] = useState<number | null>(null);
@@ -611,37 +611,46 @@ export default function TimeUtilsScreen() {
     const sessionId = focusSessionId.current;
     if (citizen?.id && sessionId) {
       try {
-        const response = await fetch(`${BASE_URL}/api/citizens/focus/${sessionId}/complete`, {
+        const response = await fetch(`${BASE_URL}/api/citizens/focus/${sessionId}/pause`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders },
-          body: JSON.stringify({ report: "" }),
+          headers: authHeaders,
         });
-        const result = await response.json() as { rewardDarmins?: number; error?: string };
-        if (!response.ok) throw new Error(result.error || "Не удалось завершить фокус-сессию");
-        focusSessionId.current = null;
+        const result = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(result.error || "Не удалось приостановить фокус-сессию");
         setFocusReportSessionId(sessionId);
-        setFocusReward(result.rewardDarmins ?? 0);
+        setFocusReward(null);
         setFocusReport("");
         setFocusReportPending(true);
-        await refreshCitizen();
-        void queryClient.invalidateQueries({ queryKey: getListFocusSessionHistoryQueryKey() });
       } catch (error) {
         Alert.alert(t.time_session_done, error instanceof Error ? error.message : "Не удалось завершить фокус-сессию");
+        setFocusReportSessionId(sessionId);
+        setFocusReward(null);
+        setFocusReport("");
+        setFocusReportPending(true);
       }
     } else {
       Alert.alert(t.time_session_done, `${Math.round(sessionDurationRef.current / 60)} min · ${t.time_pomodoro}`);
     }
-  }, [authHeaders, citizen?.id, queryClient, refreshCitizen, stopInterval, t.time_pomodoro, t.time_session_done]);
+  }, [authHeaders, citizen?.id, stopInterval, t.time_pomodoro, t.time_session_done]);
 
   const finishFocusSession = async (saveReport: boolean) => {
     if (focusReportSaving) return;
     setFocusReportSaving(true);
     try {
-      if (saveReport && focusReport.trim() && focusReportSessionId) {
-        await saveFocusSessionReport.mutateAsync({
-          id: focusReportSessionId,
-          data: { report: focusReport.trim() },
+      if (focusReportSessionId) {
+        const response = await fetch(`${BASE_URL}/api/citizens/focus/${focusReportSessionId}/complete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders },
+          body: JSON.stringify({ report: saveReport ? focusReport.trim() : "" }),
         });
+        const result = await response.json() as { rewardDarmins?: number; rewardBlockedReason?: string; reportAuditReason?: string; error?: string };
+        if (!response.ok) throw new Error(result.error || "Не удалось проверить отчёт");
+        setFocusReward(result.rewardDarmins ?? 0);
+        focusSessionId.current = null;
+        if (result.rewardBlockedReason === "report_not_relevant") {
+          Alert.alert(t.time_session_done, result.reportAuditReason || "Отчёт не связан с темой фокусировки. Дармин не начислен.");
+        }
+        if ((result.rewardDarmins ?? 0) > 0) await refreshCitizen();
       }
       setFocusReportPending(false);
       setFocusReportSessionId(null);
@@ -736,6 +745,10 @@ export default function TimeUtilsScreen() {
       return;
     }
     setFocusPausedForInactivity(false);
+    if (!focusSessionId.current && !activeFocusTask && focusTopic.trim().length < 3) {
+      Alert.alert(t.time_pomodoro, "Укажите тему фокусировки (не менее 3 символов).");
+      return;
+    }
     if (completed || remaining === 0) {
       const duration = PRESET_MINUTES[preset]! * 60;
       setRemaining(duration);
@@ -752,7 +765,7 @@ export default function TimeUtilsScreen() {
         const response = await fetch(route, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
-          ...(!focusSessionId.current ? { body: JSON.stringify({ plannedSeconds: sessionDurationRef.current }) } : {}),
+          ...(!focusSessionId.current ? { body: JSON.stringify({ plannedSeconds: sessionDurationRef.current, focusTopic: activeFocusTask?.title ?? focusTopic.trim() }) } : {}),
         });
         const data = await response.json() as { sessionId?: number; error?: string };
         if (!response.ok) throw new Error(data.error || "Не удалось запустить фокус-сессию");
@@ -1043,10 +1056,12 @@ export default function TimeUtilsScreen() {
         ))}
       </ScrollView>
 
-      <ScrollView
+      <KeyboardAwareScrollViewCompat
         style={{ flex: 1 }}
         contentContainerStyle={st.scroll}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        bottomOffset={20}
       >
         {/* ── World Clock ── */}
         {section === "clock" && (
@@ -1091,6 +1106,19 @@ export default function TimeUtilsScreen() {
                   : (lang === "ru" ? `Proof-of-Focus ${running ? "активна" : "готова"} · 1 Д за 12 минут · максимум 12 Д/сутки` : `Proof-of-Focus ${running ? "active" : "ready"} · 1 Д per 12 minutes · 12 Д daily limit`)}
               </Text>
             </View>
+            {!activeFocusTask && (
+              <TextInput
+                value={focusTopic}
+                onChangeText={setFocusTopic}
+                maxLength={160}
+                editable={!running && !focusReportPending}
+                accessibilityLabel={lang === "ru" ? "Тема фокусировки" : "Focus topic"}
+                placeholder={lang === "ru" ? "Тема фокусировки, например: подготовить план проекта" : "Focus topic, e.g. prepare a project plan"}
+                placeholderTextColor={colors.mutedForeground}
+                style={{ color: colors.foreground, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 12 }}
+                testID="input-focus-topic"
+              />
+            )}
 
             {/* Preset buttons */}
             <View style={st.presetRow}>
@@ -1165,15 +1193,15 @@ export default function TimeUtilsScreen() {
                 {activeFocusTask && <Text style={st.infoText}>{activeFocusTask.title}</Text>}
                 {focusReward !== null && <Text style={{ color: colors.success, fontWeight: "700" }}>+{focusReward} Д</Text>}
                 <Text style={st.infoText}>
-                  {lang === "ru" ? "Короткий отчёт сохранится приватно. Он не влияет на награду." : "Your short report is private and does not affect your reward."}
+                  {lang === "ru" ? "Напишите хотя бы одно законченное предложение по теме. ИИ-Аудитор проверит связь отчёта с темой перед начислением." : "Write at least one complete sentence related to the topic. The AI auditor checks it before awarding."}
                 </Text>
                 <TextInput
                   value={focusReport}
                   onChangeText={setFocusReport}
-                  maxLength={500}
+                  maxLength={2000}
                   multiline
                   accessibilityLabel={lang === "ru" ? "Краткий отчёт о фокус-сессии" : "Short focus session report"}
-                  placeholder={lang === "ru" ? "Напишите краткий отчёт (необязательно)" : "Write a short report (optional)"}
+                  placeholder={lang === "ru" ? "Опишите, что вы сделали по теме фокусировки" : "Describe what you worked on for this topic"}
                   placeholderTextColor={colors.mutedForeground}
                   style={{ color: colors.foreground, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 10, minHeight: 82, textAlignVertical: "top" }}
                 />
@@ -1193,7 +1221,7 @@ export default function TimeUtilsScreen() {
                   onPress={() => void finishFocusSession(false)}
                   style={st.controlBtnSecondary}
                 >
-                  <Text style={st.controlBtnSecondaryText}>{lang === "ru" ? "Пропустить отчёт" : "Skip report"}</Text>
+                  <Text style={st.controlBtnSecondaryText}>{lang === "ru" ? "Завершить без награды" : "Finish without reward"}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1659,7 +1687,7 @@ export default function TimeUtilsScreen() {
           </View>
         )}
         <SandTimerCatalog visible={section === "shop"} />
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
 
       {/* QR Scanner Modal */}
       <Modal visible={qrScanModal} animationType="slide" statusBarTranslucent transparent>

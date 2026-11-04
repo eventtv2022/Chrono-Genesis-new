@@ -2753,6 +2753,10 @@ components:
           type: integer
           minimum: 60
           maximum: 5400
+        focusTopic:
+          type: string
+          minLength: 3
+          maxLength: 160
       required: [plannedSeconds]
 
     FocusSessionStarted:
@@ -2799,7 +2803,7 @@ components:
           description: Legacy focus text; use report for the private session summary.
         report:
           type: string
-          maxLength: 500
+          maxLength: 2000
 
     FocusSessionHistoryItem:
       type: object
@@ -2819,7 +2823,7 @@ components:
       properties:
         report:
           type: string
-          maxLength: 500
+          maxLength: 2000
       required: [report]
 
     FocusSessionReportSaved:
@@ -2840,7 +2844,9 @@ components:
           type: integer
         rewardBlockedReason:
           type: ["string", "null"]
-          enum: [daily_cap, cooldown, suspicious_activity, null]
+          enum: [daily_cap, cooldown, suspicious_activity, report_not_relevant, null]
+        reportAuditReason:
+          type: string
         newlyCompleted:
           type: boolean
       required: [elapsedSeconds, textCharacters, rewardDarmins]

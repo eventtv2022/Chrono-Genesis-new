@@ -642,11 +642,14 @@ export function Time() {
   const [running, setRunning] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [activeFocusTask, setActiveFocusTask] = useState<{ id: number; title: string } | null>(null);
+  const [focusTopic, setFocusTopic] = useState("");
   const [focusText, setFocusText] = useState("");
   const [forwardFocusToTelegram, setForwardFocusToTelegram] = useState(false);
-  const [focusResult, setFocusResult] = useState<{ rewardDarmins: number; elapsedSeconds: number; rewardBlockedReason?: string; textCharacters: number; telegramStatus?: "not_requested" | "sent" | "not_linked" | "failed" | "already_completed" } | null>(null);
+  const [focusCompleting, setFocusCompleting] = useState(false);
+  const [focusResult, setFocusResult] = useState<{ rewardDarmins: number; elapsedSeconds: number; rewardBlockedReason?: string; reportAuditReason?: string; textCharacters: number; telegramStatus?: "not_requested" | "sent" | "not_linked" | "failed" | "already_completed" } | null>(null);
   const [focusError, setFocusError] = useState("");
   const focusSessionId = useRef<number | null>(null);
+  const focusCompletionInFlight = useRef(false);
   const [quizAttempt, setQuizAttempt] = useState<{ id: string; question: string } | null>(null);
   const quizSession = useRef<{ citizenId: number; sessionId: string | null } | null>(null);
   const [quizAnswer, setQuizAnswer] = useState("");
@@ -662,27 +665,33 @@ export function Time() {
   }, []);
 
   const handleTimerComplete = useCallback(async () => {
+    if (focusCompletionInFlight.current) return;
+    focusCompletionInFlight.current = true;
+    setFocusCompleting(true);
     stopInterval();
     setRunning(false);
     setCompleted(true);
     setFocusError("");
-    if (citizen?.id && focusSessionId.current) {
-      try {
+    try {
+      if (citizen?.id && focusSessionId.current) {
         const response = await fetch(`/api/citizens/focus/${focusSessionId.current}/complete`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders },
-          body: JSON.stringify({ text: focusText, forwardToTelegram: forwardFocusToTelegram }),
+          body: JSON.stringify({ text: focusText, report: focusText.slice(0, 2000), forwardToTelegram: forwardFocusToTelegram }),
         });
-        const data = await response.json() as { rewardDarmins?: number; elapsedSeconds?: number; rewardBlockedReason?: string; textCharacters?: number; telegramStatus?: "not_requested" | "sent" | "not_linked" | "failed"; newlyCompleted?: boolean; error?: string };
+        const data = await response.json() as { rewardDarmins?: number; elapsedSeconds?: number; rewardBlockedReason?: string; reportAuditReason?: string; textCharacters?: number; telegramStatus?: "not_requested" | "sent" | "not_linked" | "failed"; newlyCompleted?: boolean; error?: string };
         if (!response.ok) throw new Error(data.error || "Не удалось сохранить сеанс");
-        setFocusResult({ rewardDarmins: data.rewardDarmins ?? 0, elapsedSeconds: data.elapsedSeconds ?? 0, rewardBlockedReason: data.rewardBlockedReason, textCharacters: data.textCharacters ?? 0, telegramStatus: data.newlyCompleted === false ? "already_completed" : data.telegramStatus });
+        setFocusResult({ rewardDarmins: data.rewardDarmins ?? 0, elapsedSeconds: data.elapsedSeconds ?? 0, rewardBlockedReason: data.rewardBlockedReason, reportAuditReason: data.reportAuditReason, textCharacters: data.textCharacters ?? 0, telegramStatus: data.newlyCompleted === false ? "already_completed" : data.telegramStatus });
         focusSessionId.current = null;
         if (!forwardFocusToTelegram || data.telegramStatus === "sent" || !focusText.trim()) setFocusText("");
         setForwardFocusToTelegram(false);
         if ((data.rewardDarmins ?? 0) > 0) await refreshCitizen();
-      } catch (error) {
-        setFocusError(error instanceof Error ? error.message : "Не удалось сохранить сеанс");
       }
+    } catch (error) {
+        setFocusError(error instanceof Error ? error.message : "Не удалось сохранить сеанс");
+    } finally {
+      focusCompletionInFlight.current = false;
+      setFocusCompleting(false);
     }
   }, [authToken, citizen?.id, focusText, forwardFocusToTelegram, refreshCitizen, stopInterval]);
 
@@ -772,6 +781,10 @@ export function Time() {
       setFocusResult(null);
       setFocusText("");
     }
+    if (!focusSessionId.current && !activeFocusTask && focusTopic.trim().length < 3) {
+      setFocusError("Укажите тему фокусировки (не менее 3 символов).");
+      return;
+    }
     if (citizen?.id) {
       try {
         const url = focusSessionId.current
@@ -780,7 +793,7 @@ export function Time() {
         const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders },
-          ...(focusSessionId.current ? {} : { body: JSON.stringify({ plannedSeconds: PRESETS[preset]!.seconds }) }),
+          ...(focusSessionId.current ? {} : { body: JSON.stringify({ plannedSeconds: PRESETS[preset]!.seconds, focusTopic: activeFocusTask?.title ?? focusTopic.trim() }) }),
         });
         const data = await response.json() as { sessionId?: number; error?: string };
         if (!response.ok) throw new Error(data.error || "Не удалось начать сеанс");
@@ -858,6 +871,7 @@ export function Time() {
     setCompleted(false);
     setFocusResult(null);
     setFocusError("");
+    setFocusTopic(task.title);
     setFocusText("");
     setForwardFocusToTelegram(false);
     setRunning(true);
@@ -1290,6 +1304,21 @@ export function Time() {
                 <span className="text-muted-foreground">{lang === "ru" ? "Фокус по задаче:" : "Focusing on:"} <strong className="text-foreground">{activeFocusTask.title}</strong></span>
               </div>
             )}
+            {!activeFocusTask && (
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold">Тема фокусировки</span>
+                <input
+                  value={focusTopic}
+                  onChange={event => setFocusTopic(event.target.value)}
+                  maxLength={160}
+                  disabled={running || focusSessionId.current !== null}
+                  placeholder="Например: подготовить план проекта"
+                  className="w-full rounded-lg border border-border bg-card p-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  data-testid="input-focus-topic"
+                />
+                <span className="text-xs text-muted-foreground">ИИ-Аудитор сравнит тему с вашим отчётом.</span>
+              </label>
+            )}
             <div>
               <h2 className="text-lg font-semibold">⏱ Таймер фокусировки</h2>
               <p className="text-xs text-muted-foreground">Завершённая сессия засчитывается ИИ-Аудитором</p>
@@ -1332,6 +1361,7 @@ export function Time() {
             </div>
             <div className="flex gap-3">
               <button
+                disabled={focusCompleting}
                 onClick={async () => {
                   stopInterval();
                   if (focusSessionId.current) {
@@ -1347,6 +1377,7 @@ export function Time() {
               </button>
               <button
                 onClick={() => void toggleFocusTimer()}
+                disabled={focusCompleting || (completed && focusSessionId.current !== null)}
                 className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold text-base transition-colors ${running ? "bg-secondary text-foreground border border-border" : "bg-primary text-primary-foreground"}`}
               >
                 {running ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
@@ -1354,16 +1385,17 @@ export function Time() {
               </button>
             </div>
             <label className="block space-y-2">
-              <span className="text-sm font-semibold">Запишите мысли во время фокусировки</span>
+              <span className="text-sm font-semibold">Отчёт о фокусировке</span>
               <textarea
                 value={focusText}
                 onChange={event => setFocusText(event.target.value)}
-                maxLength={100000}
-                rows={6}
-                placeholder="Пишите свободно. Текст не сохраняется — для расчёта награды учитывается только его объём."
+                disabled={focusCompleting}
+                maxLength={2000}
+                rows={4}
+                placeholder="Напишите хотя бы одно законченное предложение по теме. ИИ-Аудитор проверит связь отчёта с темой."
                 className="w-full resize-y rounded-lg border border-border bg-card p-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
-              <span className="text-xs text-muted-foreground">{Array.from(focusText).length.toLocaleString()} символов · 1 страница ≈ 1 800 символов</span>
+              <span className="text-xs text-muted-foreground">{Array.from(focusText).length.toLocaleString()} / 2 000 символов</span>
             </label>
             <label className="flex items-start gap-2 text-sm">
               <input
@@ -1384,7 +1416,11 @@ export function Time() {
                 <span className="text-xl">🎉</span>
                 <p className="text-sm text-foreground">
                   Сеанс завершён: <strong>{Math.round(sessionDurationRef.current / 60)} минут</strong> концентрации.
-                  {focusResult && <> Сессия: {Math.floor(focusResult.elapsedSeconds / 60)} мин. Начислено {focusResult.rewardDarmins} Д.{focusResult.rewardBlockedReason ? ` · Награда заблокирована: ${focusResult.rewardBlockedReason}` : ""}</>}
+                  {focusResult && <> Сессия: {Math.floor(focusResult.elapsedSeconds / 60)} мин. Начислено {focusResult.rewardDarmins} Д.
+                    {focusResult.rewardBlockedReason === "report_not_relevant"
+                      ? ` · Дармин не начислен: ${focusResult.reportAuditReason || "отчёт не связан с темой фокусировки."}`
+                      : focusResult.rewardBlockedReason ? ` · Награда заблокирована: ${focusResult.rewardBlockedReason}` : ""}
+                  </>}
                   {focusResult?.telegramStatus === "sent" && <> Мысли отправлены в Telegram.</>}
                   {focusResult?.telegramStatus === "not_linked" && <> Telegram не привязан — мысли не отправлены.</>}
                   {focusResult?.telegramStatus === "failed" && <> Не удалось отправить мысли в Telegram.</>}
@@ -1393,6 +1429,15 @@ export function Time() {
               </div>
             )}
             {focusError && <p role="alert" className="text-sm text-destructive">{focusError}</p>}
+            {completed && focusSessionId.current !== null && focusError && (
+              <button
+                onClick={() => void handleTimerComplete()}
+                disabled={focusCompleting}
+                className="w-full rounded-lg border border-primary px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
+              >
+                Повторить проверку отчёта
+              </button>
+            )}
             <div className="flex items-start gap-2 p-3 rounded-lg bg-muted text-xs text-muted-foreground">
               <Info className="w-4 h-4 shrink-0 mt-0.5" />
               За завершённый сеанс от 12 минут начисляется 1 Д за каждые 1 800 символов. Текст не хранится.

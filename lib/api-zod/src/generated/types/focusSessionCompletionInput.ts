@@ -13,6 +13,6 @@ export interface FocusSessionCompletionInput {
      * @maxLength 100000
      */
   text?: string;
-  /** @maxLength 500 */
+  /** @maxLength 2000 */
   report?: string;
 }

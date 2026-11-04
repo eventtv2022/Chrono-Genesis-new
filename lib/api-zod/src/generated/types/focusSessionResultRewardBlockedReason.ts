@@ -16,4 +16,5 @@ export const FocusSessionResultRewardBlockedReason = {
   daily_cap: 'daily_cap',
   cooldown: 'cooldown',
   suspicious_activity: 'suspicious_activity',
+  report_not_relevant: 'report_not_relevant',
 } as const;

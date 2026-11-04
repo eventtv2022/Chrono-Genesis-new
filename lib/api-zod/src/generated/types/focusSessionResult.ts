@@ -13,5 +13,6 @@ export interface FocusSessionResult {
   rewardDarmins: number;
   /** @nullable */
   rewardBlockedReason?: FocusSessionResultRewardBlockedReason;
+  reportAuditReason?: string;
   newlyCompleted?: boolean;
 }

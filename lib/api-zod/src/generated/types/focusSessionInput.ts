@@ -12,4 +12,9 @@ export interface FocusSessionInput {
      * @maximum 5400
      */
   plannedSeconds: number;
+  /**
+     * @minLength 3
+     * @maxLength 160
+     */
+  focusTopic?: string;
 }

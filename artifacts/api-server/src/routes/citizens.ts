@@ -27,7 +27,7 @@ import { notifyPassportEmissionStarted, sendDirectMessage, sendFocusThoughtsToTe
 import { issueEligiblePassport } from "../services/passportIssuanceService";
 import { deriveAgeTier } from "../services/ageGateService";
 import { getCitizenDisplayName } from "../services/citizenIdentity";
-import { checkQuadrantBTitle } from "../services/timeMatrixAi";
+import { checkFocusReport, checkQuadrantBTitle } from "../services/timeMatrixAi";
 import { selectRelevantGuideFragments } from "./guide";
 
 // ── Secure vault: citizen photos stored outside web-accessible paths ──────────
@@ -1439,10 +1439,16 @@ async function generateFocusQuizQuestion(previousQuestions: string[], previousQu
 }
 
 router.post("/citizens/focus/start", requireAuth, async (req, res): Promise<void> => {
-  const parsed = z.object({ plannedSeconds: z.number().int().min(60).max(5400) }).safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "Неверная длительность таймера" }); return; }
+  const parsed = z.object({
+    plannedSeconds: z.number().int().min(60).max(5400),
+    focusTopic: z.string().trim().min(3).max(160).optional(),
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Неверная длительность таймера или тема фокусировки" }); return; }
   const [session] = await db.insert(focusSessionsTable).values({
-    citizenId: req.citizen!.id, plannedSeconds: parsed.data.plannedSeconds, runningSince: new Date(),
+    citizenId: req.citizen!.id,
+    plannedSeconds: parsed.data.plannedSeconds,
+    focusTopic: parsed.data.focusTopic ?? null,
+    runningSince: new Date(),
   }).returning({ id: focusSessionsTable.id });
   res.status(201).json({ sessionId: session!.id });
 });
@@ -1486,10 +1492,44 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
   const id = Number(req.params.id);
   const parsed = z.object({
     text: z.string().max(100_000).optional(),
-    report: z.string().max(500).optional(),
+    report: z.string().max(2000).optional(),
     forwardToTelegram: z.boolean().optional().default(false),
   }).safeParse(req.body);
   if (!Number.isInteger(id) || id < 1 || !parsed.success) { res.status(400).json({ error: "Неверные данные сеанса" }); return; }
+  const [preSession] = await db.select().from(focusSessionsTable)
+    .where(and(eq(focusSessionsTable.id, id), eq(focusSessionsTable.citizenId, req.citizen!.id)))
+    .limit(1);
+  if (!preSession) { res.status(404).json({ error: "Сеанс не найден" }); return; }
+  const preElapsed = preSession.elapsedSeconds + (
+    preSession.status === "running" && preSession.runningSince
+      ? Math.max(0, Math.floor((Date.now() - preSession.runningSince.getTime()) / 1000))
+      : 0
+  );
+  if (preSession.status !== "completed" && preElapsed < preSession.plannedSeconds - 3) {
+    res.status(409).json({ error: "Таймер ещё не завершён" });
+    return;
+  }
+  let reportAudit: { valid: boolean; reason?: string } = { valid: false, reason: "Напишите хотя бы одно законченное предложение по теме фокусировки." };
+  const reportToAudit = parsed.data.report?.trim() || parsed.data.text?.trim() || "";
+  if (preSession.status !== "completed" && preElapsed >= 12 * 60) {
+    const topic = preSession.focusTopic ?? (preSession.taskId
+      ? (await db.select({ title: timeMatrixTasksTable.title }).from(timeMatrixTasksTable)
+        .where(eq(timeMatrixTasksTable.id, preSession.taskId)).limit(1))[0]?.title ?? null
+      : null);
+    const hasSentence = /[\p{L}\p{N}][^.!?…]*[.!?…](?:\s|$)/u.test(reportToAudit);
+    if (hasSentence && topic) {
+      try {
+        const check = await checkFocusReport(topic, reportToAudit, req.headers["accept-language"]?.startsWith("en") ? "en" : "ru");
+        reportAudit = check;
+      } catch (err) {
+        req.log.error({ err, citizenId: req.citizen!.id, sessionId: id }, "Focus report AI audit failed");
+        res.status(503).json({ error: "Проверка отчёта временно недоступна. Попробуйте ещё раз." });
+        return;
+      }
+    } else if (!topic) {
+      reportAudit = { valid: false, reason: "У этой сессии не сохранена тема фокусировки." };
+    }
+  }
   const result = await db.transaction(async tx => {
     const [session] = await tx.select().from(focusSessionsTable).where(and(eq(focusSessionsTable.id, id), eq(focusSessionsTable.citizenId, req.citizen!.id))).for("update").limit(1);
     if (!session) return null;
@@ -1503,8 +1543,12 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
     const chars = Array.from(report ?? parsed.data.text ?? "").length;
     const now = new Date();
     let reward = elapsedSeconds >= 12 * 60 ? 1 : 0;
-    let rewardBlockedReason: "daily_cap" | "cooldown" | "suspicious_activity" | undefined;
+    let rewardBlockedReason: "daily_cap" | "cooldown" | "suspicious_activity" | "report_not_relevant" | undefined;
     if (reward) {
+      if (!reportAudit.valid) {
+        reward = 0;
+        rewardBlockedReason = "report_not_relevant";
+      }
       const [citizen] = await tx.select({
         balanceMinutes: citizensTable.balanceMinutes,
         timeXp: citizensTable.timeXp,
@@ -1518,13 +1562,13 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
         eq(timeMatrixRewardsTable.citizenId, req.citizen!.id),
         gte(timeMatrixRewardsTable.createdAt, new Date(now.getTime() - 24 * 60 * 60 * 1000)),
       ));
-      if (citizen?.suspiciousActivity) {
+      if (!rewardBlockedReason && citizen?.suspiciousActivity) {
         reward = 0;
         rewardBlockedReason = "suspicious_activity";
-      } else if (Number(daily?.total ?? 0) >= 12) {
+      } else if (!rewardBlockedReason && Number(daily?.total ?? 0) >= 12) {
         reward = 0;
         rewardBlockedReason = "daily_cap";
-      } else if (citizen?.lastRewardAt && now.getTime() - citizen.lastRewardAt.getTime() < 12 * 60 * 1000) {
+      } else if (!rewardBlockedReason && citizen?.lastRewardAt && now.getTime() - citizen.lastRewardAt.getTime() < 12 * 60 * 1000) {
         reward = 0;
         rewardBlockedReason = "cooldown";
       }
@@ -1547,7 +1591,14 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
       }
     }
     await tx.update(focusSessionsTable).set({ status: "completed", runningSince: null, elapsedSeconds, textCharacters: chars, report, rewardDarmins: reward, completedAt: now }).where(eq(focusSessionsTable.id, id));
-    return { elapsedSeconds, textCharacters: chars, rewardDarmins: reward, rewardBlockedReason, newlyCompleted: true };
+    return {
+      elapsedSeconds,
+      textCharacters: chars,
+      rewardDarmins: reward,
+      rewardBlockedReason,
+      reportAuditReason: reportAudit.valid ? undefined : reportAudit.reason,
+      newlyCompleted: true,
+    };
   });
   if (!result) { res.status(404).json({ error: "Сеанс не найден или уже завершён" }); return; }
   if ("tooEarly" in result) { res.status(409).json({ error: "Таймер ещё не завершён" }); return; }
@@ -1555,7 +1606,7 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
     const [citizen] = await db.select({ balanceMinutes: citizensTable.balanceMinutes }).from(citizensTable)
       .where(eq(citizensTable.id, req.citizen!.id)).limit(1);
     if (citizen) await sendTimeMatrixRewardNotification(req.citizen!.id, citizen.balanceMinutes);
-  } else if (result.newlyCompleted && result.rewardBlockedReason) {
+  } else if (result.newlyCompleted && result.rewardBlockedReason && result.rewardBlockedReason !== "report_not_relevant") {
     await sendTimeMatrixSecurityAlert(req.citizen!.id, result.rewardBlockedReason);
   }
   let telegramStatus: "not_requested" | "sent" | "not_linked" | "failed" = "not_requested";
@@ -1594,7 +1645,7 @@ router.get("/citizens/focus/history", requireAuth, async (req, res): Promise<voi
 
 router.patch("/citizens/focus/:id/report", requireAuth, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
-  const parsed = z.object({ report: z.string().max(500) }).safeParse(req.body);
+  const parsed = z.object({ report: z.string().max(2000) }).safeParse(req.body);
   if (!Number.isSafeInteger(id) || id < 1 || !parsed.success) {
     res.status(400).json({ error: "Неверные данные отчёта" });
     return;
@@ -1835,6 +1886,7 @@ router.post("/citizens/time-matrix/tasks/:id/start", requireAuth, async (req, re
     const [session] = await tx.insert(focusSessionsTable).values({
       citizenId: req.citizen!.id,
       taskId: id,
+      focusTopic: task.title,
       plannedSeconds: 12 * 60,
       runningSince: now,
     }).returning({ id: focusSessionsTable.id });

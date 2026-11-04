@@ -7,6 +7,6 @@
  */
 
 export interface FocusSessionReportInput {
-  /** @maxLength 500 */
+  /** @maxLength 2000 */
   report: string;
 }

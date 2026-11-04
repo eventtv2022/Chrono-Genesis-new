@@ -606,6 +606,11 @@ export interface FocusSessionInput {
      * @maximum 5400
      */
   plannedSeconds: number;
+  /**
+     * @minLength 3
+     * @maxLength 160
+     */
+  focusTopic?: string;
 }
 
 export interface FocusSessionStarted {
@@ -641,7 +646,7 @@ export interface FocusSessionCompletionInput {
      * @maxLength 100000
      */
   text?: string;
-  /** @maxLength 500 */
+  /** @maxLength 2000 */
   report?: string;
 }
 
@@ -661,7 +666,7 @@ export interface FocusSessionHistoryItem {
 }
 
 export interface FocusSessionReportInput {
-  /** @maxLength 500 */
+  /** @maxLength 2000 */
   report: string;
 }
 
@@ -679,6 +684,7 @@ export const FocusSessionResultRewardBlockedReason = {
   daily_cap: 'daily_cap',
   cooldown: 'cooldown',
   suspicious_activity: 'suspicious_activity',
+  report_not_relevant: 'report_not_relevant',
 } as const;
 
 export interface FocusSessionResult {
@@ -687,6 +693,7 @@ export interface FocusSessionResult {
   rewardDarmins: number;
   /** @nullable */
   rewardBlockedReason?: FocusSessionResultRewardBlockedReason;
+  reportAuditReason?: string;
   newlyCompleted?: boolean;
 }
 
