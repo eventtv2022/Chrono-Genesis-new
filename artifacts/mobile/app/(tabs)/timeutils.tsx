@@ -557,6 +557,7 @@ export default function TimeUtilsScreen() {
   const [focusReportSessionId, setFocusReportSessionId] = useState<number | null>(null);
   const [activeFocusTask, setActiveFocusTask] = useState<{ id: number; title: string } | null>(null);
   const [focusPausedForInactivity, setFocusPausedForInactivity] = useState(false);
+  const [focusPauseCount, setFocusPauseCount] = useState(0);
   const [matrixTaskTitle, setMatrixTaskTitle] = useState("");
   const [matrixQuadrant, setMatrixQuadrant] = useState<TimeMatrixTask["quadrant"]>("A");
   const [matrixTaskError, setMatrixTaskError] = useState("");
@@ -568,6 +569,7 @@ export default function TimeUtilsScreen() {
     task.status === "completed" && task.completedAt && new Date(task.completedAt).toDateString() === matrixTodayKey
   );
   const focusSessionId = useRef<number | null>(null);
+  const focusPauseInFlight = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionDurationRef = useRef(PRESET_MINUTES[1]! * 60);
 
@@ -577,6 +579,29 @@ export default function TimeUtilsScreen() {
       intervalRef.current = null;
     }
   }, []);
+
+  const applyFocusPauseResult = useCallback((result: { elapsedSeconds?: number; focusPauseCount?: number; sessionEnded?: boolean }, fromBackground = false) => {
+    if (result.sessionEnded) {
+      focusSessionId.current = null;
+      setRunning(false);
+      setCompleted(false);
+      setFocusReward(null);
+      setFocusPauseCount(0);
+      setFocusPausedForInactivity(false);
+      setActiveFocusTask(null);
+      setFocusReport("");
+      const duration = PRESET_MINUTES[preset]! * 60;
+      sessionDurationRef.current = duration;
+      setRemaining(duration);
+      Alert.alert(t.time_pomodoro, "Вы расфокусировались 3 раза, начните фокус сессию заново.");
+      return;
+    }
+    if (typeof result.elapsedSeconds === "number") {
+      setRemaining(Math.max(0, sessionDurationRef.current - result.elapsedSeconds));
+    }
+    setFocusPauseCount(result.focusPauseCount ?? 0);
+    setFocusPausedForInactivity(fromBackground);
+  }, [preset, t.time_pomodoro]);
 
   const handleTimerComplete = useCallback(async () => {
     stopInterval();
@@ -652,44 +677,42 @@ export default function TimeUtilsScreen() {
 
   useEffect(() => {
     if (Platform.OS === "web" || !running) return;
-    let backgroundTimeout: ReturnType<typeof setTimeout> | null = null;
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
-        if (backgroundTimeout) clearTimeout(backgroundTimeout);
-        backgroundTimeout = null;
         return;
       }
-      if (backgroundTimeout) clearTimeout(backgroundTimeout);
-      backgroundTimeout = setTimeout(async () => {
-        if (AppState.currentState === "active") return;
-        const id = focusSessionId.current;
-        if (id && authToken) {
-          try {
-            const response = await fetch(`${BASE_URL}/api/citizens/focus/${id}/pause`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${authToken}` },
-            });
-            if (!response.ok) return;
-            const result = await response.json() as { elapsedSeconds?: number };
-            if (typeof result.elapsedSeconds === "number") {
-              setRemaining(Math.max(0, sessionDurationRef.current - result.elapsedSeconds));
-            }
-          } catch { return; }
-        }
-        setRunning(false);
+      if (focusPauseInFlight.current) return;
+      setRunning(false);
+      const id = focusSessionId.current;
+      if (!id || !authToken) {
         setFocusPausedForInactivity(true);
-      }, 30_000);
+        return;
+      }
+      focusPauseInFlight.current = true;
+      void fetch(`${BASE_URL}/api/citizens/focus/${id}/pause`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "hidden" }),
+        keepalive: true,
+      }).then(async (response) => {
+        const result = await response.json() as { elapsedSeconds?: number; focusPauseCount?: number; sessionEnded?: boolean; error?: string };
+        if (!response.ok) throw new Error(result.error || "Не удалось приостановить фокус-сессию");
+        applyFocusPauseResult(result, true);
+      }).catch((error) => {
+        Alert.alert(t.time_pomodoro, error instanceof Error ? error.message : "Не удалось приостановить фокус-сессию");
+      }).finally(() => { focusPauseInFlight.current = false; });
     });
     return () => {
       subscription.remove();
-      if (backgroundTimeout) clearTimeout(backgroundTimeout);
     };
-  }, [authToken, running]);
+  }, [applyFocusPauseResult, authToken, running, t.time_pomodoro]);
 
   const handlePreset = (i: number) => {
     stopInterval();
     setRunning(false);
     setCompleted(false);
+    setFocusPauseCount(0);
+    setFocusPausedForInactivity(false);
     setPreset(i);
     setRemaining(PRESET_MINUTES[i]! * 60);
     sessionDurationRef.current = PRESET_MINUTES[i]! * 60;
@@ -707,6 +730,7 @@ export default function TimeUtilsScreen() {
           Alert.alert(t.time_pomodoro, "Не удалось приостановить сессию. Проверьте соединение.");
           return;
         }
+        applyFocusPauseResult(await response.json() as { elapsedSeconds?: number; focusPauseCount?: number; sessionEnded?: boolean });
       }
       setRunning(false);
       return;
@@ -721,6 +745,7 @@ export default function TimeUtilsScreen() {
     }
     if (citizen?.id) {
       try {
+        const isNewSession = !focusSessionId.current;
         const route = focusSessionId.current
           ? `${BASE_URL}/api/citizens/focus/${focusSessionId.current}/resume`
           : `${BASE_URL}/api/citizens/focus/start`;
@@ -731,7 +756,10 @@ export default function TimeUtilsScreen() {
         });
         const data = await response.json() as { sessionId?: number; error?: string };
         if (!response.ok) throw new Error(data.error || "Не удалось запустить фокус-сессию");
-        if (data.sessionId) focusSessionId.current = data.sessionId;
+        if (data.sessionId) {
+          focusSessionId.current = data.sessionId;
+          if (isNewSession) setFocusPauseCount(0);
+        }
       } catch (error) {
         Alert.alert(t.time_pomodoro, error instanceof Error ? error.message : "Не удалось запустить фокус-сессию");
         return;
@@ -749,6 +777,8 @@ export default function TimeUtilsScreen() {
       }).catch(() => {});
     }
     focusSessionId.current = null;
+    setFocusPauseCount(0);
+    setFocusPausedForInactivity(false);
     stopInterval();
     setRunning(false);
     setCompleted(false);
@@ -1057,7 +1087,7 @@ export default function TimeUtilsScreen() {
               <Feather name="shield" size={14} color={colors.primary} />
               <Text style={st.infoText}>
                 {focusPausedForInactivity
-                  ? (lang === "ru" ? "Сессия приостановлена после 30 секунд в фоне." : "Session paused after 30 seconds in the background.")
+                  ? (lang === "ru" ? `Сессия приостановлена при переходе в фон (${focusPauseCount}/3).` : `Session paused in the background (${focusPauseCount}/3).`)
                   : (lang === "ru" ? `Proof-of-Focus ${running ? "активна" : "готова"} · 1 Д за 12 минут · максимум 12 Д/сутки` : `Proof-of-Focus ${running ? "active" : "ready"} · 1 Д per 12 minutes · 12 Д daily limit`)}
               </Text>
             </View>
@@ -1294,6 +1324,8 @@ export default function TimeUtilsScreen() {
                                         disabled={startMatrixTask.isPending}
                                         onPress={() => startMatrixTask.mutate({ id: task.id }, { onSuccess: (result) => {
                                           focusSessionId.current = result.focusSessionId;
+                                          setFocusPauseCount(0);
+                                          setFocusPausedForInactivity(false);
                                           setActiveFocusTask({ id: task.id, title: task.title });
                                           sessionDurationRef.current = 12 * 60;
                                           setRemaining(12 * 60);

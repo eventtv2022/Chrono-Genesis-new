@@ -1450,11 +1450,27 @@ router.post("/citizens/focus/start", requireAuth, async (req, res): Promise<void
 router.post("/citizens/focus/:id/pause", requireAuth, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) { res.status(400).json({ error: "Неверный сеанс" }); return; }
-  const [session] = await db.select().from(focusSessionsTable).where(and(eq(focusSessionsTable.id, id), eq(focusSessionsTable.citizenId, req.citizen!.id))).limit(1);
-  if (!session || session.status !== "running" || !session.runningSince) { res.status(409).json({ error: "Сеанс нельзя приостановить" }); return; }
-  const elapsed = session.elapsedSeconds + Math.max(0, Math.floor((Date.now() - session.runningSince.getTime()) / 1000));
-  await db.update(focusSessionsTable).set({ elapsedSeconds: elapsed, runningSince: null, status: "paused" }).where(eq(focusSessionsTable.id, id));
-  res.json({ elapsedSeconds: elapsed });
+  const parsed = z.object({ reason: z.enum(["hidden"]).optional() }).safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: "Неверная причина паузы" }); return; }
+  const isFocusLoss = parsed.data.reason === "hidden";
+  const result = await db.transaction(async (tx) => {
+    const [session] = await tx.select().from(focusSessionsTable)
+      .where(and(eq(focusSessionsTable.id, id), eq(focusSessionsTable.citizenId, req.citizen!.id)))
+      .for("update").limit(1);
+    if (!session || session.status !== "running" || !session.runningSince) return null;
+    const elapsedSeconds = session.elapsedSeconds + Math.max(0, Math.floor((Date.now() - session.runningSince.getTime()) / 1000));
+    const focusPauseCount = session.focusPauseCount + (isFocusLoss ? 1 : 0);
+    const sessionEnded = isFocusLoss && focusPauseCount >= 3;
+    await tx.update(focusSessionsTable).set({
+      elapsedSeconds,
+      focusPauseCount,
+      runningSince: null,
+      status: sessionEnded ? "abandoned" : "paused",
+    }).where(eq(focusSessionsTable.id, id));
+    return { elapsedSeconds, focusPauseCount, sessionEnded };
+  });
+  if (!result) { res.status(409).json({ error: "Сеанс нельзя приостановить" }); return; }
+  res.json(result);
 });
 
 router.post("/citizens/focus/:id/resume", requireAuth, async (req, res): Promise<void> => {

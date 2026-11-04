@@ -8,4 +8,6 @@
 
 export interface FocusSessionPaused {
   elapsedSeconds: number;
+  focusPauseCount: number;
+  sessionEnded: boolean;
 }

@@ -7,6 +7,7 @@ export const focusSessionsTable = pgTable("focus_sessions", {
   report: text("report"),
   plannedSeconds: integer("planned_seconds").notNull(),
   elapsedSeconds: integer("elapsed_seconds").notNull().default(0),
+  focusPauseCount: integer("focus_pause_count").notNull().default(0),
   runningSince: timestamp("running_since", { withTimezone: true }),
   status: text("status").notNull().default("running"),
   textCharacters: integer("text_characters").notNull().default(0),

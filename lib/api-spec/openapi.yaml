@@ -795,6 +795,12 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FocusSessionPauseInput"
       responses:
         "200":
           description: Session paused
@@ -2763,7 +2769,18 @@ components:
       properties:
         elapsedSeconds:
           type: integer
-      required: [elapsedSeconds]
+        focusPauseCount:
+          type: integer
+        sessionEnded:
+          type: boolean
+      required: [elapsedSeconds, focusPauseCount, sessionEnded]
+
+    FocusSessionPauseInput:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum: [hidden]
 
     FocusSessionResumed:
       type: object

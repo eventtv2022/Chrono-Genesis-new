@@ -42,6 +42,7 @@ import type {
   FocusSessionCompletionInput,
   FocusSessionHistoryItem,
   FocusSessionInput,
+  FocusSessionPauseInput,
   FocusSessionPaused,
   FocusSessionReportInput,
   FocusSessionReportSaved,
@@ -2432,14 +2433,15 @@ export const getPauseFocusSessionUrl = (id: number,) => {
 /**
  * @summary Pause an authenticated focus session
  */
-export const pauseFocusSession = async (id: number, options?: RequestInit): Promise<FocusSessionPaused> => {
+export const pauseFocusSession = async (id: number,
+    focusSessionPauseInput?: FocusSessionPauseInput, options?: RequestInit): Promise<FocusSessionPaused> => {
 
   return customFetch<FocusSessionPaused>(getPauseFocusSessionUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(focusSessionPauseInput)
   }
 );}
 
@@ -2448,8 +2450,8 @@ export const pauseFocusSession = async (id: number, options?: RequestInit): Prom
 
 
 export const getPauseFocusSessionMutationOptions = <TError = ErrorType<ErrorResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pauseFocusSession>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof pauseFocusSession>>, TError,{id: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pauseFocusSession>>, TError,{id: number;data?: BodyType<FocusSessionPauseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof pauseFocusSession>>, TError,{id: number;data?: BodyType<FocusSessionPauseInput>}, TContext> => {
 
 const mutationKey = ['pauseFocusSession'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -2461,10 +2463,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pauseFocusSession>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pauseFocusSession>>, {id: number;data?: BodyType<FocusSessionPauseInput>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  pauseFocusSession(id,requestOptions)
+          return  pauseFocusSession(id,data,requestOptions)
         }
 
 
@@ -2475,18 +2477,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type PauseFocusSessionMutationResult = NonNullable<Awaited<ReturnType<typeof pauseFocusSession>>>
-
+    export type PauseFocusSessionMutationBody = BodyType<FocusSessionPauseInput> | undefined
     export type PauseFocusSessionMutationError = ErrorType<ErrorResponse>
 
     /**
  * @summary Pause an authenticated focus session
  */
 export const usePauseFocusSession = <TError = ErrorType<ErrorResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pauseFocusSession>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pauseFocusSession>>, TError,{id: number;data?: BodyType<FocusSessionPauseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof pauseFocusSession>>,
         TError,
-        {id: number},
+        {id: number;data?: BodyType<FocusSessionPauseInput>},
         TContext
       > => {
       return useMutation(getPauseFocusSessionMutationOptions(options));

@@ -35,6 +35,8 @@ export * from './focusSessionCompletionInput';
 export * from './focusSessionHistoryItem';
 export * from './focusSessionInput';
 export * from './focusSessionPaused';
+export * from './focusSessionPauseInput';
+export * from './focusSessionPauseInputReason';
 export * from './focusSessionReportInput';
 export * from './focusSessionReportSaved';
 export * from './focusSessionResult';

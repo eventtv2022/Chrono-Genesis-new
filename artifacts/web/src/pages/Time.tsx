@@ -654,6 +654,7 @@ export function Time() {
   const [quizError, setQuizError] = useState("");
   const [quizBusy, setQuizBusy] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const focusPauseInFlight = useRef(false);
   const sessionDurationRef = useRef(PRESETS[1]!.seconds);
 
   const stopInterval = useCallback(() => {
@@ -699,35 +700,49 @@ export function Time() {
     return stopInterval;
   }, [running, handleTimerComplete, stopInterval]);
 
+  const pauseFocusSession = useCallback(async (sessionId: number, keepalive = false, isFocusLoss = false) => {
+    const response = await fetch(`/api/citizens/focus/${sessionId}/pause`, {
+      method: "POST",
+      headers: {
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        ...(isFocusLoss ? { "Content-Type": "application/json" } : {}),
+      },
+      ...(isFocusLoss ? { body: JSON.stringify({ reason: "hidden" }) } : {}),
+      keepalive,
+    });
+    const result = await response.json() as { elapsedSeconds?: number; focusPauseCount?: number; sessionEnded?: boolean; error?: string };
+    if (!response.ok) throw new Error(result.error || "Не удалось приостановить сеанс");
+    if (result.sessionEnded) {
+      focusSessionId.current = null;
+      setActiveFocusTask(null);
+      setCompleted(false);
+      setFocusText("");
+      setRemaining(PRESETS[preset]!.seconds);
+      setFocusError("Вы расфокусировались 3 раза, начните фокус сессию заново.");
+      return;
+    }
+    if (typeof result.elapsedSeconds === "number") {
+      setRemaining(Math.max(0, sessionDurationRef.current - result.elapsedSeconds));
+    }
+    setFocusError(`Сессия приостановлена (${result.focusPauseCount ?? 1}/3). Нажмите «Продолжить», чтобы возобновить.`);
+  }, [authToken, preset]);
+
   useEffect(() => {
     if (!running) return;
-    let backgroundTimeout: ReturnType<typeof setTimeout> | null = null;
     const onVisibilityChange = () => {
-      if (!document.hidden) {
-        if (backgroundTimeout) clearTimeout(backgroundTimeout);
-        backgroundTimeout = null;
-        return;
-      }
-      if (backgroundTimeout) clearTimeout(backgroundTimeout);
-      backgroundTimeout = setTimeout(async () => {
-        if (!document.hidden) return;
-        if (focusSessionId.current) {
-          await fetch(`/api/citizens/focus/${focusSessionId.current}/pause`, {
-            method: "POST",
-            headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-          });
-        }
-        setRunning(false);
-        setFocusError("Сессия приостановлена: приложение было неактивно более 30 секунд.");
-      }, 30_000);
+      if (!document.hidden || focusPauseInFlight.current) return;
+      setRunning(false);
+      const sessionId = focusSessionId.current;
+      if (!sessionId) return;
+      focusPauseInFlight.current = true;
+      void pauseFocusSession(sessionId, true, true)
+        .catch((error) => setFocusError(error instanceof Error ? error.message : "Не удалось приостановить сеанс"))
+        .finally(() => { focusPauseInFlight.current = false; });
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     onVisibilityChange();
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      if (backgroundTimeout) clearTimeout(backgroundTimeout);
-    };
-  }, [running, authToken]);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [running, pauseFocusSession]);
 
   const handlePreset = (i: number) => {
     stopInterval(); setRunning(false); setCompleted(false);
@@ -741,8 +756,12 @@ export function Time() {
     setFocusError("");
     if (running) {
       if (focusSessionId.current) {
-        const response = await fetch(`/api/citizens/focus/${focusSessionId.current}/pause`, { method: "POST", headers: authHeaders });
-        if (!response.ok) { setFocusError("Не удалось приостановить сеанс. Проверьте соединение."); return; }
+        try {
+          await pauseFocusSession(focusSessionId.current);
+        } catch (error) {
+          setFocusError(error instanceof Error ? error.message : "Не удалось приостановить сеанс. Проверьте соединение.");
+          return;
+        }
       }
       setRunning(false);
       return;

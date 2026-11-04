@@ -846,8 +846,14 @@ export const PauseFocusSessionParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const PauseFocusSessionBody = zod.object({
+  "reason": zod.enum(['hidden']).optional()
+})
+
 export const PauseFocusSessionResponse = zod.object({
-  "elapsedSeconds": zod.number()
+  "elapsedSeconds": zod.number(),
+  "focusPauseCount": zod.number(),
+  "sessionEnded": zod.boolean()
 })
 
 

@@ -615,6 +615,19 @@ export interface FocusSessionStarted {
 
 export interface FocusSessionPaused {
   elapsedSeconds: number;
+  focusPauseCount: number;
+  sessionEnded: boolean;
+}
+
+export type FocusSessionPauseInputReason = typeof FocusSessionPauseInputReason[keyof typeof FocusSessionPauseInputReason];
+
+
+export const FocusSessionPauseInputReason = {
+  hidden: 'hidden',
+} as const;
+
+export interface FocusSessionPauseInput {
+  reason?: FocusSessionPauseInputReason;
 }
 
 export interface FocusSessionResumed {
