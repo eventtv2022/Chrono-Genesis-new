@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Tv, Users, History, ShoppingCart, UserPlus, UserRound, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X, ShieldCheck, QrCode, Database, CalendarClock, CircleHelp, Landmark, Timer } from "lucide-react";
+import { Activity, Tv, Users, History, ShoppingCart, UserPlus, UserRound, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X, ShieldCheck, QrCode, Database, CalendarClock, CircleHelp, Landmark, Timer, BookOpen } from "lucide-react";
 import { SystemClock } from "./SystemClock";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -183,6 +183,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/tv",        label: t.nav_tv,              icon: Tv        },
     { href: "/citizens",  label: t.nav_registry,        icon: Users     },
     { href: "/timeline",  label: t.nav_timeline,        icon: History   },
+    { href: "/guide", label: lang === "ru" ? "Руководство" : "User guide", icon: BookOpen },
     { href: "/timetr",    label: "TiMETR",              icon: Timer     },
     { href: "/timenaming", label: lang === "ru" ? "Именование времени" : "Timenaming", icon: CalendarClock },
     { href: "/timenaming#legal-help", label: timenamingCopy[lang].helpNav, icon: CircleHelp },

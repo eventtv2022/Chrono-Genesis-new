@@ -50,6 +50,7 @@ import { Timenaming } from "./pages/Timenaming";
 import { TimeBank } from "./pages/TimeBank";
 import { TiMETR } from "./pages/TiMETR";
 import { Refund, Terms } from "./pages/LegalPages";
+import { UserGuide } from "./pages/UserGuide";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -87,7 +88,7 @@ function TgGuard({ children }: { children: React.ReactNode }) {
       }
 
       if (!citizen) {
-        const guestRoutes = ["/", "/welcome", "/onboarding", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/terms", "/refund", "/reset-password", "/qr-login", "/signature-request", "/referrals", "/profile", "/timenaming", "/timebank", "/timetr", "/watch-shop"];
+        const guestRoutes = ["/", "/welcome", "/onboarding", "/guide", "/register", "/login", "/passport-lookup", "/privacy", "/tos", "/terms", "/refund", "/reset-password", "/qr-login", "/signature-request", "/referrals", "/profile", "/timenaming", "/timebank", "/timetr", "/watch-shop"];
         if (!guestRoutes.includes(location)) navigate("/welcome");
         else if (location === "/") navigate("/welcome");
       }
@@ -101,7 +102,7 @@ function TgGuard({ children }: { children: React.ReactNode }) {
     if (["/privacy", "/tos", "/terms", "/refund"].includes(location)) return;
 
     if (!citizen) {
-      if (location !== "/onboarding") navigate("/onboarding");
+      if (location !== "/onboarding" && location !== "/guide") navigate("/onboarding");
       return;
     }
 
@@ -189,6 +190,7 @@ function Router() {
           <Route path="/admin/souvenir-darmins" component={AdminSouvenirDarmins} />
           <Route path="/referrals" component={Referrals} />
           <Route path="/profile" component={Profile} />
+          <Route path="/guide" component={UserGuide} />
           <Route path="/register" component={Register} />
           <Route path="/login" component={Login} />
           <Route path="/onboarding" component={OnboardingGame} />

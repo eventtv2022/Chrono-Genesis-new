@@ -20,7 +20,7 @@
 - [TRON WalletConnect checkout](timenation-tron-walletconnect.md) — TRC20 transfers use Tron signing formats v1/v2; keep TxID submission under manual review.
 - [Focus timer rewards](focus-timer-rewards.md) — 1 Д per 1,800 typed characters after 12 focus minutes; quiz pays 1 Д per 12 correct answers.
 - [Professional documents & service catalog](professional-documents-and-service-catalog.md) — CV/portfolio stay private; AI analysis requires consent; catalog publication costs 1 Д.
-- [In-app user guide](user-guide.md) — keep the full mobile manual accessible from the Profile section.
+- [In-app user guide](user-guide.md) — keep the full manual accessible from mobile Profile and the web navigation.
 - [Timenaming license legal status](timenaming-license.md) — keep the contradictory disclaimer visibly marked as draft until legal review.
 - [Time Bank legal status](timebank-legal-status.md) — do not claim universal legality without qualified, jurisdiction-specific review.
 - [Structured locale generation](structured-locale-generation.md) — key generated translations by message ID; translation arrays can return in a different order.
