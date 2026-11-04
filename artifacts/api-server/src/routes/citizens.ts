@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, sql, desc, and, or, isNull, isNotNull, gte } from "drizzle-orm";
+import { eq, sql, desc, and, or, isNull, isNotNull, gte, gt, ne } from "drizzle-orm";
 import crypto from "crypto";
 import path from "path";
 import fs from "fs";
@@ -9,7 +9,7 @@ import { GoogleGenAI } from "@google/genai";
 import { readFile } from "node:fs/promises";
 import { db } from "@workspace/db";
 import { referralsTable } from "@workspace/db";
-import { citizensTable, onboardingProgressTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable, focusSessionsTable, focusQuizAttemptsTable, citizenProfessionalDocumentsTable, timeMatrixRewardsTable, timeMatrixTasksTable } from "@workspace/db";
+import { citizensTable, onboardingProgressTable, timelineAnchorsTable, timeAuditLogsTable, aiSystemPromptsTable, focusSessionsTable, focusQuizAttemptsTable, citizenProfessionalDocumentsTable, timeMatrixRewardsTable, timeMatrixTasksTable, auctionsTable, chronopediaEventsTable, chronopediaSlotsTable } from "@workspace/db";
 import { auditCitizenRate } from "../services/rateAuditorService";
 import {
   UpdateCitizenBody,
@@ -339,15 +339,18 @@ router.get("/citizens", async (req, res): Promise<void> => {
   res.json(citizens);
 });
 
-// Minimal public time profile for a passport number. Keep balances and identity
-// data out of this response; the registry is intentionally public and number-only.
+// Public profile for a passport number. Expose only merit and authored public
+// activity in addition to time milestones; keep balance and identity data out.
 router.get("/citizens/number/:num/time-profile", async (req, res): Promise<void> => {
   const citizenNumber = req.params["num"] ?? "";
   const [citizen] = await db.select({
+    id: citizensTable.id,
     citizenNumber: citizensTable.citizenNumber,
     createdAt: citizensTable.createdAt,
     availableAt: citizensTable.availableAt,
     registrationStatus: citizensTable.registrationStatus,
+    rank: citizensTable.rank,
+    meritScore: citizensTable.meritScore,
   }).from(citizensTable)
     .where(eq(citizensTable.citizenNumber, citizenNumber))
     .limit(1);
@@ -357,11 +360,48 @@ router.get("/citizens/number/:num/time-profile", async (req, res): Promise<void>
     return;
   }
 
+  const [activeDarminAuctions, chronopediaDiscussions] = await Promise.all([
+    db.select({
+      id: auctionsTable.id,
+      amountDarmins: auctionsTable.amountDarmins,
+      startingPrice: auctionsTable.startingPrice,
+      currentBid: auctionsTable.currentBid,
+      endsAt: auctionsTable.endsAt,
+    }).from(auctionsTable)
+      .where(and(
+        eq(auctionsTable.sellerId, citizen.id),
+        eq(auctionsTable.assetType, "DARMIN_CURRENCY"),
+        eq(auctionsTable.status, "active"),
+        gt(auctionsTable.endsAt, new Date()),
+      ))
+      .orderBy(desc(auctionsTable.createdAt))
+      .limit(20),
+    db.select({
+      id: chronopediaEventsTable.id,
+      slotId: chronopediaEventsTable.slotId,
+      title: chronopediaEventsTable.title,
+      createdAt: chronopediaEventsTable.createdAt,
+      locationName: chronopediaSlotsTable.locationName,
+      timeMarker: chronopediaSlotsTable.timeMarker,
+    }).from(chronopediaEventsTable)
+      .innerJoin(chronopediaSlotsTable, eq(chronopediaSlotsTable.id, chronopediaEventsTable.slotId))
+      .where(and(
+        eq(chronopediaEventsTable.authorId, citizen.id),
+        ne(chronopediaEventsTable.status, "deleted"),
+      ))
+      .orderBy(desc(chronopediaEventsTable.createdAt))
+      .limit(20),
+  ]);
+
   res.json({
     citizenNumber: citizen.citizenNumber,
     joinedAt: citizen.createdAt.toISOString(),
     availableAt: citizen.availableAt?.toISOString() ?? null,
     status: citizen.registrationStatus ?? "issued",
+    rank: citizen.rank,
+    meritScore: citizen.meritScore,
+    activeDarminAuctions,
+    chronopediaDiscussions,
   });
 });
 

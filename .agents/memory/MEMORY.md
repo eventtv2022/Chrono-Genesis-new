@@ -26,6 +26,6 @@
 - [Time Bank legal status](timebank-legal-status.md) — do not claim universal legality without qualified, jurisdiction-specific review.
 - [Structured locale generation](structured-locale-generation.md) — key generated translations by message ID; translation arrays can return in a different order.
 - [Workspace typecheck timeouts](workspace-typecheck-timeouts.md) — if aggregate typecheck stalls, validate shared libs and app packages serially.
-- [Public dashboard privacy](public-dashboard-privacy.md) — public views use aggregates only; citizen-level balances and histories require sign-in.
+- [Public dashboard privacy](public-dashboard-privacy.md) — only the passport card shows merit and authored public activity; balances and identity stay private.
 - [Souvenir DarMin auction custody](souvenir-darmin-auctions.md) — souvenir NFTs may be listed through platform-controlled Sepolia escrow with return and winner-transfer paths.
 - [TimeNation refund policy](refund-policy.md) — 14-day refunds apply to every payment method; use support@timenation.info as the sole official contact.

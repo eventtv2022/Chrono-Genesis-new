@@ -1,10 +1,10 @@
 ---
-name: Public dashboard privacy
-description: TimeNation's public dashboards and statistics must not identify individual citizens.
+name: Public dashboard and citizen-card privacy
+description: Public statistics stay aggregate; the passport card has a narrow exception for merit and authored public activity.
 ---
 
-Public dashboards show aggregate activity only. Do not publish citizen-level rankings, passport numbers, or individual transaction rows. Personal balances and histories belong behind sign-in. All-time counts and transfer totals must aggregate the complete transaction history, not a recent-page sample.
+Public dashboards show aggregate activity only. The passport-number citizen card is an explicit exception: it may show rank and merit score, time milestones, the citizen's currently active Darmin auctions, and non-deleted Chronopedia entries authored by that citizen. Do not expose balance, contact details, identity data, or private history. All-time counts and transfer totals must aggregate the complete transaction history, not a recent-page sample.
 
-**Why:** the user requires citizen personal data to remain private and wants public statistics to describe the system, not individual behavior.
+**Why:** the user requested these specific public fields for the citizen card while the existing privacy rule still protects balances and personal identity.
 
-**How to apply:** when changing public dashboard UI or API responses, expose only aggregates; keep citizen-specific data behind authenticated, ownership-scoped endpoints and use full-history database aggregates for lifetime metrics.
+**How to apply:** keep this exception limited to the passport-number card and only public/active authored records. Do not generalize it to other public endpoints; keep citizen balances and private history behind authenticated, ownership-scoped endpoints.

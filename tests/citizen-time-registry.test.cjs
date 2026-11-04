@@ -28,5 +28,16 @@ test("passport numbers open a time profile without exposing a citizen balance", 
   const handler = routes.slice(start, end);
   assert.match(handler, /createdAt:\s*citizensTable\.createdAt/);
   assert.match(handler, /availableAt:\s*citizensTable\.availableAt/);
+  assert.match(handler, /rank:\s*citizensTable\.rank/);
+  assert.match(handler, /meritScore:\s*citizensTable\.meritScore/);
+  assert.match(handler, /eq\(auctionsTable\.assetType,\s*"DARMIN_CURRENCY"\)/);
+  assert.match(handler, /eq\(auctionsTable\.status,\s*"active"\)/);
+  assert.match(handler, /ne\(chronopediaEventsTable\.status,\s*"deleted"\)/);
+  assert.match(handler, /activeDarminAuctions/);
+  assert.match(handler, /chronopediaDiscussions/);
   assert.doesNotMatch(handler, /balanceMinutes|citizensTable\.name|citizensTable\.phone/);
+
+  assert.match(component, /Уровень мерита/);
+  assert.match(component, /Открытые аукционы Дармин/);
+  assert.match(component, /Обсуждения в Хронопедии/);
 });

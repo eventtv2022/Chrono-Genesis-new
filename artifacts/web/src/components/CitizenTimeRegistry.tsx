@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Children, useEffect, useMemo, useState } from "react";
 import { CalendarClock, Clock3, Search, Timer } from "lucide-react";
 import { useListCitizens, getListCitizensQueryKey } from "@workspace/api-client-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -12,6 +12,23 @@ interface CitizenTimeProfile {
   joinedAt: string;
   availableAt: string | null;
   status: string;
+  rank: string;
+  meritScore: number;
+  activeDarminAuctions: {
+    id: number;
+    amountDarmins: number;
+    startingPrice: number;
+    currentBid: number | null;
+    endsAt: string;
+  }[];
+  chronopediaDiscussions: {
+    id: number;
+    slotId: number;
+    title: string;
+    createdAt: string;
+    locationName: string;
+    timeMarker: string;
+  }[];
 }
 
 function nextAnniversary(joinedAt: Date, now: Date): Date {
@@ -197,6 +214,45 @@ export function CitizenTimeRegistry() {
                 />
               </div>
 
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">{english ? "Merit level" : "Уровень мерита"}</p>
+                <p className="mt-1 font-semibold">{profile.rank}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {english ? "Merit score" : "Мерит"}: {Number(profile.meritScore).toLocaleString(english ? "en-US" : "ru-RU", { maximumFractionDigits: 2 })}
+                </p>
+              </div>
+
+              <ProfileActivity
+                title={english ? "Open Darmin auctions" : "Открытые аукционы Дармин"}
+                empty={english ? "No open auctions." : "Открытых аукционов нет."}
+              >
+                {profile.activeDarminAuctions.map((auction) => (
+                  <div key={auction.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
+                    <span>{Number(auction.amountDarmins).toLocaleString(english ? "en-US" : "ru-RU")} Д</span>
+                    <span className="text-muted-foreground">
+                      {english ? "Price" : "Цена"}: {Number(auction.currentBid ?? auction.startingPrice).toLocaleString(english ? "en-US" : "ru-RU")} Д
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {english ? "Until" : "До"} {new Date(auction.endsAt).toLocaleDateString(english ? "en-US" : "ru-RU")}
+                    </span>
+                  </div>
+                ))}
+              </ProfileActivity>
+
+              <ProfileActivity
+                title={english ? "Chronopedia discussions" : "Обсуждения в Хронопедии"}
+                empty={english ? "No public discussions." : "Публичных обсуждений нет."}
+              >
+                {profile.chronopediaDiscussions.map((discussion) => (
+                  <div key={discussion.id} className="space-y-0.5 text-sm">
+                    <p className="font-medium">{discussion.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {discussion.locationName} · {discussion.timeMarker} · {new Date(discussion.createdAt).toLocaleDateString(english ? "en-US" : "ru-RU")}
+                    </p>
+                  </div>
+                ))}
+              </ProfileActivity>
+
               <div className="flex items-center justify-between gap-3 border-t border-border pt-3 text-sm">
                 <span className="text-muted-foreground">{english ? "Passport status" : "Статус паспорта"}</span>
                 <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${status === "issued" ? "bg-emerald-500/10 text-emerald-400" : status === "rejected" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-400"}`}>
@@ -219,14 +275,26 @@ export function CitizenTimeRegistry() {
               )}
               <p className="text-[11px] leading-relaxed text-muted-foreground">
                 {english
-                  ? "This public card shows time milestones only. Personal data and balance are not displayed."
-                  : "В публичной карточке отображаются только временные этапы. Личные данные и баланс скрыты."}
+                  ? "This public card shows time milestones, merit, and public activity only. Personal data and balance are not displayed."
+                  : "Публичная карточка показывает временные этапы, мерит и открытые активности. Личные данные и баланс скрыты."}
               </p>
             </div>
           ) : null}
         </DialogContent>
       </Dialog>
     </section>
+  );
+}
+
+function ProfileActivity({ title, empty, children }: { title: string; empty: string; children: React.ReactNode }) {
+  const hasItems = Children.count(children) > 0;
+  return (
+    <div className="space-y-2 rounded-lg border border-border p-3">
+      <p className="text-xs font-medium text-muted-foreground">{title}</p>
+      {hasItems
+        ? <div className="max-h-36 space-y-2 overflow-y-auto">{children}</div>
+        : <p className="text-sm text-muted-foreground">{empty}</p>}
+    </div>
   );
 }
 
