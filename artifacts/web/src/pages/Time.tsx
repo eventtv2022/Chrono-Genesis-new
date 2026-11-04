@@ -471,9 +471,10 @@ function TimeMatrixSurface() {
                   <ul className="space-y-2">
                     {quadrantTasks.map(task => (
                       <li key={task.id} className="rounded-lg border border-border/70 bg-background/70 px-3 py-2.5 text-foreground" data-testid={`task-row-${task.id}`}>
-                        <div className="flex items-start gap-2.5">
-                          <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${task.status === "completed" ? "bg-teal-300" : q.marker}`} />
-                          <div className="min-w-0 flex-1">
+                        <div className="flex flex-col gap-2.5">
+                          <div className="flex min-w-0 items-start gap-2.5">
+                            <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${task.status === "completed" ? "bg-teal-300" : q.marker}`} />
+                            <div className="min-w-0 flex-1">
                             {editingTaskId === task.id ? (
                               <div className="space-y-2">
                 <input value={editingTitle} onChange={event => setEditingTitle(event.target.value)} maxLength={120} aria-label={matrixText.placeholder} className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm" data-testid={`input-edit-task-${task.id}`} />
@@ -491,14 +492,15 @@ function TimeMatrixSurface() {
                               {task.elapsedSeconds > 0 && <span data-testid={`text-task-elapsed-${task.id}`}>{formatTaskDuration(task.elapsedSeconds)}</span>}
                               {task.status === "completed" && task.rewardDarmins > 0 && <span className="text-primary" data-testid={`text-task-reward-${task.id}`}>+{task.rewardDarmins} Д</span>}
                             </div>
+                            </div>
                           </div>
                           {task.status === "completed" ? (
-                            <div className="flex shrink-0 items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="flex items-center gap-1 text-[10px] font-medium text-teal-200" data-testid={`status-task-completed-${task.id}`}><Check className="h-3 w-3" /> {TIME_MATRIX_ACTIONS[lang].done}</span>
                               <button type="button" disabled={isMutating} onClick={() => { if (window.confirm(TIME_MATRIX_ACTIONS[lang].deletePrompt)) deleteTask.mutate({ id: task.id }); }} className="rounded-md border border-rose-400/30 px-2 py-1 text-[10px] text-rose-300" data-testid={`button-delete-task-${task.id}`}>{TIME_MATRIX_DELETE[lang]}</button>
                             </div>
                           ) : (
-                            <div className="flex shrink-0 items-center gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               {!task.startedAt && editingTaskId !== task.id && <button type="button" disabled={isMutating} onClick={() => { setEditingTaskId(task.id); setEditingTitle(task.title); setEditingQuadrant(task.quadrant); }} className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground" data-testid={`button-edit-task-${task.id}`}>{TIME_MATRIX_ACTIONS[lang].edit}</button>}
                               <button type="button" disabled={isMutating} onClick={() => { if (window.confirm(TIME_MATRIX_ACTIONS[lang].deletePrompt)) deleteTask.mutate({ id: task.id }); }} className="rounded-md border border-rose-400/30 px-2 py-1 text-[10px] text-rose-300" data-testid={`button-delete-task-${task.id}`}>{TIME_MATRIX_DELETE[lang]}</button>
                               <button
