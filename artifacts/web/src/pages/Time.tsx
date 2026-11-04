@@ -340,25 +340,37 @@ function formatTaskDuration(seconds: number) {
 }
 
 function TimeMatrixSurface() {
+  const { citizen, authToken, authHeaders } = useCitizen();
   const { lang, t } = useLanguage();
   const matrixText = TIME_MATRIX_I18N[lang];
   const queryClient = useQueryClient();
   const tasksQuery = useListTimeMatrixTasks({
-    query: { queryKey: getListTimeMatrixTasksQueryKey(), staleTime: 0, refetchOnMount: "always" },
+    query: {
+      queryKey: [...getListTimeMatrixTasksQueryKey(), citizen?.id],
+      enabled: Boolean(citizen?.id && authToken),
+      staleTime: 0,
+      refetchOnMount: "always",
+    },
+    request: { headers: authHeaders },
   });
   const createTask = useCreateTimeMatrixTask({
+    request: { headers: authHeaders },
     mutation: { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); } },
   });
   const startTask = useStartTimeMatrixTask({
+    request: { headers: authHeaders },
     mutation: { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); } },
   });
   const completeTask = useCompleteTimeMatrixTask({
+    request: { headers: authHeaders },
     mutation: { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); } },
   });
   const updateTask = useUpdateTimeMatrixTask({
+    request: { headers: authHeaders },
     mutation: { onSuccess: () => { setEditingTaskId(null); void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); } },
   });
   const deleteTask = useDeleteTimeMatrixTask({
+    request: { headers: authHeaders },
     mutation: { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); } },
   });
   const [title, setTitle] = useState("");
@@ -387,6 +399,19 @@ function TimeMatrixSurface() {
       onError: (error) => setFormError(getTimeMatrixErrorMessage(error, TIME_MATRIX_ERRORS[lang].saveFailed)),
     });
   };
+
+  if (!citizen?.id || !authToken) {
+    return (
+      <section className="space-y-5" aria-labelledby="time-matrix-title" data-testid="section-time-matrix">
+        <div className="rounded-2xl border border-border bg-card p-5 sm:p-7">
+          <h2 id="time-matrix-title" className="text-2xl font-semibold tracking-tight text-foreground">{matrixText.tab}</h2>
+          <p className="mt-2 text-sm text-muted-foreground" role="status" data-testid="status-time-matrix-auth">
+            {matrixText.signIn} <Link href="/login" className="font-semibold text-primary underline">{lang === "ru" ? "Войти" : "Sign in"}</Link>
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-5" aria-labelledby="time-matrix-title" data-testid="section-time-matrix">
