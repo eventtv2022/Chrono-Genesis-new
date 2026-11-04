@@ -1423,7 +1423,8 @@ router.post("/citizens/focus/:id/resume", requireAuth, async (req, res): Promise
 router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const parsed = z.object({
-    text: z.string().max(100_000),
+    text: z.string().max(100_000).optional(),
+    report: z.string().max(500).optional(),
     forwardToTelegram: z.boolean().optional().default(false),
   }).safeParse(req.body);
   if (!Number.isInteger(id) || id < 1 || !parsed.success) { res.status(400).json({ error: "Неверные данные сеанса" }); return; }
@@ -1436,7 +1437,8 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
     if (!["running", "paused"].includes(session.status)) return null;
     const elapsedSeconds = session.elapsedSeconds + (session.status === "running" && session.runningSince ? Math.max(0, Math.floor((Date.now() - session.runningSince.getTime()) / 1000)) : 0);
     if (elapsedSeconds < session.plannedSeconds - 3) return { tooEarly: true as const };
-    const chars = Array.from(parsed.data.text).length;
+    const report = parsed.data.report?.trim() || null;
+    const chars = Array.from(report ?? parsed.data.text ?? "").length;
     const now = new Date();
     let reward = elapsedSeconds >= 12 * 60 ? 1 : 0;
     let rewardBlockedReason: "daily_cap" | "cooldown" | "suspicious_activity" | undefined;
@@ -1482,7 +1484,7 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
         await tx.insert(timeMatrixRewardsTable).values({ citizenId: req.citizen!.id, source: "focus_session", amount: 1, createdAt: now });
       }
     }
-    await tx.update(focusSessionsTable).set({ status: "completed", runningSince: null, elapsedSeconds, textCharacters: chars, rewardDarmins: reward, completedAt: now }).where(eq(focusSessionsTable.id, id));
+    await tx.update(focusSessionsTable).set({ status: "completed", runningSince: null, elapsedSeconds, textCharacters: chars, report, rewardDarmins: reward, completedAt: now }).where(eq(focusSessionsTable.id, id));
     return { elapsedSeconds, textCharacters: chars, rewardDarmins: reward, rewardBlockedReason, newlyCompleted: true };
   });
   if (!result) { res.status(404).json({ error: "Сеанс не найден или уже завершён" }); return; }
@@ -1495,7 +1497,8 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
     await sendTimeMatrixSecurityAlert(req.citizen!.id, result.rewardBlockedReason);
   }
   let telegramStatus: "not_requested" | "sent" | "not_linked" | "failed" = "not_requested";
-  if (parsed.data.forwardToTelegram && result.newlyCompleted && parsed.data.text.trim()) {
+  const textToForward = parsed.data.report?.trim() || parsed.data.text?.trim() || "";
+  if (parsed.data.forwardToTelegram && result.newlyCompleted && textToForward) {
     const [citizen] = await db.select({ telegramId: citizensTable.telegramId })
       .from(citizensTable)
       .where(eq(citizensTable.id, req.citizen!.id))
@@ -1503,10 +1506,51 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
     if (!citizen?.telegramId) {
       telegramStatus = "not_linked";
     } else {
-      telegramStatus = await sendFocusThoughtsToTelegram(citizen.telegramId, parsed.data.text) ? "sent" : "failed";
+      telegramStatus = await sendFocusThoughtsToTelegram(citizen.telegramId, textToForward) ? "sent" : "failed";
     }
   }
   res.json({ ...result, telegramStatus });
+});
+
+router.get("/citizens/focus/history", requireAuth, async (req, res): Promise<void> => {
+  const sessions = await db.select({
+    id: focusSessionsTable.id,
+    taskId: focusSessionsTable.taskId,
+    taskTitle: timeMatrixTasksTable.title,
+    elapsedSeconds: focusSessionsTable.elapsedSeconds,
+    report: focusSessionsTable.report,
+    rewardDarmins: focusSessionsTable.rewardDarmins,
+    createdAt: focusSessionsTable.createdAt,
+    completedAt: focusSessionsTable.completedAt,
+  }).from(focusSessionsTable)
+    .leftJoin(timeMatrixTasksTable, eq(timeMatrixTasksTable.id, focusSessionsTable.taskId))
+    .where(eq(focusSessionsTable.citizenId, req.citizen!.id))
+    .orderBy(desc(focusSessionsTable.createdAt))
+    .limit(20);
+  res.json(sessions);
+});
+
+router.patch("/citizens/focus/:id/report", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const parsed = z.object({ report: z.string().max(500) }).safeParse(req.body);
+  if (!Number.isSafeInteger(id) || id < 1 || !parsed.success) {
+    res.status(400).json({ error: "Неверные данные отчёта" });
+    return;
+  }
+  const report = parsed.data.report.trim() || null;
+  const [updated] = await db.update(focusSessionsTable)
+    .set({ report, textCharacters: Array.from(report ?? "").length })
+    .where(and(
+      eq(focusSessionsTable.id, id),
+      eq(focusSessionsTable.citizenId, req.citizen!.id),
+      eq(focusSessionsTable.status, "completed"),
+    ))
+    .returning({ id: focusSessionsTable.id });
+  if (!updated) {
+    res.status(404).json({ error: "Завершённая сессия не найдена" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 router.get("/citizens/focus/quiz/question", requireAuth, async (req, res): Promise<void> => {
@@ -1675,17 +1719,28 @@ router.delete("/citizens/time-matrix/tasks/:id", requireAuth, async (req, res): 
 router.post("/citizens/time-matrix/tasks/:id/start", requireAuth, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (!Number.isSafeInteger(id) || id < 1) { res.status(400).json({ error: "Некорректная задача" }); return; }
-  const [task] = await db.select().from(timeMatrixTasksTable).where(and(
-    eq(timeMatrixTasksTable.id, id),
-    eq(timeMatrixTasksTable.citizenId, req.citizen!.id),
-  )).limit(1);
-  if (!task) { res.status(404).json({ error: "Задача не найдена" }); return; }
-  if (task.status === "completed") { res.status(409).json({ error: "Задача уже завершена" }); return; }
-  const [updated] = await db.update(timeMatrixTasksTable)
-    .set({ startedAt: task.startedAt ?? new Date() })
-    .where(eq(timeMatrixTasksTable.id, id))
-    .returning();
-  res.json(updated);
+  const result = await db.transaction(async (tx) => {
+    const [task] = await tx.select().from(timeMatrixTasksTable).where(and(
+      eq(timeMatrixTasksTable.id, id),
+      eq(timeMatrixTasksTable.citizenId, req.citizen!.id),
+    )).for("update").limit(1);
+    if (!task) return { error: "Задача не найдена", status: 404 as const };
+    if (task.status === "completed") return { error: "Задача уже завершена", status: 409 as const };
+    const now = new Date();
+    const [updated] = await tx.update(timeMatrixTasksTable)
+      .set({ startedAt: task.startedAt ?? now })
+      .where(eq(timeMatrixTasksTable.id, id))
+      .returning();
+    const [session] = await tx.insert(focusSessionsTable).values({
+      citizenId: req.citizen!.id,
+      taskId: id,
+      plannedSeconds: 12 * 60,
+      runningSince: now,
+    }).returning({ id: focusSessionsTable.id });
+    return { task: updated, focusSessionId: session!.id };
+  });
+  if ("error" in result) { res.status(result.status ?? 500).json({ error: result.error }); return; }
+  res.json(result);
 });
 
 router.post("/citizens/time-matrix/tasks/:id/complete", requireAuth, async (req, res): Promise<void> => {
@@ -1707,8 +1762,14 @@ router.post("/citizens/time-matrix/tasks/:id/complete", requireAuth, async (req,
       eq(focusSessionsTable.citizenId, req.citizen!.id),
       eq(focusSessionsTable.status, "completed"),
       gte(focusSessionsTable.elapsedSeconds, 12 * 60),
-      gte(focusSessionsTable.createdAt, task.startedAt),
-      gte(focusSessionsTable.completedAt, task.startedAt),
+      or(
+        eq(focusSessionsTable.taskId, id),
+        and(
+          isNull(focusSessionsTable.taskId),
+          gte(focusSessionsTable.createdAt, task.startedAt),
+          gte(focusSessionsTable.completedAt, task.startedAt),
+        ),
+      ),
     )).limit(1);
     if (!verifiedSession) {
       res.status(409).json({ error: "Квадрант B требует завершённой 12-минутной фокус-сессии" });

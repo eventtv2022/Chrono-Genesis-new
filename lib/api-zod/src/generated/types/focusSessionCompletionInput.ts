@@ -7,6 +7,12 @@
  */
 
 export interface FocusSessionCompletionInput {
-  /** @maxLength 100000 */
-  text: string;
+  /**
+     * Legacy focus text; use report for the private session summary.
+     * @deprecated
+     * @maxLength 100000
+     */
+  text?: string;
+  /** @maxLength 500 */
+  report?: string;
 }

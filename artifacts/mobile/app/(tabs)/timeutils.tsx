@@ -38,6 +38,9 @@ import {
   useCompleteTimeMatrixTask,
   useUpdateTimeMatrixTask,
   useDeleteTimeMatrixTask,
+  useListFocusSessionHistory,
+  getListFocusSessionHistoryQueryKey,
+  useSaveFocusSessionReport,
   type TimeMatrixTask,
 } from "@workspace/api-client-react";
 
@@ -333,6 +336,15 @@ export default function TimeUtilsScreen() {
     },
     request: { headers: authHeaders },
   });
+  const focusHistoryQuery = useListFocusSessionHistory({
+    query: {
+      queryKey: [...getListFocusSessionHistoryQueryKey(), citizen?.id],
+      enabled: Boolean(authToken && citizen?.id),
+      retry: false,
+    },
+    request: { headers: authHeaders },
+  });
+  const saveFocusSessionReport = useSaveFocusSessionReport({ request: { headers: authHeaders } });
   const createMatrixTask = useCreateTimeMatrixTask({ request: { headers: authHeaders } });
   const startMatrixTask = useStartTimeMatrixTask({ request: { headers: authHeaders } });
   const completeMatrixTask = useCompleteTimeMatrixTask({ request: { headers: authHeaders } });
@@ -539,6 +551,11 @@ export default function TimeUtilsScreen() {
   const [running, setRunning] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [focusReward, setFocusReward] = useState<number | null>(null);
+  const [focusReport, setFocusReport] = useState("");
+  const [focusReportPending, setFocusReportPending] = useState(false);
+  const [focusReportSaving, setFocusReportSaving] = useState(false);
+  const [focusReportSessionId, setFocusReportSessionId] = useState<number | null>(null);
+  const [activeFocusTask, setActiveFocusTask] = useState<{ id: number; title: string } | null>(null);
   const [focusPausedForInactivity, setFocusPausedForInactivity] = useState(false);
   const [matrixTaskTitle, setMatrixTaskTitle] = useState("");
   const [matrixQuadrant, setMatrixQuadrant] = useState<TimeMatrixTask["quadrant"]>("A");
@@ -566,30 +583,55 @@ export default function TimeUtilsScreen() {
     setRunning(false);
     setCompleted(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    let awardedDarmins = 0;
-    if (citizen?.id && focusSessionId.current) {
+    const sessionId = focusSessionId.current;
+    if (citizen?.id && sessionId) {
       try {
-        const response = await fetch(`${BASE_URL}/api/citizens/focus/${focusSessionId.current}/complete`, {
+        const response = await fetch(`${BASE_URL}/api/citizens/focus/${sessionId}/complete`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
-          body: JSON.stringify({ text: "" }),
+          headers: { "Content-Type": "application/json", ...authHeaders },
+          body: JSON.stringify({ report: "" }),
         });
-        const result = await response.json() as { rewardDarmins?: number; rewardBlockedReason?: string; error?: string };
-        if (!response.ok) throw new Error(result.error || "Не удалось подтвердить фокус-сессию");
-        awardedDarmins = result.rewardDarmins ?? 0;
-        setFocusReward(awardedDarmins);
+        const result = await response.json() as { rewardDarmins?: number; error?: string };
+        if (!response.ok) throw new Error(result.error || "Не удалось завершить фокус-сессию");
         focusSessionId.current = null;
+        setFocusReportSessionId(sessionId);
+        setFocusReward(result.rewardDarmins ?? 0);
+        setFocusReport("");
+        setFocusReportPending(true);
         await refreshCitizen();
+        void queryClient.invalidateQueries({ queryKey: getListFocusSessionHistoryQueryKey() });
       } catch (error) {
-        Alert.alert(t.time_session_done, error instanceof Error ? error.message : "Не удалось подтвердить фокус-сессию");
+        Alert.alert(t.time_session_done, error instanceof Error ? error.message : "Не удалось завершить фокус-сессию");
       }
+    } else {
+      Alert.alert(t.time_session_done, `${Math.round(sessionDurationRef.current / 60)} min · ${t.time_pomodoro}`);
     }
-    Alert.alert(
-      t.time_session_done,
-      `${Math.round(sessionDurationRef.current / 60)} min · ${t.time_pomodoro}${citizen?.id ? ` · +${awardedDarmins} Д` : ""}`,
-      [{ text: "OK", onPress: () => setCompleted(false) }]
-    );
-  }, [authToken, citizen?.id, refreshCitizen, stopInterval, t.time_pomodoro, t.time_session_done]);
+  }, [authHeaders, citizen?.id, queryClient, refreshCitizen, stopInterval, t.time_pomodoro, t.time_session_done]);
+
+  const finishFocusSession = async (saveReport: boolean) => {
+    if (focusReportSaving) return;
+    setFocusReportSaving(true);
+    try {
+      if (saveReport && focusReport.trim() && focusReportSessionId) {
+        await saveFocusSessionReport.mutateAsync({
+          id: focusReportSessionId,
+          data: { report: focusReport.trim() },
+        });
+      }
+      setFocusReportPending(false);
+      setFocusReportSessionId(null);
+      setFocusReport("");
+      void queryClient.invalidateQueries({ queryKey: getListFocusSessionHistoryQueryKey() });
+      if (activeFocusTask) {
+        setSection("matrix");
+        setActiveFocusTask(null);
+      }
+    } catch (error) {
+      Alert.alert(t.time_session_done, error instanceof Error ? error.message : "Не удалось сохранить сессию");
+    } finally {
+      setFocusReportSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (running) {
@@ -1066,12 +1108,13 @@ export default function TimeUtilsScreen() {
 
             {/* Controls */}
             <View style={st.timerControls}>
-              <TouchableOpacity style={st.controlBtnSecondary} onPress={handleReset}>
+              <TouchableOpacity style={[st.controlBtnSecondary, focusReportPending && { opacity: 0.45 }]} disabled={focusReportPending || focusReportSaving} onPress={handleReset}>
                 <Feather name="rotate-ccw" size={20} color={colors.mutedForeground} />
                 <Text style={st.controlBtnSecondaryText}>{t.time_reset_btn}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[st.controlBtnPrimary, running && st.controlBtnPause]}
+                disabled={focusReportPending || focusReportSaving}
+                style={[st.controlBtnPrimary, running && st.controlBtnPause, (focusReportPending || focusReportSaving) && { opacity: 0.45 }]}
                 onPress={handleStartPause}
               >
                 <Feather name={running ? "pause" : "play"} size={22} color={colors.primaryForeground} />
@@ -1084,6 +1127,67 @@ export default function TimeUtilsScreen() {
               <Feather name="info" size={14} color={colors.mutedForeground} />
               <Text style={st.infoText}>{t.timer_ai_checker}</Text>
             </View>
+            {focusReportPending && (
+              <View style={{ gap: 10, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+                <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 16 }}>
+                  {lang === "ru" ? "Что удалось сделать?" : "What did you work on?"}
+                </Text>
+                {activeFocusTask && <Text style={st.infoText}>{activeFocusTask.title}</Text>}
+                {focusReward !== null && <Text style={{ color: colors.success, fontWeight: "700" }}>+{focusReward} Д</Text>}
+                <Text style={st.infoText}>
+                  {lang === "ru" ? "Короткий отчёт сохранится приватно. Он не влияет на награду." : "Your short report is private and does not affect your reward."}
+                </Text>
+                <TextInput
+                  value={focusReport}
+                  onChangeText={setFocusReport}
+                  maxLength={500}
+                  multiline
+                  accessibilityLabel={lang === "ru" ? "Краткий отчёт о фокус-сессии" : "Short focus session report"}
+                  placeholder={lang === "ru" ? "Напишите краткий отчёт (необязательно)" : "Write a short report (optional)"}
+                  placeholderTextColor={colors.mutedForeground}
+                  style={{ color: colors.foreground, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 10, minHeight: 82, textAlignVertical: "top" }}
+                />
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  testID="button-focus-report-save"
+                  disabled={focusReportSaving}
+                  onPress={() => void finishFocusSession(true)}
+                  style={[st.controlBtnPrimary, { opacity: focusReportSaving ? 0.6 : 1 }]}
+                >
+                  <Text style={st.controlBtnPrimaryText}>{lang === "ru" ? "Сохранить и завершить" : "Save and finish"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  testID="button-focus-report-skip"
+                  disabled={focusReportSaving}
+                  onPress={() => void finishFocusSession(false)}
+                  style={st.controlBtnSecondary}
+                >
+                  <Text style={st.controlBtnSecondaryText}>{lang === "ru" ? "Пропустить отчёт" : "Skip report"}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {completed && focusReward !== null && !focusReportPending && (
+              <Text style={{ color: colors.success, fontWeight: "700", textAlign: "center" }}>+{focusReward} Д</Text>
+            )}
+            {citizen?.id && (
+              <View style={{ gap: 8, marginTop: 12 }}>
+                <Text style={{ color: colors.foreground, fontWeight: "700", fontSize: 16 }}>
+                  {lang === "ru" ? "История фокус-сессий" : "Recent focus sessions"}
+                </Text>
+                {focusHistoryQuery.isLoading ? <ActivityIndicator color={colors.primary} /> :
+                  (focusHistoryQuery.data ?? []).slice(0, 5).map((item) => (
+                    <View key={item.id} style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 3 }}>
+                      <Text style={{ color: colors.foreground, fontWeight: "600" }}>
+                        {item.taskTitle ?? (lang === "ru" ? "Фокус-сессия" : "Focus session")}
+                      </Text>
+                      {!!item.report && <Text style={st.infoText}>{item.report}</Text>}
+                      <Text style={st.infoText}>{Math.floor(item.elapsedSeconds / 60)} {t.tb_min} · {new Date(item.createdAt).toLocaleDateString(lang)}</Text>
+                    </View>
+                  ))
+                }
+              </View>
+            )}
             </>}
 
             {section === "matrix" && (
@@ -1183,16 +1287,30 @@ export default function TimeUtilsScreen() {
                                   </Text>
                                 ) : (
                                   <View style={{ flexDirection: "row", gap: 12 }}>
-                                    {!task.startedAt && (
+                                    {task.status === "open" && (
                                       <TouchableOpacity
                                         testID={`button-time-matrix-start-${task.id}`}
                                         accessibilityRole="button"
                                         disabled={startMatrixTask.isPending}
-                                        onPress={() => startMatrixTask.mutate({ id: task.id }, { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); }, onError: () => setMatrixTaskError(TIME_MATRIX_ERRORS[lang].saveFailed) })}
+                                        onPress={() => startMatrixTask.mutate({ id: task.id }, { onSuccess: (result) => {
+                                          focusSessionId.current = result.focusSessionId;
+                                          setActiveFocusTask({ id: task.id, title: task.title });
+                                          sessionDurationRef.current = 12 * 60;
+                                          setRemaining(12 * 60);
+                                          setPreset(1);
+                                          setCompleted(false);
+                                          setFocusReportPending(false);
+                                          setFocusReportSessionId(null);
+                                          setFocusReward(null);
+                                          setRunning(true);
+                                          setFocusPausedForInactivity(false);
+                                          setSection("timer");
+                                          void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() });
+                                        }, onError: () => setMatrixTaskError(TIME_MATRIX_ERRORS[lang].saveFailed) })}
                                         style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
                                       >
                                         <Feather name="play" size={14} color={colors.primary} />
-                                        <Text style={{ color: colors.primary }}>{TIME_MATRIX_ACTIONS[lang].start}</Text>
+                                        <Text style={{ color: colors.primary }}>{lang === "ru" ? "Начать фокус" : "Start focus"}</Text>
                                       </TouchableOpacity>
                                     )}
                                     {!!task.startedAt && (

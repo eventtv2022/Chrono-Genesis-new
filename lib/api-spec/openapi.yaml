@@ -869,6 +869,56 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /citizens/focus/history:
+    get:
+      operationId: listFocusSessionHistory
+      tags: [citizens]
+      summary: List the authenticated citizen's recent focus sessions
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Recent focus sessions with private reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FocusSessionHistoryItem"
+
+  /citizens/focus/{id}/report:
+    patch:
+      operationId: saveFocusSessionReport
+      tags: [citizens]
+      summary: Save a private report for a completed focus session
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FocusSessionReportInput"
+      responses:
+        "200":
+          description: Report saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FocusSessionReportSaved"
+        "404":
+          description: Completed session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /citizens/focus/quiz/question:
     get:
       operationId: getFocusQuizQuestion
@@ -1056,11 +1106,11 @@ paths:
             type: integer
       responses:
         "200":
-          description: Task started
+          description: Task and linked focus session started
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TimeMatrixTask"
+                $ref: "#/components/schemas/TimeMatrixTaskFocusStarted"
         "404":
           description: Task not found
           content:
@@ -2721,7 +2771,39 @@ components:
         text:
           type: string
           maxLength: 100000
-      required: [text]
+          deprecated: true
+          description: Legacy focus text; use report for the private session summary.
+        report:
+          type: string
+          maxLength: 500
+
+    FocusSessionHistoryItem:
+      type: object
+      properties:
+        id: { type: integer }
+        taskId: { type: ["integer", "null"] }
+        taskTitle: { type: ["string", "null"] }
+        elapsedSeconds: { type: integer }
+        report: { type: ["string", "null"] }
+        rewardDarmins: { type: integer }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+      required: [id, elapsedSeconds, rewardDarmins, createdAt]
+
+    FocusSessionReportInput:
+      type: object
+      properties:
+        report:
+          type: string
+          maxLength: 500
+      required: [report]
+
+    FocusSessionReportSaved:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]
 
     FocusSessionResult:
       type: object
@@ -2777,6 +2859,15 @@ components:
         rewardDarmins: { type: integer }
         quickChecklist: { type: boolean }
       required: [id, title, quadrant, status, createdAt, elapsedSeconds, rewardDarmins, quickChecklist]
+
+    TimeMatrixTaskFocusStarted:
+      type: object
+      properties:
+        task:
+          $ref: "#/components/schemas/TimeMatrixTask"
+        focusSessionId:
+          type: integer
+      required: [task, focusSessionId]
 
     GuideAssistantMessage:
       type: object

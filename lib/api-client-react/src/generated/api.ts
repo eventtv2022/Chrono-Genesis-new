@@ -40,8 +40,11 @@ import type {
   FocusQuizAnswerResult,
   FocusQuizQuestion,
   FocusSessionCompletionInput,
+  FocusSessionHistoryItem,
   FocusSessionInput,
   FocusSessionPaused,
+  FocusSessionReportInput,
+  FocusSessionReportSaved,
   FocusSessionResult,
   FocusSessionResumed,
   FocusSessionStarted,
@@ -82,6 +85,7 @@ import type {
   TelegramWebAppInput,
   TelegramWebAppSession,
   TimeMatrixTask,
+  TimeMatrixTaskFocusStarted,
   TimeMatrixTaskInput,
   TimeMatrixTaskUpdate,
   TimelineAnchorInput,
@@ -2630,6 +2634,155 @@ export const useCompleteFocusSession = <TError = ErrorType<ErrorResponse>,
       return useMutation(getCompleteFocusSessionMutationOptions(options));
     }
 
+export const getListFocusSessionHistoryUrl = () => {
+
+
+
+
+  return `/api/citizens/focus/history`
+}
+
+/**
+ * @summary List the authenticated citizen's recent focus sessions
+ */
+export const listFocusSessionHistory = async ( options?: RequestInit): Promise<FocusSessionHistoryItem[]> => {
+
+  return customFetch<FocusSessionHistoryItem[]>(getListFocusSessionHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFocusSessionHistoryQueryKey = () => {
+    return [
+    `/api/citizens/focus/history`
+    ] as const;
+    }
+
+
+export const getListFocusSessionHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listFocusSessionHistory>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFocusSessionHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFocusSessionHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFocusSessionHistory>>> = ({ signal }) => listFocusSessionHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFocusSessionHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFocusSessionHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listFocusSessionHistory>>>
+export type ListFocusSessionHistoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the authenticated citizen's recent focus sessions
+ */
+
+export function useListFocusSessionHistory<TData = Awaited<ReturnType<typeof listFocusSessionHistory>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFocusSessionHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFocusSessionHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveFocusSessionReportUrl = (id: number,) => {
+
+
+
+
+  return `/api/citizens/focus/${id}/report`
+}
+
+/**
+ * @summary Save a private report for a completed focus session
+ */
+export const saveFocusSessionReport = async (id: number,
+    focusSessionReportInput: FocusSessionReportInput, options?: RequestInit): Promise<FocusSessionReportSaved> => {
+
+  return customFetch<FocusSessionReportSaved>(getSaveFocusSessionReportUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(focusSessionReportInput)
+  }
+);}
+
+
+
+
+
+export const getSaveFocusSessionReportMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveFocusSessionReport>>, TError,{id: number;data: BodyType<FocusSessionReportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveFocusSessionReport>>, TError,{id: number;data: BodyType<FocusSessionReportInput>}, TContext> => {
+
+const mutationKey = ['saveFocusSessionReport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveFocusSessionReport>>, {id: number;data: BodyType<FocusSessionReportInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  saveFocusSessionReport(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveFocusSessionReportMutationResult = NonNullable<Awaited<ReturnType<typeof saveFocusSessionReport>>>
+    export type SaveFocusSessionReportMutationBody = BodyType<FocusSessionReportInput>
+    export type SaveFocusSessionReportMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Save a private report for a completed focus session
+ */
+export const useSaveFocusSessionReport = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveFocusSessionReport>>, TError,{id: number;data: BodyType<FocusSessionReportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveFocusSessionReport>>,
+        TError,
+        {id: number;data: BodyType<FocusSessionReportInput>},
+        TContext
+      > => {
+      return useMutation(getSaveFocusSessionReportMutationOptions(options));
+    }
+
 export const getGetFocusQuizQuestionUrl = () => {
 
 
@@ -3151,9 +3304,9 @@ export const getStartTimeMatrixTaskUrl = (id: number,) => {
 /**
  * @summary Start timing a Time Matrix task
  */
-export const startTimeMatrixTask = async (id: number, options?: RequestInit): Promise<TimeMatrixTask> => {
+export const startTimeMatrixTask = async (id: number, options?: RequestInit): Promise<TimeMatrixTaskFocusStarted> => {
 
-  return customFetch<TimeMatrixTask>(getStartTimeMatrixTaskUrl(id),
+  return customFetch<TimeMatrixTaskFocusStarted>(getStartTimeMatrixTaskUrl(id),
   {
     ...options,
     method: 'POST'

@@ -1,8 +1,10 @@
-import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, index } from "drizzle-orm/pg-core";
 
 export const focusSessionsTable = pgTable("focus_sessions", {
   id: serial("id").primaryKey(),
   citizenId: integer("citizen_id").notNull(),
+  taskId: integer("task_id"),
+  report: text("report"),
   plannedSeconds: integer("planned_seconds").notNull(),
   elapsedSeconds: integer("elapsed_seconds").notNull().default(0),
   runningSince: timestamp("running_since", { withTimezone: true }),
@@ -11,7 +13,9 @@ export const focusSessionsTable = pgTable("focus_sessions", {
   rewardDarmins: integer("reward_darmins").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
-});
+}, (table) => [
+  index("focus_sessions_task_idx").on(table.taskId),
+]);
 
 export const focusQuizAttemptsTable = pgTable("focus_quiz_attempts", {
   id: text("id").primaryKey(),

@@ -872,10 +872,13 @@ export const CompleteFocusSessionParams = zod.object({
 
 export const completeFocusSessionBodyTextMax = 100000;
 
+export const completeFocusSessionBodyReportMax = 500;
+
 
 
 export const CompleteFocusSessionBody = zod.object({
-  "text": zod.string().max(completeFocusSessionBodyTextMax)
+  "text": zod.string().max(completeFocusSessionBodyTextMax).optional().describe('Legacy focus text; use report for the private session summary.'),
+  "report": zod.string().max(completeFocusSessionBodyReportMax).optional()
 })
 
 export const CompleteFocusSessionResponse = zod.object({
@@ -884,6 +887,42 @@ export const CompleteFocusSessionResponse = zod.object({
   "rewardDarmins": zod.number(),
   "rewardBlockedReason": zod.union([zod.literal('daily_cap'),zod.literal('cooldown'),zod.literal('suspicious_activity'),zod.literal(null)]).nullish(),
   "newlyCompleted": zod.boolean().optional()
+})
+
+
+/**
+ * @summary List the authenticated citizen's recent focus sessions
+ */
+export const ListFocusSessionHistoryResponseItem = zod.object({
+  "id": zod.number(),
+  "taskId": zod.number().nullish(),
+  "taskTitle": zod.string().nullish(),
+  "elapsedSeconds": zod.number(),
+  "report": zod.string().nullish(),
+  "rewardDarmins": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullish()
+})
+export const ListFocusSessionHistoryResponse = zod.array(ListFocusSessionHistoryResponseItem)
+
+
+/**
+ * @summary Save a private report for a completed focus session
+ */
+export const SaveFocusSessionReportParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const saveFocusSessionReportBodyReportMax = 500;
+
+
+
+export const SaveFocusSessionReportBody = zod.object({
+  "report": zod.string().max(saveFocusSessionReportBodyReportMax)
+})
+
+export const SaveFocusSessionReportResponse = zod.object({
+  "ok": zod.boolean()
 })
 
 
@@ -1034,6 +1073,7 @@ export const StartTimeMatrixTaskParams = zod.object({
 })
 
 export const StartTimeMatrixTaskResponse = zod.object({
+  "task": zod.object({
   "id": zod.number(),
   "title": zod.string(),
   "quadrant": zod.enum(['A', 'B', 'C', 'D']),
@@ -1044,6 +1084,8 @@ export const StartTimeMatrixTaskResponse = zod.object({
   "elapsedSeconds": zod.number(),
   "rewardDarmins": zod.number(),
   "quickChecklist": zod.boolean()
+}),
+  "focusSessionId": zod.number()
 })
 
 

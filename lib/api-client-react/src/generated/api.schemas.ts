@@ -622,8 +622,38 @@ export interface FocusSessionResumed {
 }
 
 export interface FocusSessionCompletionInput {
-  /** @maxLength 100000 */
-  text: string;
+  /**
+     * Legacy focus text; use report for the private session summary.
+     * @deprecated
+     * @maxLength 100000
+     */
+  text?: string;
+  /** @maxLength 500 */
+  report?: string;
+}
+
+export interface FocusSessionHistoryItem {
+  id: number;
+  /** @nullable */
+  taskId?: number | null;
+  /** @nullable */
+  taskTitle?: string | null;
+  elapsedSeconds: number;
+  /** @nullable */
+  report?: string | null;
+  rewardDarmins: number;
+  createdAt: string;
+  /** @nullable */
+  completedAt?: string | null;
+}
+
+export interface FocusSessionReportInput {
+  /** @maxLength 500 */
+  report: string;
+}
+
+export interface FocusSessionReportSaved {
+  ok: boolean;
 }
 
 /**
@@ -716,6 +746,11 @@ export interface TimeMatrixTask {
   elapsedSeconds: number;
   rewardDarmins: number;
   quickChecklist: boolean;
+}
+
+export interface TimeMatrixTaskFocusStarted {
+  task: TimeMatrixTask;
+  focusSessionId: number;
 }
 
 export type GuideAssistantMessageRole = typeof GuideAssistantMessageRole[keyof typeof GuideAssistantMessageRole];
