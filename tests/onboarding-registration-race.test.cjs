@@ -223,6 +223,7 @@ test("concurrent citizen registrations with one completed guide create and claim
     eq: (column, value) => ({ column, value }),
     generateNextCitizenNumber: async () => "000000001",
     deriveAgeTier: () => "ADULT",
+    getCitizenDisplayName: (citizen) => citizen.name,
     encryptNullable: (value) => value,
     cropSignature: async (signature) => signature,
     formatCitizenRow: (citizen) => citizen,
@@ -271,6 +272,8 @@ test("concurrent Telegram registrations with one completed guide create and clai
     deriveAgeTier: () => "ADULT",
     emissionState: () => ({ status: "IN_EMISSION", secondsLeft: 3600 }),
     notifyPassportEmissionStarted: () => Promise.resolve(),
+    consumeRateLimit: async () => ({ allowed: true, count: 1, subjectHash: "test" }),
+    recordDarminSecurityEvent: async () => undefined,
     logger: { error() {} },
   });
 
@@ -281,7 +284,7 @@ test("concurrent Telegram registrations with one completed guide create and clai
       dateOfBirth: "1990-01-01",
       preApplicationProgressToken: progressToken,
     },
-    log: { info() {}, warn() {} },
+    log: { info() {}, warn() {}, error() {} },
   });
   const responses = [makeResponse(), makeResponse()];
   await Promise.all([

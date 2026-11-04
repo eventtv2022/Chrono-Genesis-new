@@ -1,6 +1,6 @@
 import { Telegraf } from "telegraf";
 import { db } from "@workspace/db";
-import { citizensTable, transactionsTable, timeMatrixTasksTable, timeMatrixRewardsTable } from "@workspace/db";
+import { citizensTable, transactionsTable, timeMatrixTasksTable, timeMatrixRewardsTable, darminSecurityEventsTable } from "@workspace/db";
 import { eq, and, ilike, gte, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
@@ -301,6 +301,14 @@ export function initBot(token: string): Telegraf {
     }
     const citizenId = Number(ctx.match[1]);
     await db.update(citizensTable).set({ suspiciousActivity: false }).where(eq(citizensTable.id, citizenId));
+    await db.update(darminSecurityEventsTable).set({
+      status: "reviewed",
+      reviewedAt: new Date(),
+      reviewedBy: String(ctx.from.id),
+    }).where(and(
+      eq(darminSecurityEventsTable.citizenId, citizenId),
+      eq(darminSecurityEventsTable.status, "pending"),
+    ));
     await ctx.answerCbQuery("Security flag cleared");
     await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
   });
@@ -311,6 +319,14 @@ export function initBot(token: string): Telegraf {
     }
     const citizenId = Number(ctx.match[1]);
     await db.update(citizensTable).set({ status: "blocked", authToken: null }).where(eq(citizensTable.id, citizenId));
+    await db.update(darminSecurityEventsTable).set({
+      status: "reviewed",
+      reviewedAt: new Date(),
+      reviewedBy: String(ctx.from.id),
+    }).where(and(
+      eq(darminSecurityEventsTable.citizenId, citizenId),
+      eq(darminSecurityEventsTable.status, "pending"),
+    ));
     await ctx.answerCbQuery("Citizen blocked");
     await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
   });

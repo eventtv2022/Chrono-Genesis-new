@@ -22,6 +22,7 @@ import { issueEligiblePassport } from "../services/passportIssuanceService";
 import { cropSignature } from "../services/imageService";
 import { deriveAgeTier } from "../services/ageGateService";
 import { requireAdultKyc, requireAuth } from "../middleware/auth";
+import { consumeRateLimit, recordDarminSecurityEvent } from "../services/darminSecurityService";
 
 const router: IRouter = Router();
 
@@ -167,6 +168,31 @@ router.post("/auth/telegram-webapp", async (req, res): Promise<void> => {
   }
 
   const telegramId = String(tgUser.id);
+  // initData has been signature-verified, so this is a stable account key rather
+  // than an attacker-controlled request field or an untrusted proxy header.
+  try {
+    const registrationLimit = await consumeRateLimit({
+      action: "telegram_webapp_auth",
+      subject: telegramId,
+      limit: 10,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!registrationLimit.allowed) {
+      if (registrationLimit.count === 11) {
+        await recordDarminSecurityEvent({
+          subjectHash: registrationLimit.subjectHash,
+          source: "telegram_webapp_auth",
+          reason: "rate_limit_exceeded",
+        });
+      }
+      res.status(429).json({ error: "Слишком много запросов. Попробуйте позже." });
+      return;
+    }
+  } catch (error) {
+    req.log.error({ err: error }, "TWA auth abuse-control check failed");
+    res.status(503).json({ error: "Проверка безопасности временно недоступна." });
+    return;
+  }
 
   // ── Lookup existing citizen by telegramId ──────────────────────────────────
   const [existing] = await db

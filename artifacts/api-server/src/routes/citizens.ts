@@ -1480,7 +1480,9 @@ async function generateFocusQuizQuestion(previousQuestions: string[], previousQu
   throw new Error("The TimeNation assistant could not generate a new unique question");
 }
 
-router.post("/citizens/focus/start", requireAuth, async (req, res): Promise<void> => {
+router.post("/citizens/focus/start", requireAuth, rateLimit(
+  "focus_start", 12, 60 * 60 * 1000, (request) => String(request.citizen!.id),
+), async (req, res): Promise<void> => {
   const parsed = z.object({
     plannedSeconds: z.number().int().min(60).max(5400),
     focusTopic: z.string().trim().min(3).max(160).optional(),
@@ -1495,7 +1497,9 @@ router.post("/citizens/focus/start", requireAuth, async (req, res): Promise<void
   res.status(201).json({ sessionId: session!.id });
 });
 
-router.post("/citizens/focus/:id/pause", requireAuth, async (req, res): Promise<void> => {
+router.post("/citizens/focus/:id/pause", requireAuth, rateLimit(
+  "focus_pause", 60, 60 * 60 * 1000, (request) => String(request.citizen!.id),
+), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) { res.status(400).json({ error: "Неверный сеанс" }); return; }
   const parsed = z.object({ reason: z.enum(["hidden"]).optional() }).safeParse(req.body ?? {});
@@ -1521,7 +1525,9 @@ router.post("/citizens/focus/:id/pause", requireAuth, async (req, res): Promise<
   res.json(result);
 });
 
-router.post("/citizens/focus/:id/resume", requireAuth, async (req, res): Promise<void> => {
+router.post("/citizens/focus/:id/resume", requireAuth, rateLimit(
+  "focus_resume", 60, 60 * 60 * 1000, (request) => String(request.citizen!.id),
+), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) { res.status(400).json({ error: "Неверный сеанс" }); return; }
   const [session] = await db.select().from(focusSessionsTable).where(and(eq(focusSessionsTable.id, id), eq(focusSessionsTable.citizenId, req.citizen!.id))).limit(1);
@@ -1530,7 +1536,9 @@ router.post("/citizens/focus/:id/resume", requireAuth, async (req, res): Promise
   res.json({ ok: true });
 });
 
-router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promise<void> => {
+router.post("/citizens/focus/:id/complete", requireAuth, rateLimit(
+  "focus_complete", 12, 60 * 60 * 1000, (request) => String(request.citizen!.id),
+), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const parsed = z.object({
     text: z.string().max(100_000).optional(),
@@ -1614,9 +1622,6 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
         reward = 0;
         rewardBlockedReason = "cooldown";
       }
-      if (rewardBlockedReason === "daily_cap" || rewardBlockedReason === "cooldown") {
-        await tx.update(citizensTable).set({ suspiciousActivity: true }).where(eq(citizensTable.id, req.citizen!.id));
-      }
       if (reward && citizen) {
         const lastAt = citizen.lastRewardAt;
         const today = now.toISOString().slice(0, 10);
@@ -1648,7 +1653,7 @@ router.post("/citizens/focus/:id/complete", requireAuth, async (req, res): Promi
     const [citizen] = await db.select({ balanceMinutes: citizensTable.balanceMinutes }).from(citizensTable)
       .where(eq(citizensTable.id, req.citizen!.id)).limit(1);
     if (citizen) await sendTimeMatrixRewardNotification(req.citizen!.id, citizen.balanceMinutes);
-  } else if (result.newlyCompleted && result.rewardBlockedReason && result.rewardBlockedReason !== "report_not_relevant") {
+  } else if (result.newlyCompleted && result.rewardBlockedReason === "suspicious_activity") {
     await sendTimeMatrixSecurityAlert(req.citizen!.id, result.rewardBlockedReason);
   }
   let telegramStatus: "not_requested" | "sent" | "not_linked" | "failed" = "not_requested";
@@ -1708,7 +1713,9 @@ router.patch("/citizens/focus/:id/report", requireAuth, async (req, res): Promis
   res.json({ ok: true });
 });
 
-router.get("/citizens/focus/quiz/question", requireAuth, async (req, res): Promise<void> => {
+router.get("/citizens/focus/quiz/question", requireAuth, rateLimit(
+  "focus_quiz_question", 20, 60 * 60 * 1000, (request) => String(request.citizen!.id),
+), async (req, res): Promise<void> => {
   const parsed = z.string().uuid().optional().safeParse(req.query.sessionId);
   if (!parsed.success) { res.status(400).json({ error: "Неверная сессия викторины" }); return; }
   const sessionId = parsed.data ?? crypto.randomUUID();
@@ -1753,7 +1760,9 @@ router.get("/citizens/focus/quiz/question", requireAuth, async (req, res): Promi
   }
 });
 
-router.post("/citizens/focus/quiz/answer", requireAuth, async (req, res): Promise<void> => {
+router.post("/citizens/focus/quiz/answer", requireAuth, rateLimit(
+  "focus_quiz_answer", 30, 60 * 60 * 1000, (request) => String(request.citizen!.id),
+), async (req, res): Promise<void> => {
   const parsed = z.object({ attemptId: z.string().uuid(), answer: z.string().min(1).max(500) }).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Введите ответ" }); return; }
   const result = await db.transaction(async tx => {
@@ -1780,7 +1789,6 @@ router.post("/citizens/focus/quiz/answer", requireAuth, async (req, res): Promis
       else if (citizen.lastTimeMatrixRewardAt && now.getTime() - citizen.lastTimeMatrixRewardAt.getTime() < 12 * 60 * 1000) rewardBlockedReason = "cooldown";
       if (rewardBlockedReason) {
         awarded = 0;
-        await tx.update(citizensTable).set({ suspiciousActivity: true }).where(eq(citizensTable.id, citizen.id));
       } else {
         const lastDay = citizen.lastTimeMatrixRewardAt?.toISOString().slice(0, 10);
         const today = now.toISOString().slice(0, 10);
@@ -1806,7 +1814,9 @@ router.post("/citizens/focus/quiz/answer", requireAuth, async (req, res): Promis
       .where(eq(citizensTable.id, req.citizen!.id)).limit(1);
     if (citizen) await sendTimeMatrixRewardNotification(req.citizen!.id, citizen.balanceMinutes);
   }
-  if (result.rewardBlockedReason) await sendTimeMatrixSecurityAlert(req.citizen!.id, result.rewardBlockedReason);
+  if (result.rewardBlockedReason === "suspicious_activity") {
+    await sendTimeMatrixSecurityAlert(req.citizen!.id, result.rewardBlockedReason);
+  }
   res.json(result);
 });
 
@@ -1817,7 +1827,9 @@ router.get("/citizens/time-matrix/tasks", requireAuth, async (req, res): Promise
   res.json(tasks);
 });
 
-router.post("/citizens/time-matrix/tasks", requireAuth, async (req, res): Promise<void> => {
+router.post("/citizens/time-matrix/tasks", requireAuth, rateLimit(
+  "task_creation", 15, 5 * 60 * 1000, (request) => String(request.citizen!.id),
+), async (req, res): Promise<void> => {
   const parsed = z.object({
     title: z.string().trim().min(3).max(120),
     quadrant: z.enum(["A", "B", "C", "D"]),
@@ -1825,17 +1837,6 @@ router.post("/citizens/time-matrix/tasks", requireAuth, async (req, res): Promis
   if (!parsed.success) { res.status(400).json({ error: "Укажите название и квадрант задачи" }); return; }
 
   const citizenId = req.citizen!.id;
-  const now = new Date();
-  const [recent] = await db.select({ total: sql<number>`count(*)` }).from(timeMatrixTasksTable).where(and(
-    eq(timeMatrixTasksTable.citizenId, citizenId),
-    gte(timeMatrixTasksTable.createdAt, new Date(now.getTime() - 5 * 60 * 1000)),
-  ));
-  if (Number(recent?.total ?? 0) >= 15) {
-    await db.update(citizensTable).set({ suspiciousActivity: true }).where(eq(citizensTable.id, citizenId));
-    await sendTimeMatrixSecurityAlert(citizenId, "task_creation_rate");
-    res.status(429).json({ error: "Слишком много задач за короткое время; начисления заморожены до проверки" });
-    return;
-  }
   const normalizedTitle = parsed.data.title.replace(/\s+/g, " ").trim();
   if (parsed.data.quadrant === "B") {
     try {
