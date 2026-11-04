@@ -320,7 +320,7 @@ function getDayNames(lang: string): string[] {
 export default function TimeUtilsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { citizen, authToken, refreshCitizen } = useCitizen();
+  const { citizen, authToken, authHeaders, refreshCitizen } = useCitizen();
   const { t, lang } = useLanguage();
   const matrixText = TIME_MATRIX_I18N[lang];
   const st = styles(colors);
@@ -331,12 +331,13 @@ export default function TimeUtilsScreen() {
       enabled: Boolean(authToken && citizen?.id),
       retry: false,
     },
+    request: { headers: authHeaders },
   });
-  const createMatrixTask = useCreateTimeMatrixTask();
-  const startMatrixTask = useStartTimeMatrixTask();
-  const completeMatrixTask = useCompleteTimeMatrixTask();
-  const updateMatrixTask = useUpdateTimeMatrixTask();
-  const deleteMatrixTask = useDeleteTimeMatrixTask();
+  const createMatrixTask = useCreateTimeMatrixTask({ request: { headers: authHeaders } });
+  const startMatrixTask = useStartTimeMatrixTask({ request: { headers: authHeaders } });
+  const completeMatrixTask = useCompleteTimeMatrixTask({ request: { headers: authHeaders } });
+  const updateMatrixTask = useUpdateTimeMatrixTask({ request: { headers: authHeaders } });
+  const deleteMatrixTask = useDeleteTimeMatrixTask({ request: { headers: authHeaders } });
   const DAYS = getDayNames(lang);
   const PRESET_SECONDS = PRESET_MINUTES.map((m) => ({ label: `${m}m`, seconds: m * 60 }));
 
