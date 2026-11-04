@@ -21,6 +21,7 @@
 - [Focus timer rewards](focus-timer-rewards.md) — 1 Д per 1,800 typed characters after 12 focus minutes; quiz pays 1 Д per 12 correct answers.
 - [Professional documents & service catalog](professional-documents-and-service-catalog.md) — CV/portfolio stay private; AI analysis requires consent; catalog publication costs 1 Д.
 - [In-app user guide](user-guide.md) — keep the full manual accessible from mobile Profile and the web navigation.
+- [Bundled API guide asset](guide-assistant-asset-path.md) — resolve copied API assets relative to the bundled entrypoint, not the source route.
 - [Timenaming license legal status](timenaming-license.md) — keep the contradictory disclaimer visibly marked as draft until legal review.
 - [Time Bank legal status](timebank-legal-status.md) — do not claim universal legality without qualified, jurisdiction-specific review.
 - [Structured locale generation](structured-locale-generation.md) — key generated translations by message ID; translation arrays can return in a different order.

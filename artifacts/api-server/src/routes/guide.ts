@@ -147,7 +147,7 @@ router.post("/guide/assistant", requireAuth, async (req, res): Promise<void> => 
   }
 
   try {
-    const guide = await readFile(new URL("../assets/USER_GUIDE_RU.md", import.meta.url), "utf8");
+    const guide = await readFile(new URL("./assets/USER_GUIDE_RU.md", import.meta.url), "utf8");
     const lastUserQuestion = messages[messages.length - 1].content;
     const relevantGuide = selectRelevantGuideFragments(guide, lastUserQuestion);
     if (!relevantGuide) {
