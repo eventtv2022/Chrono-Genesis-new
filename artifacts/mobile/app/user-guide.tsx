@@ -1,5 +1,5 @@
-import React from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useMemo, useState } from "react";
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -131,6 +131,17 @@ const guideMarkdown = `# TimeNation: руководство пользовате
 
 Разрешите уведомления устройства, если хотите получать напоминания. Отдельные возможности требуют входа в аккаунт.
 
+#### Матрица Эйзенхауэра
+
+Матрица помогает выбрать, чем заняться сначала. Оцените каждую задачу по двум признакам: насколько она важна и насколько срочно её нужно выполнить. В приложении откройте **«Матрицу времени»**, выберите квадрант, сформулируйте задачу как конкретное действие и добавьте её.
+
+- **A — важно и срочно:** выполните в первую очередь.
+- **B — важно, но не срочно:** запланируйте и выделите время заранее.
+- **C — срочно, но не важно:** по возможности сократите время на задачу или отложите её.
+- **D — не важно и не срочно:** подумайте, можно ли её убрать или отложить.
+
+Например, «Стекло в двери автомобиля» — это описание проблемы. Для списка задач лучше подойдёт действие **«Заменить стекло в двери автомобиля»**. Пересматривайте квадранты, если срочность или важность изменились. В матрице можно отметить задачу выполненной и следить за временем работы.
+
 ### 9. Циферблат
 
 На циферблате собраны 24 языка, каждый отмечен флагом и часом. Нажмите на язык на циферблате или в списке, чтобы выбрать его. Выбранный язык также меняет язык приложения там, где перевод доступен.
@@ -176,6 +187,21 @@ export default function UserGuideScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isRu = lang === "ru";
+  const [search, setSearch] = useState("");
+  const visibleLines = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    if (!term) return lines.map((line, index) => ({ line, index }));
+    const matches: Array<{ line: string; index: number }> = [];
+    let currentHeading: { line: string; index: number } | null = null;
+    for (const [index, line] of lines.entries()) {
+      if (/^#{1,4}\s+/.test(line.trim())) currentHeading = { line, index };
+      if (line.toLocaleLowerCase().includes(term)) {
+        if (currentHeading && matches[matches.length - 1]?.index !== currentHeading.index) matches.push(currentHeading);
+        if (matches[matches.length - 1]?.index !== index) matches.push({ line, index });
+      }
+    }
+    return matches;
+  }, [search]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -189,9 +215,38 @@ export default function UserGuideScreen() {
         </View>
         <Feather name="book-open" size={19} color={colors.primary} />
       </View>
+      <View style={[styles.searchBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
+        <Feather name="search" size={17} color={colors.mutedForeground} />
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder={isRu ? "Поиск по ключевому слову" : "Search by keyword"}
+          placeholderTextColor={colors.mutedForeground}
+          accessibilityLabel={isRu ? "Поиск по руководству" : "Search the guide"}
+          returnKeyType="search"
+          style={[styles.searchInput, { color: colors.foreground }]}
+        />
+        {!!search && (
+          <TouchableOpacity onPress={() => setSearch("")} accessibilityRole="button" accessibilityLabel={isRu ? "Очистить поиск" : "Clear search"}>
+            <Feather name="x" size={17} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        )}
+      </View>
+      <TouchableOpacity
+        style={[styles.assistantButton, { backgroundColor: colors.primary }]}
+        onPress={() => router.push("/guide-assistant")}
+        accessibilityRole="button"
+      >
+        <Feather name="message-circle" size={17} color={colors.background} />
+        <Text style={[styles.assistantButtonText, { color: colors.background }]}>
+          {isRu ? "Спроси ЗаБОТливого технического специалиста" : "Ask the helpful technical specialist"}
+        </Text>
+      </TouchableOpacity>
       {!isRu && <Text style={[styles.languageNote, { color: colors.mutedForeground }]}>Полная версия руководства пока доступна на русском языке.</Text>}
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}>
-        {lines.map((line, index) => {
+        {visibleLines.length === 0 ? (
+          <Text style={[styles.noResults, { color: colors.mutedForeground }]}>{isRu ? "По этому слову ничего не найдено." : "No matches found."}</Text>
+        ) : visibleLines.map(({ line, index }) => {
           const text = line.trim();
           if (!text) return <View key={`space-${index}`} style={styles.spacer} />;
           const heading = /^(#{1,4})\s+(.+)$/.exec(text);
@@ -232,6 +287,11 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 10, letterSpacing: 1.5, fontWeight: "700" },
   title: { fontSize: 18, fontWeight: "700", marginTop: 3 },
   languageNote: { paddingHorizontal: 20, paddingTop: 12, fontSize: 12, lineHeight: 18 },
+  searchBox: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 20, marginTop: 14, paddingHorizontal: 12, minHeight: 44, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12 },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: 10 },
+  assistantButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginHorizontal: 20, marginTop: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12 },
+  assistantButtonText: { fontSize: 13, fontWeight: "700", flexShrink: 1, textAlign: "center" },
+  noResults: { textAlign: "center", paddingVertical: 32, fontSize: 14 },
   content: { padding: 20, gap: 4 },
   spacer: { height: 6 },
   heading: { fontWeight: "700", marginTop: 10 },

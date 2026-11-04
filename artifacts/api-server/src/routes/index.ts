@@ -32,6 +32,7 @@ import referralsRouter from "./referrals";
 import serviceCatalogRouter from "./serviceCatalog";
 import timenamingRouter from "./timenaming";
 import souvenirDarminsRouter from "./souvenirDarmins";
+import guideRouter from "./guide";
 
 const router: IRouter = Router();
 
@@ -68,5 +69,6 @@ router.use(referralsRouter);
 router.use(serviceCatalogRouter);
 router.use(timenamingRouter);
 router.use(souvenirDarminsRouter);
+router.use(guideRouter);
 
 export default router;

@@ -718,6 +718,39 @@ export interface TimeMatrixTask {
   quickChecklist: boolean;
 }
 
+export type GuideAssistantMessageRole = typeof GuideAssistantMessageRole[keyof typeof GuideAssistantMessageRole];
+
+
+export const GuideAssistantMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export interface GuideAssistantMessage {
+  role: GuideAssistantMessageRole;
+  /**
+     * @minLength 1
+     * @maxLength 1200
+     */
+  content: string;
+}
+
+export interface GuideAssistantRequest {
+  /**
+     * @minItems 1
+     * @maxItems 8
+     */
+  messages: GuideAssistantMessage[];
+}
+
+export interface GuideAssistantResponse {
+  /**
+     * @minLength 1
+     * @maxLength 2400
+     */
+  answer: string;
+}
+
 export interface FocusQuizQuestion {
   attemptId: string;
   question: string;

@@ -961,6 +961,31 @@ export const CreateTimeMatrixTaskResponse = zod.object({
 
 
 /**
+ * @summary Ask the authenticated TimeNation user guide assistant
+ */
+export const askGuideAssistantBodyMessagesItemContentMax = 1200;
+
+export const askGuideAssistantBodyMessagesMax = 8;
+
+
+
+export const AskGuideAssistantBody = zod.object({
+  "messages": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().min(1).max(askGuideAssistantBodyMessagesItemContentMax)
+})).min(1).max(askGuideAssistantBodyMessagesMax)
+})
+
+export const askGuideAssistantResponseAnswerMax = 2400;
+
+
+
+export const AskGuideAssistantResponse = zod.object({
+  "answer": zod.string().min(1).max(askGuideAssistantResponseAnswerMax)
+})
+
+
+/**
  * @summary Update an open Time Matrix task
  */
 export const UpdateTimeMatrixTaskParams = zod.object({

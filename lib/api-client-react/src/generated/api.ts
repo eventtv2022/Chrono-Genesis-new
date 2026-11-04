@@ -52,6 +52,8 @@ import type {
   GovernmentPollInput,
   GovernmentPollVote,
   GovernmentPollWithBallots,
+  GuideAssistantRequest,
+  GuideAssistantResponse,
   HealthStatus,
   HeritageTransferInput,
   HeritageTransferResult,
@@ -2922,6 +2924,77 @@ export const useCreateTimeMatrixTask = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getCreateTimeMatrixTaskMutationOptions(options));
+    }
+
+export const getAskGuideAssistantUrl = () => {
+
+
+
+
+  return `/api/guide/assistant`
+}
+
+/**
+ * @summary Ask the authenticated TimeNation user guide assistant
+ */
+export const askGuideAssistant = async (guideAssistantRequest: GuideAssistantRequest, options?: RequestInit): Promise<GuideAssistantResponse> => {
+
+  return customFetch<GuideAssistantResponse>(getAskGuideAssistantUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(guideAssistantRequest)
+  }
+);}
+
+
+
+
+
+export const getAskGuideAssistantMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof askGuideAssistant>>, TError,{data: BodyType<GuideAssistantRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof askGuideAssistant>>, TError,{data: BodyType<GuideAssistantRequest>}, TContext> => {
+
+const mutationKey = ['askGuideAssistant'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof askGuideAssistant>>, {data: BodyType<GuideAssistantRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  askGuideAssistant(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AskGuideAssistantMutationResult = NonNullable<Awaited<ReturnType<typeof askGuideAssistant>>>
+    export type AskGuideAssistantMutationBody = BodyType<GuideAssistantRequest>
+    export type AskGuideAssistantMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Ask the authenticated TimeNation user guide assistant
+ */
+export const useAskGuideAssistant = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof askGuideAssistant>>, TError,{data: BodyType<GuideAssistantRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof askGuideAssistant>>,
+        TError,
+        {data: BodyType<GuideAssistantRequest>},
+        TContext
+      > => {
+      return useMutation(getAskGuideAssistantMutationOptions(options));
     }
 
 export const getUpdateTimeMatrixTaskUrl = (id: number,) => {

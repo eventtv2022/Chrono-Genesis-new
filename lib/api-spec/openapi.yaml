@@ -959,6 +959,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /guide/assistant:
+    post:
+      operationId: askGuideAssistant
+      tags: [citizens]
+      summary: Ask the authenticated TimeNation user guide assistant
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuideAssistantRequest"
+      responses:
+        "200":
+          description: Answer grounded in the TimeNation user guide
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuideAssistantResponse"
+        "400":
+          description: Invalid question or conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Assistant request limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Assistant is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /citizens/time-matrix/tasks/{id}:
     patch:
       operationId: updateTimeMatrixTask
@@ -2738,6 +2777,38 @@ components:
         rewardDarmins: { type: integer }
         quickChecklist: { type: boolean }
       required: [id, title, quadrant, status, createdAt, elapsedSeconds, rewardDarmins, quickChecklist]
+
+    GuideAssistantMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+          minLength: 1
+          maxLength: 1200
+      required: [role, content]
+
+    GuideAssistantRequest:
+      type: object
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/GuideAssistantMessage"
+      required: [messages]
+
+    GuideAssistantResponse:
+      type: object
+      properties:
+        answer:
+          type: string
+          minLength: 1
+          maxLength: 2400
+      required: [answer]
 
     FocusQuizQuestion:
       type: object
