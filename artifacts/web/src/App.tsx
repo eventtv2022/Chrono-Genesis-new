@@ -21,7 +21,6 @@ const IS_TELEGRAM = isTelegramWebApp();
 
 import { Home } from "./pages/Home";
 import { Tv } from "./pages/Tv";
-import { Citizens } from "./pages/Citizens";
 import { Timeline } from "./pages/Timeline";
 import { Shop } from "./pages/Shop";
 import { Register } from "./pages/Register";
@@ -180,7 +179,7 @@ function Router() {
         <Switch>
           <Route path="/" component={Home} />
           <Route path="/tv" component={Tv} />
-          <Route path="/citizens" component={Citizens} />
+          <Route path="/citizens" component={Home} />
           <Route path="/timeline" component={Timeline} />
           <Route path="/timenaming" component={Timenaming} />
           <Route path="/timebank" component={TimeBank} />

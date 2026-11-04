@@ -339,6 +339,32 @@ router.get("/citizens", async (req, res): Promise<void> => {
   res.json(citizens);
 });
 
+// Minimal public time profile for a passport number. Keep balances and identity
+// data out of this response; the registry is intentionally public and number-only.
+router.get("/citizens/number/:num/time-profile", async (req, res): Promise<void> => {
+  const citizenNumber = req.params["num"] ?? "";
+  const [citizen] = await db.select({
+    citizenNumber: citizensTable.citizenNumber,
+    createdAt: citizensTable.createdAt,
+    availableAt: citizensTable.availableAt,
+    registrationStatus: citizensTable.registrationStatus,
+  }).from(citizensTable)
+    .where(eq(citizensTable.citizenNumber, citizenNumber))
+    .limit(1);
+
+  if (!citizen) {
+    res.status(404).json({ error: "Гражданин не найден" });
+    return;
+  }
+
+  res.json({
+    citizenNumber: citizen.citizenNumber,
+    joinedAt: citizen.createdAt.toISOString(),
+    availableAt: citizen.availableAt?.toISOString() ?? null,
+    status: citizen.registrationStatus ?? "issued",
+  });
+});
+
 // Authenticated directory for in-app citizen-to-citizen actions.
 router.get("/citizens/directory", requireAuth, async (_req, res): Promise<void> => {
   const citizens = await db

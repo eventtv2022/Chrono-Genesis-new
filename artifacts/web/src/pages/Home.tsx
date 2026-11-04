@@ -5,6 +5,7 @@ import { useCitizen } from "@/context/CitizenContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, Clock, Users, Zap } from "lucide-react";
+import { CitizenTimeRegistry } from "@/components/CitizenTimeRegistry";
 
 export function Home() {
   const { data: stats, isLoading, isError } = useGetStats();
@@ -64,6 +65,9 @@ export function Home() {
         <p className="text-xs text-muted-foreground">
           Общий объём — сумма всех завершённых переводов, а не текущий остаток минут в системе.
         </p>
+        <div className="border-t border-border pt-8">
+          <CitizenTimeRegistry />
+        </div>
       </div>
     </Layout>
   );
