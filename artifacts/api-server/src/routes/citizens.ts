@@ -1603,7 +1603,7 @@ router.post("/citizens/time-matrix/tasks", requireAuth, async (req, res): Promis
     try {
       const check = await checkQuadrantBTitle(normalizedTitle, req.headers["accept-language"]?.startsWith("en") ? "en" : "ru");
       if (!check.valid) {
-        res.status(400).json({ error: check.reason || "Опишите важную и срочную задачу конкретно" });
+        res.status(400).json({ error: check.reason || "Опишите конкретное действие для важной, но не срочной задачи" });
         return;
       }
     } catch (err) {
@@ -1645,7 +1645,7 @@ router.patch("/citizens/time-matrix/tasks/:id", requireAuth, async (req, res): P
     try {
       const check = await checkQuadrantBTitle(title, req.headers["accept-language"]?.startsWith("en") ? "en" : "ru");
       if (!check.valid) {
-        res.status(400).json({ error: check.reason || "Опишите важную и срочную задачу конкретно" });
+        res.status(400).json({ error: check.reason || "Опишите конкретное действие для важной, но не срочной задачи" });
         return;
       }
     } catch (err) {

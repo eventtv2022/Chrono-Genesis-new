@@ -4,7 +4,7 @@ import { Layout } from "@/components/Layout";
 import { Globe, Clock, Bell, Play, Pause, RotateCcw, ChevronUp, ChevronDown, Info, Radio, X, Volume2, Search, Users, Zap, ShoppingBag } from "lucide-react";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { TIME_MATRIX_ACTIONS, TIME_MATRIX_DELETE, TIME_MATRIX_ERRORS, TIME_MATRIX_I18N } from "../../../mobile/lib/timeMatrixI18n";
+import { getTimeMatrixErrorMessage, TIME_MATRIX_ACTIONS, TIME_MATRIX_DELETE, TIME_MATRIX_ERRORS, TIME_MATRIX_I18N } from "../../../mobile/lib/timeMatrixI18n";
 import { useSocialAlarmWs } from "@/hooks/useSocialAlarmWs";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -384,7 +384,7 @@ function TimeMatrixSurface() {
     setFormError("");
     createTask.mutate({ data: { title: cleanTitle, quadrant } }, {
       onSuccess: () => setTitle(""),
-      onError: () => setFormError(TIME_MATRIX_ERRORS[lang].saveFailed),
+      onError: (error) => setFormError(getTimeMatrixErrorMessage(error, TIME_MATRIX_ERRORS[lang].saveFailed)),
     });
   };
 

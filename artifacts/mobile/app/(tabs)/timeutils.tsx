@@ -26,7 +26,7 @@ import { Audio } from "expo-av";
 import { useColors } from "@/hooks/useColors";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { TIME_MATRIX_ACTIONS, TIME_MATRIX_DELETE, TIME_MATRIX_ERRORS, TIME_MATRIX_I18N } from "@/lib/timeMatrixI18n";
+import { getTimeMatrixErrorMessage, TIME_MATRIX_ACTIONS, TIME_MATRIX_DELETE, TIME_MATRIX_ERRORS, TIME_MATRIX_I18N } from "@/lib/timeMatrixI18n";
 import { LogoBrand } from "@/components/LogoBrand";
 import { MinuteHourglass } from "@/components/MinuteHourglass";
 import { SandTimerCatalog } from "@/components/SandTimerCatalog";
@@ -1137,7 +1137,7 @@ export default function TimeUtilsScreen() {
                           setMatrixTaskTitle("");
                           void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() });
                         },
-                        onError: () => setMatrixTaskError(TIME_MATRIX_ERRORS[lang].saveFailed),
+                        onError: (error) => setMatrixTaskError(getTimeMatrixErrorMessage(error, TIME_MATRIX_ERRORS[lang].saveFailed)),
                       });
                     }}
                     style={{ minHeight: 44, borderRadius: 12, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, opacity: createMatrixTask.isPending || !matrixTaskTitle.trim() ? 0.55 : 1 }}
@@ -1169,7 +1169,7 @@ export default function TimeUtilsScreen() {
                                     <TextInput value={editingMatrixTaskTitle} onChangeText={setEditingMatrixTaskTitle} maxLength={120} accessibilityLabel={matrixText.placeholder} style={{ color: colors.foreground, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 9 }} />
                                     <View style={{ flexDirection: "row", gap: 6 }}>
                                       {(["A", "B", "C", "D"] as const).map((q) => <TouchableOpacity key={q} onPress={() => setEditingMatrixTaskQuadrant(q)} style={{ padding: 8, borderRadius: 8, backgroundColor: editingMatrixTaskQuadrant === q ? colors.goldGlow : colors.card }}><Text style={{ color: colors.foreground }}>{q}</Text></TouchableOpacity>)}
-                                      <TouchableOpacity onPress={() => updateMatrixTask.mutate({ id: task.id, data: { title: editingMatrixTaskTitle, quadrant: editingMatrixTaskQuadrant } }, { onSuccess: () => { setEditingMatrixTaskId(null); void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); }, onError: () => setMatrixTaskError(TIME_MATRIX_ERRORS[lang].saveFailed) })} disabled={updateMatrixTask.isPending || editingMatrixTaskTitle.trim().length < 3}><Text style={{ color: colors.primary, padding: 8 }}>{t.save}</Text></TouchableOpacity>
+                                      <TouchableOpacity onPress={() => updateMatrixTask.mutate({ id: task.id, data: { title: editingMatrixTaskTitle, quadrant: editingMatrixTaskQuadrant } }, { onSuccess: () => { setEditingMatrixTaskId(null); void queryClient.invalidateQueries({ queryKey: getListTimeMatrixTasksQueryKey() }); }, onError: (error) => setMatrixTaskError(getTimeMatrixErrorMessage(error, TIME_MATRIX_ERRORS[lang].saveFailed)) })} disabled={updateMatrixTask.isPending || editingMatrixTaskTitle.trim().length < 3}><Text style={{ color: colors.primary, padding: 8 }}>{t.save}</Text></TouchableOpacity>
                                       <TouchableOpacity onPress={() => setEditingMatrixTaskId(null)}><Text style={{ color: colors.mutedForeground, padding: 8 }}>{t.cancel}</Text></TouchableOpacity>
                                     </View>
                                   </View>

@@ -47,6 +47,17 @@ export const TIME_MATRIX_I18N: Record<MatrixLangCode, MatrixCopy> = {
   sv: { tab: "Tidsmatris", intro: "Uppgifter sparas i din profil.", balance: "Saldo", today: "Slutförda idag", placeholder: "Beskriv en konkret uppgift", add: "Lägg till uppgift", signIn: "Logga in för att spara uppgifter.", quadrants: ["Gör först", "Planera", "Håll kort", "Släpp"], empty: "Inga uppgifter ännu.", urgentHint: "Kvadrant B är för viktiga men inte brådskande uppgifter.", checklistHint: "Snabba checklistor under 60 sekunder ger inga Darmins.", retry: "Försök igen", loadError: "Uppgifterna kunde inte läsas in.", },
 };
 
+export function getTimeMatrixErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === "object" && "data" in error) {
+    const data = (error as { data?: unknown }).data;
+    if (data && typeof data === "object" && "error" in data) {
+      const message = (data as { error?: unknown }).error;
+      if (typeof message === "string" && message.trim()) return message;
+    }
+  }
+  return fallback;
+}
+
 export const TIME_MATRIX_DELETE: Record<MatrixLangCode, string> = {
   ru: "Удалить", en: "Delete", zh: "删除", hi: "हटाएं", es: "Eliminar", fr: "Supprimer",
   ar: "حذف", bn: "মুছুন", pt: "Excluir", ur: "حذف کریں", id: "Hapus", de: "Löschen",
