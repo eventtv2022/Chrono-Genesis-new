@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { useLanguage } from "@/context/LanguageContext";
 import type { LangCode } from "@/i18n/ui";
@@ -69,6 +69,26 @@ const TRANSLATIONS: Record<string, { welcome: string; select: string; status: st
 const DIAL = 340;
 const RADIUS = 130;
 const HAND_LENGTH = 105;
+
+const CLOCK_SOUNDS = [
+  { title: "Clock tick tock fast", file: "clock-tick-tock-fast.mp3" },
+  { title: "Sound effect of countdown clock hands", file: "countdown-clock-hands.mp3" },
+  { title: "Movie tension — clock second hand", file: "movie-tension-second-hand.mp3" },
+  { title: "Vintage clock strikes", file: "vintage-clock-strikes.mp3" },
+  { title: "The wall clock strikes twelve", file: "wall-clock-strikes-twelve.mp3" },
+  { title: "Завод и бой часов", file: "clock-wind-and-chimes.mp3" },
+  { title: "Тиканье часов", file: "clock-ticking.mp3" },
+  { title: "Household clock tick-tock", file: "household-clock-tick-tock.mp3" },
+  { title: "Бой курантов вместе с башней", file: "tower-bells-chime.mp3" },
+  { title: "Часы 006", file: "chasy-006.mp3" },
+  { title: "Часы 005", file: "chasy-005.mp3" },
+  { title: "Часы 007", file: "chasy-007.mp3" },
+  { title: "Часы 008", file: "chasy-008.mp3" },
+  { title: "Часы 009", file: "chasy-009.mp3" },
+  { title: "Часы 010", file: "chasy-010.mp3" },
+  { title: "Звук часов", file: "zvuk-chasov.mp3" },
+  { title: "Alarm clock ticking loop 002", file: "alarm-clock-ticking-loop.mp3" },
+] as const;
 
 export function PeopleClockDial({ size = DIAL }: { size?: number }) {
   const { lang, setLang } = useLanguage();
@@ -152,11 +172,18 @@ export function Clock() {
   const active = LANGUAGES_24.find((l) => l.code === lang) ?? LANGUAGES_24[0]!;
   const activeHour = active.hour;
   const t = TRANSLATIONS[active.code] ?? TRANSLATIONS["ru"]!;
+  const [soundCollectionOpen, setSoundCollectionOpen] = useState(false);
+  const soundCollectionRef = useRef<HTMLElement>(null);
 
   // degrees: each hour = +15°, hour=24 at top (0°=up in CSS rotate)
   useEffect(() => {
     document.title = `${t.welcome} | TimeNation`;
   }, [t.welcome]);
+
+  useEffect(() => {
+    if (!soundCollectionOpen) return;
+    soundCollectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [soundCollectionOpen]);
 
   return (
     <Layout>
@@ -179,6 +206,15 @@ export function Clock() {
             {activeHour}:00 · {active.iso} · {active.native}
           </span>
         </p>
+        <button
+          type="button"
+          onClick={() => setSoundCollectionOpen((open) => !open)}
+          aria-expanded={soundCollectionOpen}
+          aria-controls="clock-sound-collection"
+          className="mb-8 rounded-lg border border-amber-500/40 bg-amber-500/10 px-5 py-2.5 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+        >
+          {active.code === "ru" ? "Коллекция звуков" : "Sound collection"}
+        </button>
 
         {/* Two-column layout on large screens */}
         <div className="flex flex-col lg:flex-row gap-10 items-center lg:items-start w-full max-w-4xl">
@@ -227,6 +263,53 @@ export function Clock() {
             </div>
           </div>
         </div>
+
+        {soundCollectionOpen && (
+          <section
+            id="clock-sound-collection"
+            ref={soundCollectionRef}
+            className="mt-10 w-full max-w-4xl scroll-mt-8"
+            aria-label={active.code === "ru" ? "Коллекция звуков часов" : "Clock sound collection"}
+          >
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 className="text-xl font-bold text-amber-300">
+                  {active.code === "ru" ? "Коллекция звуков" : "Sound collection"}
+                </h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {active.code === "ru"
+                    ? `${CLOCK_SOUNDS.length} звуков · воспроизводится одна дорожка за раз`
+                    : `${CLOCK_SOUNDS.length} sounds · one track plays at a time`}
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {CLOCK_SOUNDS.map((sound, index) => (
+                <article
+                  key={sound.file}
+                  className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4"
+                >
+                  <h3 className="mb-3 text-sm font-medium text-zinc-200">
+                    <span className="mr-2 font-mono text-xs text-amber-500/80">{String(index + 1).padStart(2, "0")}</span>
+                    {sound.title}
+                  </h3>
+                  <audio
+                    controls
+                    preload="none"
+                    src={`${import.meta.env.BASE_URL}audio/clock-collection/${sound.file}`}
+                    aria-label={sound.title}
+                    className="h-10 w-full"
+                    onPlay={(event) => {
+                      soundCollectionRef.current?.querySelectorAll("audio").forEach((otherAudio) => {
+                        if (otherAudio !== event.currentTarget) otherAudio.pause();
+                      });
+                    }}
+                  />
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </Layout>
   );
