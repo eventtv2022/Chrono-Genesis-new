@@ -29,3 +29,4 @@
 - [Public dashboard privacy](public-dashboard-privacy.md) — only the passport card shows merit and authored public activity; balances and identity stay private.
 - [Souvenir DarMin auction custody](souvenir-darmin-auctions.md) — souvenir NFTs may be listed through platform-controlled Sepolia escrow with return and winner-transfer paths.
 - [TimeNation refund policy](refund-policy.md) — 14-day refunds apply to every payment method; use support@timenation.info as the sole official contact.
+- [Citizen auth schema coupling](citizen-auth-schema-coupling.md) — one missing citizens column can break every protected endpoint because auth selects the full row.
