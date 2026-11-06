@@ -5,6 +5,7 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const clockPage = fs.readFileSync(path.join(root, "artifacts/web/src/pages/Clock.tsx"), "utf8");
+const timePage = fs.readFileSync(path.join(root, "artifacts/web/src/pages/Time.tsx"), "utf8");
 
 test("all clock sound collection tracks have a matching public audio file", () => {
   const files = [...clockPage.matchAll(/file:\s*"([^"]+\.mp3)"/g)].map((match) => match[1]);
@@ -17,4 +18,6 @@ test("all clock sound collection tracks have a matching public audio file", () =
   }
   assert.match(clockPage, /Коллекция звуков/);
   assert.match(clockPage, /controls/);
+  assert.match(timePage, /import \{ ClockSoundCollection \} from "@\/pages\/Clock"/);
+  assert.match(timePage, /<ClockSoundCollection \/>/);
 });

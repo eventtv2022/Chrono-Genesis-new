@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
+import { ClockSoundCollection } from "@/pages/Clock";
 import { Globe, Clock, Bell, Play, Pause, RotateCcw, ChevronUp, ChevronDown, Info, Radio, X, Volume2, Search, Users, Zap, ShoppingBag } from "lucide-react";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -1226,6 +1227,7 @@ export function Time() {
         {/* ── World Clock ── */}
         {section === "clock" && (
           <div className="space-y-3">
+            <ClockSoundCollection />
             <div>
               <h2 className="text-lg font-semibold">🌍 Мировые часы</h2>
               <p className="text-xs text-muted-foreground">Суверенное время TimeNation — Фамагуста, Кипр · 24 часовых пояса</p>

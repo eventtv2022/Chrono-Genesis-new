@@ -167,23 +167,81 @@ export function PeopleClockDial({ size = DIAL }: { size?: number }) {
   );
 }
 
-export function Clock() {
-  const { lang, setLang } = useLanguage();
-  const active = LANGUAGES_24.find((l) => l.code === lang) ?? LANGUAGES_24[0]!;
-  const activeHour = active.hour;
-  const t = TRANSLATIONS[active.code] ?? TRANSLATIONS["ru"]!;
+export function ClockSoundCollection() {
+  const { lang } = useLanguage();
   const [soundCollectionOpen, setSoundCollectionOpen] = useState(false);
-  const soundCollectionRef = useRef<HTMLElement>(null);
-
-  // degrees: each hour = +15°, hour=24 at top (0°=up in CSS rotate)
-  useEffect(() => {
-    document.title = `${t.welcome} | TimeNation`;
-  }, [t.welcome]);
+  const soundCollectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!soundCollectionOpen) return;
     soundCollectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [soundCollectionOpen]);
+
+  return (
+    <section className="w-full" aria-label={lang === "ru" ? "Коллекция звуков часов" : "Clock sound collection"}>
+      <button
+        type="button"
+        onClick={() => setSoundCollectionOpen((open) => !open)}
+        aria-expanded={soundCollectionOpen}
+        aria-controls="clock-sound-collection"
+        className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        data-testid="button-clock-sound-collection"
+      >
+        {lang === "ru" ? "Коллекция звуков" : "Sound collection"}
+      </button>
+      {soundCollectionOpen && (
+        <div
+          id="clock-sound-collection"
+          ref={soundCollectionRef}
+          className="mt-5 scroll-mt-8"
+        >
+          <div className="mb-4">
+            <h2 className="text-xl font-bold text-amber-300">
+              {lang === "ru" ? "Коллекция звуков" : "Sound collection"}
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {lang === "ru"
+                ? `${CLOCK_SOUNDS.length} звуков · воспроизводится одна дорожка за раз`
+                : `${CLOCK_SOUNDS.length} sounds · one track plays at a time`}
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {CLOCK_SOUNDS.map((sound, index) => (
+              <article key={sound.file} className="rounded-xl border border-border bg-card p-4">
+                <h3 className="mb-3 text-sm font-medium text-foreground">
+                  <span className="mr-2 font-mono text-xs text-primary/80">{String(index + 1).padStart(2, "0")}</span>
+                  {sound.title}
+                </h3>
+                <audio
+                  controls
+                  preload="none"
+                  src={`${import.meta.env.BASE_URL}audio/clock-collection/${sound.file}`}
+                  aria-label={sound.title}
+                  className="h-10 w-full"
+                  onPlay={(event) => {
+                    soundCollectionRef.current?.querySelectorAll("audio").forEach((otherAudio) => {
+                      if (otherAudio !== event.currentTarget) otherAudio.pause();
+                    });
+                  }}
+                />
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function Clock() {
+  const { lang, setLang } = useLanguage();
+  const active = LANGUAGES_24.find((l) => l.code === lang) ?? LANGUAGES_24[0]!;
+  const activeHour = active.hour;
+  const t = TRANSLATIONS[active.code] ?? TRANSLATIONS["ru"]!;
+
+  useEffect(() => {
+    document.title = `${t.welcome} | TimeNation`;
+  }, [t.welcome]);
 
   return (
     <Layout>
@@ -192,7 +250,6 @@ export function Clock() {
         style={{ background: "transparent" }}
         dir={active.rtl ? "rtl" : "ltr"}
       >
-        {/* Header */}
         <h1
           className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-500 mb-2 text-center transition-all duration-500"
           key={active.code + "-welcome"}
@@ -206,24 +263,12 @@ export function Clock() {
             {activeHour}:00 · {active.iso} · {active.native}
           </span>
         </p>
-        <button
-          type="button"
-          onClick={() => setSoundCollectionOpen((open) => !open)}
-          aria-expanded={soundCollectionOpen}
-          aria-controls="clock-sound-collection"
-          className="mb-8 rounded-lg border border-amber-500/40 bg-amber-500/10 px-5 py-2.5 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
-        >
-          {active.code === "ru" ? "Коллекция звуков" : "Sound collection"}
-        </button>
-
-        {/* Two-column layout on large screens */}
+        <div className="mb-8 w-full max-w-4xl">
+          <ClockSoundCollection />
+        </div>
         <div className="flex flex-col lg:flex-row gap-10 items-center lg:items-start w-full max-w-4xl">
-
-          {/* ── Clock face ── */}
           <div className="flex flex-col items-center gap-5 shrink-0">
             <PeopleClockDial size={DIAL} />
-
-            {/* Status quote */}
             <div
               className="w-full max-w-xs px-5 py-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 text-center"
               dir={active.rtl ? "rtl" : "ltr"}
@@ -232,8 +277,6 @@ export function Clock() {
               <p className="text-zinc-300 text-sm leading-relaxed">{t.status}</p>
             </div>
           </div>
-
-          {/* ── Language grid ── */}
           <div className="flex-1 w-full min-w-0">
             <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-3 text-center lg:text-left">
               24 языка · 24 часа
@@ -254,62 +297,13 @@ export function Clock() {
                     <span aria-hidden="true" className={`fi fi-${item.countryCode} text-base leading-none shrink-0`} />
                     <span className="font-mono text-[10px] text-zinc-500 shrink-0">{item.iso}</span>
                     <span className="truncate">{item.label}</span>
-                    {item.rtl && (
-                      <span className="ml-auto text-[9px] text-zinc-600 shrink-0">RTL</span>
-                    )}
+                    {item.rtl && <span className="ml-auto text-[9px] text-zinc-600 shrink-0">RTL</span>}
                   </button>
                 );
               })}
             </div>
           </div>
         </div>
-
-        {soundCollectionOpen && (
-          <section
-            id="clock-sound-collection"
-            ref={soundCollectionRef}
-            className="mt-10 w-full max-w-4xl scroll-mt-8"
-            aria-label={active.code === "ru" ? "Коллекция звуков часов" : "Clock sound collection"}
-          >
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <h2 className="text-xl font-bold text-amber-300">
-                  {active.code === "ru" ? "Коллекция звуков" : "Sound collection"}
-                </h2>
-                <p className="mt-1 text-xs text-zinc-500">
-                  {active.code === "ru"
-                    ? `${CLOCK_SOUNDS.length} звуков · воспроизводится одна дорожка за раз`
-                    : `${CLOCK_SOUNDS.length} sounds · one track plays at a time`}
-                </p>
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {CLOCK_SOUNDS.map((sound, index) => (
-                <article
-                  key={sound.file}
-                  className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4"
-                >
-                  <h3 className="mb-3 text-sm font-medium text-zinc-200">
-                    <span className="mr-2 font-mono text-xs text-amber-500/80">{String(index + 1).padStart(2, "0")}</span>
-                    {sound.title}
-                  </h3>
-                  <audio
-                    controls
-                    preload="none"
-                    src={`${import.meta.env.BASE_URL}audio/clock-collection/${sound.file}`}
-                    aria-label={sound.title}
-                    className="h-10 w-full"
-                    onPlay={(event) => {
-                      soundCollectionRef.current?.querySelectorAll("audio").forEach((otherAudio) => {
-                        if (otherAudio !== event.currentTarget) otherAudio.pause();
-                      });
-                    }}
-                  />
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
       </div>
     </Layout>
   );
