@@ -6,6 +6,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const clockPage = fs.readFileSync(path.join(root, "artifacts/web/src/pages/Clock.tsx"), "utf8");
 const timePage = fs.readFileSync(path.join(root, "artifacts/web/src/pages/Time.tsx"), "utf8");
+const mobileTimePage = fs.readFileSync(path.join(root, "artifacts/mobile/app/(tabs)/timeutils.tsx"), "utf8");
 
 test("all clock sound collection tracks have a matching public audio file", () => {
   const files = [...clockPage.matchAll(/file:\s*"([^"]+\.mp3)"/g)].map((match) => match[1]);
@@ -20,4 +21,8 @@ test("all clock sound collection tracks have a matching public audio file", () =
   assert.match(clockPage, /controls/);
   assert.match(timePage, /import \{ ClockSoundCollection \} from "@\/pages\/Clock"/);
   assert.match(timePage, /<ClockSoundCollection \/>/);
+  const mobileFiles = [...mobileTimePage.matchAll(/file:\s*"([^"]+\.mp3)"/g)].map((match) => match[1]);
+  assert.deepEqual(mobileFiles, files, "Mobile and web collections should list the same tracks in the same order");
+  assert.match(mobileTimePage, /testID="button-clock-sound-collection"/);
+  assert.match(mobileTimePage, /\/web\/audio\/clock-collection\/\$\{file\}/);
 });

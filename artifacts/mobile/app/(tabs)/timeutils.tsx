@@ -46,6 +46,26 @@ import {
 
 const BASE_URL = getBaseUrl();
 
+const CLOCK_SOUNDS = [
+  { title: "Clock tick tock fast", file: "clock-tick-tock-fast.mp3" },
+  { title: "Sound effect of countdown clock hands", file: "countdown-clock-hands.mp3" },
+  { title: "Movie tension — clock second hand", file: "movie-tension-second-hand.mp3" },
+  { title: "Vintage clock strikes", file: "vintage-clock-strikes.mp3" },
+  { title: "The wall clock strikes twelve", file: "wall-clock-strikes-twelve.mp3" },
+  { title: "Завод и бой часов", file: "clock-wind-and-chimes.mp3" },
+  { title: "Тиканье часов", file: "clock-ticking.mp3" },
+  { title: "Household clock tick-tock", file: "household-clock-tick-tock.mp3" },
+  { title: "Бой курантов вместе с башней", file: "tower-bells-chime.mp3" },
+  { title: "Часы 006", file: "chasy-006.mp3" },
+  { title: "Часы 005", file: "chasy-005.mp3" },
+  { title: "Часы 007", file: "chasy-007.mp3" },
+  { title: "Часы 008", file: "chasy-008.mp3" },
+  { title: "Часы 009", file: "chasy-009.mp3" },
+  { title: "Часы 010", file: "chasy-010.mp3" },
+  { title: "Звук часов", file: "zvuk-chasov.mp3" },
+  { title: "Alarm clock ticking loop 002", file: "alarm-clock-ticking-loop.mp3" },
+] as const;
+
 // ── expo-notifications: guarded lazy load (removed from Expo Go in SDK 53) ───
 const isExpoGo = Constants.appOwnership === "expo";
 // `Notifications` is null in Expo Go and on web; non-null on native dev/prod builds.
@@ -354,6 +374,88 @@ export default function TimeUtilsScreen() {
 
   // ── Section toggle ──────────────────────────────────────────────────────────
   const [section, setSection] = useState<"clock" | "timer" | "matrix" | "alarm" | "social-alarm" | "shop">("clock");
+  const [clockSoundCollectionOpen, setClockSoundCollectionOpen] = useState(false);
+  const [playingClockSoundFile, setPlayingClockSoundFile] = useState<string | null>(null);
+  const [loadingClockSoundFile, setLoadingClockSoundFile] = useState<string | null>(null);
+  const clockCollectionSoundRef = useRef<Audio.Sound | null>(null);
+  const clockCollectionCurrentFileRef = useRef<string | null>(null);
+  const clockCollectionLoadLock = useRef(false);
+
+  const stopClockCollectionSound = useCallback(async () => {
+    const sound = clockCollectionSoundRef.current;
+    clockCollectionSoundRef.current = null;
+    clockCollectionCurrentFileRef.current = null;
+    setPlayingClockSoundFile(null);
+    if (sound) {
+      await sound.stopAsync().catch(() => {});
+      await sound.unloadAsync().catch(() => {});
+    }
+  }, []);
+
+  const toggleClockCollectionSound = useCallback(async (file: string) => {
+    if (clockCollectionLoadLock.current) return;
+
+    const currentSound = clockCollectionSoundRef.current;
+    if (currentSound && clockCollectionCurrentFileRef.current === file) {
+      try {
+        const status = await currentSound.getStatusAsync();
+        if (status.isLoaded && status.isPlaying) {
+          await currentSound.pauseAsync();
+          setPlayingClockSoundFile(null);
+        } else if (status.isLoaded) {
+          await currentSound.playAsync();
+          setPlayingClockSoundFile(file);
+        }
+      } catch {
+        Alert.alert(
+          lang === "ru" ? "Не удалось воспроизвести звук" : "Playback failed",
+          lang === "ru" ? "Попробуйте запустить звук ещё раз." : "Try playing the sound again.",
+        );
+      }
+      return;
+    }
+
+    clockCollectionLoadLock.current = true;
+    setLoadingClockSoundFile(file);
+    try {
+      await stopClockCollectionSound();
+      const uri = `${BASE_URL}/web/audio/clock-collection/${file}`;
+      let createdSound: Audio.Sound | null = null;
+      const result = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: true, volume: 1 },
+        (status) => {
+          if (status.isLoaded && status.didJustFinish && createdSound) {
+            if (clockCollectionSoundRef.current === createdSound) {
+              clockCollectionSoundRef.current = null;
+              clockCollectionCurrentFileRef.current = null;
+              setPlayingClockSoundFile(null);
+              void createdSound.unloadAsync();
+            }
+          }
+        },
+      );
+      createdSound = result.sound;
+      clockCollectionSoundRef.current = result.sound;
+      clockCollectionCurrentFileRef.current = file;
+      setPlayingClockSoundFile(file);
+    } catch {
+      Alert.alert(
+        lang === "ru" ? "Не удалось загрузить звук" : "Could not load sound",
+        lang === "ru" ? "Проверьте соединение и попробуйте ещё раз." : "Check your connection and try again.",
+      );
+    } finally {
+      clockCollectionLoadLock.current = false;
+      setLoadingClockSoundFile(null);
+    }
+  }, [lang, playingClockSoundFile, stopClockCollectionSound]);
+
+  useEffect(() => () => {
+    const sound = clockCollectionSoundRef.current;
+    clockCollectionSoundRef.current = null;
+    clockCollectionCurrentFileRef.current = null;
+    if (sound) void sound.unloadAsync().catch(() => {});
+  }, []);
 
   // ── Social Alarm ─────────────────────────────────────────────────────────────
   const [saConsent, setSaConsent] = useState(false);
@@ -1042,7 +1144,11 @@ export default function TimeUtilsScreen() {
           <TouchableOpacity
             key={s}
             style={[st.sectionBtn, section === s && st.sectionBtnActive]}
-            onPress={() => { Haptics.selectionAsync(); setSection(s); }}
+            onPress={() => {
+              Haptics.selectionAsync();
+              if (s !== "clock") void stopClockCollectionSound();
+              setSection(s);
+            }}
           >
             <Feather
               name={s === "clock" ? "globe" : s === "timer" ? "clock" : s === "matrix" ? "grid" : s === "alarm" ? "bell" : s === "social-alarm" ? "radio" : "shopping-bag"}
@@ -1066,6 +1172,106 @@ export default function TimeUtilsScreen() {
         {/* ── World Clock ── */}
         {section === "clock" && (
           <View style={st.section}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityState={{ expanded: clockSoundCollectionOpen }}
+              testID="button-clock-sound-collection"
+              onPress={() => {
+                if (clockSoundCollectionOpen) void stopClockCollectionSound();
+                setClockSoundCollectionOpen((open) => !open);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 13,
+                borderRadius: colors.radius,
+                borderWidth: 1,
+                borderColor: colors.primary + "66",
+                backgroundColor: colors.primary + "14",
+              }}
+            >
+              <Feather name="music" size={17} color={colors.primary} />
+              <Text style={{ flex: 1, color: colors.primary, fontSize: 14, fontWeight: "700" }}>
+                {lang === "ru" ? "Коллекция звуков" : "Sound collection"}
+              </Text>
+              <Feather name={clockSoundCollectionOpen ? "chevron-up" : "chevron-down"} size={17} color={colors.primary} />
+            </TouchableOpacity>
+            {clockSoundCollectionOpen && (
+              <View
+                accessibilityLabel={lang === "ru" ? "Коллекция звуков часов" : "Clock sound collection"}
+                testID="clock-sound-collection"
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: colors.radius,
+                  backgroundColor: colors.card,
+                  padding: 12,
+                  gap: 10,
+                }}
+              >
+                <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
+                  {lang === "ru"
+                    ? `${CLOCK_SOUNDS.length} звуков · воспроизводится одна дорожка за раз`
+                    : `${CLOCK_SOUNDS.length} sounds · one track plays at a time`}
+                </Text>
+                {CLOCK_SOUNDS.map((sound, index) => {
+                  const isPlaying = playingClockSoundFile === sound.file;
+                  const isLoading = loadingClockSoundFile === sound.file;
+                  return (
+                    <View
+                      key={sound.file}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 10,
+                        paddingVertical: 8,
+                        borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
+                        borderTopColor: colors.border,
+                      }}
+                    >
+                      <Text style={{ flex: 1, color: colors.foreground, fontSize: 13, lineHeight: 18 }}>
+                        <Text style={{ color: colors.primary, fontWeight: "700" }}>
+                          {String(index + 1).padStart(2, "0")}{" "}
+                        </Text>
+                        {sound.title}
+                      </Text>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          isLoading
+                            ? (lang === "ru" ? `Загрузка: ${sound.title}` : `Loading: ${sound.title}`)
+                            : isPlaying
+                              ? (lang === "ru" ? `Пауза: ${sound.title}` : `Pause: ${sound.title}`)
+                              : (lang === "ru" ? `Воспроизвести: ${sound.title}` : `Play: ${sound.title}`)
+                        }
+                        disabled={isLoading}
+                        testID={`button-clock-sound-${index + 1}`}
+                        onPress={() => void toggleClockCollectionSound(sound.file)}
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: isPlaying ? colors.primary : colors.surface,
+                          opacity: isLoading ? 0.65 : 1,
+                        }}
+                      >
+                        {isLoading
+                          ? <ActivityIndicator size="small" color={colors.primary} />
+                          : <Feather
+                              name={isPlaying ? "pause" : "play"}
+                              size={16}
+                              color={isPlaying ? colors.primaryForeground : colors.primary}
+                            />}
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
             <Text style={st.sectionTitle}>{t.time_world_clock}</Text>
             <Text style={st.sectionSub}>TimeNation · Famagusta, Cyprus</Text>
             {ZONES.map((z) => {
