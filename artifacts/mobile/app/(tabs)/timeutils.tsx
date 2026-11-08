@@ -2,6 +2,8 @@ import { getBaseUrl } from "@/lib/api";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import {
+  Animated,
+  Easing,
   View,
   Text,
   StyleSheet,
@@ -33,7 +35,10 @@ import { MinuteHourglass } from "@/components/MinuteHourglass";
 import { SandTimerCatalog } from "@/components/SandTimerCatalog";
 import {
   getListTimeMatrixTasksQueryKey,
+  getGetHourglassStatusQueryKey,
   useListTimeMatrixTasks,
+  useGetHourglassStatus,
+  useSpinHourglass,
   useCreateTimeMatrixTask,
   useStartTimeMatrixTask,
   useCompleteTimeMatrixTask,
@@ -43,6 +48,7 @@ import {
   getListFocusSessionHistoryQueryKey,
   type TimeMatrixTask,
 } from "@workspace/api-client-react";
+import { HOURGLASS_MOBILE_COPY } from "@/lib/hourglassI18n";
 
 const BASE_URL = getBaseUrl();
 
@@ -346,12 +352,29 @@ export default function TimeUtilsScreen() {
   const { citizen, authToken, authHeaders, refreshCitizen } = useCitizen();
   const { t, lang } = useLanguage();
   const matrixText = TIME_MATRIX_I18N[lang];
+  const hourglassCopy = HOURGLASS_MOBILE_COPY[lang];
   const st = styles(colors);
   const queryClient = useQueryClient();
+  const [section, setSection] = useState<"clock" | "timer" | "hourglass" | "matrix" | "alarm" | "social-alarm" | "shop">("clock");
+  const hourglassStatusQuery = useGetHourglassStatus({
+    query: {
+      queryKey: [...getGetHourglassStatusQueryKey(), citizen?.id],
+      enabled: Boolean(authToken && citizen?.id && section === "hourglass"),
+      refetchInterval: 15_000,
+      refetchOnWindowFocus: true,
+    },
+    request: { headers: authHeaders },
+  });
+  const spinHourglass = useSpinHourglass({ request: { headers: authHeaders } });
+  const wheelRotation = useRef(new Animated.Value(0)).current;
+  const hourglassSpinLock = useRef(false);
+  const [hourglassSpinning, setHourglassSpinning] = useState(false);
+  const [hourglassReward, setHourglassReward] = useState<number | null>(null);
+  const [utcNow, setUtcNow] = useState(Date.now());
   const matrixTasksQuery = useListTimeMatrixTasks({
     query: {
       queryKey: [...getListTimeMatrixTasksQueryKey(), citizen?.id],
-      enabled: Boolean(authToken && citizen?.id),
+      enabled: Boolean(authToken && citizen?.id && section === "matrix"),
       retry: false,
     },
     request: { headers: authHeaders },
@@ -359,7 +382,7 @@ export default function TimeUtilsScreen() {
   const focusHistoryQuery = useListFocusSessionHistory({
     query: {
       queryKey: [...getListFocusSessionHistoryQueryKey(), citizen?.id],
-      enabled: Boolean(authToken && citizen?.id),
+      enabled: Boolean(authToken && citizen?.id && section === "timer"),
       retry: false,
     },
     request: { headers: authHeaders },
@@ -373,7 +396,6 @@ export default function TimeUtilsScreen() {
   const PRESET_SECONDS = PRESET_MINUTES.map((m) => ({ label: `${m}m`, seconds: m * 60 }));
 
   // ── Section toggle ──────────────────────────────────────────────────────────
-  const [section, setSection] = useState<"clock" | "timer" | "matrix" | "alarm" | "social-alarm" | "shop">("clock");
   const [clockSoundCollectionOpen, setClockSoundCollectionOpen] = useState(false);
   const [playingClockSoundFile, setPlayingClockSoundFile] = useState<string | null>(null);
   const [loadingClockSoundFile, setLoadingClockSoundFile] = useState<string | null>(null);
@@ -1085,6 +1107,71 @@ export default function TimeUtilsScreen() {
     return () => { if (alarmRef.current) clearInterval(alarmRef.current); };
   }, [alarmActive, alarmHour, alarmMinute, alarmDays, citizen?.name, syncScheduledAlarms, playAlarmSound]);
 
+  useEffect(() => {
+    if (section !== "hourglass") return;
+    const interval = setInterval(() => setUtcNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [section]);
+
+  const startHourglassSpin = async () => {
+    const status = hourglassStatusQuery.data;
+    if (!status || !status.enabled || status.alreadySpun || !status.hasActivityToday
+      || status.tiers.every((tier) => tier.remainingQuantity <= 0)
+      || hourglassSpinLock.current) return;
+
+    hourglassSpinLock.current = true;
+    setHourglassSpinning(true);
+    setHourglassReward(null);
+    wheelRotation.setValue(0);
+    const animation = new Promise<void>((resolve) => {
+      Animated.timing(wheelRotation, {
+        toValue: 1,
+        duration: 6000,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(() => resolve());
+    });
+
+    try {
+      const [result] = await Promise.all([
+        spinHourglass.mutateAsync(undefined),
+        animation,
+      ]);
+      setHourglassReward(result.rewardAmount);
+      void refreshCitizen();
+      await queryClient.invalidateQueries({ queryKey: getGetHourglassStatusQueryKey() });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      wheelRotation.stopAnimation();
+      Alert.alert(t.error, t.connection_error);
+    } finally {
+      setHourglassSpinning(false);
+      hourglassSpinLock.current = false;
+    }
+  };
+
+  const openHourglassConfirmation = () => {
+    const status = hourglassStatusQuery.data;
+    if (!status?.enabled || status.alreadySpun || status.tiers.every((tier) => tier.remainingQuantity <= 0)) return;
+    if (!status.hasActivityToday) {
+      Alert.alert(hourglassCopy.needActivityTitle, hourglassCopy.needActivityBody, [
+        { text: t.close },
+      ]);
+      return;
+    }
+    Alert.alert(hourglassCopy.unlockedTitle, hourglassCopy.unlockedBody, [
+      { text: t.cancel, style: "cancel" },
+      { text: hourglassCopy.startSpin, onPress: () => { void startHourglassSpin(); } },
+    ]);
+  };
+
+  const hourglassStatus = hourglassStatusQuery.data;
+  const resetSeconds = hourglassStatus
+    ? Math.max(0, Math.floor((new Date(hourglassStatus.nextResetAt).getTime() - utcNow) / 1000))
+    : 0;
+  const resetCountdown = `${String(Math.floor(resetSeconds / 3600)).padStart(2, "0")}:${String(Math.floor((resetSeconds % 3600) / 60)).padStart(2, "0")}:${String(resetSeconds % 60).padStart(2, "0")}`;
+  const wheelRotate = wheelRotation.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "1440deg"] });
+
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   return (
@@ -1140,7 +1227,7 @@ export default function TimeUtilsScreen() {
         contentContainerStyle={st.sectionRow}
         style={{ flexGrow: 0 }}
       >
-        {(["clock", "timer", "matrix", "alarm", "social-alarm", "shop"] as const).map((s) => (
+        {(["clock", "timer", "hourglass", "matrix", "alarm", "social-alarm", "shop"] as const).map((s) => (
           <TouchableOpacity
             key={s}
             style={[st.sectionBtn, section === s && st.sectionBtnActive]}
@@ -1151,12 +1238,12 @@ export default function TimeUtilsScreen() {
             }}
           >
             <Feather
-              name={s === "clock" ? "globe" : s === "timer" ? "clock" : s === "matrix" ? "grid" : s === "alarm" ? "bell" : s === "social-alarm" ? "radio" : "shopping-bag"}
+              name={s === "clock" ? "globe" : s === "timer" ? "clock" : s === "hourglass" ? "rotate-cw" : s === "matrix" ? "grid" : s === "alarm" ? "bell" : s === "social-alarm" ? "radio" : "shopping-bag"}
               size={14}
               color={section === s ? colors.primaryForeground : colors.mutedForeground}
             />
             <Text style={[st.sectionBtnText, section === s && st.sectionBtnTextActive]}>
-              {s === "clock" ? t.time_zones_tab : s === "timer" ? t.time_timer_tab : s === "matrix" ? matrixText.tab : s === "alarm" ? t.time_alarm_tab : s === "social-alarm" ? t.sa_tab : lang === "ru" ? "Каталог" : "Shop"}
+              {s === "clock" ? t.time_zones_tab : s === "timer" ? t.time_timer_tab : s === "hourglass" ? hourglassCopy.title : s === "matrix" ? matrixText.tab : s === "alarm" ? t.time_alarm_tab : s === "social-alarm" ? t.sa_tab : lang === "ru" ? "Каталог" : "Shop"}
             </Text>
           </TouchableOpacity>
         ))}
@@ -1295,6 +1382,104 @@ export default function TimeUtilsScreen() {
                 </View>
               );
             })}
+          </View>
+        )}
+
+        {section === "hourglass" && (
+          <View style={st.section} testID="section-hourglass">
+            {hourglassStatusQuery.isLoading && <ActivityIndicator testID="loading-hourglass-mobile" color={colors.primary} />}
+            {hourglassStatusQuery.isError && (
+              <View style={st.hgMessage}>
+                <Feather name="alert-circle" size={22} color={colors.destructive} />
+                <Text style={[st.infoText, { flex: 1 }]}>{t.connection_error}</Text>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  testID="button-retry-hourglass-mobile"
+                  onPress={() => { void hourglassStatusQuery.refetch(); }}
+                  style={st.hgRetry}
+                >
+                  <Text style={{ color: colors.primary, fontWeight: "700" }}>{t.refresh}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {hourglassStatus && (
+              <View style={st.hgPanel}>
+                <View style={st.hgHeading}>
+                  <View style={st.hgDial}>
+                    <Animated.View style={{ transform: [{ rotate: wheelRotate }] }}>
+                      <Feather name="rotate-cw" size={34} color={colors.primary} />
+                    </Animated.View>
+                  </View>
+                  <View style={{ flex: 1, gap: 5 }}>
+                    <Text style={st.hgTitle}>{hourglassCopy.title}</Text>
+                    <Text style={st.hgState}>
+                      {hourglassStatus.alreadySpun
+                        ? hourglassCopy.claimed
+                        : hourglassStatus.hasActivityToday
+                          ? hourglassCopy.unlockedTitle
+                          : hourglassCopy.needActivityTitle}
+                    </Text>
+                  </View>
+                </View>
+
+                {!hourglassStatus.hasActivityToday && !hourglassStatus.alreadySpun && (
+                  <Text style={st.hgDescription}>{hourglassCopy.needActivityBody}</Text>
+                )}
+                {hourglassSpinning && <Text style={st.hgSpinning}>{hourglassCopy.spinning}</Text>}
+                {hourglassReward !== null && (
+                  <View style={st.hgReward} testID="status-hourglass-reward">
+                    <Feather name="award" size={19} color={colors.success} />
+                    <Text style={st.hgRewardText}>+{hourglassReward} D</Text>
+                  </View>
+                )}
+
+                <View style={st.hgMetrics}>
+                  <View style={st.hgMetric}>
+                    <Text style={st.hgMetricLabel}>{t.eco_balance}</Text>
+                    <Text style={st.hgMetricValue}>
+                      {hourglassStatus.balanceMinutes.toLocaleString(undefined, { maximumFractionDigits: 2 })} D
+                    </Text>
+                  </View>
+                  <View style={st.hgMetric}>
+                    <Text style={st.hgMetricLabel}>{hourglassCopy.title} · UTC</Text>
+                    <Text style={st.hgMetricValue}>{resetCountdown}</Text>
+                  </View>
+                </View>
+
+                <View style={st.hgPool}>
+                  <View style={st.hgPoolHeader}>
+                    <Text style={st.hgPoolTitle}>{hourglassCopy.title}</Text>
+                    <Text style={st.hgPoolMeta}>UTC</Text>
+                  </View>
+                  <View style={st.hgTierRow} testID="list-hourglass-tiers-mobile">
+                    {[...hourglassStatus.tiers]
+                      .sort((a, b) => a.rewardAmount - b.rewardAmount)
+                      .map((tier) => (
+                        <View key={tier.rewardAmount} style={st.hgTier}>
+                          <Text style={st.hgTierAmount}>{tier.rewardAmount} D</Text>
+                          <Text style={st.hgTierStock}>{tier.remainingQuantity}/{tier.dailyQuantity}</Text>
+                          <Text style={st.hgTierChance}>{tier.probabilityPercent}%</Text>
+                        </View>
+                      ))}
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: hourglassSpinning || !hourglassStatus.enabled || hourglassStatus.alreadySpun }}
+                  testID="button-spin-hourglass-mobile"
+                  disabled={hourglassSpinning || !hourglassStatus.enabled || hourglassStatus.alreadySpun || hourglassStatus.tiers.every((tier) => tier.remainingQuantity <= 0)}
+                  onPress={openHourglassConfirmation}
+                  style={[
+                    st.hgSpinButton,
+                    (hourglassSpinning || !hourglassStatus.enabled || hourglassStatus.alreadySpun || hourglassStatus.tiers.every((tier) => tier.remainingQuantity <= 0)) && { opacity: 0.5 },
+                  ]}
+                >
+                  <Feather name={hourglassSpinning ? "loader" : "rotate-cw"} size={19} color={colors.primaryForeground} />
+                  <Text style={st.hgSpinText}>{hourglassSpinning ? hourglassCopy.spinning : hourglassCopy.spin}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
@@ -2160,6 +2345,91 @@ function styles(colors: ReturnType<typeof useColors>) {
     section: { gap: 12 },
     sectionTitle: { fontSize: 18, fontWeight: "700", color: colors.foreground },
     sectionSub: { fontSize: 13, color: colors.mutedForeground, marginTop: -6 },
+    hgPanel: {
+      gap: 16,
+      padding: 16,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    hgHeading: { flexDirection: "row", alignItems: "center", gap: 14 },
+    hgDial: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      borderWidth: 1,
+      borderColor: colors.primary + "66",
+      backgroundColor: colors.goldGlow,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    hgTitle: { color: colors.foreground, fontSize: 22, fontWeight: "800" },
+    hgState: { color: colors.primary, fontSize: 12, fontWeight: "700" },
+    hgDescription: { color: colors.mutedForeground, fontSize: 13, lineHeight: 19 },
+    hgSpinning: { color: colors.primary, textAlign: "center", fontSize: 13, fontWeight: "700" },
+    hgReward: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      padding: 10,
+      borderRadius: 12,
+      backgroundColor: colors.success + "18",
+    },
+    hgRewardText: { color: colors.success, fontSize: 20, fontWeight: "800" },
+    hgMetrics: { flexDirection: "row", gap: 10 },
+    hgMetric: {
+      flex: 1,
+      gap: 4,
+      padding: 11,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+    },
+    hgMetricLabel: { color: colors.mutedForeground, fontSize: 10, fontWeight: "600" },
+    hgMetricValue: { color: colors.foreground, fontSize: 15, fontWeight: "700", fontVariant: ["tabular-nums"] },
+    hgPool: { gap: 10 },
+    hgPoolHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    hgPoolTitle: { color: colors.foreground, fontSize: 14, fontWeight: "700" },
+    hgPoolMeta: { color: colors.mutedForeground, fontSize: 11 },
+    hgTierRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    hgTier: {
+      flexGrow: 1,
+      minWidth: 82,
+      alignItems: "center",
+      gap: 4,
+      paddingVertical: 10,
+      paddingHorizontal: 7,
+      borderRadius: 11,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    hgTierAmount: { color: colors.primary, fontSize: 15, fontWeight: "800" },
+    hgTierStock: { color: colors.foreground, fontSize: 11 },
+    hgTierChance: { color: colors.mutedForeground, fontSize: 10 },
+    hgSpinButton: {
+      flexDirection: "row",
+      minHeight: 50,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      paddingHorizontal: 14,
+      borderRadius: colors.radius,
+      backgroundColor: colors.primary,
+    },
+    hgSpinText: { color: colors.primaryForeground, fontSize: 14, fontWeight: "800" },
+    hgMessage: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      padding: 14,
+      borderRadius: 14,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    hgRetry: { paddingVertical: 8, paddingHorizontal: 10 },
 
     // Clock
     clockCard: {
