@@ -5,6 +5,63 @@
  * TimeNation API — digital state where time is currency
  * OpenAPI spec version: 0.1.0
  */
+export interface HourglassTier {
+  rewardAmount: number;
+  dailyQuantity: number;
+  remainingQuantity: number;
+  probabilityPercent: number;
+}
+
+export interface HourglassStatus {
+  prizeDate: string;
+  enabled: boolean;
+  alreadySpun: boolean;
+  nextResetAt: string;
+  balanceMinutes: number;
+  tiers: HourglassTier[];
+}
+
+export interface HourglassSpinResult {
+  rewardAmount: number;
+  spunAt: string;
+  balanceMinutes: number;
+  status: HourglassStatus;
+}
+
+export interface AdminHourglass {
+  prizeDate: string;
+  enabled: boolean;
+  totalSpinsToday: number;
+  totalDarminsDistributed: number;
+  remainingPrizes: number;
+  tiers: HourglassTier[];
+}
+
+export type HourglassConfigInputTiersItemRewardAmount = typeof HourglassConfigInputTiersItemRewardAmount[keyof typeof HourglassConfigInputTiersItemRewardAmount];
+
+
+export const HourglassConfigInputTiersItemRewardAmount = {
+  NUMBER_1: 1,
+  NUMBER_3: 3,
+  NUMBER_5: 5,
+  NUMBER_10: 10,
+  NUMBER_60: 60,
+} as const;
+
+export type HourglassConfigInputTiersItem = {
+  rewardAmount: HourglassConfigInputTiersItemRewardAmount;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  dailyQuantity: number;
+};
+
+export interface HourglassConfigInput {
+  enabled: boolean;
+  tiers: HourglassConfigInputTiersItem[];
+}
+
 export interface TimenamingConfig {
   network: string;
   chainId: number;

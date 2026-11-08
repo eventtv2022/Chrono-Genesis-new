@@ -21,6 +21,7 @@ import type {
 
 import type {
   AdminGovernmentPoll,
+  AdminHourglass,
   AdminTransaction,
   AdminTransferInput,
   AdminTransferResult,
@@ -62,6 +63,9 @@ import type {
   HealthStatus,
   HeritageTransferInput,
   HeritageTransferResult,
+  HourglassConfigInput,
+  HourglassSpinResult,
+  HourglassStatus,
   ListAdminTransactionsParams,
   ListTransactionsParams,
   LoginInput,
@@ -140,6 +144,373 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetHourglassStatusUrl = () => {
+
+
+
+
+  return `/api/hourglass`
+}
+
+/**
+ * @summary Get the authenticated citizen's daily Hourglass status
+ */
+export const getHourglassStatus = async ( options?: RequestInit): Promise<HourglassStatus> => {
+
+  return customFetch<HourglassStatus>(getGetHourglassStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetHourglassStatusQueryKey = () => {
+    return [
+    `/api/hourglass`
+    ] as const;
+    }
+
+
+export const getGetHourglassStatusQueryOptions = <TData = Awaited<ReturnType<typeof getHourglassStatus>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHourglassStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetHourglassStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getHourglassStatus>>> = ({ signal }) => getHourglassStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getHourglassStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetHourglassStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getHourglassStatus>>>
+export type GetHourglassStatusQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get the authenticated citizen's daily Hourglass status
+ */
+
+export function useGetHourglassStatus<TData = Awaited<ReturnType<typeof getHourglassStatus>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHourglassStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetHourglassStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSpinHourglassUrl = () => {
+
+
+
+
+  return `/api/hourglass/spin`
+}
+
+/**
+ * @summary Claim one prize from today's shared pool
+ */
+export const spinHourglass = async ( options?: RequestInit): Promise<HourglassSpinResult> => {
+
+  return customFetch<HourglassSpinResult>(getSpinHourglassUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSpinHourglassMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof spinHourglass>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof spinHourglass>>, TError,void, TContext> => {
+
+const mutationKey = ['spinHourglass'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof spinHourglass>>, void> = () => {
+
+
+          return  spinHourglass(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SpinHourglassMutationResult = NonNullable<Awaited<ReturnType<typeof spinHourglass>>>
+
+    export type SpinHourglassMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Claim one prize from today's shared pool
+ */
+export const useSpinHourglass = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof spinHourglass>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof spinHourglass>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSpinHourglassMutationOptions(options));
+    }
+
+export const getGetAdminHourglassUrl = () => {
+
+
+
+
+  return `/api/admin/hourglass`
+}
+
+/**
+ * @summary Get Hourglass settings and daily statistics
+ */
+export const getAdminHourglass = async ( options?: RequestInit): Promise<AdminHourglass> => {
+
+  return customFetch<AdminHourglass>(getGetAdminHourglassUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminHourglassQueryKey = () => {
+    return [
+    `/api/admin/hourglass`
+    ] as const;
+    }
+
+
+export const getGetAdminHourglassQueryOptions = <TData = Awaited<ReturnType<typeof getAdminHourglass>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminHourglass>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminHourglassQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminHourglass>>> = ({ signal }) => getAdminHourglass({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminHourglass>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminHourglassQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminHourglass>>>
+export type GetAdminHourglassQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get Hourglass settings and daily statistics
+ */
+
+export function useGetAdminHourglass<TData = Awaited<ReturnType<typeof getAdminHourglass>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminHourglass>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminHourglassQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAdminHourglassUrl = () => {
+
+
+
+
+  return `/api/admin/hourglass`
+}
+
+/**
+ * @summary Update Hourglass activation and prize quantities
+ */
+export const updateAdminHourglass = async (hourglassConfigInput: HourglassConfigInput, options?: RequestInit): Promise<AdminHourglass> => {
+
+  return customFetch<AdminHourglass>(getUpdateAdminHourglassUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(hourglassConfigInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminHourglassMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminHourglass>>, TError,{data: BodyType<HourglassConfigInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminHourglass>>, TError,{data: BodyType<HourglassConfigInput>}, TContext> => {
+
+const mutationKey = ['updateAdminHourglass'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminHourglass>>, {data: BodyType<HourglassConfigInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAdminHourglass(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminHourglassMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminHourglass>>>
+    export type UpdateAdminHourglassMutationBody = BodyType<HourglassConfigInput>
+    export type UpdateAdminHourglassMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update Hourglass activation and prize quantities
+ */
+export const useUpdateAdminHourglass = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminHourglass>>, TError,{data: BodyType<HourglassConfigInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminHourglass>>,
+        TError,
+        {data: BodyType<HourglassConfigInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminHourglassMutationOptions(options));
+    }
+
+export const getRefillAdminHourglassUrl = () => {
+
+
+
+
+  return `/api/admin/hourglass/refill`
+}
+
+/**
+ * @summary Refill today's shared prize pool from configured quantities
+ */
+export const refillAdminHourglass = async ( options?: RequestInit): Promise<AdminHourglass> => {
+
+  return customFetch<AdminHourglass>(getRefillAdminHourglassUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRefillAdminHourglassMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refillAdminHourglass>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof refillAdminHourglass>>, TError,void, TContext> => {
+
+const mutationKey = ['refillAdminHourglass'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof refillAdminHourglass>>, void> = () => {
+
+
+          return  refillAdminHourglass(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RefillAdminHourglassMutationResult = NonNullable<Awaited<ReturnType<typeof refillAdminHourglass>>>
+
+    export type RefillAdminHourglassMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Refill today's shared prize pool from configured quantities
+ */
+export const useRefillAdminHourglass = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refillAdminHourglass>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof refillAdminHourglass>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRefillAdminHourglassMutationOptions(options));
+    }
 
 export const getGetTimenamingConfigUrl = () => {
 

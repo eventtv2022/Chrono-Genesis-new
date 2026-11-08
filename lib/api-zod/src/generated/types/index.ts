@@ -8,6 +8,7 @@
 
 export * from './adminGovernmentPoll';
 export * from './adminGovernmentPollStatus';
+export * from './adminHourglass';
 export * from './adminTransaction';
 export * from './adminTransferInput';
 export * from './adminTransferResult';
@@ -63,6 +64,12 @@ export * from './guideAssistantResponse';
 export * from './healthStatus';
 export * from './heritageTransferInput';
 export * from './heritageTransferResult';
+export * from './hourglassConfigInput';
+export * from './hourglassConfigInputTiersItem';
+export * from './hourglassConfigInputTiersItemRewardAmount';
+export * from './hourglassSpinResult';
+export * from './hourglassStatus';
+export * from './hourglassTier';
 export * from './listAdminTransactionsParams';
 export * from './listTransactionsParams';
 export * from './loginInput';

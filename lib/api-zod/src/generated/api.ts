@@ -9,6 +9,114 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Get the authenticated citizen's daily Hourglass status
+ */
+export const GetHourglassStatusResponse = zod.object({
+  "prizeDate": zod.coerce.date(),
+  "enabled": zod.boolean(),
+  "alreadySpun": zod.boolean(),
+  "nextResetAt": zod.coerce.date(),
+  "balanceMinutes": zod.number(),
+  "tiers": zod.array(zod.object({
+  "rewardAmount": zod.number(),
+  "dailyQuantity": zod.number(),
+  "remainingQuantity": zod.number(),
+  "probabilityPercent": zod.number()
+}))
+})
+
+
+/**
+ * @summary Claim one prize from today's shared pool
+ */
+export const SpinHourglassResponse = zod.object({
+  "rewardAmount": zod.number(),
+  "spunAt": zod.coerce.date(),
+  "balanceMinutes": zod.number(),
+  "status": zod.object({
+  "prizeDate": zod.coerce.date(),
+  "enabled": zod.boolean(),
+  "alreadySpun": zod.boolean(),
+  "nextResetAt": zod.coerce.date(),
+  "balanceMinutes": zod.number(),
+  "tiers": zod.array(zod.object({
+  "rewardAmount": zod.number(),
+  "dailyQuantity": zod.number(),
+  "remainingQuantity": zod.number(),
+  "probabilityPercent": zod.number()
+}))
+})
+})
+
+
+/**
+ * @summary Get Hourglass settings and daily statistics
+ */
+export const GetAdminHourglassResponse = zod.object({
+  "prizeDate": zod.coerce.date(),
+  "enabled": zod.boolean(),
+  "totalSpinsToday": zod.number(),
+  "totalDarminsDistributed": zod.number(),
+  "remainingPrizes": zod.number(),
+  "tiers": zod.array(zod.object({
+  "rewardAmount": zod.number(),
+  "dailyQuantity": zod.number(),
+  "remainingQuantity": zod.number(),
+  "probabilityPercent": zod.number()
+}))
+})
+
+
+/**
+ * @summary Update Hourglass activation and prize quantities
+ */
+export const updateAdminHourglassBodyTiersItemDailyQuantityMin = 0;
+export const updateAdminHourglassBodyTiersItemDailyQuantityMax = 10000;
+
+
+
+export const UpdateAdminHourglassBody = zod.object({
+  "enabled": zod.boolean(),
+  "tiers": zod.array(zod.object({
+  "rewardAmount": zod.union([zod.literal(1),zod.literal(3),zod.literal(5),zod.literal(10),zod.literal(60)]),
+  "dailyQuantity": zod.number().min(updateAdminHourglassBodyTiersItemDailyQuantityMin).max(updateAdminHourglassBodyTiersItemDailyQuantityMax)
+}))
+})
+
+export const UpdateAdminHourglassResponse = zod.object({
+  "prizeDate": zod.coerce.date(),
+  "enabled": zod.boolean(),
+  "totalSpinsToday": zod.number(),
+  "totalDarminsDistributed": zod.number(),
+  "remainingPrizes": zod.number(),
+  "tiers": zod.array(zod.object({
+  "rewardAmount": zod.number(),
+  "dailyQuantity": zod.number(),
+  "remainingQuantity": zod.number(),
+  "probabilityPercent": zod.number()
+}))
+})
+
+
+/**
+ * @summary Refill today's shared prize pool from configured quantities
+ */
+export const RefillAdminHourglassResponse = zod.object({
+  "prizeDate": zod.coerce.date(),
+  "enabled": zod.boolean(),
+  "totalSpinsToday": zod.number(),
+  "totalDarminsDistributed": zod.number(),
+  "remainingPrizes": zod.number(),
+  "tiers": zod.array(zod.object({
+  "rewardAmount": zod.number(),
+  "dailyQuantity": zod.number(),
+  "remainingQuantity": zod.number(),
+  "probabilityPercent": zod.number()
+}))
+})
+
+
+/**
  * @summary Get public Timenaming network and mint configuration
  */
 export const GetTimenamingConfigResponse = zod.object({

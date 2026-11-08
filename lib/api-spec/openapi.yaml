@@ -22,7 +22,148 @@ tags:
     description: Fiat gateway — buy minutes
   - name: timenaming
     description: Historical minute licenses and NFT minting
+  - name: hourglass
+    description: Daily Hourglass rewards and prize pool administration
 paths:
+  /hourglass:
+    get:
+      operationId: getHourglassStatus
+      tags: [hourglass]
+      summary: Get the authenticated citizen's daily Hourglass status
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Daily availability and remaining shared prizes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HourglassStatus"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /hourglass/spin:
+    post:
+      operationId: spinHourglass
+      tags: [hourglass]
+      summary: Claim one prize from today's shared pool
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Prize awarded and balance updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HourglassSpinResult"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Already spun today or no prizes remain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/hourglass:
+    get:
+      operationId: getAdminHourglass
+      tags: [hourglass]
+      summary: Get Hourglass settings and daily statistics
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Current configuration and statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHourglass"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateAdminHourglass
+      tags: [hourglass]
+      summary: Update Hourglass activation and prize quantities
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HourglassConfigInput"
+      responses:
+        "200":
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHourglass"
+        "400":
+          description: Invalid prize distribution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/hourglass/refill:
+    post:
+      operationId: refillAdminHourglass
+      tags: [hourglass]
+      summary: Refill today's shared prize pool from configured quantities
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Today's prize pool refilled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHourglass"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /timenaming/config:
     get:
       operationId: getTimenamingConfig
@@ -2028,6 +2169,67 @@ components:
       type: http
       scheme: bearer
   schemas:
+    HourglassTier:
+      type: object
+      properties:
+        rewardAmount: { type: integer }
+        dailyQuantity: { type: integer }
+        remainingQuantity: { type: integer }
+        probabilityPercent: { type: number }
+      required: [rewardAmount, dailyQuantity, remainingQuantity, probabilityPercent]
+
+    HourglassStatus:
+      type: object
+      properties:
+        prizeDate: { type: string, format: date }
+        enabled: { type: boolean }
+        alreadySpun: { type: boolean }
+        nextResetAt: { type: string, format: date-time }
+        balanceMinutes: { type: number }
+        tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/HourglassTier"
+      required: [prizeDate, enabled, alreadySpun, nextResetAt, balanceMinutes, tiers]
+
+    HourglassSpinResult:
+      type: object
+      properties:
+        rewardAmount: { type: integer }
+        spunAt: { type: string, format: date-time }
+        balanceMinutes: { type: number }
+        status:
+          $ref: "#/components/schemas/HourglassStatus"
+      required: [rewardAmount, spunAt, balanceMinutes, status]
+
+    AdminHourglass:
+      type: object
+      properties:
+        prizeDate: { type: string, format: date }
+        enabled: { type: boolean }
+        totalSpinsToday: { type: integer }
+        totalDarminsDistributed: { type: number }
+        remainingPrizes: { type: integer }
+        tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/HourglassTier"
+      required: [prizeDate, enabled, totalSpinsToday, totalDarminsDistributed, remainingPrizes, tiers]
+
+    HourglassConfigInput:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        tiers:
+          type: array
+          items:
+            type: object
+            properties:
+              rewardAmount: { type: integer, enum: [1, 3, 5, 10, 60] }
+              dailyQuantity: { type: integer, minimum: 0, maximum: 10000 }
+            required: [rewardAmount, dailyQuantity]
+      required: [enabled, tiers]
+
     TimenamingConfig:
       type: object
       properties:

@@ -34,6 +34,8 @@ import { Admin } from "./pages/Admin";
 import { AdminRegistry } from "./pages/AdminRegistry";
 import { SouvenirDarmin } from "./pages/SouvenirDarmin";
 import { AdminSouvenirDarmins } from "./pages/AdminSouvenirDarmins";
+import { Hourglass } from "./pages/Hourglass";
+import { AdminHourglass } from "./pages/AdminHourglass";
 import { GovBlockVotes } from "./pages/GovBlockVotes";
 import { GovPolls } from "./pages/GovPolls";
 import { QrLogin } from "./pages/QrLogin";
@@ -186,6 +188,8 @@ function Router() {
           <Route path="/timetr" component={TiMETR} />
           <Route path="/shop" component={Shop} />
           <Route path="/souvenir-darmin" component={SouvenirDarmin} />
+          <Route path="/hourglass" component={Hourglass} />
+          <Route path="/admin/hourglass" component={AdminHourglass} />
           <Route path="/admin/souvenir-darmins" component={AdminSouvenirDarmins} />
           <Route path="/referrals" component={Referrals} />
           <Route path="/profile" component={Profile} />

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Tv, History, ShoppingCart, UserPlus, UserRound, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X, ShieldCheck, QrCode, Database, CalendarClock, CircleHelp, Landmark, Timer, BookOpen } from "lucide-react";
+import { Activity, Tv, History, ShoppingCart, UserPlus, UserRound, LogOut, RefreshCw, Search, Clock, Globe, Eye, EyeOff, Menu, X, ShieldCheck, QrCode, Database, CalendarClock, CircleHelp, Landmark, Timer, BookOpen, Hourglass } from "lucide-react";
 import { SystemClock } from "./SystemClock";
 import { useCitizen } from "@/context/CitizenContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -101,6 +101,12 @@ function CitizenWidget() {
                 Реестр сувенирных Дарминов
               </button>
             </Link>
+            <Link href="/admin/hourglass">
+              <button className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-[11px] font-bold transition-colors" data-testid="link-admin-hourglass">
+                <Hourglass className="w-3.5 h-3.5" />
+                Hourglass Prize Pool
+              </button>
+            </Link>
           </>
         )}
       </div>
@@ -193,6 +199,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ...(citizen && authToken
       ? [{ href: "/timebank", label: lang === "ru" ? "Банк времени" : "Time Bank", icon: Landmark }]
       : []),
+    ...(citizen && authToken
+      ? [{ href: "/hourglass", label: lang === "ru" ? "Песочные часы удачи" : "Hourglass rewards", icon: Hourglass }]
+      : []),
     { href: "/register",  label: t.nav_become_citizen,  icon: UserPlus  },
     { href: "/passport-lookup", label: t.nav_passport,  icon: Search    },
     { href: "/time",      label: t.nav_time,            icon: Clock     },
@@ -258,6 +267,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
+                data-testid={item.href === "/hourglass" ? "link-hourglass" : undefined}
                 onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-sm text-sm transition-colors ${
                   active
