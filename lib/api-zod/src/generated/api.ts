@@ -15,6 +15,7 @@ export const GetHourglassStatusResponse = zod.object({
   "prizeDate": zod.coerce.date(),
   "enabled": zod.boolean(),
   "alreadySpun": zod.boolean(),
+  "hasActivityToday": zod.boolean(),
   "nextResetAt": zod.coerce.date(),
   "balanceMinutes": zod.number(),
   "tiers": zod.array(zod.object({
@@ -37,6 +38,7 @@ export const SpinHourglassResponse = zod.object({
   "prizeDate": zod.coerce.date(),
   "enabled": zod.boolean(),
   "alreadySpun": zod.boolean(),
+  "hasActivityToday": zod.boolean(),
   "nextResetAt": zod.coerce.date(),
   "balanceMinutes": zod.number(),
   "tiers": zod.array(zod.object({

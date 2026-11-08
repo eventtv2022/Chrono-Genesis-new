@@ -11,6 +11,7 @@ export interface HourglassStatus {
   prizeDate: Date;
   enabled: boolean;
   alreadySpun: boolean;
+  hasActivityToday: boolean;
   nextResetAt: Date;
   balanceMinutes: number;
   tiers: HourglassTier[];

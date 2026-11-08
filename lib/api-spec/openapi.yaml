@@ -66,6 +66,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Complete an authenticated app activity first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: Already spun today or no prizes remain
           content:
@@ -2184,13 +2190,14 @@ components:
         prizeDate: { type: string, format: date }
         enabled: { type: boolean }
         alreadySpun: { type: boolean }
+        hasActivityToday: { type: boolean }
         nextResetAt: { type: string, format: date-time }
         balanceMinutes: { type: number }
         tiers:
           type: array
           items:
             $ref: "#/components/schemas/HourglassTier"
-      required: [prizeDate, enabled, alreadySpun, nextResetAt, balanceMinutes, tiers]
+      required: [prizeDate, enabled, alreadySpun, hasActivityToday, nextResetAt, balanceMinutes, tiers]
 
     HourglassSpinResult:
       type: object

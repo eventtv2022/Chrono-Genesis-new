@@ -1,6 +1,6 @@
 import { type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
-import { citizensTable } from "@workspace/db";
+import { citizenActivityDaysTable, citizensTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { canPublishUnmoderatedContent, canUseAdultKycFeature, deriveAgeTier } from "../services/ageGateService";
 
@@ -59,6 +59,22 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       citizen.ageTier = ageTier;
     }
     req.citizen = citizen;
+    const requestPath = req.originalUrl.split("?")[0];
+    const isHourglassRequest = /\/(?:admin\/)?hourglass(?:\/spin|\/refill)?\/?$/.test(requestPath);
+    const isProfileRefresh = req.method === "GET" && /\/citizens\/\d+\/?$/.test(requestPath);
+    if (!isHourglassRequest && !isProfileRefresh) {
+      try {
+        await db.insert(citizenActivityDaysTable).values({
+          citizenId: citizen.id,
+          activityDate: new Date().toISOString().slice(0, 10),
+        }).onConflictDoUpdate({
+          target: [citizenActivityDaysTable.citizenId, citizenActivityDaysTable.activityDate],
+          set: { lastActivityAt: new Date() },
+        });
+      } catch (activityError) {
+        req.log.error({ err: activityError, citizenId: citizen.id }, "citizen activity tracking failed");
+      }
+    }
     next();
   } catch (err) {
     req.log.error({ err }, "requireAuth DB error");

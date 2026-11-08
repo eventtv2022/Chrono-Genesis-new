@@ -7,6 +7,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useWsSync } from "@/hooks/useWsSync";
 import { AnthemButton } from "./AnthemPlayer";
 import { timenamingCopy } from "@/i18n/timenaming";
+import { HOURGLASS_COPY } from "@/i18n/hourglassCopy";
 import { LegalFooter } from "./LegalFooter";
 
 function CitizenWidget() {
@@ -200,7 +201,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       ? [{ href: "/timebank", label: lang === "ru" ? "Банк времени" : "Time Bank", icon: Landmark }]
       : []),
     ...(citizen && authToken
-      ? [{ href: "/hourglass", label: lang === "ru" ? "Песочные часы удачи" : "Hourglass rewards", icon: Hourglass }]
+      ? [{ href: "/hourglass", label: HOURGLASS_COPY[lang].title, icon: Hourglass }]
       : []),
     { href: "/register",  label: t.nav_become_citizen,  icon: UserPlus  },
     { href: "/passport-lookup", label: t.nav_passport,  icon: Search    },

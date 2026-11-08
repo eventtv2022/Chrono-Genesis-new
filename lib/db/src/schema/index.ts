@@ -43,3 +43,4 @@ export * from "./minuteLicenses";
 export * from "./fiatDarminPurchases";
 export * from "./souvenirDarmins";
 export * from "./hourglass";
+export * from "./citizenActivity";

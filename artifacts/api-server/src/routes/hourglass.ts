@@ -3,6 +3,7 @@ import { Router, type IRouter } from "express";
 import { and, count, eq, gt, sql, sum } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
+  citizenActivityDaysTable,
   citizensTable,
   hourglassDailyInventoryTable,
   hourglassPrizeTiersTable,
@@ -64,12 +65,18 @@ async function getStatus(citizenId: number) {
     )).limit(1),
     db.select({ balanceMinutes: citizensTable.balanceMinutes }).from(citizensTable).where(eq(citizensTable.id, citizenId)).limit(1),
   ]);
+  const [activity] = await db.select({ id: citizenActivityDaysTable.id }).from(citizenActivityDaysTable)
+    .where(and(
+      eq(citizenActivityDaysTable.citizenId, citizenId),
+      eq(citizenActivityDaysTable.activityDate, prizeDate),
+    )).limit(1);
   const inventoryByReward = new Map(inventory.map((row) => [row.rewardAmount, row]));
   const remainingTotal = inventory.reduce((total, row) => total + row.remainingQuantity, 0);
   return {
     prizeDate,
     enabled: settings?.enabled ?? false,
     alreadySpun: Boolean(spin),
+    hasActivityToday: Boolean(activity),
     nextResetAt: nextUtcReset(prizeDate),
     balanceMinutes: citizen?.balanceMinutes ?? 0,
     tiers: configured.map((tier) => ({
@@ -130,6 +137,13 @@ router.post("/hourglass/spin", requireAuth, async (req, res): Promise<void> => {
       const [settings] = await tx.select().from(hourglassSettingsTable)
         .where(eq(hourglassSettingsTable.id, 1)).for("update").limit(1);
       if (!settings?.enabled) return { error: "Рулетка временно отключена.", status: 409 as const };
+      const [activity] = await tx.select({ id: citizenActivityDaysTable.id })
+        .from(citizenActivityDaysTable)
+        .where(and(
+          eq(citizenActivityDaysTable.citizenId, req.citizen!.id),
+          eq(citizenActivityDaysTable.activityDate, prizeDate),
+        )).limit(1);
+      if (!activity) return { error: "Сначала выполните любое действие в TimeNation, чтобы открыть ежедневный запуск.", status: 403 as const };
 
       const [existingSpin] = await tx.select({ id: hourglassSpinsTable.id })
         .from(hourglassSpinsTable)
